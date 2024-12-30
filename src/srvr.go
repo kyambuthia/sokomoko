@@ -15,6 +15,11 @@ type Product struct {
         category string `json:"category"`
 }
 
+func buildDBTables() {
+        fmt.Println("-- initialising the DB Tables --")
+
+}
+
 func main() {
         db, err := sql.Open("sqlite3", "./db/t.db")
         if (err != nil) {
