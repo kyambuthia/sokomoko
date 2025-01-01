@@ -3,38 +3,56 @@ package main
 import (
         "fmt"
         "log"
+        "os"
         "database/sql"
+        "text/template"
 
         _ "github.com/ncruces/go-sqlite3/driver"
         _ "github.com/ncruces/go-sqlite3/embed"
 )
 
 type Product struct {
-        name string     `json:"name"`
-        price float64   `json:"price"`
-        category string `json:"category"`
+        Name string     `json:"name"`
+        Price float64   `json:"price"`
+        Category string `json:"category"`
 }
 
-func buildDBTables() {
-        fmt.Println("-- initialising the DB Tables --")
-
+func createTableSchema() {
+        db.Exec()
 }
 
 func main() {
-        db, err := sql.Open("sqlite3", "./db/t.db")
+        // create the product table.
+        createProductTableQuery := `
+        CREATE TABLE products (category TEXT, itemName TEXT, price REAL);
+        `
+
+        // returns all items.
+        allItemsQuery := `
+        SELECT * FROM products;
+        `
+
+        db, err := sql.Open("sqlite3", "../db/t.db")
         if (err != nil) {
                 log.Fatal(err)
         }
         defer db.Close()
 
-        var prod = Product{"Banana Cake", 300, "cake"}
-        fmt.Println(prod)
+        db.Query(createProductTableQuery)
 
-        // Create DB
+        db.Query(allItemsQuery)
 
+        fmt.Println("Hello, Go")
 
-        err = db.QueryRow(`SELECT * FROM names`).Scan(&result, &phonenumber)
-        if err != nil {
+        prod := Product{"Banana Cake", 300, "cake"}
+
+        tmpl, err := template.New("tmpl").Parse("CREATE TABLE Product {{.Name}} {{.Price}} {{.Category}} \n")
+        if (err != nil) {
+                log.Fatal(err)
+        }
+
+        tmpl.Execute(os.Stdout, prod)
+        if (err != nil) {
                 log.Fatal(err)
         }
 }
