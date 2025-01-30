@@ -1,14 +1,10 @@
 package main
 
 import (
-        "fmt"
         "log"
-        "os"
-        "database/sql"
         "text/template"
-
-        _ "github.com/ncruces/go-sqlite3/driver"
-        _ "github.com/ncruces/go-sqlite3/embed"
+        "net/http"
+        "time"
 )
 
 type Product struct {
@@ -17,48 +13,40 @@ type Product struct {
         Category string `json:"category"`
 }
 
-func createTableSchema() {
-        db.Exec()
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+        p := Product{"Azimia", 60.00, "mineral drinking water"}
+        t, err := template.New("tmpl").Parse("{{.Name}} {{.Price}} {{.Category}}")
+        if (err != nil) {
+                log.Fatal("Error: template parsing has failed")
+        }
+        t.Execute(w, p)
 }
 
 func main() {
-        // create the product table.
-        createProductTableQuery := `
-        CREATE TABLE products (category TEXT, itemName TEXT, price REAL);
-        `
+        mux := http.NewServeMux()
 
-        // returns all items.
-        allItemsQuery := `
-        SELECT * FROM products;
-        `
+        mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
+                tmpl, err := template.New("aboutPageTmpl").Parse(`{{define "T"}}, Hello, {{.}}!{{end}}`)
+                if (err!=nil) {
+                        log.Fatal(err)
+                }
+                tmpl.ExecuteTemplate(w, "T", "<script>alert("You've been pawned")</script>")
+        })
 
-        db, err := sql.Open("sqlite3", "../db/t.db")
-        if (err != nil) {
-                log.Fatal(err)
-        }
-        defer db.Close()
 
-        db.Query(createProductTableQuery)
+        mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+                p := Product{"Azimia", 60.00, "mineral drinking water"}
+                t, err := template.New("tmpl").Parse("{{.Name}} {{.Price}} {{.Category}}")
 
-        db.Query(allItemsQuery)
-
-        fmt.Println("Hello, Go")
-
-        prod := Product{"Banana Cake", 300, "cake"}
-
-        tmpl, err := template.New("tmpl").Parse("CREATE TABLE Product {{.Name}} {{.Price}} {{.Category}} \n")
-        if (err != nil) {
-                log.Fatal(err)
-        }
-
-        tmpl.Execute(os.Stdout, prod)
-        if (err != nil) {
-                log.Fatal(err)
-        }
+                if (err != nil) {
+                        log.Fatal(err)
+                }
+                t.Execute(w, p)
+        })
 
         srv := &http.Server{
-                Handler:        r,
-                Addr:   "127.0.0.1:8000",
+                Handler: mux,
+                Addr: "127.0.0.1:8000",
                 WriteTimeout: 15 * time.Second,
                 ReadTimeout: 15 * time.Second,
         }
