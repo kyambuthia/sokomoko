@@ -1,0 +1,8 @@
+{{ define "indexTemplate"}}
+<h2>Products</h2>
+    {{ range . }}
+    <div class="product-card-area">
+        <span>{{.Name}}</span>
+    </div>
+    {{ end }}
+{{end}}

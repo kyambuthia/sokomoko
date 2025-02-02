@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>sokomoko</title>
+    </head>
+    <body class="bd">
+        <p>this is the index page</p>
+        {{ range . }}
+            <h2>{{.Name}}</h2>
+            <p>{{.Category}}</p>
+            <p>KSH {{.Price}}</p>
+            <a href="/products/{{.Name}}">{{.Name}}</a>
+        {{ end }}
+    </body>
+</head>
