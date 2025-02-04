@@ -1,10 +1,16 @@
 package main
 
 import (
+        _ "io"
+        _ "os"
+        "fmt"
         "log"
         "html/template"
         "net/http"
         "time"
+
+        "database/sql"
+        "github.com/ncruces/go-sqlite3"
 )
 
 type Product struct {
@@ -14,6 +20,11 @@ type Product struct {
 }
 
 func main() {
+        var drivers[]string
+        drivers = sql.Drivers()
+        fmt.Println(drivers)
+        
+        //mux
         mux := http.NewServeMux()
 
         mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
@@ -38,13 +49,14 @@ func main() {
                 tmpl.Execute(w, productList)
         })
         
-
         srv := &http.Server{
                 Handler: mux,
                 Addr: "127.0.0.1:8000",
                 WriteTimeout: 15 * time.Second,
                 ReadTimeout: 15 * time.Second,
         }
+
+        fmt.Printf("\n---\nServer is running locally at ADDR: http://%s \nCTRL-C to stop the server\n", srv.Addr)
 
         log.Fatal(srv.ListenAndServe())
 }
