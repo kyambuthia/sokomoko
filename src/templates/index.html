@@ -3,14 +3,37 @@
     <head>
         <meta charset="utf-8" />
         <title>sokomoko</title>
+        <link rel="stylesheet" href="/static/stylesheets/styles.css">
     </head>
-    <body class="bd">
-        <p>this is the index page</p>
-        {{ range . }}
-            <h2>{{.Name}}</h2>
-            <p>{{.Category}}</p>
-            <p>KSH {{.Price}}</p>
-            <a href="/products/{{.Name}}">{{.Name}}</a>
-        {{ end }}
+    <body class="body-area">
+            <header class="header-area">
+                   <nav class="nav-area">
+                            <div class="nav-item-area">
+                                    <a href="/">sokomoko</a>
+                            </div>
+                            <div class="nav-item-area">
+                                   <a href="/search">search</a>
+                            </div>
+                            <div class="nav-item-area">
+                                    <a href="/cart">cart</a>
+                            </div>
+                            <div class="nav-item-area">
+                                    <a href="/account">account</a>
+                            </div>
+                    </nav>
+            </header>
+
+            <main class="main-area">
+                    <h2>Karibu to sokomoko</h2>
+                    <div class="product-feed">                 
+                            {{ range . }}
+                            <div class="product-card-area">
+                                    <h3>{{.Name}}</h3>
+                                    <p>{{.Category}}</p>
+                                    <p>{{.Price}}</p>
+                            </div>
+                            {{ end }}
+                    </div>
+            </main>
     </body>
 </head>
