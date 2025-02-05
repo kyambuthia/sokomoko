@@ -1,16 +1,18 @@
 package main
 
 import (
-        _ "io"
-        _ "os"
+        "io"
+        "os"
         "fmt"
         "log"
         "html/template"
         "net/http"
         "time"
+        "context"
 
         "database/sql"
-        "github.com/ncruces/go-sqlite3"
+        _ "github.com/ncruces/go-sqlite3/driver"
+        _ "github.com/ncruces/go-sqlite3/embed"
 )
 
 type Product struct {
@@ -19,20 +21,68 @@ type Product struct {
         Category string `json:"category"`
 }
 
+type Persona struct {
+        Name string
+        Phonenumber string
+}
+
+type Item struct {
+        Title string    `json: "title"`
+        Type string     `json: "type"`
+        Category string `json: "category"`
+        Price float64   `json: "Price"`
+        Quantity int    `json: "quantity"`
+        Note string     `json: "note"`
+}
+
+type Blog struct {
+        Title string `json:"title"`
+        Author string `json:"author"`
+        Created time.Time `json: "created"`
+        content string `json: "content"`
+}
+var db *sql.DB
+var version string
+
 func main() {
-        var drivers[]string
-        drivers = sql.Drivers()
-        fmt.Println(drivers)
-        
+        db, err := sql.Open("sqlite3", "../db/t.db"); if (err != nil) {
+                log.Fatal(err)
+        }
+
+        db.QueryRow(`SELECT sqlite_version()`).Scan(&version)
+        io.WriteString(os.Stdout, version)
+        defer db.Close()
+
         //mux
         mux := http.NewServeMux()
 
-        mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
-                tmpl, err := template.New("aboutPageTmpl").Parse(`{{define "T"}}, Hello, {{.}}! <a href="./checkout"></a>{{end}}`)
-                if (err!=nil) {
+        mux.HandleFunc("/names", func(w http.ResponseWriter, req *http.Request) {
+                ctx := context.Background()
+                var result []Persona 
+
+                rows, err := db.QueryContext(ctx, `SELECT * FROM names;`); if (err != nil) {
                         log.Fatal(err)
                 }
-                tmpl.ExecuteTemplate(w, "T", "<script>alert('Youve been pawned')</script>")
+                defer rows.Close()
+
+                // iterate throught the rows, append to queryResult slice.
+                for rows.Next() {
+                        var item Persona
+                        if err := rows.Scan(&item.Name, &item.Phonenumber); err != nil {
+                                log.Fatal(err)
+                        }
+                        result = append(result, item)
+                }
+
+                if err := rows.Err(); err != nil {
+                        log.Fatal(err)
+                }
+
+                tmpl, err := template.ParseFiles("./templates/items.html"); if err != nil {
+                        log.Fatal(err)
+                }
+
+                tmpl.Execute(w, result)
         })
 
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
