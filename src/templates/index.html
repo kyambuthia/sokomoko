@@ -1,39 +1,16 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8" />
-        <title>sokomoko</title>
-        <link rel="stylesheet" href="/static/stylesheets/styles.css">
-    </head>
-    <body class="body-area">
-            <header class="header-area">
-                   <nav class="nav-area">
-                            <div class="nav-item-area">
-                                    <a href="/">sokomoko</a>
-                            </div>
-                            <div class="nav-item-area">
-                                   <a href="/search">search</a>
-                            </div>
-                            <div class="nav-item-area">
-                                    <a href="/cart">cart</a>
-                            </div>
-                            <div class="nav-item-area">
-                                    <a href="/account">account</a>
-                            </div>
-                    </nav>
-            </header>
+{{ define "body_area" }}
+<h2>Karibu sokomoko</h2>
 
-            <main class="main-area">
-                    <h2>Karibu to sokomoko</h2>
-                    <div class="product-feed">                 
-                            {{ range . }}
-                            <div class="product-card-area">
-                                    <h3>{{.Name}}</h3>
-                                    <p>{{.Category}}</p>
-                                    <p>{{.Price}}</p>
-                            </div>
-                            {{ end }}
-                    </div>
-            </main>
-    </body>
-</head>
+<div class="feed-header-area">
+        <h2>Products Available</h2>
+</div>
+
+<div class="product-feed"> 
+  {{ range . }}
+        <div class="product-card-area">
+                <h3>{{.Name}}</h3>
+                <p>{{.Category}}</p>
+                <p>{{.Price}}</p>
+        </div>
+  {{ end }}
+{{ end }}
