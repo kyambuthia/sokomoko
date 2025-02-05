@@ -125,7 +125,7 @@ func main() {
 
                 tmpl.ExecuteTemplate(w, "base_html_layout", "this is the cart page")
         })
-         mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
+        mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
@@ -138,20 +138,37 @@ func main() {
 
                 tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
         })
- 
 
+        mux.HandleFunc("/delivery", func(w http.ResponseWriter, req *http.Request) {
+                tmpl, err := template.ParseFiles(
+                        "./templates/layout.html",
+                        "./templates/components/nav.html", 
+                        "./templates/pages/delivery.html",
+                )
+                      
+                if err != nil {
+                        log.Fatal(err)
+                }
+
+                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
+        })
+ 
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
                 products := []Product{
                     {"Cocaine", 99, "Health"},
                     {"Heroin", 120, "Electronics"},
                     {"Apple Juice", 60, "Juice"},
                 }
-                tmpl, err := template.ParseFiles("./templates/index.html")
+                tmpl, err := template.ParseFiles(
+                        "./templates/layout.html",
+                        "./templates/components/nav.html",
+                        "./templates/index.html",
+                )
                 if (err != nil) {
                         log.Fatal(err)
                 }
                 var productList []Product = products[0:3]
-                tmpl.Execute(w, productList)
+                tmpl.ExecuteTemplate(w, "base_html_layout", productList)
         })
         
         srv := &http.Server{
