@@ -85,6 +85,61 @@ func main() {
                 tmpl.Execute(w, result)
         })
 
+        mux.HandleFunc("/search", func(w http.ResponseWriter, req *http.Request) {
+                tmpl, err := template.ParseFiles(
+                        "./templates/layout.html",
+                        "./templates/components/nav.html", 
+                        "./templates/pages/search.html",
+                )
+                      
+                if err != nil {
+                        log.Fatal(err)
+                }
+
+                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the search page")
+        })
+
+        mux.HandleFunc("/account", func(w http.ResponseWriter, req *http.Request) {
+                tmpl, err := template.ParseFiles(
+                        "./templates/layout.html",
+                        "./templates/components/nav.html", 
+                        "./templates/pages/account.html",
+                )
+                      
+                if err != nil {
+                        log.Fatal(err)
+                }
+
+                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the account page")
+        })
+         mux.HandleFunc("/cart", func(w http.ResponseWriter, req *http.Request) {
+                tmpl, err := template.ParseFiles(
+                        "./templates/layout.html",
+                        "./templates/components/nav.html", 
+                        "./templates/pages/cart.html",
+                )
+                      
+                if err != nil {
+                        log.Fatal(err)
+                }
+
+                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the cart page")
+        })
+         mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
+                tmpl, err := template.ParseFiles(
+                        "./templates/layout.html",
+                        "./templates/components/nav.html", 
+                        "./templates/pages/checkout.html",
+                )
+                      
+                if err != nil {
+                        log.Fatal(err)
+                }
+
+                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
+        })
+ 
+
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
                 products := []Product{
                     {"Cocaine", 99, "Health"},
