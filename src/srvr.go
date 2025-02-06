@@ -1,8 +1,6 @@
 package main
 
 import (
-        "io"
-        "os"
         "fmt"
         "log"
         "html/template"
@@ -48,10 +46,12 @@ func main() {
         db, err := sql.Open("sqlite3", "../db/t.db"); if (err != nil) {
                 log.Fatal(err)
         }
-
         db.QueryRow(`SELECT sqlite_version()`).Scan(&version)
-        io.WriteString(os.Stdout, version)
+        fmt.Printf("SQLLITE DB VERSION %s - Up and running", version)
         defer db.Close()
+
+        staticFS := http.FileServer(http.Dir("./static"))
+        http.Handle("/", staticFS)
 
         //mux
         mux := http.NewServeMux()
