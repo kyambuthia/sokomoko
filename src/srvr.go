@@ -6,9 +6,8 @@ import (
         "html/template"
         "net/http"
         "time"
-        "context"
-
         "database/sql"
+
         _ "github.com/ncruces/go-sqlite3/driver"
         _ "github.com/ncruces/go-sqlite3/embed"
 )
@@ -17,6 +16,11 @@ type Product struct {
         Name string     `json:"name"`
         Price float64   `json:"price"`
         Category string `json:"category"`
+}
+
+type ProductList struct {
+        Name string
+        Items []Product
 }
 
 type Persona struct {
@@ -50,40 +54,15 @@ func main() {
         fmt.Printf("SQLLITE DB VERSION %s - Up and running", version)
         defer db.Close()
 
-        staticFS := http.FileServer(http.Dir("./static"))
-        http.Handle("/", staticFS)
-
-        //mux
+        // Serve Static Files (CSS and JS)
+        
         mux := http.NewServeMux()
 
-        mux.HandleFunc("/names", func(w http.ResponseWriter, req *http.Request) {
-                ctx := context.Background()
-                var result []Persona 
+        staticHandler := http.FileServer(http.Dir("./static/"))
+        mux.Handle("/static", http.StripPrefix("/static/", staticHandler))
 
-                rows, err := db.QueryContext(ctx, `SELECT * FROM names;`); if (err != nil) {
-                        log.Fatal(err)
-                }
-                defer rows.Close()
-
-                // iterate throught the rows, append to queryResult slice.
-                for rows.Next() {
-                        var item Persona
-                        if err := rows.Scan(&item.Name, &item.Phonenumber); err != nil {
-                                log.Fatal(err)
-                        }
-                        result = append(result, item)
-                }
-
-                if err := rows.Err(); err != nil {
-                        log.Fatal(err)
-                }
-
-                tmpl, err := template.ParseFiles("./templates/items.html"); if err != nil {
-                        log.Fatal(err)
-                }
-
-                tmpl.Execute(w, result)
-        })
+        testHandler := http.FileServer(http.Dir("templates/test.html"))
+        mux.Handle("/test", testHandler)
 
         mux.HandleFunc("/search", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
@@ -146,14 +125,13 @@ func main() {
                         "./templates/pages/delivery.html",
                 )
                       
-                if err != nil {
-                        log.Fatal(err)
+                if err != nil { log.Fatal(err)
                 }
 
                 tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
         })
  
-        mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+        mux.HandleFunc("/root", func(w http.ResponseWriter, req *http.Request) {
                 products := []Product{
                     {"Cocaine", 99, "Health"},
                     {"Heroin", 120, "Electronics"},
@@ -162,13 +140,14 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html",
+                        "./templates/components/footer.html",
                         "./templates/index.html",
                 )
                 if (err != nil) {
                         log.Fatal(err)
                 }
-                var productList []Product = products[0:3]
-                tmpl.ExecuteTemplate(w, "base_html_layout", productList)
+                itemList := ProductList{"front_items", products}
+                tmpl.ExecuteTemplate(w, "base_html_layout", itemList)
         })
         
         srv := &http.Server{
