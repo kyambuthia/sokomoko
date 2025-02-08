@@ -51,40 +51,10 @@ func main() {
         defer db.Close()
 
         staticFS := http.FileServer(http.Dir("./static"))
-        http.Handle("/", staticFS)
+        http.Handle("/static/", http.StripPrefix("/static/", staticFS))
 
         //mux
         mux := http.NewServeMux()
-
-        mux.HandleFunc("/names", func(w http.ResponseWriter, req *http.Request) {
-                ctx := context.Background()
-                var result []Persona 
-
-                rows, err := db.QueryContext(ctx, `SELECT * FROM names;`); if (err != nil) {
-                        log.Fatal(err)
-                }
-                defer rows.Close()
-
-                // iterate throught the rows, append to queryResult slice.
-                for rows.Next() {
-                        var item Persona
-                        if err := rows.Scan(&item.Name, &item.Phonenumber); err != nil {
-                                log.Fatal(err)
-                        }
-                        result = append(result, item)
-                }
-
-                if err := rows.Err(); err != nil {
-                        log.Fatal(err)
-                }
-
-                tmpl, err := template.ParseFiles("./templates/items.html"); if err != nil {
-                        log.Fatal(err)
-                }
-
-                tmpl.Execute(w, result)
-        })
-
         mux.HandleFunc("/search", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
@@ -96,7 +66,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the search page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the search page")
         })
 
         mux.HandleFunc("/account", func(w http.ResponseWriter, req *http.Request) {
@@ -110,7 +80,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the account page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the account page")
         })
          mux.HandleFunc("/cart", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
@@ -123,7 +93,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the cart page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the cart page")
         })
         mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
@@ -136,7 +106,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the checkout page")
         })
 
         mux.HandleFunc("/delivery", func(w http.ResponseWriter, req *http.Request) {
@@ -150,7 +120,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the checkout page")
         })
  
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
@@ -162,13 +132,14 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html",
+                        "./templates/components/footer.html",
                         "./templates/index.html",
                 )
                 if (err != nil) {
                         log.Fatal(err)
                 }
                 var productList []Product = products[0:3]
-                tmpl.ExecuteTemplate(w, "base_html_layout", productList)
+                tmpl.ExecuteTemplate(w, "root_template", productList)
         })
         
         srv := &http.Server{
