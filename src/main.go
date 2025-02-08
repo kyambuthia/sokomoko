@@ -9,9 +9,6 @@ import (
 func main() {
         mux := http.NewServeMux()
 
-        fs := http.FileServer(http.Dir("./testy/"))
-        mux.Handle("/static", http.StripPrefix("/static/", fs))
-
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
@@ -25,6 +22,8 @@ func main() {
                 tmpl.ExecuteTemplate(w, "root_template", "Karibu, Sokomoko")
         })
  
+        fs := http.FileServer(http.Dir("./static/"))
+        mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
         mux.HandleFunc("/account", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.New("tmpl").Parse(`{{define "about_template"}}about Page - {{.}}{{end}}`)
