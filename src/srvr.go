@@ -55,11 +55,10 @@ func main() {
         defer db.Close()
 
         // Serve Static Files (CSS and JS)
-        
         mux := http.NewServeMux()
 
         staticHandler := http.FileServer(http.Dir("./static/"))
-        mux.Handle("/static", http.StripPrefix("/static/", staticHandler))
+        mux.Handle("/static/", http.StripPrefix("/static/", staticHandler))
 
         testHandler := http.FileServer(http.Dir("templates/test.html"))
         mux.Handle("/test", testHandler)
@@ -75,7 +74,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the search page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the search page")
         })
 
         mux.HandleFunc("/account", func(w http.ResponseWriter, req *http.Request) {
@@ -89,7 +88,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the account page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the account page")
         })
          mux.HandleFunc("/cart", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
@@ -102,7 +101,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the cart page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the cart page")
         })
         mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
@@ -115,7 +114,7 @@ func main() {
                         log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the checkout page")
         })
 
         mux.HandleFunc("/delivery", func(w http.ResponseWriter, req *http.Request) {
@@ -128,10 +127,10 @@ func main() {
                 if err != nil { log.Fatal(err)
                 }
 
-                tmpl.ExecuteTemplate(w, "base_html_layout", "this is the checkout page")
+                tmpl.ExecuteTemplate(w, "root_template", "this is the checkout page")
         })
  
-        mux.HandleFunc("/root", func(w http.ResponseWriter, req *http.Request) {
+        mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
                 products := []Product{
                     {"Cocaine", 99, "Health"},
                     {"Heroin", 120, "Electronics"},
@@ -147,7 +146,7 @@ func main() {
                         log.Fatal(err)
                 }
                 itemList := ProductList{"front_items", products}
-                tmpl.ExecuteTemplate(w, "base_html_layout", itemList)
+                tmpl.ExecuteTemplate(w, "root_template", itemList)
         })
         
         srv := &http.Server{
