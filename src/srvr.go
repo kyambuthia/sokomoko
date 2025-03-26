@@ -6,7 +6,6 @@ import (
         "html/template"
         "net/http"
         "time"
-        "context"
 
         "database/sql"
         _ "github.com/ncruces/go-sqlite3/driver"
@@ -141,7 +140,7 @@ func main() {
                 var productList []Product = products[0:3]
                 tmpl.ExecuteTemplate(w, "root_template", productList)
         })
-        
+         
         srv := &http.Server{
                 Handler: mux,
                 Addr: "127.0.0.1:8000",
