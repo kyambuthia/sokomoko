@@ -38,6 +38,7 @@ type Blog struct {
         Created time.Time `json: "created"`
         content string `json: "content"`
 }
+
 var db *sql.DB
 var version string
 
@@ -50,7 +51,7 @@ func main() {
         defer db.Close()
 
         staticFS := http.FileServer(http.Dir("./static"))
-        http.Handle("/static/", http.StripPrefix("/static/", staticFS))
+        http.Handle("/static", http.StripPrefix("/static/", staticFS))
 
         //mux
         mux := http.NewServeMux()
