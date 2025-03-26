@@ -47,6 +47,7 @@ func main() {
                 log.Fatal(err)
         }
         db.QueryRow(`SELECT sqlite_version()`).Scan(&version)
+
         fmt.Printf("SQLLITE DB VERSION %s - Up and running", version)
         defer db.Close()
 
