@@ -7,11 +7,10 @@
 </div>
 
 <div class="product-feed"> 
-  {{ range .Items }}
+  {{ range . }}
         <div class="product-card-area">
                 <h3>{{.Name}}</h3>
-                <p>{{.Category}}</p>
-                <p>{{.Price}}</p>
+                <p>{{.Phonenumber}}</p>
         </div>
   {{ end }}
 </div>
