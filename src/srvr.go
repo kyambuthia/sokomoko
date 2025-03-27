@@ -46,16 +46,17 @@ func main() {
         db, err := sql.Open("sqlite3", "../db/t.db"); if (err != nil) {
                 log.Fatal(err)
         }
+
         db.QueryRow(`SELECT sqlite_version()`).Scan(&version)
 
         fmt.Printf("SQLLITE DB VERSION %s - Up and running", version)
         defer db.Close()
-
-        staticFS := http.FileServer(http.Dir("./static"))
-        http.Handle("/static", http.StripPrefix("/static/", staticFS))
-
         //mux
         mux := http.NewServeMux()
+
+        staticFS := http.FileServer(http.Dir("./static"))
+        mux.Handle("/static/", http.StripPrefix("/static/", staticFS))
+
         mux.HandleFunc("/search", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
@@ -140,6 +141,7 @@ func main() {
                         log.Fatal(err)
                 }
                 var productList []Product = products[0:3]
+		//db.QueryRow("SELECT * FROM t1").Scan(&items)
                 tmpl.ExecuteTemplate(w, "root_template", productList)
         })
          
