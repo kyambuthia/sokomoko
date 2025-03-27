@@ -19,8 +19,8 @@ type Product struct {
 }
 
 type Persona struct {
-        Name string
-        Phonenumber string
+	Name string		`json: "name"`
+	Phonenumber string	`json: "phonenumber"`
 }
 
 type Item struct {
@@ -51,9 +51,11 @@ func main() {
 
         fmt.Printf("SQLLITE DB VERSION %s - Up and running", version)
         defer db.Close()
+
         //mux
         mux := http.NewServeMux()
 
+	// serving static files (CSS, JS)
         staticFS := http.FileServer(http.Dir("./static"))
         mux.Handle("/static/", http.StripPrefix("/static/", staticFS))
 
@@ -61,6 +63,7 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
+			"./templates/components/footer.html",
                         "./templates/pages/search.html",
                 )
                       
@@ -75,6 +78,7 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
+			"./templates/components/footer.html",
                         "./templates/pages/account.html",
                 )
                       
@@ -88,6 +92,7 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
+			"./templates/components/footer.html",
                         "./templates/pages/cart.html",
                 )
                       
@@ -101,6 +106,7 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
+			"./templates/components/footer.html",
                         "./templates/pages/checkout.html",
                 )
                       
@@ -115,6 +121,7 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
+			"./templates/components/footer.html",
                         "./templates/pages/delivery.html",
                 )
                       
@@ -126,11 +133,6 @@ func main() {
         })
  
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-                products := []Product{
-                    {"Cocaine", 99, "Health"},
-                    {"Heroin", 120, "Electronics"},
-                    {"Apple Juice", 60, "Juice"},
-                }
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html",
@@ -140,9 +142,28 @@ func main() {
                 if (err != nil) {
                         log.Fatal(err)
                 }
-                var productList []Product = products[0:3]
-		//db.QueryRow("SELECT * FROM t1").Scan(&items)
-                tmpl.ExecuteTemplate(w, "root_template", productList)
+
+		showcase_items_query := `
+		SELECT * FROM names;
+		`
+
+		rows, err := db.Query(showcase_items_query)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+		
+		var persona_array[] Persona
+		for rows.Next() {
+			var persona Persona
+			if err := rows.Scan(&persona.Name, &persona.Phonenumber); err != nil {
+				log.Fatal(err)
+			}
+
+			persona_array = append(persona_array, Persona{persona.Name, persona.Phonenumber})
+		}
+
+                tmpl.ExecuteTemplate(w, "root_template", persona_array)
         })
          
         srv := &http.Server{
