@@ -4,5 +4,59 @@
 }
 
 html {
+    position: relative;
+    display: block;
     font-family: monospace;
+    font-size: 16px;
+}
+
+/* body-area */
+.body-area
+{
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+.header-area
+{
+    display: block;
+}
+
+.nav-area
+{
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-item-area
+{
+    display: block;
+    margin-right: .25rem;
+    border-bottom: .1rem gray dashed;
+}
+
+.nav-item-area:hover
+{
+    border-bottom: .1rem black dashed;
+}
+
+.nav-item-area, a
+{
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: .1rem;
+    font-weight: 500;
+    color: gray;
+}
+
+.nav-item-area, a:hover
+{
+    color: black;
+}
+
+/* site-main-area */
+.main-area
+{
+    display: block;
 }
