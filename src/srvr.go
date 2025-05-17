@@ -106,7 +106,7 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
-			"./templates/components/footer.html",
+						"./templates/components/footer.html",
                         "./templates/pages/checkout.html",
                 )
                       
@@ -121,7 +121,7 @@ func main() {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
                         "./templates/components/nav.html", 
-			"./templates/components/footer.html",
+						"./templates/components/footer.html",
                         "./templates/pages/delivery.html",
                 )
                       
@@ -135,6 +135,7 @@ func main() {
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./templates/layout.html",
+						"./templates/components/header.html",
                         "./templates/components/nav.html",
                         "./templates/components/footer.html",
                         "./templates/index.html",
