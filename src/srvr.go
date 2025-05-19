@@ -42,6 +42,10 @@ type Blog struct {
 var db *sql.DB
 var version string
 
+func queryDB() {
+	fmt.Println('DB Queried.')
+}
+
 func main() {
         db, err := sql.Open("sqlite3", "../db/t.db"); if (err != nil) {
                 log.Fatal(err)
