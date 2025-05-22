@@ -43,7 +43,7 @@ var db *sql.DB
 var version string
 
 func queryDB() {
-	fmt.Println('DB Queried.')
+	fmt.Println("DB Queried.")
 }
 
 func main() {
@@ -59,7 +59,7 @@ func main() {
         //mux
         mux := http.NewServeMux()
 
-	// serving static files (CSS, JS)
+		// serving static files (CSS, JS)
         staticFS := http.FileServer(http.Dir("./static"))
         mux.Handle("/static/", http.StripPrefix("/static/", staticFS))
 
