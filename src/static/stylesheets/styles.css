@@ -61,3 +61,30 @@ html {
 {
     display: block;
 }
+
+/* footer-area */
+.footer-area
+{
+    display: block;
+    border-top: .1rem black dashed;
+}
+
+.footer-nav-item
+{
+    display: block;
+    padding: .2rem 0rem;
+    border-bottom: .1rem gray dashed;
+}
+
+.footer-area--notice-banner
+{
+    display: block;
+    margin: .3rem;
+}
+
+.notice-txt
+{
+    font-size: .75rem;
+    letter-spacing: .1rem;
+    text-transform: uppercase;
+}
