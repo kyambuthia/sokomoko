@@ -15,10 +15,13 @@ the requirements for this project are as listed below.
 ===
 . clone the repository
 
-`git clone github.com\kyambuthia\sokomoko.git`
+`git clone github.com/kyambuthia/sokomoko.git && cd ./sokomoko`
 
-. run the go server file
-`cd ./src && go run ./server.go`
+. create a build directory and change directory into the source directory. 
+`mkdir build && cd ./src`
+
+. build the binary
+`go build -o ../build ./src/main.go`
 
 ## CONTRIBUTING
 ===============
