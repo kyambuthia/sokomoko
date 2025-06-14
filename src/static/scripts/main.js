@@ -1,24 +1,24 @@
-() =>
-{
-    if (document.readyState === "complete")
-    {
-        console.log("Document is ready");
-        console.log("-->");
+console.log("Habari, dunia")
 
-        const currentTime = Date.now();
+const searchForm = document.querySelector("#searchForm")
 
-        const bannerArea = document.createElement("div");
-        bannerArea.className="banner-area";
-        bannerArea.innerHTML = currentTime;
-
-        const siteHeader = document.querySelector("header");
-        siteHeader.appendChild(bannerArea);
+searchForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = {
+        searchQuery: form.value.queryString
     }
 
-    document.addEventListener("DOMContentLoaded", () => 
-    {
-        console.log("ready");
+    const res = await fetch("/search", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(data)
     });
-}
 
+    const text = await res.text();
+    console.log(text)
+
+});
 

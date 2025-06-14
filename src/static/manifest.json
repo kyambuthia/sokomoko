@@ -1,0 +1,10 @@
+{
+    "name": "sokomoko",
+    "icons": [
+        {
+            "src": "/static/icons/sokomoko.svg",
+            "type": "image/svg",
+            "sizes": "80x80"
+        }
+    ]
+}
