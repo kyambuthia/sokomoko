@@ -1,16 +1,38 @@
 {{ define "body_area" }}
-        {{ template "site_nav_area" }}
-        <h2>Search</h2>
-        <p>Discover Items you might like</p>
-        <div class="search-form-wrapper">
-                <form action="/search" method="POST" id="searchForm">
-                        <div class="form-item-area">
-                                <input name="query" type="text" id="queryString" />
-                        </div>
-                        <div class="form-item-area">
-                                <input type="submit" value="search" />
-                        </div>
-                </form>
+    <!-- body-area.nav-area -->
+    {{ template "site_nav_area" }}
+
+    <!-- main-area.search-section -->
+    <div class="search-section">
+        <div class="section-header-area">
+            <h2 class="section-header">Search</h2>
+            <p>search for an item</p>
         </div>
+        <div class="section-body">
+            <!-- search-form-area -->
+            <div class="search-form-wrapper">
+                <form action="/search" method="POST" id="searchForm">
+                    <div class="form-item-area">
+                        <input name="queryString" type="text" id="queryString" />
+                    </div>
+                    <div class="form-item-area">
+                        <input type="submit" value="search" />
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- main-area.discover-section -->
+    <div class="discover-section">
+        <div class="section-header-area">
+            <h2 class="section-header">Discover</h2>
+            <p>discover items you'd like</p>
+        </div>
+        <div class="section-body">
+        </div>
+    </div>
+
+    <!-- body-area.footer-area -->
 	{{ template "footer_area" }}
 {{ end }}
