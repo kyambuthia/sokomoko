@@ -1,29 +1,34 @@
-window.onload = () =>
-{
+document.addEventListener("DOMContentLoaded", (e) => {
+    console.log("DOMContentloaded")
+
     const searchForm = document.querySelector("#searchForm");
-    searchForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
 
-        const formData = new FormData(searchForm);
-        // DEBUGS 
-        //  ---
-        //console.log(formData.get("queryString"));
-        const data = {
-            queryString: formData.get("queryString")
-        }
+    if (searchForm)
+    {
+        searchForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
 
-        //console.log(JSON.stringify(data));
-        const res = await fetch("/search", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(data)
-        });
+            const formData = new FormData(searchForm);
+            // DEBUGS 
+            //  ---
+            //console.log(formData.get("queryString"));
+            const data = {
+                queryString: formData.get("queryString")
+            }
 
-        const text = await res.text();
-        console.log("response text: \n", text)
-    });
+            //console.log(JSON.stringify(data));
+            const res = await fetch("/search", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
+
+            const text = await res.text();
+            console.log("response text: \n", text)
+        });   
+    }
 
     // read values from the search-form.
     async function readSearchFormValues()
@@ -47,4 +52,4 @@ window.onload = () =>
 
     // --> load JSON from server.
     readSearchFormValues();
-}
+})
