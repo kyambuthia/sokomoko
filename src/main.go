@@ -7,6 +7,7 @@ import (
 	"embed"
 	"net/http"
 	"html/template"
+	"os"
 
 	"github.com/kyambuthia/sokomoko/src/db"
 	"github.com/kyambuthia/sokomoko/src/routes"
@@ -25,7 +26,7 @@ var (
 func init() {
 	var err error
 
-	baseTemplateFiles := []string {
+	baseTemplateFiles := []string{
 		"templates/base/base.tmpl.html",
 		"templates/base/banner.tmpl.html",
 		"templates/base/header.tmpl.html",
@@ -34,21 +35,25 @@ func init() {
 		"templates/base/footer.tmpl.html",
 	}
 
-	rootTemplateFiles := append(baseTemplateFiles, "templates/pages/index.html")
-
-	searchRouteTemplateFiles := append(baseTemplateFiles, "templates/pages/search.html")
-
-	authRouteTemplateFiles := append(baseTemplateFiles, "templates/pages/account.html")
-	
-	baseTemplate, err = template.ParseFS(tmplData, rootTemplateFiles...); if err != nil {
+	// Parse the base template once
+	base, err := template.ParseFS(tmplData, baseTemplateFiles...)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	searchTemplate, err = template.ParseFS(tmplData, searchRouteTemplateFiles...); if err != nil {
+	// Clone the base template and parse additional files for other routes
+	baseTemplate, err = template.Must(base.Clone()).ParseFS(tmplData, "templates/pages/index.html")
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	authTemplate, err = template.ParseFS(tmplData, authRouteTemplateFiles...); if err != nil {
+	searchTemplate, err = template.Must(base.Clone()).ParseFS(tmplData, "templates/pages/search.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	authTemplate, err = template.Must(base.Clone()).ParseFS(tmplData, "templates/pages/account.html")
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -68,9 +73,14 @@ func main() {
 
 	// Static File Handler.
 	mux.Handle("/static/", routes.Static(staticFS))
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "6969"
+	}
 	
-	srvr := &http.Server {
-		Addr: ":6969",
+srvr := &http.Server {
+		Addr: ":" + port,
 		Handler: mux,
 		ReadTimeout: 15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -78,7 +88,8 @@ func main() {
 
 	fmt.Printf("\n --- RUNNING --- \n server is listening on PORT %s \nCTRL-C to EXIT\n", srvr.Addr)
 
-	err := srvr.ListenAndServe(); if (err != nil) {
+	err := srvr.ListenAndServe()
+	if err != nil {
 		log.Fatal(err)
 	}
 }
