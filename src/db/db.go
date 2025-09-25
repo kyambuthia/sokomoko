@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"log"
+	"os"
 	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
@@ -47,7 +48,11 @@ CREATE TABLE IF NOT EXISTS products (
 
 func InitDB() {
 	var err error
-	DB, err = sql.Open("sqlite3", "./db/t.db")
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./db/t.db"
+	}
+	DB, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -73,6 +78,27 @@ type User struct {
 	Role         string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+// Category represents a product category
+type Category struct {
+	ID          int
+	Name        string
+	Description string
+	ParentID    sql.NullInt64 // Use sql.NullInt64 for nullable integers
+}
+
+// Product represents a product in the system
+type Product struct {
+	ID            int
+	Name          string
+	Description   string
+	Price         float64
+	StockQuantity int
+	CategoryID    sql.NullInt64 // Use sql.NullInt64 for nullable integers
+	ImageURL      string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // CreateUser inserts a new user into the database
@@ -165,6 +191,157 @@ func UpdateUser(user User) error {
 // DeleteUser deletes a user from the database by ID
 func DeleteUser(id int) error {
 	stmt, err := DB.Prepare("DELETE FROM users WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateCategory inserts a new category into the database
+func CreateCategory(category Category) (int64, error) {
+	stmt, err := DB.Prepare(
+		"INSERT INTO categories (name, description, parent_id) VALUES (?, ?, ?)")
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(category.Name, category.Description, category.ParentID)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// GetCategoryByID retrieves a category by its ID
+func GetCategoryByID(id int) (*Category, error) {
+	row := DB.QueryRow(
+		"SELECT id, name, description, parent_id FROM categories WHERE id = ?", id)
+
+	category := &Category{}
+	err := row.Scan(
+		&category.ID,
+		&category.Name,
+		&category.Description,
+		&category.ParentID)
+
+	if err == sql.ErrNoRows {
+		return nil, nil // Category not found
+	}
+	if err != nil {
+		return nil, err
+	}
+	return category, nil
+}
+
+// UpdateCategory updates an existing category's information
+func UpdateCategory(category Category) error {
+	stmt, err := DB.Prepare(
+		"UPDATE categories SET name = ?, description = ?, parent_id = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(category.Name, category.Description, category.ParentID, category.ID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteCategory deletes a category from the database by ID
+func DeleteCategory(id int) error {
+	stmt, err := DB.Prepare("DELETE FROM categories WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateProduct inserts a new product into the database
+func CreateProduct(product Product) (int64, error) {
+	stmt, err := DB.Prepare(
+		"INSERT INTO products (name, description, price, stock_quantity, category_id, image_url) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(product.Name, product.Description, product.Price, product.StockQuantity, product.CategoryID, product.ImageURL)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// GetProductByID retrieves a product by its ID
+func GetProductByID(id int) (*Product, error) {
+	row := DB.QueryRow(
+		"SELECT id, name, description, price, stock_quantity, category_id, image_url, created_at, updated_at FROM products WHERE id = ?", id)
+
+	product := &Product{}
+	err := row.Scan(
+		&product.ID,
+		&product.Name,
+		&product.Description,
+		&product.Price,
+		&product.StockQuantity,
+		&product.CategoryID,
+		&product.ImageURL,
+		&product.CreatedAt,
+		&product.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, nil // Product not found
+	}
+	if err != nil {
+		return nil, err
+	}
+	return product, nil
+}
+
+// UpdateProduct updates an existing product's information
+func UpdateProduct(product Product) error {
+	stmt, err := DB.Prepare(
+		"UPDATE products SET name = ?, description = ?, price = ?, stock_quantity = ?, category_id = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(product.Name, product.Description, product.Price, product.StockQuantity, product.CategoryID, product.ImageURL, product.ID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteProduct deletes a product from the database by ID
+func DeleteProduct(id int) error {
+	stmt, err := DB.Prepare("DELETE FROM products WHERE id = ?")
 	if err != nil {
 		return err
 	}
