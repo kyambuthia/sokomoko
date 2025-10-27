@@ -18,5 +18,14 @@
     <div class="nav-item-area">
 	    <a href="/blog">blog</a>
     </div>
+    <div class="nav-item-area">
+        {{ if .IsAuthenticated }}
+            <span>Welcome, {{ .User.Email }} ({{ .User.Role }})</span>
+            <a href="/logout">Logout</a>
+        {{ else }}
+            <a href="/login">Login</a>
+            <a href="/signup">Sign Up</a>
+        {{ end }}
+    </div>
 </nav>
 {{ end }}
