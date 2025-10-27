@@ -6,6 +6,8 @@ import (
         "html/template"
         "net/http"
         "time"
+        "path/filepath"
+        "os"
 
         "database/sql"
         _ "github.com/ncruces/go-sqlite3/driver"
@@ -43,7 +45,14 @@ var db *sql.DB
 var version string
 
 func main() {
-        db, err := sql.Open("sqlite3", "../db/t.db"); if (err != nil) {
+        var err error
+        cwd, err := os.Getwd()
+        if err != nil {
+                log.Fatal(err)
+        }
+        dbPath := filepath.Join(cwd, "db", "t.db")
+
+        db, err = sql.Open("sqlite3", dbPath); if (err != nil) {
                 log.Fatal(err)
         }
 
@@ -56,15 +65,19 @@ func main() {
         mux := http.NewServeMux()
 
 	// serving static files (CSS, JS)
-        staticFS := http.FileServer(http.Dir("./static"))
+        staticFS := http.FileServer(http.Dir("./src/static"))
         mux.Handle("/static/", http.StripPrefix("/static/", staticFS))
 
         mux.HandleFunc("/search", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == "POST" {
+			fmt.Println("Handling the POST")
+		}
+
                 tmpl, err := template.ParseFiles(
-                        "./templates/layout.html",
-                        "./templates/components/nav.html", 
-			"./templates/components/footer.html",
-                        "./templates/pages/search.html",
+                        "./src/templates/layout.html",
+                        "./src/templates/components/nav.html", 
+			"./src/templates/components/footer.html",
+                        "./src/templates/pages/search.html",
                 )
                       
                 if err != nil {
@@ -76,10 +89,10 @@ func main() {
 
         mux.HandleFunc("/account", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
-                        "./templates/layout.html",
-                        "./templates/components/nav.html", 
-			"./templates/components/footer.html",
-                        "./templates/pages/account.html",
+                        "./src/templates/layout.html",
+                        "./src/templates/components/nav.html", 
+			"./src/templates/components/footer.html",
+                        "./src/templates/pages/account.html",
                 )
                       
                 if err != nil {
@@ -90,10 +103,10 @@ func main() {
         })
          mux.HandleFunc("/cart", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
-                        "./templates/layout.html",
-                        "./templates/components/nav.html", 
-			"./templates/components/footer.html",
-                        "./templates/pages/cart.html",
+                        "./src/templates/layout.html",
+                        "./src/templates/components/nav.html", 
+			"./src/templates/components/footer.html",
+                        "./src/templates/pages/cart.html",
                 )
                       
                 if err != nil {
@@ -104,10 +117,10 @@ func main() {
         })
         mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
-                        "./templates/layout.html",
-                        "./templates/components/nav.html", 
-			"./templates/components/footer.html",
-                        "./templates/pages/checkout.html",
+                        "./src/templates/layout.html",
+                        "./src/templates/components/nav.html", 
+			"./src/templates/components/footer.html",
+                        "./src/templates/pages/checkout.html",
                 )
                       
                 if err != nil {
@@ -119,10 +132,10 @@ func main() {
 
         mux.HandleFunc("/delivery", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
-                        "./templates/layout.html",
-                        "./templates/components/nav.html", 
-			"./templates/components/footer.html",
-                        "./templates/pages/delivery.html",
+                        "./src/templates/layout.html",
+                        "./src/templates/components/nav.html", 
+			"./src/templates/components/footer.html",
+                        "./src/templates/pages/delivery.html",
                 )
                       
                 if err != nil {
@@ -134,10 +147,10 @@ func main() {
  
         mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
-                        "./templates/layout.html",
-                        "./templates/components/nav.html",
-                        "./templates/components/footer.html",
-                        "./templates/index.html",
+                        "./src/templates/layout.html",
+                        "./src/templates/components/nav.html",
+                        "./src/templates/components/footer.html",
+                        "./src/templates/index.html",
                 )
                 if (err != nil) {
                         log.Fatal(err)
