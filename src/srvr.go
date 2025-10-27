@@ -236,6 +236,33 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
     }
 }
 
+// requireRole is a middleware that checks if the authenticated user has one of the allowed roles
+func requireRole(allowedRoles []string, next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, req *http.Request) {
+        userSession, ok := getSessionUser(req)
+        if !ok {
+            http.Redirect(w, req, "/login", http.StatusSeeOther) // Not authenticated
+            return
+        }
+
+        // Check if the user's role is in the allowedRoles list
+        isAuthorized := false
+        for _, role := range allowedRoles {
+            if userSession.Role == role {
+                isAuthorized = true
+                break
+            }
+        }
+
+        if !isAuthorized {
+            http.Error(w, "Forbidden: You do not have the required role to access this page.", http.StatusForbidden)
+            return
+        }
+
+        next.ServeHTTP(w, req)
+    }
+}
+
 func main() {
         var err error
         cwd, err := os.Getwd()
@@ -413,6 +440,27 @@ func main() {
                 tmpl.ExecuteTemplate(w, "root_template", data)
         })
          
+        mux.HandleFunc("/partner/dashboard", requireRole([]string{"partner"}, func(w http.ResponseWriter, req *http.Request) {
+            tmpl, err := template.ParseFiles(
+                "./src/templates/layout.html",
+                "./src/templates/components/nav.html",
+                "./src/templates/components/footer.html",
+                "./src/templates/pages/partner_dashboard.html",
+            )
+            if err != nil {
+                log.Printf("Error parsing partner dashboard templates: %v", err)
+                http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+                return
+            }
+
+            userSession, isAuthenticated := getSessionUser(req)
+            data := TemplateData{
+                User: userSession,
+                IsAuthenticated: isAuthenticated,
+            }
+            tmpl.ExecuteTemplate(w, "root_template", data)
+        }))
+
         srv := &http.Server{
                 Handler: mux,
                 Addr: "127.0.0.1:8000",
