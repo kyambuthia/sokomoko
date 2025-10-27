@@ -107,7 +107,12 @@ func signupHandler(w http.ResponseWriter, req *http.Request) {
             http.Error(w, "Internal Server Error", http.StatusInternalServerError)
             return
         }
-        tmpl.ExecuteTemplate(w, "root_template", nil)
+        err = tmpl.ExecuteTemplate(w, "root_template", nil)
+        if err != nil {
+            log.Printf("Error executing signup template: %v", err)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
         return
     }
 
@@ -159,7 +164,12 @@ func loginHandler(w http.ResponseWriter, req *http.Request) {
             http.Error(w, "Internal Server Error", http.StatusInternalServerError)
             return
         }
-        tmpl.ExecuteTemplate(w, "root_template", nil)
+        err = tmpl.ExecuteTemplate(w, "root_template", nil)
+        if err != nil {
+            log.Printf("Error executing login template: %v", err)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
         return
     }
 
