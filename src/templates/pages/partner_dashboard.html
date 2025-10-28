@@ -1,8 +1,38 @@
-{{ define "partner_dashboard_page" }}
+{{ define "body_area" }}
 <div class="container">
     <h2>Partner Dashboard</h2>
     <p>Welcome, {{ .User.Email }} ({{ .User.Role }})!</p>
     <p>This is your exclusive dashboard for managing your products and orders.</p>
-    <!-- Add partner-specific content here -->
+    <p><a href="/partner/products/add">Add New Product</a></p>
+
+    <h3>Your Products</h3>
+    {{ if .Products }}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Price</th>
+                    <th>Category</th>
+                    <th>Stock</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Products }}
+                <tr>
+                    <td>{{ .ID }}</td>
+                    <td>{{ .Name }}</td>
+                    <td>{{ .Description }}</td>
+                    <td>{{ .Price }}</td>
+                    <td>{{ .Category }}</td>
+                    <td>{{ .StockQuantity }}</td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+    {{ else }}
+        <p>You have not added any products yet.</p>
+    {{ end }}
 </div>
 {{ end }}
