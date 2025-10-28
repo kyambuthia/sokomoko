@@ -5,6 +5,10 @@
     </div>
     <div class="nav-item-area">
            <a href="/search">search</a>
+           <form action="/search" method="post">
+                <input type="text" name="search_query" placeholder="Search for products...">
+                <button type="submit">Search</button>
+           </form>
     </div>
     <div class="nav-item-area">
             <a href="/cart">cart</a>
@@ -25,6 +29,7 @@
         {{ else }}
             <a href="/login">Login</a>
             <a href="/signup">Sign Up</a>
+            <a href="/partner/signup">Partner Sign Up</a>
         {{ end }}
     </div>
 </nav>
