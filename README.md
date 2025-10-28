@@ -12,6 +12,22 @@ clone the repository
 `git clone github.com\kyambuthia\sokomoko.git`
 
 
+## Setup and Database Initialization
+1.  **Install Go:** Ensure you have Go installed (version 1.24 or higher recommended).
+2.  **Clone the repository:**
+    ```bash
+    git clone github.com/kyambuthia/sokomoko.git
+    cd sokomoko
+    ```
+3.  **Install dependencies:**
+    ```bash
+    go mod tidy
+    ```
+4.  **Run the application:**
+    ```bash
+    go run src/srvr.go
+    ```
+    The application will automatically create and migrate the database (`db/t.db`) on first run.
 
 
 ## CONTRIBUTING
