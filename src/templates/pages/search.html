@@ -1,16 +1,14 @@
 {{ define "body_area" }}
-        {{ template "site_nav_area" }}
-        <h2>Search</h2>
-        <p>Discover Items you might like</p>
-        <div class="search-form-wrapper">
-                <form action="/s" method="POST">
-                        <div class="form-item-area">
-                                <input type="text" id="queryString" />
-                        </div>
-                        <div class="form-item-area">
-                                <input type="submit" value="search" />
-                        </div>
-                </form>
+        {{ template "site_nav_area" .}}
+        <h2>Search Results</h2>
+        <div class="product-feed"> 
+          {{ range .Products }}
+                <div class="product-card-area">
+                        <h3>{{.Name}}</h3>
+                        <p>{{.Description}}</p>
+                        <p>Price: {{.Price}}</p>
+                </div>
+          {{ end }}
         </div>
 	{{ template "footer_area" }}
 {{ end }}
