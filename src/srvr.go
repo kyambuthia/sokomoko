@@ -8,39 +8,31 @@ import (
         "time"
         "path/filepath"
         "os"
+        "strconv"
         "github.com/google/uuid"
 
-        "database/sql"
         "golang.org/x/crypto/bcrypt"
-        _ "github.com/ncruces/go-sqlite3/driver"
-        _ "github.com/ncruces/go-sqlite3/embed"
+        "gorm.io/driver/sqlite"
+        "gorm.io/gorm"
 )
 
+type User struct {
+    gorm.Model
+    Name          string `json:"name"`
+    Phonenumber   string `json:"phonenumber"`
+    Email         string `json:"email"`
+    PasswordHash  string `json:"-"`
+    Role          string `json:"role"`
+}
+
 type Product struct {
-        Name string     `json:"name"`
-        Price float64   `json:"price"`
-        Category string `json:"category"`
-}
-
-type Persona struct {
-	Name string		`json: "name"`
-	Phonenumber string	`json: "phonenumber"`
-}
-
-type Item struct {
-        Title string    `json: "title"`
-        Type string     `json: "type"`
-        Category string `json: "category"`
-        Price float64   `json: "Price"`
-        Quantity int    `json: "quantity"`
-        Note string     `json: "note"`
-}
-
-type Blog struct {
-        Title string `json:"title"`
-        Author string `json:"author"`
-        Created time.Time `json: "created"`
-        content string `json: "content"`
+    gorm.Model
+    Name          string  `json:"name"`
+    Price         float64 `json:"price"`
+    Category      string  `json:"category"`
+    Description   string  `json:"description"`
+    StockQuantity int     `json:"stock_quantity"`
+    PartnerID     uint    `json:"partner_id"`
 }
 
 // UserSession stores user data for a session
@@ -82,14 +74,15 @@ func getSessionUser(req *http.Request) (UserSession, bool) {
     return userSession, ok
 }
 
-var db *sql.DB
+var db *gorm.DB
 var version string
 
 // TemplateData holds data to be passed to HTML templates
 type TemplateData struct {
     User UserSession
     IsAuthenticated bool
-    Personas []Persona // Added for the index page
+    Products []Product // Added for partner dashboard
+    // TODO: Add Orders []Order for partner sales/orders view
     // Add other common data here
 }
 
@@ -135,15 +128,140 @@ func signupHandler(w http.ResponseWriter, req *http.Request) {
             return
         }
 
-        _, err = db.Exec("INSERT INTO Users (name, phonenumber, email, password_hash, role) VALUES (?, ?, ?, ?, ?)",
-            name, phonenumber, email, string(hashedPassword), "user")
-        if err != nil {
-            log.Printf("Error inserting user into database: %v", err)
+        user := User{Name: name, Phonenumber: phonenumber, Email: email, PasswordHash: string(hashedPassword), Role: "user"}
+        result := db.Create(&user)
+        if result.Error != nil {
+            log.Printf("Error inserting user into database: %v", result.Error)
             http.Error(w, "Internal Server Error", http.StatusInternalServerError)
             return
         }
 
         http.Redirect(w, req, "/login", http.StatusSeeOther)
+        return
+    }
+
+    http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+}
+
+// partnerSignupHandler handles partner registration
+func partnerSignupHandler(w http.ResponseWriter, req *http.Request) {
+    if req.Method == "GET" {
+        tmpl, err := template.ParseFiles(
+            "./src/templates/layout.html",
+            "./src/templates/components/nav.html",
+            "./src/templates/components/footer.html",
+            "./src/templates/pages/partner_signup.html",
+        )
+        if err != nil {
+            log.Printf("Error parsing partner signup templates: %v", err)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+        err = tmpl.ExecuteTemplate(w, "root_template", nil)
+        if err != nil {
+            log.Printf("Error executing partner signup template: %v", err)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+        return
+    }
+
+    if req.Method == "POST" {
+        name := req.FormValue("name")
+        email := req.FormValue("email")
+        phonenumber := req.FormValue("phonenumber")
+        password := req.FormValue("password")
+        confirmPassword := req.FormValue("confirm_password")
+
+        if password != confirmPassword {
+            http.Error(w, "Passwords do not match", http.StatusBadRequest)
+            return
+        }
+
+        hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+        if err != nil {
+            log.Printf("Error hashing password: %v", err)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+
+        user := User{Name: name, Phonenumber: phonenumber, Email: email, PasswordHash: string(hashedPassword), Role: "partner"}
+        result := db.Create(&user)
+        if result.Error != nil {
+            log.Printf("Error inserting partner into database: %v", result.Error)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+
+        http.Redirect(w, req, "/login", http.StatusSeeOther) // Redirect to login page for partners
+        return
+    }
+
+    http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+}
+
+// addProductHandler handles adding new products by partners
+func addProductHandler(w http.ResponseWriter, req *http.Request) {
+    if req.Method == "GET" {
+        tmpl, err := template.ParseFiles(
+            "./src/templates/layout.html",
+            "./src/templates/components/nav.html",
+            "./src/templates/components/footer.html",
+            "./src/templates/pages/add_product.html",
+        )
+        if err != nil {
+            log.Printf("Error parsing add product templates: %v", err)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+
+        userSession, isAuthenticated := getSessionUser(req)
+        data := TemplateData{
+            User: userSession,
+            IsAuthenticated: isAuthenticated,
+        }
+        err = tmpl.ExecuteTemplate(w, "root_template", data)
+        if err != nil {
+            log.Printf("Error executing add product template: %v", err)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+        return
+    }
+
+    if req.Method == "POST" {
+        userSession, ok := getSessionUser(req)
+        if !ok || userSession.Role != "partner" {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+
+        name := req.FormValue("name")
+        description := req.FormValue("description")
+        priceStr := req.FormValue("price")
+        category := req.FormValue("category")
+        stockQuantityStr := req.FormValue("stock_quantity")
+
+        price, err := strconv.ParseFloat(priceStr, 64)
+        if err != nil {
+            http.Error(w, "Invalid price format", http.StatusBadRequest)
+            return
+        }
+        stockQuantity, err := strconv.Atoi(stockQuantityStr)
+        if err != nil {
+            http.Error(w, "Invalid stock quantity format", http.StatusBadRequest)
+            return
+        }
+
+        product := Product{Name: name, Description: description, Price: price, Category: category, StockQuantity: stockQuantity, PartnerID: uint(userSession.UserID)}
+        result := db.Create(&product)
+        if result.Error != nil {
+            log.Printf("Error inserting product into database: %v", result.Error)
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+
+        http.Redirect(w, req, "/partner/dashboard", http.StatusSeeOther)
         return
     }
 
@@ -177,21 +295,19 @@ func loginHandler(w http.ResponseWriter, req *http.Request) {
         email := req.FormValue("email")
         password := req.FormValue("password")
 
-        var id int
-        var storedHashedPassword string
-        var role string
-        err := db.QueryRow("SELECT id, password_hash, role FROM Users WHERE email = ?", email).Scan(&id, &storedHashedPassword, &role)
-        if err != nil {
-            if err == sql.ErrNoRows {
+        var user User
+        result := db.Where("email = ?", email).First(&user)
+        if result.Error != nil {
+            if result.Error == gorm.ErrRecordNotFound {
                 http.Error(w, "Invalid credentials", http.StatusUnauthorized)
                 return
             }
-            log.Printf("Error querying user from database: %v", err)
+            log.Printf("Error querying user from database: %v", result.Error)
             http.Error(w, "Internal Server Error", http.StatusInternalServerError)
             return
         }
 
-        err = bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(password))
+        err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
         if err != nil {
             http.Error(w, "Invalid credentials", http.StatusUnauthorized)
             return
@@ -199,7 +315,7 @@ func loginHandler(w http.ResponseWriter, req *http.Request) {
 
         // Login successful, create session
         sessionID := generateSessionID()
-        sessions[sessionID] = UserSession{UserID: id, Email: email, Role: role}
+        sessions[sessionID] = UserSession{UserID: int(user.ID), Email: user.Email, Role: user.Role}
         setSessionCookie(w, sessionID)
 
         http.Redirect(w, req, "/", http.StatusSeeOther) // Redirect to home page
@@ -281,29 +397,55 @@ func main() {
         }
         dbPath := filepath.Join(cwd, "db", "t.db")
 
-        db, err = sql.Open("sqlite3", dbPath); if (err != nil) {
-                log.Fatal(err)
+        db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+        if err != nil {
+                log.Fatal("failed to connect database")
         }
 
-        db.QueryRow(`SELECT sqlite_version()`).Scan(&version)
+        // Drop tables to ensure a clean slate on each run (for development)
+        db.Migrator().DropTable(&User{}, &Product{})
 
-        fmt.Printf("SQLLITE DB VERSION %s - Up and running", version)
-        defer db.Close()
+        // Migrate the schema
+        db.AutoMigrate(&User{}, &Product{})
 
-        //mux
-        mux := http.NewServeMux()
+        // Insert sample products
+        db.Create(&Product{Name: "Laptop", Price: 1200, Category: "Electronics", Description: "A powerful laptop for all your computing needs.", StockQuantity: 10, PartnerID: 1})
+        db.Create(&Product{Name: "Smartphone", Price: 800, Category: "Electronics", Description: "The latest smartphone with a stunning display.", StockQuantity: 25, PartnerID: 1})
+        db.Create(&Product{Name: "Coffee Maker", Price: 100, Category: "Home Appliances", Description: "Brew the perfect cup of coffee every morning.", StockQuantity: 50, PartnerID: 1})
 
-	// serving static files (CSS, JS)
+        fmt.Printf("SQLLITE DB Up and running")
+
+        // Main application mux
+        mainMux := http.NewServeMux()
+
+
+
+        // serving static files (CSS, JS) for main application
         staticFS := http.FileServer(http.Dir("./src/static"))
-        mux.Handle("/static/", http.StripPrefix("/static/", staticFS))
+        mainMux.Handle("/static/", http.StripPrefix("/static/", staticFS))
 
-        mux.HandleFunc("/signup", signupHandler)
-        mux.HandleFunc("/login", loginHandler)
-        mux.HandleFunc("/logout", logoutHandler)
+        mainMux.HandleFunc("/signup", signupHandler)
+        mainMux.HandleFunc("/login", loginHandler)
+        mainMux.HandleFunc("/logout", logoutHandler)
 
-        mux.HandleFunc("/search", func(w http.ResponseWriter, req *http.Request) {
+        // Partner routes
+        mainMux.HandleFunc("/partner/signup", partnerSignupHandler)
+        mainMux.HandleFunc("/partner/products/add", requireRole([]string{"partner"}, addProductHandler))
+
+
+
+        mainMux.HandleFunc("/search", func(w http.ResponseWriter, req *http.Request) {
+                userSession, isAuthenticated := getSessionUser(req)
+                data := TemplateData{
+                    User: userSession,
+                    IsAuthenticated: isAuthenticated,
+                }
+
 		if req.Method == "POST" {
-			fmt.Println("Handling the POST")
+			searchQuery := req.FormValue("search_query")
+                        var products []Product
+                        db.Where("name LIKE ? OR description LIKE ?", "%"+searchQuery+"%", "%"+searchQuery+"%").Find(&products)
+                        data.Products = products
 		}
 
                 tmpl, err := template.ParseFiles(
@@ -317,16 +459,10 @@ func main() {
                         log.Fatal(err)
                 }
 
-                userSession, isAuthenticated := getSessionUser(req)
-                data := TemplateData{
-                    User: userSession,
-                    IsAuthenticated: isAuthenticated,
-                    // Add specific data for search page if needed
-                }
                 tmpl.ExecuteTemplate(w, "root_template", data)
         })
 
-        mux.HandleFunc("/account", requireAuth(func(w http.ResponseWriter, req *http.Request) {
+        mainMux.HandleFunc("/account", requireAuth(func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./src/templates/layout.html",
                         "./src/templates/components/nav.html", 
@@ -346,7 +482,7 @@ func main() {
                 }
                 tmpl.ExecuteTemplate(w, "root_template", data)
         }))
-         mux.HandleFunc("/cart", func(w http.ResponseWriter, req *http.Request) {
+        mainMux.HandleFunc("/cart", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./src/templates/layout.html",
                         "./src/templates/components/nav.html", 
@@ -366,7 +502,7 @@ func main() {
                 }
                 tmpl.ExecuteTemplate(w, "root_template", data)
         })
-        mux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
+        mainMux.HandleFunc("/checkout", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./src/templates/layout.html",
                         "./src/templates/components/nav.html", 
@@ -387,7 +523,7 @@ func main() {
                 tmpl.ExecuteTemplate(w, "root_template", data)
         })
 
-        mux.HandleFunc("/delivery", func(w http.ResponseWriter, req *http.Request) {
+        mainMux.HandleFunc("/delivery", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./src/templates/layout.html",
                         "./src/templates/components/nav.html", 
@@ -407,8 +543,7 @@ func main() {
                 }
                 tmpl.ExecuteTemplate(w, "root_template", data)
         })
- 
-        mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+        mainMux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
                 tmpl, err := template.ParseFiles(
                         "./src/templates/layout.html",
                         "./src/templates/components/nav.html",
@@ -425,32 +560,15 @@ func main() {
                     IsAuthenticated: isAuthenticated,
                 }
 
-		showcase_items_query := `
-		SELECT * FROM names;
-		`
+		var products []Product
+		db.Find(&products)
 
-		rows, err := db.Query(showcase_items_query)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer rows.Close()
-		
-		var persona_array[] Persona
-		for rows.Next() {
-			var persona Persona
-			if err := rows.Scan(&persona.Name, &persona.Phonenumber); err != nil {
-				log.Fatal(err)
-			}
-
-			persona_array = append(persona_array, Persona{persona.Name, persona.Phonenumber})
-		}
-
-                data.Personas = persona_array // Assign persona_array to TemplateData
+                data.Products = products // Assign products to TemplateData
 
                 tmpl.ExecuteTemplate(w, "root_template", data)
         })
          
-        mux.HandleFunc("/partner/dashboard", requireRole([]string{"partner"}, func(w http.ResponseWriter, req *http.Request) {
+        mainMux.HandleFunc("/partner/dashboard", requireRole([]string{"partner"}, func(w http.ResponseWriter, req *http.Request) {
             tmpl, err := template.ParseFiles(
                 "./src/templates/layout.html",
                 "./src/templates/components/nav.html",
@@ -468,11 +586,21 @@ func main() {
                 User: userSession,
                 IsAuthenticated: isAuthenticated,
             }
+
+            var products []Product
+            result := db.Where("partner_id = ?", userSession.UserID).Find(&products)
+            if result.Error != nil {
+                log.Printf("Error querying products for partner %d: %v", userSession.UserID, result.Error)
+                http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+                return
+            }
+            data.Products = products // Assign products to TemplateData
+
             tmpl.ExecuteTemplate(w, "root_template", data)
         }))
 
         srv := &http.Server{
-                Handler: mux,
+                Handler: mainMux,
                 Addr: "127.0.0.1:8000",
                 WriteTimeout: 15 * time.Second,
                 ReadTimeout: 15 * time.Second,
