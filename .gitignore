@@ -1,2 +1,53 @@
 *.db
 t.db
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output of the go build command
+/build/
+/bin/
+/out/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Go module files (if you use vendoring)
+/vendor/
+
+# IDE/editor specific files
+.vscode/
+.idea/
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage and test result files
+*.cover
+*.coverprofile
+*.testresult
+
+# Dependency directories (if you're using tools like `glide`)
+/Godeps/
+
+# Node modules (if you're using frontend assets)
+node_modules/
+
+# Environment and config files (if used)
+.env
+.env.*
+
+# Temporary files
+*.tmp
+*.bak
+*.old

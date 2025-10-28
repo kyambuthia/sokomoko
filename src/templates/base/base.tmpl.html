@@ -1,0 +1,38 @@
+{{ define "root_template" }}
+<!DOCTYPE html>
+<html>
+        <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <link rel="manifest" href="static/manifest.json" />
+                <title>{{ block "title" . }}{{end}}</title>
+                <link rel="stylesheet" href="static/stylesheets/styles.css">
+        </head>
+        <body class="site-body-area">
+                <!-- header-area. -->
+                <div class="wrapper--header-area">
+                        <div class="header-area">
+                                {{ block "header-area" . }}
+                                {{ end }}
+                        </div>
+                </div>
+
+                <!-- main-area. -->
+                <div class="wrapper--main-area">
+                        <div class="main-area">
+                                {{ block "main-area" . }}
+                                {{ end }}
+                        </div>
+                </div>
+
+                <!-- footer-area. -->
+                 <div class="wrapper--footer-area">
+                        <div class="footer-area">
+                                {{ block "footer-area" . }}
+                                {{ end }}
+                        </div>
+                 </div>
+                <script src="static/scripts/main.js"></script>
+        </body>
+</html>
+{{ end }}
