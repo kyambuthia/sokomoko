@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kyambuthia/sokomoko/src/db"
+	"github.com/kyambuthia/sokomoko/internal/db"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -163,9 +163,9 @@ func Logout() http.HandlerFunc {
 		}
 
 		http.SetCookie(w, &http.Cookie{
-			Name:    "session_token",
-			Value:   "",
-			Expires: time.Now().Add(-time.Hour), // Set expiration to a past time to delete the cookie
+			Name:     "session_token",
+			Value:    "",
+			Expires:  time.Now().Add(-time.Hour), // Set expiration to a past time to delete the cookie
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteLaxMode,

@@ -3,8 +3,8 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -15,9 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyambuthia/sokomoko/src/db"
-	"github.com/ncruces/go-sqlite3/driver"
-	"github.com/ncruces/go-sqlite3/embed"
+	"github.com/kyambuthia/sokomoko/internal/db"
 	"golang.org/x/crypto/bcrypt"
 )
 

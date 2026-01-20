@@ -95,8 +95,8 @@ type Product struct {
 	Description   string
 	Price         float64
 	StockQuantity int
-	CategoryID    sql.NullInt64 // Use sql.NullInt64 for nullable integers
-	ImageURL      string
+	Category      string
+	ImageURL      string // Not in database, kept for frontend compatibility
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -279,13 +279,13 @@ func DeleteCategory(id int) error {
 // CreateProduct inserts a new product into the database
 func CreateProduct(product Product) (int64, error) {
 	stmt, err := DB.Prepare(
-		"INSERT INTO products (name, description, price, stock_quantity, category_id, image_url) VALUES (?, ?, ?, ?, ?, ?)")
+		"INSERT INTO products (name, description, price, stock_quantity, category) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		return 0, err
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(product.Name, product.Description, product.Price, product.StockQuantity, product.CategoryID, product.ImageURL)
+	res, err := stmt.Exec(product.Name, product.Description, product.Price, product.StockQuantity, "general")
 	if err != nil {
 		return 0, err
 	}
@@ -300,7 +300,7 @@ func CreateProduct(product Product) (int64, error) {
 // GetProductByID retrieves a product by its ID
 func GetProductByID(id int) (*Product, error) {
 	row := DB.QueryRow(
-		"SELECT id, name, description, price, stock_quantity, category_id, image_url, created_at, updated_at FROM products WHERE id = ?", id)
+		"SELECT id, name, description, price, stock_quantity, category, created_at, updated_at FROM products WHERE id = ?", id)
 
 	product := &Product{}
 	err := row.Scan(
@@ -309,8 +309,7 @@ func GetProductByID(id int) (*Product, error) {
 		&product.Description,
 		&product.Price,
 		&product.StockQuantity,
-		&product.CategoryID,
-		&product.ImageURL,
+		&product.Category,
 		&product.CreatedAt,
 		&product.UpdatedAt)
 
@@ -326,13 +325,13 @@ func GetProductByID(id int) (*Product, error) {
 // UpdateProduct updates an existing product's information
 func UpdateProduct(product Product) error {
 	stmt, err := DB.Prepare(
-		"UPDATE products SET name = ?, description = ?, price = ?, stock_quantity = ?, category_id = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+		"UPDATE products SET name = ?, description = ?, price = ?, stock_quantity = ?, category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(product.Name, product.Description, product.Price, product.StockQuantity, product.CategoryID, product.ImageURL, product.ID)
+	_, err = stmt.Exec(product.Name, product.Description, product.Price, product.StockQuantity, product.Category, product.ID)
 	if err != nil {
 		return err
 	}
@@ -354,3 +353,104 @@ func DeleteProduct(id int) error {
 	return nil
 }
 
+// SearchProducts searches for products by name or description
+func SearchProducts(query string) ([]Product, error) {
+	if query == "" {
+		return []Product{}, nil
+	}
+
+	// Use LIKE to search for products where name or description contains the query
+	rows, err := DB.Query(
+		"SELECT id, name, description, price, stock_quantity, category, created_at, updated_at FROM products WHERE name LIKE ? OR description LIKE ? ORDER BY name",
+		"%"+query+"%", "%"+query+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []Product
+	for rows.Next() {
+		product := &Product{}
+		var createdAt, updatedAt sql.NullTime
+		err := rows.Scan(
+			&product.ID,
+			&product.Name,
+			&product.Description,
+			&product.Price,
+			&product.StockQuantity,
+			&product.Category,
+			&createdAt,
+			&updatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle null timestamps
+		if createdAt.Valid {
+			product.CreatedAt = createdAt.Time
+		} else {
+			product.CreatedAt = time.Now()
+		}
+		if updatedAt.Valid {
+			product.UpdatedAt = updatedAt.Time
+		} else {
+			product.UpdatedAt = time.Now()
+		}
+
+		products = append(products, *product)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return products, nil
+}
+
+// GetAllProducts retrieves all products from the database
+func GetAllProducts() ([]Product, error) {
+	rows, err := DB.Query(
+		"SELECT id, name, description, price, stock_quantity, category, created_at, updated_at FROM products ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []Product
+	for rows.Next() {
+		product := &Product{}
+		var createdAt, updatedAt sql.NullTime
+		err := rows.Scan(
+			&product.ID,
+			&product.Name,
+			&product.Description,
+			&product.Price,
+			&product.StockQuantity,
+			&product.Category,
+			&createdAt,
+			&updatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle null timestamps
+		if createdAt.Valid {
+			product.CreatedAt = createdAt.Time
+		} else {
+			product.CreatedAt = time.Now()
+		}
+		if updatedAt.Valid {
+			product.UpdatedAt = updatedAt.Time
+		} else {
+			product.UpdatedAt = time.Now()
+		}
+
+		products = append(products, *product)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return products, nil
+}

@@ -1,0 +1,61 @@
+{{ define "title" }}Search{{ end }}
+
+{{ define "main-area" }}
+<div class="main-area">
+    <!-- Search Form -->
+    <div class="wrapper--search-form">
+        <div class="search-form">
+            <h2>Search Products</h2>
+            <form id="searchForm" action="/search" method="GET">
+                <div class="search-form__input-group">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        name="q" 
+                        placeholder="Search for products..." 
+                        value="{{.Query}}"
+                        class="search-form__input"
+                    />
+                    <button type="submit" class="search-form__button">Search</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    {{if .Query}}
+    <div class="wrapper--search-results">
+        <div class="search-results">
+            <h2>Search Results for "{{.Query}}"</h2>
+            
+            {{if .NoResults}}
+            <div class="search-results__no-results">
+                <p>No products found matching your search.</p>
+                <p>Try searching with different keywords.</p>
+            </div>
+            {{else}}
+            <div class="product-feed"> 
+                {{range .Products}}
+                <div class="product-card-area">
+                    {{if .ImageURL}}
+                    <div class="product-card__media-area">
+                        <img src="{{.ImageURL}}" alt="{{.Name}}" width="200" height="200" />
+                    </div>
+                    {{end}}
+                    <div class="product-card__content-area">
+                        <h3>{{.Name}}</h3>
+                        <p class="product-card__description">{{.Description}}</p>
+                        <p class="product-card__price">${{printf "%.2f" .Price}}</p>
+                        {{if .StockQuantity}}
+                        <p class="product-card__stock">In Stock: {{.StockQuantity}}</p>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{ end }}

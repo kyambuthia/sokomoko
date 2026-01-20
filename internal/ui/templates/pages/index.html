@@ -1,0 +1,39 @@
+{{ define "title" }}sokomoko - Home{{ end }}
+
+{{ define "main-area" }}
+<div class="main-area">
+    <h1>Featured Products</h1>
+    
+    {{if .HasProducts}}
+    <div class="product-feed">
+        {{range .Products}}
+        <div class="product-card-area">
+            {{if .ImageURL}}
+            <div class="product-card__media-area">
+                <img src="{{.ImageURL}}" alt="{{.Name}}" width="200" height="200" />
+            </div>
+            {{end}}
+            <div class="product-card__content-area">
+                <h3>{{.Name}}</h3>
+                <p>{{.Description}}</p>
+                <p>Price: ${{printf "%.2f" .Price}}</p>
+                {{if .StockQuantity}}
+                <p>In Stock: {{.StockQuantity}}</p>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="no-products">
+        <h2>No Products Available</h2>
+        <p>Check back later for new products!</p>
+    </div>
+    {{end}}
+    
+    <div style="margin-top: 30px; text-align: center;">
+        <a href="/search" class="search-cta__button" style="display: inline-block; padding: 15px 30px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Search Products</a>
+    </div>
+</div>
+{{ end }}
+
