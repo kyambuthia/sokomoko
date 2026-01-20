@@ -31,17 +31,25 @@ the requirements for this project are as listed below.
     git clone github.com/kyambuthia/sokomoko.git
     cd sokomoko
     ```
-3.  **Manage Dependencies:**
+3.  **Local DNS Setup:**
+    > [!NOTE]
+    > To use subdomains locally, add the following entries to your `/etc/hosts` file:
+    ```bash
+    127.0.0.1 sokomoko.localhost
+    127.0.0.1 admin.localhost
+    127.0.0.1 admin.sokomoko.localhost
+    ```
+4.  **Manage Dependencies:**
     > [!IMPORTANT]
     > Always use `go` commands to manage dependencies.
     ```bash
     go mod tidy
     ```
-4.  **Run the application:**
+5.  **Run the application:**
     ```bash
     go run ./cmd/sokomoko
     ```
-5.  **Build the application:**
+6.  **Build the application:**
     ```bash
     go build -o bin/sokomoko ./cmd/sokomoko
     ```

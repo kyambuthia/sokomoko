@@ -6,15 +6,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
 var (
-	baseTemplate, searchTemplate, authTemplate *template.Template
+	baseTemplate, searchTemplate, authTemplate, adminTemplate, adminLoginTemplate *template.Template
 )
 
 func init() {
@@ -50,45 +52,56 @@ func init() {
 	if err != nil {
 		log.Fatalf("Error parsing account template: %v", err)
 	}
+
+	adminTemplate, err = template.Must(base.Clone()).ParseFS(ui.TmplData, "templates/pages/admin.html")
+	if err != nil {
+		log.Fatalf("Error parsing admin template: %v", err)
+	}
+
+	adminLoginTemplate, err = template.Must(base.Clone()).ParseFS(ui.TmplData, "templates/pages/admin_login.html")
+	if err != nil {
+		log.Fatalf("Error parsing admin login template: %v", err)
+	}
 }
 
 func main() {
 	db.InitDB()
 	defer db.DB.Close()
 
-	mux := http.NewServeMux()
+	mainMux := http.NewServeMux()
+	adminMux := http.NewServeMux()
 
-	// Root Route Handler.
-	mux.HandleFunc("/", routes.Root(baseTemplate))
+	// Main Site Routes
+	mainMux.HandleFunc("/", routes.Root(baseTemplate))
+	mainMux.HandleFunc("/search", routes.Search(searchTemplate))
+	mainMux.HandleFunc("/account", routes.Auth(authTemplate))
+	mainMux.Handle("/static/", routes.Static(ui.StaticFS))
 
-	mux.HandleFunc("/search", routes.Search(searchTemplate))
+	// Admin Site Routes
+	adminMux.HandleFunc("/login", auth.AdminLogin(adminLoginTemplate))
 
-	mux.HandleFunc("/account", routes.Auth(authTemplate))
+	// Protected Admin Routes
+	adminHandlers := http.NewServeMux()
+	adminHandlers.HandleFunc("/", routes.AdminDashboard(adminTemplate))
+	adminHandlers.HandleFunc("/products", routes.AdminProducts(adminTemplate))
+	adminHandlers.HandleFunc("/orders", routes.AdminOrders(adminTemplate))
+	adminHandlers.HandleFunc("/reports", routes.AdminReports(adminTemplate))
+	adminHandlers.HandleFunc("/deliveries", routes.AdminDeliveries(adminTemplate))
 
-	// Admin Routes - Simple dashboard for now
-	mux.HandleFunc("/admin/", func(w http.ResponseWriter, r *http.Request) {
-		// Simple admin dashboard for now
-		w.Write([]byte(`
-			<!DOCTYPE html>
-			<html>
-			<head><title>Admin Dashboard</title></head>
-			<body>
-				<h1>Admin Dashboard</h1>
-				<p>Welcome to Admin Panel</p>
-				<ul>
-					<li><a href="/admin/products">Product Management</a></li>
-					<li><a href="/admin/orders">Order Management</a></li>
-					<li><a href="/admin/reports">Sales Reports</a></li>
-					<li><a href="/admin/deliveries">Delivery Management</a></li>
-				</ul>
-				<p><a href="/">Back to Store</a></p>
-			</body>
-			</html>
-		`))
+	// Wrap with Auth Middleware
+	protectedAdmin := auth.AuthMiddleware(auth.RequireRole("admin", adminHandlers))
+	adminMux.Handle("/", protectedAdmin)
+	adminMux.Handle("/static/", routes.Static(ui.StaticFS))
+
+	// Subdomain Router
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if strings.HasPrefix(host, "admin.") {
+			adminMux.ServeHTTP(w, r)
+			return
+		}
+		mainMux.ServeHTTP(w, r)
 	})
-
-	// Static File Handler.
-	mux.Handle("/static/", routes.Static(ui.StaticFS))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -97,7 +110,7 @@ func main() {
 
 	srvr := &http.Server{
 		Addr:         ":" + port,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}

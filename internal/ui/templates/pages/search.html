@@ -8,14 +8,8 @@
             <h2>Search Products</h2>
             <form id="searchForm" action="/search" method="GET">
                 <div class="search-form__input-group">
-                    <input 
-                        type="text" 
-                        id="searchInput" 
-                        name="q" 
-                        placeholder="Search for products..." 
-                        value="{{.Query}}"
-                        class="search-form__input"
-                    />
+                    <input type="text" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}"
+                        class="search-form__input" />
                     <button type="submit" class="search-form__button">Search</button>
                 </div>
             </form>
@@ -27,21 +21,19 @@
     <div class="wrapper--search-results">
         <div class="search-results">
             <h2>Search Results for "{{.Query}}"</h2>
-            
+
             {{if .NoResults}}
             <div class="search-results__no-results">
                 <p>No products found matching your search.</p>
                 <p>Try searching with different keywords.</p>
             </div>
             {{else}}
-            <div class="product-feed"> 
+            <div class="product-feed">
                 {{range .Products}}
                 <div class="product-card-area">
-                    {{if .ImageURL}}
                     <div class="product-card__media-area">
-                        <img src="{{.ImageURL}}" alt="{{.Name}}" width="200" height="200" />
+                        <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" width="200" height="200" />
                     </div>
-                    {{end}}
                     <div class="product-card__content-area">
                         <h3>{{.Name}}</h3>
                         <p class="product-card__description">{{.Description}}</p>

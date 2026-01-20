@@ -13,16 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Session represents a user session
-type Session struct {
-	UserID    int
-	ExpiresAt time.Time
-}
-
-// sessions is a simple in-memory store for sessions. In a real application,
-// this would be a persistent store (e.g., database, Redis).
-var sessions = make(map[string]Session)
-
 // Auth handles the /auth/ route and renders the login page
 func Auth(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +64,8 @@ func SignUp(tmpl *template.Template) http.HandlerFunc {
 			Email:        email,
 			PasswordHash: string(hashedPassword),
 			Salt:         salt,
-			Role:         "user", // Default role
+			Role:         "user",   // Default role
+			Slug:         username, // Simple slug
 		}
 
 		_, err = db.CreateUser(user)
@@ -93,7 +84,7 @@ func SignUp(tmpl *template.Template) http.HandlerFunc {
 func Login(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "login.html", nil)
+			tmpl.ExecuteTemplate(w, "root_template", nil)
 			return
 		}
 
@@ -135,9 +126,16 @@ func Login(tmpl *template.Template) http.HandlerFunc {
 		sessionToken := base64.URLEncoding.EncodeToString(b)
 		expiresAt := time.Now().Add(24 * time.Hour)
 
-		sessions[sessionToken] = Session{
+		// Create session in DB
+		err = db.CreateSession(db.Session{
+			ID:        sessionToken,
 			UserID:    user.ID,
 			ExpiresAt: expiresAt,
+		})
+		if err != nil {
+			log.Printf("Error creating session in DB: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
 		}
 
 		http.SetCookie(w, &http.Cookie{
@@ -145,7 +143,64 @@ func Login(tmpl *template.Template) http.HandlerFunc {
 			Value:    sessionToken,
 			Expires:  expiresAt,
 			HttpOnly: true,
-			Secure:   true, // Set to true in production with HTTPS
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		http.Redirect(w, r, "/", http.StatusFound)
+	}
+}
+
+// AdminLogin handles admin authentication and ensures only admins can login
+func AdminLogin(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			tmpl.ExecuteTemplate(w, "root_template", nil)
+			return
+		}
+
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+
+		user, err := db.GetUserByUsername(username)
+		if err != nil || user == nil || user.Role != "admin" {
+			log.Printf("Admin login failed for user %s: %v", username, err)
+			http.Error(w, "Invalid admin credentials", http.StatusUnauthorized)
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password+user.Salt)); err != nil {
+			http.Error(w, "Invalid admin credentials", http.StatusUnauthorized)
+			return
+		}
+
+		// Success
+		b := make([]byte, 32)
+		rand.Read(b)
+		sessionToken := base64.URLEncoding.EncodeToString(b)
+		expiresAt := time.Now().Add(24 * time.Hour)
+
+		// Create session in DB
+		err = db.CreateSession(db.Session{
+			ID:        sessionToken,
+			UserID:    user.ID,
+			ExpiresAt: expiresAt,
+		})
+		if err != nil {
+			log.Printf("Error creating admin session in DB: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_token",
+			Value:    sessionToken,
+			Expires:  expiresAt,
+			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
 		})
 
@@ -158,14 +213,14 @@ func Logout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_token")
 		if err == nil {
-			// Delete session from store
-			delete(sessions, cookie.Value)
+			// Delete session from DB
+			_ = db.DeleteSession(cookie.Value)
 		}
 
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session_token",
 			Value:    "",
-			Expires:  time.Now().Add(-time.Hour), // Set expiration to a past time to delete the cookie
+			Expires:  time.Now().Add(-time.Hour),
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteLaxMode,
@@ -192,10 +247,12 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		sess, ok := sessions[cookie.Value]
-		if !ok || sess.ExpiresAt.Before(time.Now()) {
+		sess, err := db.GetSession(cookie.Value)
+		if err != nil || sess == nil || sess.ExpiresAt.Before(time.Now()) {
 			// Session invalid or expired
-			delete(sessions, cookie.Value) // Clean up expired session
+			if sess != nil {
+				_ = db.DeleteSession(cookie.Value)
+			}
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
@@ -203,14 +260,10 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		user, err := db.GetUserByID(sess.UserID)
 		if err != nil || user == nil {
 			log.Printf("Error retrieving user from DB for session %d: %v", sess.UserID, err)
-			delete(sessions, cookie.Value) // Invalidate session if user not found
+			_ = db.DeleteSession(cookie.Value)
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
-
-		// Renew session expiration
-		sess.ExpiresAt = time.Now().Add(24 * time.Hour)
-		sessions[cookie.Value] = sess
 
 		// Add user to context
 		ctx := context.WithValue(r.Context(), userContextKey, user)

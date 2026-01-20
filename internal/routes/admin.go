@@ -9,8 +9,7 @@ import (
 // AdminDashboard serves the main admin dashboard
 func AdminDashboard(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// For now, serve a simple admin dashboard page
-		err := tmpl.Execute(w, map[string]interface{}{
+		err := tmpl.ExecuteTemplate(w, "root_template", map[string]interface{}{
 			"Title":   "Admin Dashboard",
 			"Message": "Welcome to Admin Dashboard",
 		})
@@ -25,8 +24,7 @@ func AdminDashboard(tmpl *template.Template) http.HandlerFunc {
 // AdminProducts handles product management
 func AdminProducts(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Product management page
-		err := tmpl.Execute(w, map[string]interface{}{
+		err := tmpl.ExecuteTemplate(w, "root_template", map[string]interface{}{
 			"Title":   "Product Management",
 			"Message": "Manage your products here",
 		})
@@ -41,8 +39,7 @@ func AdminProducts(tmpl *template.Template) http.HandlerFunc {
 // AdminOrders handles order management
 func AdminOrders(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Order management page
-		err := tmpl.Execute(w, map[string]interface{}{
+		err := tmpl.ExecuteTemplate(w, "root_template", map[string]interface{}{
 			"Title":   "Order Management",
 			"Message": "View and manage orders",
 		})
@@ -57,8 +54,7 @@ func AdminOrders(tmpl *template.Template) http.HandlerFunc {
 // AdminReports handles sales reports
 func AdminReports(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Sales reports page
-		err := tmpl.Execute(w, map[string]interface{}{
+		err := tmpl.ExecuteTemplate(w, "root_template", map[string]interface{}{
 			"Title":   "Sales Reports",
 			"Message": "View your sales analytics",
 		})
@@ -73,8 +69,7 @@ func AdminReports(tmpl *template.Template) http.HandlerFunc {
 // AdminDeliveries handles delivery management
 func AdminDeliveries(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Delivery management page
-		err := tmpl.Execute(w, map[string]interface{}{
+		err := tmpl.ExecuteTemplate(w, "root_template", map[string]interface{}{
 			"Title":   "Delivery Management",
 			"Message": "Manage product deliveries",
 		})

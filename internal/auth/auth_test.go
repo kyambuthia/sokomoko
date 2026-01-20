@@ -60,6 +60,7 @@ func createTestUser(username, email, password, role string) *db.User {
 		Username: username,
 		Email:    email,
 		Role:     role,
+		Slug:     username,
 	}
 
 	saltBytes := make([]byte, 16)
@@ -205,7 +206,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test access with valid session
 	sessionToken := "valid_session_token"
-	sessions[sessionToken] = Session{UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour)}
+	db.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
@@ -234,7 +235,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test access with expired session
 	sessionToken = "expired_session_token"
-	sessions[sessionToken] = Session{UserID: user.ID, ExpiresAt: time.Now().Add(-time.Hour)}
+	db.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(-time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
