@@ -14,7 +14,7 @@
             <div class="product-card__content-area">
                 <h3>{{.Name}}</h3>
                 <p>{{.Description}}</p>
-                <p>Price: ${{printf "%.2f" .Price}}</p>
+                <p class="product-card__price">${{printf "%.2f" .Price}}</p>
                 {{if .StockQuantity}}
                 <p>In Stock: {{.StockQuantity}}</p>
                 {{end}}
@@ -29,10 +29,8 @@
     </div>
     {{end}}
 
-    <div style="margin-top: 30px; text-align: center;">
-        <a href="/search" class="search-cta__button"
-            style="display: inline-block; padding: 15px 30px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Search
-            Products</a>
+    <div class="search-CTA-wrapper">
+        <a href="/search" class="search-CTA__button">Search Products</a>
     </div>
 </div>
 {{ end }}

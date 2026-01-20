@@ -1,248 +1,263 @@
+/* Early Internet Aesthetic - Reduced Noise Edition */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #000000;
+    --link-color: #0000ee;
+    --border-dashed: 1px dashed #cccccc;
+    --border-solid: 1px solid #000000;
+    --spacing: 24px;
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
-}
-
-:root
-{
-    --border-color: rgb(160, 160, 160);
-}
-
-html {
-    position: relative;
-    display: block;
-    font-family: monospace;
-    font-size: 16px;
-}
-
-body
-{
-    display: block;
-    margin: 0;
     padding: 0;
 }
 
-/* body-area */
-.body-area
-{
-    display: block;
-    margin: 0;
-    padding: 0;
-}
-
-/* header-area */
-.wrapper--header-area
-{
-    background: white;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    border-bottom: .05rem dashed gray;
-}
-
-.header-area
-{
-    display: block;
-    border: .05rem dashed var(--border-color);
-}
-
-/* 
-    nav-area 
-    ---
-    nav-area__nav-item
-
-*/
-.nav-area
-{
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.nav-area__nav-item
-{
-    display: block;
-    margin: 0 .5rem;
-}
-
-/*
-    nav-link
-    ---
-    nav-link__media-area
-    nav-link__content-area
-*/
-.nav-link
-{
-    display: block;
-}
-
-.nav-link__media-area
-{
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.nav-link__content-area
-{
-    display: block;
-    padding: .5rem 0rem;
-}
-
-.nav-link-label
-{
-    font-size: .75rem;
-    letter-spacing: .075rem;
-    text-transform: uppercase;
-    text-decoration: none;
-}
-
-/* site-main-area */
-.wrapper--main-area
-{
-    display: block;
-    padding-top: 48px;
-}
-
-.main-area
-{
-    display: block;
-}
-
-/* footer-area */
-.footer-area
-{
-    display: block;
-    border-top: .1rem black dashed;
-}
-
-.footer-nav-item
-{
-    display: block;
-    padding: .2rem 0rem;
-    border-bottom: .1rem gray dashed;
-}
-
-.footer-area--notice-banner
-{
-    display: block;
-    margin: .3rem;
-}
-
-.notice-txt
-{
-    text-align: center;
-    font-size: .75rem;
-    letter-spacing: .1rem;
-    text-transform: uppercase;
-}
-
+html,
 body {
-    background-color: #f4f4f4; /* Light gray background */
-    color: #333; /* Dark gray text */
+    font-family: "Courier New", Courier, monospace;
+    background-color: #f8f8f8;
+    color: var(--text-color);
+    font-size: 14px;
     line-height: 1.6;
-    margin: 0;
-    padding: 0;
 }
 
-.container {
-    width: 80%;
-    margin: auto;
-    overflow: hidden;
-    padding: 20px 0;
+/* Links: Always dashed underline */
+a {
+    color: var(--link-color);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--link-color);
+}
+
+a:hover {
+    border-bottom-style: solid;
+}
+
+/* Headings: Simple and bold */
+h1,
+h2,
+h3 {
+    text-transform: uppercase;
+    font-weight: bold;
+    margin-top: 10px;
+    margin-bottom: 15px;
+    display: inline-block;
+}
+
+h1 {
+    font-size: 1.6rem;
+    border-bottom: 2px solid #000;
 }
 
 h2 {
-    color: #333;
-    text-align: center;
-    margin-bottom: 20px;
+    font-size: 1.3rem;
+    border-bottom: 1px solid #000;
 }
 
-form {
+h3 {
+    font-size: 1rem;
+}
+
+/* Layout Containers */
+.wrapper--header-area {
     background: #fff;
+    border-bottom: var(--border-solid);
+    padding: 12px var(--spacing);
+    margin-bottom: var(--spacing);
+}
+
+.main-area {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: var(--spacing);
+    background: #fff;
+    border-left: var(--border-solid);
+    border-right: var(--border-solid);
+}
+
+.footer-area {
+    max-width: 800px;
+    margin: var(--spacing) auto;
     padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    max-width: 500px;
-    margin: 20px auto;
+    border-top: var(--border-dashed);
+    text-align: center;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Navigation */
+.nav-area {
+    display: flex;
+    gap: 20px;
+    list-style: none;
+    padding: 10px 0;
+}
+
+.nav-area__nav-item a {
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+.nav-area__nav-item a:hover {
+    border-bottom: 1px dashed var(--link-color);
+}
+
+/* Re-enabling for ALL links as requested */
+.nav-link {
+    border-bottom: 1px dashed var(--link-color) !important;
+}
+
+/* Product Feed */
+.product-feed {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 30px;
+    margin-top: var(--spacing);
+}
+
+.product-card-area {
+    padding: 10px;
+}
+
+.product-card__media-area img {
+    width: 100%;
+    height: auto;
+    display: block;
+    image-rendering: auto;
+    border: 1px solid #eee;
+    margin-bottom: 12px;
+}
+
+.product-card__content-area h3 {
+    margin-bottom: 8px;
+    border-bottom: none;
+}
+
+.product-card__price {
+    font-weight: bold;
+    color: #444;
+}
+
+/* Admin Specifics */
+.admin-top-bar {
+    background: #000 !important;
+    color: #0f0 !important;
+    font-family: monospace;
+    padding: 6px 20px !important;
+    font-size: 12px;
+}
+
+.admin-header {
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+}
+
+.admin-nav {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.admin-nav-link {
+    padding: 2px 4px;
+    border-bottom: 1px dashed var(--link-color);
+}
+
+.admin-nav-link.active {
+    background: #000;
+    color: #fff;
+    border-bottom: none;
+}
+
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.stat-card {
+    border: 1px solid #ddd;
+    padding: 20px;
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #222;
+}
+
+/* Forms */
+form {
+    border: 1px solid #000;
+    padding: 30px;
+    max-width: 450px;
+    margin: 40px auto;
 }
 
 form label {
     display: block;
     margin-bottom: 8px;
     font-weight: bold;
+    text-transform: uppercase;
+    font-size: 12px;
 }
 
-form input[type="text"],
-form input[type="email"],
-form input[type="password"] {
-    display: block; /* Explicitly make them block-level to stack */
+form input {
     width: 100%;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-sizing: border-box; /* Ensure padding doesn't increase width */
+    padding: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #000;
+    font-family: inherit;
+    outline: none;
 }
 
 form button {
-    display: block;
-    width: 100%;
-    padding: 10px;
-    background: #333;
+    background: #000;
     color: #fff;
     border: none;
-    border-radius: 4px;
+    padding: 10px 20px;
     cursor: pointer;
-    font-size: 16px;
+    font-family: inherit;
+    font-weight: bold;
+    text-transform: uppercase;
+    width: 100%;
 }
 
 form button:hover {
-    background: #555;
+    background: #333;
 }
 
-p {
+/* Utils */
+.search-CTA-wrapper {
+    margin-top: 40px;
     text-align: center;
-    margin-top: 20px;
 }
 
-p a {
-    color: #333;
-    text-decoration: none;
-}
-
-p a:hover {
-    text-decoration: underline;
-}
-
-/* Reset styles for the search form in the nav */
-.nav-area form {
-    background: none;
-    padding: 0;
-    border-radius: 0;
-    box-shadow: none;
-    max-width: none;
-    margin: 0;
-}
-
-.nav-area form input[type="text"] {
+.search-CTA__button {
     display: inline-block;
-    width: auto;
-    padding: 0;
-    margin-bottom: 0;
-    border: none;
-    border-radius: 0;
+    padding: 10px 25px;
+    background: #000;
+    color: #fff !important;
+    border-bottom: none !important;
+    font-weight: bold;
+    text-transform: uppercase;
 }
 
-.nav-area form button {
-    display: inline-block;
-    width: auto;
-    padding: 0;
-    background: none;
-    color: #333;
-    border: none;
-    border-radius: 0;
-    font-size: 1em;
+.search-CTA__button:hover {
+    background: #333;
+}
+
+/* Banner */
+.banner-area {
+    background: #000;
+    color: #fff;
+    padding: 4px 0;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
 }

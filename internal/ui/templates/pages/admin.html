@@ -1,71 +1,62 @@
 {{ define "title" }}Admin - {{.Title}}{{ end }}
-
-{{ define "header-area" }}
-    <div class="admin-top-bar" style="background: #333; color: white; padding: 10px 20px;">
-        <span>Sokomoko Admin</span>
-    </div>
+ {{ define "header-area" }} <div class="admin-top-bar">
+    <span>Sokomoko Admin Terminal v1.0</span>
+</div>
 {{ end }}
-
-{{ define "main-area" }}
-<div class="main-area">
+ {{ define "main-area" }} <div class="main-area">
     <!-- Admin Header -->
-    <div class="wrapper--admin-header">
-        <div class="admin-header">
+<div class="wrapper--admin-header">
+<div class="admin-header">
             <h1>Admin Dashboard</h1>
-            <div class="admin-nav">
-                <a href="/admin/" class="admin-nav-link {{if eq .Title "Admin Dashboard"}}active{{end}}">Dashboard</a>
-                <a href="/admin/products" class="admin-nav-link {{if eq .Title "Product Management"}}active{{end}}">Products</a>
-                <a href="/admin/orders" class="admin-nav-link {{if eq .Title "Order Management"}}active{{end}}">Orders</a>
-                <a href="/admin/reports" class="admin-nav-link {{if eq .Title "Sales Reports"}}active{{end}}">Reports</a>
-                <a href="/admin/deliveries" class="admin-nav-link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a>
-                <a href="/" class="admin-nav-link">Back to Store</a>
+<div class="admin-nav">
+<a href="/admin/" class="admin-nav-link {{if eq .Title " Admin Dashboard"}}active{{end}}">Dashboard</a>
+<a href="/admin/products" class="admin-nav-link {{if eq .Title " Product Management"}}active{{end}}">Products</a>
+<a href="/admin/orders" class="admin-nav-link {{if eq .Title " Order Management"}}active{{end}}">Orders</a>
+<a href="/admin/reports" class="admin-nav-link {{if eq .Title " Sales Reports"}}active{{end}}">Reports</a>
+<a href="/admin/deliveries" class="admin-nav-link {{if eq .Title " Delivery Management"}}active{{end}}">Deliveries</a>
+<a href="/" class="admin-nav-link">Back to Store</a>
             </div>
         </div>
     </div>
 
     <!-- Admin Content -->
-    <div class="wrapper--admin-content">
-        <div class="admin-content">
+<div class="wrapper--admin-content">
+<div class="admin-content">
             <h2>{{.Title}}</h2>
             <p>{{.Message}}</p>
-            
+
             <!-- Content will be added here based on specific admin functions -->
-            <div class="admin-section">
-                {{if eq .Title "Admin Dashboard"}}
-                    <div class="dashboard-stats">
-                        <div class="stat-card">
-                            <h3>Total Products</h3>
-                            <p class="stat-number">0</p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Orders Today</h3>
-                            <p class="stat-number">0</p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Revenue Today</h3>
-                            <p class="stat-number">$0.00</p>
-                        </div>
+<div class="admin-section"> {{if eq .Title "Admin Dashboard"}} <div class="dashboard-stats">
+<div class="stat-card">
+                        <h3>Total Products</h3>
+<p class="stat-number">0</p>
                     </div>
-                    
-                    <div class="admin-actions">
-                        <h3>Quick Actions</h3>
-                        <div class="action-buttons">
-                            <a href="/admin/products" class="action-button">Add New Product</a>
-                            <a href="/admin/orders" class="action-button">View Orders</a>
-                        </div>
+<div class="stat-card">
+                        <h3>Orders Today</h3>
+<p class="stat-number">0</p>
                     </div>
+<div class="stat-card">
+                        <h3>Revenue Today</h3>
+<p class="stat-number">$0.00</p>
+                    </div>
+                </div>
+ <div class="admin-actions">
+                    <h3>Quick Actions</h3>
+<div class="action-buttons">
+<a href="/admin/products" class="action-button">Add New Product</a>
+<a href="/admin/orders" class="action-button">View Orders</a>
+                    </div>
+                </div>
                 {{end}}
-                
-                {{if eq .Title "Product Management"}}
-                    <div class="product-actions">
-                        <h3>Product Actions</h3>
-                        <div class="action-buttons">
-                            <button class="action-button" onclick="openAddProductModal()">Add New Product</button>
-                            <button class="action-button" onclick="openImportModal()">Import Products</button>
-                        </div>
+ {{if eq .Title "Product Management"}} <div class="product-actions">
+                    <h3>Product Actions</h3>
+<div class="action-buttons">
+<button class="action-button" onclick="openAddProductModal()">Add New Product</button>
+<button class="action-button" onclick="openImportModal()">Import Products</button>
                     </div>
+                </div>
                 {{end}}
-                
+
                 <!-- Additional admin sections will be added here -->
             </div>
         </div>
