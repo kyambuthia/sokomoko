@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
             e.preventDefault();
 
             const formData = new FormData(searchForm);
-            const queryString = formData.get("queryString")?.trim();
+            const queryString = formData.get("q")?.trim();
             
             if (!queryString) {
                 return;
