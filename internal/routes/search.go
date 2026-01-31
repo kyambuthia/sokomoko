@@ -2,12 +2,12 @@ package routes
 
 import (
 	"encoding/json"
-	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 
+	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
@@ -15,7 +15,7 @@ type SearchFormValues struct {
 	QueryString string `json:"queryString"`
 }
 
-func Search(store *db.Store, tmpl *template.Template) http.HandlerFunc {
+func Search(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		// HANDLE GET REQUESTS -  /search ROUTE
@@ -23,7 +23,7 @@ func Search(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			query := req.URL.Query().Get("q")
 			if query != "" {
 				// Perform search
-				products, err := store.SearchProducts(strings.TrimSpace(query))
+				products, err := a.Store.SearchProducts(strings.TrimSpace(query))
 				if err != nil {
 					log.Printf("Error searching products: %v", err)
 					http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -36,25 +36,14 @@ func Search(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 					"Products":  products,
 					"NoResults": len(products) == 0,
 				}
-
-				err = tmpl.ExecuteTemplate(w, "root_template", data)
-				if err != nil {
-					log.Printf("Template execution error: %v", err)
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
-					return
-				}
+				a.Render(w, a.Templates.Search, data)
 			} else {
 				data := map[string]interface{}{
 					"Query":     "",
 					"Products":  []db.Product{},
 					"NoResults": false,
 				}
-				err := tmpl.ExecuteTemplate(w, "root_template", data)
-				if err != nil {
-					log.Printf("Template execution error: %v", err)
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
-					return
-				}
+				a.Render(w, a.Templates.Search, data)
 			}
 
 		// HANDLE POST REQUESTS - /search ROUTE
@@ -75,7 +64,7 @@ func Search(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			}
 
 			// Perform search
-			products, err := store.SearchProducts(strings.TrimSpace(formData.QueryString))
+			products, err := a.Store.SearchProducts(strings.TrimSpace(formData.QueryString))
 			if err != nil {
 				log.Printf("Error searching products: %v", err)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)

@@ -1,15 +1,13 @@
 package routes
 
 import (
-	"log"
 	"net/http"
-	"html/template"
+
+	"github.com/kyambuthia/sokomoko/internal/app"
 )
 
-func Auth(tmpl *template.Template) http.HandlerFunc {
+func Auth(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		err := tmpl.ExecuteTemplate(w, "root_template", "authentication route"); if err != nil {
-			log.Fatal(err)
-		}
+		a.Render(w, a.Templates.Account, "authentication route")
 	}
 }

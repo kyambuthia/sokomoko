@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kyambuthia/sokomoko/internal/auth"
+	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
@@ -26,30 +26,13 @@ func main() {
 	}
 	defer store.Close()
 
+	a := app.New(store, templates, ui.StaticFS)
+
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()
 
-	// Main Site Routes
-	mainMux.HandleFunc("/", routes.Root(store, templates.Index))
-	mainMux.HandleFunc("/search", routes.Search(store, templates.Search))
-	mainMux.HandleFunc("/account", routes.Auth(templates.Account))
-	mainMux.Handle("/static/", routes.Static(ui.StaticFS))
-
-	// Admin Site Routes
-	adminMux.HandleFunc("/login", auth.AdminLogin(store, templates.AdminLogin))
-
-	// Protected Admin Routes
-	adminHandlers := http.NewServeMux()
-	adminHandlers.HandleFunc("/", routes.AdminDashboard(templates.Admin))
-	adminHandlers.HandleFunc("/products", routes.AdminProducts(templates.Admin))
-	adminHandlers.HandleFunc("/orders", routes.AdminOrders(templates.Admin))
-	adminHandlers.HandleFunc("/reports", routes.AdminReports(templates.Admin))
-	adminHandlers.HandleFunc("/deliveries", routes.AdminDeliveries(templates.Admin))
-
-	// Wrap with Auth Middleware
-	protectedAdmin := auth.AuthMiddleware(store, auth.RequireRole("admin", adminHandlers))
-	adminMux.Handle("/", protectedAdmin)
-	adminMux.Handle("/static/", routes.Static(ui.StaticFS))
+	routes.RegisterPublic(a, mainMux)
+	routes.RegisterAdmin(a, adminMux)
 
 	// Subdomain Router
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
