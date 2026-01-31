@@ -1,24 +1,64 @@
 {{ define "body_area" }}
 <div class="container">
-    <h2>Add New Product</h2>
+  <div style="max-width: 600px;">
+    <h1>Add New Product</h1>
+    <p style="color: #666666; margin-bottom: 1.5em;">Fill in the form below to add a new product to your catalog.</p>
+
     <form action="/partner/products/add" method="POST">
-        <label for="name">Product Name:</label>
-        <input type="text" id="name" name="name" required>
+      <fieldset>
+        <legend>Product Information</legend>
 
-        <label for="description">Description:</label>
-        <textarea id="description" name="description" rows="4"></textarea>
+        <div class="form-group">
+          <label for="name">Product Name *</label>
+          <input type="text" id="name" name="name" placeholder="e.g. Wireless Bluetooth Speaker" required>
+        </div>
 
-        <label for="price">Price:</label>
-        <input type="number" id="price" name="price" step="0.01" required>
+        <div class="form-group">
+          <label for="description">Description *</label>
+          <textarea id="description" name="description" placeholder="Describe your product, features, specifications..." rows="5" required></textarea>
+        </div>
 
-        <label for="category">Category:</label>
-        <input type="text" id="category" name="category">
+        <div class="grid grid-2-cols">
+          <div class="form-group">
+            <label for="price">Price (USD) *</label>
+            <input type="number" id="price" name="price" step="0.01" placeholder="0.00" required>
+          </div>
 
-        <label for="stock_quantity">Stock Quantity:</label>
-        <input type="number" id="stock_quantity" name="stock_quantity" required>
+          <div class="form-group">
+            <label for="stock_quantity">Stock Quantity *</label>
+            <input type="number" id="stock_quantity" name="stock_quantity" placeholder="0" required>
+          </div>
+        </div>
 
-        <button type="submit">Add Product</button>
+        <div class="form-group">
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            <option value="">-- Select a Category --</option>
+            <option value="electronics">Electronics</option>
+            <option value="clothing">Clothing</option>
+            <option value="home">Home & Garden</option>
+            <option value="sports">Sports & Outdoors</option>
+            <option value="books">Books & Media</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <div style="display: flex; gap: 12px; margin-top: 1.5em;">
+        <button type="submit" class="button button--large" style="flex: 1;">Add Product</button>
+        <a href="/partner/dashboard" class="button button--secondary button--large" style="flex: 1; text-align: center; border-bottom: none;">Cancel</a>
+      </div>
     </form>
-    <p><a href="/partner/dashboard">Back to Dashboard</a></p>
+
+    <div class="alert alert--info" style="margin-top: 1.5em;">
+      <h4>Tips for Better Product Listings</h4>
+      <ul style="margin: 0; padding-left: 1.5em;">
+        <li>Use clear, descriptive product names</li>
+        <li>Include important specifications and features</li>
+        <li>Set accurate pricing and stock levels</li>
+        <li>Select the correct category for better discoverability</li>
+      </ul>
+    </div>
+  </div>
 </div>
 {{ end }}

@@ -1,26 +1,60 @@
-{{ define "title" }}Admin Login{{ end }}
+{{ define "title" }}Admin Login – Sokomoko{{ end }}
 
 {{ define "header-area" }}
-<div class="admin-top-bar">
-    <span>Sokomoko Admin Terminal v1.0</span>
+<div class="header">
+  <h1 class="site-title">Admin Login</h1>
+  <p class="site-tagline">Sokomoko Administration</p>
 </div>
 {{ end }}
 
 {{ define "main-area" }}
-<div class="main-area">
-    <div class="login-container">
-        <h2>ADMIN AUTHENTICATION</h2>
-        <form action="/login" method="POST">
-            <div>
-                <label for="username">USER:</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div>
-                <label for="password">PASS:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit">LOGIN</button>
-        </form>
+<div class="container">
+  <div style="max-width: 450px; margin: 2em auto;">
+    
+    <h1>Administrator Access</h1>
+    <p style="color: #666666; margin-bottom: 2em;">Sign in with your admin credentials to access the administration dashboard.</p>
+
+    <!-- Login Form -->
+    <form action="/login" method="POST">
+      <fieldset>
+        <legend>Admin Credentials</legend>
+
+        <div class="form-group">
+          <label for="username">Username *</label>
+          <input type="text" id="username" name="username" placeholder="Enter your username" required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password *</label>
+          <input type="password" id="password" name="password" placeholder="Enter your password" required>
+        </div>
+
+        <button type="submit" class="button--block">Sign In</button>
+      </fieldset>
+    </form>
+
+    <!-- Security Notice -->
+    <div class="alert alert--info" style="margin-top: 2em;">
+      <h4>Security Notice</h4>
+      <p>Only authorized administrators can access this area. All access attempts are logged for security purposes. Unauthorized access is prohibited.</p>
     </div>
+
+    <!-- Default Credentials Note (Development) -->
+    <div class="card" style="margin-top: 1.5em; background-color: #FFFAF0; border-color: #FF8C00;">
+      <div class="card__header" style="background-color: #FFF5E6;">
+        <h3 style="color: #FF8C00; margin: 0;">Development Credentials</h3>
+      </div>
+      <div class="card__body">
+        <p style="margin: 0 0 0.5em 0; font-size: 0.9rem;">
+          <strong>Username:</strong> <code>admin</code><br>
+          <strong>Password:</strong> <code>admin123</code>
+        </p>
+        <p style="margin: 0; font-size: 0.85rem; color: #666666;">
+          ⚠️ These are default development credentials. Change them immediately in production.
+        </p>
+      </div>
+    </div>
+
+  </div>
 </div>
 {{ end }}

@@ -1,36 +1,55 @@
-{{ define "title" }}sokomoko - Home{{ end }}
+{{ define "title" }}sokomoko – Online Marketplace{{ end }}
 
 {{ define "main-area" }}
-<div class="main-area">
-    <h1>Featured Products</h1>
+<div class="container">
+  <h1>Featured Products</h1>
 
-    {{if .HasProducts}}
-    <div class="product-feed">
-        {{range .Products}}
-        <div class="product-card-area">
-            <div class="product-card__media-area">
-                <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" width="200" height="200" />
-            </div>
-            <div class="product-card__content-area">
-                <h3>{{.Name}}</h3>
-                <p>{{.Description}}</p>
-                <p class="product-card__price">${{printf "%.2f" .Price}}</p>
-                {{if .StockQuantity}}
-                <p>In Stock: {{.StockQuantity}}</p>
-                {{end}}
-            </div>
-        </div>
+  <p>Browse our collection of quality products. Use the search below to find what you're looking for.</p>
+
+  <div style="margin: 1.5em 0;">
+    <form method="GET" action="/search" style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <input type="text" name="q" placeholder="Search products..." style="flex: 1; min-width: 200px;">
+      <button type="submit" class="button">Search</button>
+    </form>
+  </div>
+
+  {{if .HasProducts}}
+  <div class="product-grid">
+    {{range .Products}}
+    <div class="product-card">
+      <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-card__image" width="200" height="200">
+      <div class="product-card__content">
+        <h3 class="product-card__title">{{.Name}}</h3>
+        <p class="product-card__description">{{.Description}}</p>
+        <div class="product-card__price">${{printf "%.2f" .Price}}</div>
+        {{if .StockQuantity}}
+        <p style="font-size: 0.85rem; color: #008000; margin: 0.4em 0;">✓ In Stock ({{.StockQuantity}})</p>
+        {{else}}
+        <p style="font-size: 0.85rem; color: #CC0000; margin: 0.4em 0;">Out of Stock</p>
         {{end}}
-    </div>
-    {{else}}
-    <div class="no-products">
-        <h2>No Products Available</h2>
-        <p>Check back later for new products!</p>
+        <div class="product-card__footer">
+          <button class="product-card__button button button--small button--block">View Details</button>
+        </div>
+      </div>
     </div>
     {{end}}
+  </div>
+  {{else}}
+  <div class="alert alert--info" style="max-width: 600px;">
+    <h3>No Products Available</h3>
+    <p>Check back later for new products from our sellers!</p>
+  </div>
+  {{end}}
 
-    <div class="search-CTA-wrapper">
-        <a href="/search" class="search-CTA__button">Search Products</a>
-    </div>
+  <div style="margin-top: 2em; padding: 1.5em; border: 1px solid #CCCCCC; background-color: #F5F5F5;">
+    <h2>How It Works</h2>
+    <ol>
+      <li><strong>Browse</strong> our selection of products</li>
+      <li><strong>Add items</strong> to your cart</li>
+      <li><strong>Checkout</strong> securely</li>
+      <li><strong>Receive</strong> your order</li>
+    </ol>
+  </div>
+
 </div>
 {{ end }}

@@ -1,24 +1,51 @@
 {{ define "body_area" }}
 <div class="container">
-    <h2>Sign Up</h2>
+  <div style="max-width: 450px; margin: 2em auto;">
+    <h1>Create Account</h1>
+
     <form action="/signup" method="POST">
-        <label for="name">Name:</label>
-        <input type="text" id="name" name="name" required>
+      <fieldset>
+        <legend>Sign Up</legend>
 
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" required>
+        <div class="form-group">
+          <label for="name">Full Name *</label>
+          <input type="text" id="name" name="name" placeholder="John Doe" required>
+        </div>
 
-        <label for="phonenumber">Phone Number:</label>
-        <input type="text" id="phonenumber" name="phonenumber">
+        <div class="form-group">
+          <label for="email">Email Address *</label>
+          <input type="email" id="email" name="email" placeholder="your@email.com" required>
+        </div>
 
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
+        <div class="form-group">
+          <label for="phonenumber">Phone Number</label>
+          <input type="tel" id="phonenumber" name="phonenumber" placeholder="555-1234">
+        </div>
 
-        <label for="confirm_password">Confirm Password:</label>
-        <input type="password" id="confirm_password" name="confirm_password" required>
+        <div class="form-group">
+          <label for="password">Password *</label>
+          <input type="password" id="password" name="password" placeholder="At least 8 characters" required>
+        </div>
 
-        <button type="submit">Sign Up</button>
+        <div class="form-group">
+          <label for="confirm_password">Confirm Password *</label>
+          <input type="password" id="confirm_password" name="confirm_password" required>
+        </div>
+
+        <div class="checkbox-group">
+          <div class="checkbox-item">
+            <input type="checkbox" id="terms" name="terms" required>
+            <label for="terms" class="inline">I agree to the terms and conditions</label>
+          </div>
+        </div>
+
+        <button type="submit" class="button--block">Create Account</button>
+      </fieldset>
     </form>
-    <p>Already have an account? <a href="/login">Login here</a></p>
+
+    <p style="text-align: center; margin-top: 1.5em;">
+      Already have an account? <a href="/login">Sign in here</a>
+    </p>
+  </div>
 </div>
 {{ end }}

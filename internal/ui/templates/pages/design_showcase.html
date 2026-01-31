@@ -1,0 +1,551 @@
+{{ define "body_area" }}
+<div class="container">
+  <!-- ===== TYPOGRAPHY ===== -->
+  <section class="mt-3">
+    <h1>Sokomoko Design System Showcase</h1>
+    <p>A comprehensive guide to the retro, mobile-first UI components.</p>
+
+    <h2>Typography</h2>
+    
+    <h3>Headings</h3>
+    <h1>Heading 1 – Page Title</h1>
+    <h2>Heading 2 – Section Title</h2>
+    <h3>Heading 3 – Subsection</h3>
+    <h4>Heading 4 – Minor Section</h4>
+
+    <h3>Text Styles</h3>
+    <p>This is a <strong>bold</strong> word, and this is <em>italic</em> text. You can also use <code>inline code</code> for technical terms.</p>
+    <p><small>This text is smaller (0.85rem) for secondary information.</small></p>
+
+    <h3>Code Blocks</h3>
+    <pre><code>&lt;button&gt;Submit&lt;/button&gt;
+&lt;a href="/"&gt;Home&lt;/a&gt;</code></pre>
+  </section>
+
+  <!-- ===== LINKS ===== -->
+  <section class="mt-3">
+    <h2>Links & Navigation</h2>
+    
+    <h3>Standard Links</h3>
+    <p>
+      This is an <a href="#">unvisited link (blue with underline)</a>.
+      Links change <a href="#">on hover (black background, white text)</a>.
+    </p>
+
+    <h3>Navigation Menu</h3>
+    <nav class="nav">
+      <ul class="nav__list">
+        <li class="nav__item">
+          <a href="/" class="nav__link active">Home</a>
+        </li>
+        <li class="nav__item">
+          <a href="/products" class="nav__link">Products</a>
+        </li>
+        <li class="nav__item">
+          <a href="/about" class="nav__link">About</a>
+        </li>
+        <li class="nav__item">
+          <a href="/contact" class="nav__link">Contact</a>
+        </li>
+        <li class="nav__item">
+          <a href="/account" class="nav__link">Account</a>
+        </li>
+      </ul>
+    </nav>
+
+    <h3>Breadcrumb Navigation</h3>
+    <p>
+      <a href="/">Home</a> &gt;
+      <a href="/products">Products</a> &gt;
+      <a href="/electronics">Electronics</a> &gt;
+      Laptop
+    </p>
+  </section>
+
+  <!-- ===== BUTTONS ===== -->
+  <section class="mt-3">
+    <h2>Buttons</h2>
+    
+    <h3>Button States</h3>
+    <div style="margin-bottom: 1em;">
+      <button>Normal Button</button>
+      <button disabled>Disabled Button</button>
+    </div>
+
+    <h3>Button Variants</h3>
+    <div style="margin-bottom: 1em;">
+      <button class="button">Primary Button</button>
+      <button class="button--secondary">Secondary Button</button>
+      <button class="button--success">Success Button</button>
+      <button class="button--danger">Danger Button</button>
+    </div>
+
+    <h3>Button Sizes</h3>
+    <div style="margin-bottom: 1em;">
+      <button class="button--small">Small</button>
+      <button>Normal</button>
+      <button class="button--large">Large</button>
+    </div>
+
+    <h3>Full-Width Button</h3>
+    <button class="button--block">Full Width Button</button>
+
+    <h3>Button as Link</h3>
+    <a href="#" class="button">Link Button</a>
+    <a href="#" class="button--secondary">Secondary Link Button</a>
+  </section>
+
+  <!-- ===== FORMS ===== -->
+  <section class="mt-3">
+    <h2>Forms</h2>
+
+    <h3>Basic Form</h3>
+    <form style="max-width: 400px;">
+      <fieldset>
+        <legend>Contact Form</legend>
+
+        <div class="form-group">
+          <label for="name">Full Name *</label>
+          <input type="text" id="name" name="name" placeholder="John Doe" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address *</label>
+          <input type="email" id="email" name="email" placeholder="john@example.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="phone">Phone (Optional)</label>
+          <input type="tel" id="phone" name="phone" placeholder="555-1234">
+        </div>
+
+        <div class="form-group">
+          <label for="category">Category *</label>
+          <select id="category" name="category" required>
+            <option value="">-- Select a Category --</option>
+            <option value="sales">Sales Inquiry</option>
+            <option value="support">Technical Support</option>
+            <option value="feedback">Feedback</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="message">Message *</label>
+          <textarea id="message" name="message" placeholder="Your message here..." required></textarea>
+        </div>
+
+        <div class="checkbox-group">
+          <div class="checkbox-item">
+            <input type="checkbox" id="subscribe" name="subscribe">
+            <label for="subscribe" class="inline">Subscribe to our newsletter</label>
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" id="terms" name="terms">
+            <label for="terms" class="inline">I agree to the terms and conditions</label>
+          </div>
+        </div>
+
+        <div class="radio-group">
+          <label>Preferred Contact Method:</label>
+          <div class="radio-item">
+            <input type="radio" id="contact-email" name="contact-method" value="email">
+            <label for="contact-email" class="inline">Email</label>
+          </div>
+          <div class="radio-item">
+            <input type="radio" id="contact-phone" name="contact-method" value="phone">
+            <label for="contact-phone" class="inline">Phone</label>
+          </div>
+        </div>
+
+        <button type="submit" class="button--block">Submit</button>
+        <button type="reset" class="button--secondary button--block" style="margin-top: 0.5em;">Clear</button>
+      </fieldset>
+    </form>
+
+    <h3>Form States</h3>
+    <form style="max-width: 400px;">
+      <div class="form-group has-error">
+        <label for="bad-email">Error Input</label>
+        <input type="email" id="bad-email" name="bad-email">
+        <div class="form-error">Please enter a valid email address</div>
+      </div>
+
+      <div class="form-group has-success">
+        <label for="good-email">Success Input</label>
+        <input type="email" id="good-email" name="good-email">
+        <div class="form-success">Email verified!</div>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===== ALERTS ===== -->
+  <section class="mt-3">
+    <h2>Alerts & Messages</h2>
+
+    <div class="alert alert--info">
+      <h4>Information</h4>
+      <p>This is an informational message. Use this for general notifications.</p>
+    </div>
+
+    <div class="alert alert--success">
+      <h4>Success</h4>
+      <p>Your order has been placed successfully. Confirmation email sent.</p>
+    </div>
+
+    <div class="alert alert--warning">
+      <h4>Warning</h4>
+      <p>Your session is about to expire. Please save your work.</p>
+    </div>
+
+    <div class="alert alert--error">
+      <h4>Error</h4>
+      <p>Something went wrong. Please try again or contact support.</p>
+    </div>
+  </section>
+
+  <!-- ===== CARDS ===== -->
+  <section class="mt-3">
+    <h2>Cards & Containers</h2>
+
+    <h3>Basic Card</h3>
+    <div class="card">
+      <div class="card__header">
+        <h3>Card Title</h3>
+      </div>
+      <div class="card__body">
+        <p>This is the main content of the card. Cards are useful for grouping related information.</p>
+        <p>You can include multiple paragraphs, lists, and other content inside.</p>
+      </div>
+      <div class="card__footer">
+        <small>Created on January 20, 2025</small>
+      </div>
+    </div>
+
+    <h3>Card Variant (Light Gray)</h3>
+    <div class="card card--alt">
+      <div class="card__header">
+        <h3>Alternative Card</h3>
+      </div>
+      <div class="card__body">
+        <p>This card uses a light gray background for visual distinction.</p>
+      </div>
+    </div>
+
+    <h3>Multiple Cards in Grid</h3>
+    <div class="grid grid-2-cols">
+      <div class="card">
+        <div class="card__header">
+          <h4>Feature 1</h4>
+        </div>
+        <div class="card__body">
+          <p>Description of the first feature.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card__header">
+          <h4>Feature 2</h4>
+        </div>
+        <div class="card__body">
+          <p>Description of the second feature.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== TABLES ===== -->
+  <section class="mt-3">
+    <h2>Tables</h2>
+
+    <h3>Standard Table</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Category</th>
+          <th>Price</th>
+          <th>Stock</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Laptop Pro</strong></td>
+          <td>Electronics</td>
+          <td>$1,299.99</td>
+          <td>5</td>
+          <td><a href="#">Edit</a></td>
+        </tr>
+        <tr>
+          <td><strong>USB Cable</strong></td>
+          <td>Accessories</td>
+          <td>$4.99</td>
+          <td>42</td>
+          <td><a href="#">Edit</a></td>
+        </tr>
+        <tr>
+          <td><strong>Wireless Mouse</strong></td>
+          <td>Accessories</td>
+          <td>$29.99</td>
+          <td>0</td>
+          <td><a href="#">Edit</a></td>
+        </tr>
+        <tr>
+          <td><strong>Monitor 27"</strong></td>
+          <td>Electronics</td>
+          <td>$349.99</td>
+          <td>3</td>
+          <td><a href="#">Edit</a></td>
+        </tr>
+        <tr>
+          <td><strong>Keyboard Mechanical</strong></td>
+          <td>Accessories</td>
+          <td>$129.99</td>
+          <td>8</td>
+          <td><a href="#">Edit</a></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Compact Table</h3>
+    <table class="table--compact">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>User</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>#001</td>
+          <td>John Doe</td>
+          <td>Active</td>
+          <td>2025-01-20</td>
+        </tr>
+        <tr>
+          <td>#002</td>
+          <td>Jane Smith</td>
+          <td>Inactive</td>
+          <td>2025-01-19</td>
+        </tr>
+        <tr>
+          <td>#003</td>
+          <td>Bob Johnson</td>
+          <td>Pending</td>
+          <td>2025-01-18</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Fully Bordered Table</h3>
+    <table class="table--bordered">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Revenue</th>
+          <th>Growth</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>January</td>
+          <td>$15,000</td>
+          <td>+10%</td>
+        </tr>
+        <tr>
+          <td>February</td>
+          <td>$18,500</td>
+          <td>+23%</td>
+        </tr>
+        <tr>
+          <td>March</td>
+          <td>$22,100</td>
+          <td>+19%</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== LISTS ===== -->
+  <section class="mt-3">
+    <h2>Lists</h2>
+
+    <h3>Unordered List</h3>
+    <ul>
+      <li>First item in the list</li>
+      <li>Second item with more information</li>
+      <li>Third item</li>
+      <li>Fourth item with nested content:
+        <ul>
+          <li>Nested item 1</li>
+          <li>Nested item 2</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h3>Ordered List</h3>
+    <ol>
+      <li>First step in the process</li>
+      <li>Second step
+        <ol>
+          <li>Sub-step A</li>
+          <li>Sub-step B</li>
+        </ol>
+      </li>
+      <li>Third step</li>
+      <li>Final step</li>
+    </ol>
+
+    <h3>Definition List</h3>
+    <dl>
+      <dt><strong>API</strong></dt>
+      <dd>Application Programming Interface – a set of protocols for building software applications.</dd>
+      <dt><strong>CSS</strong></dt>
+      <dd>Cascading Style Sheets – used for styling web pages.</dd>
+      <dt><strong>HTTP</strong></dt>
+      <dd>HyperText Transfer Protocol – the foundation of data communication on the web.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== PRODUCT GRID ===== -->
+  <section class="mt-3">
+    <h2>Product Grid</h2>
+
+    <div class="product-grid">
+      <div class="product-card">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext x='50%' y='50%' text-anchor='middle' dy='.3em' fill='%23999' font-family='monospace'%3EProduct 1%3C/text%3E%3C/svg%3E" alt="Product 1" class="product-card__image">
+        <div class="product-card__content">
+          <h3 class="product-card__title">Widget A</h3>
+          <p class="product-card__description">Quality product with great features.</p>
+          <div class="product-card__price">$29.99</div>
+          <div class="product-card__footer">
+            <button class="product-card__button button--small button--block">Add to Cart</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-card">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext x='50%' y='50%' text-anchor='middle' dy='.3em' fill='%23999' font-family='monospace'%3EProduct 2%3C/text%3E%3C/svg%3E" alt="Product 2" class="product-card__image">
+        <div class="product-card__content">
+          <h3 class="product-card__title">Widget B</h3>
+          <p class="product-card__description">Premium version with extra options.</p>
+          <div class="product-card__price">$49.99</div>
+          <div class="product-card__footer">
+            <button class="product-card__button button--small button--block">Add to Cart</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-card">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext x='50%' y='50%' text-anchor='middle' dy='.3em' fill='%23999' font-family='monospace'%3EProduct 3%3C/text%3E%3C/svg%3E" alt="Product 3" class="product-card__image">
+        <div class="product-card__content">
+          <h3 class="product-card__title">Widget C</h3>
+          <p class="product-card__description">Budget-friendly option.</p>
+          <div class="product-card__price">$14.99</div>
+          <div class="product-card__footer">
+            <button class="product-card__button button--small button--block">Add to Cart</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="product-card">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext x='50%' y='50%' text-anchor='middle' dy='.3em' fill='%23999' font-family='monospace'%3EProduct 4%3C/text%3E%3C/svg%3E" alt="Product 4" class="product-card__image">
+        <div class="product-card__content">
+          <h3 class="product-card__title">Widget D</h3>
+          <p class="product-card__description">Professional-grade equipment.</p>
+          <div class="product-card__price">$99.99</div>
+          <div class="product-card__footer">
+            <button class="product-card__button button--small button--block">Add to Cart</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PAGINATION ===== -->
+  <section class="mt-3">
+    <h2>Pagination</h2>
+
+    <ul class="pagination">
+      <li class="pagination__item disabled">
+        <span class="pagination__link">← Previous</span>
+      </li>
+      <li class="pagination__item active">
+        <a href="#" class="pagination__link">1</a>
+      </li>
+      <li class="pagination__item">
+        <a href="#" class="pagination__link">2</a>
+      </li>
+      <li class="pagination__item">
+        <a href="#" class="pagination__link">3</a>
+      </li>
+      <li class="pagination__item">
+        <a href="#" class="pagination__link">4</a>
+      </li>
+      <li class="pagination__item">
+        <a href="#" class="pagination__link">5</a>
+      </li>
+      <li class="pagination__item">
+        <a href="#" class="pagination__link">Next →</a>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ===== UTILITY CLASSES ===== -->
+  <section class="mt-3">
+    <h2>Utility Classes</h2>
+
+    <h3>Text Styling</h3>
+    <p class="text-left">Left aligned text</p>
+    <p class="text-center">Center aligned text</p>
+    <p class="text-right">Right aligned text</p>
+
+    <h3>Text Colors</h3>
+    <p class="text-muted">Muted text (gray)</p>
+    <p class="text-success">Success text (green)</p>
+    <p class="text-error">Error text (red)</p>
+    <p class="text-warning">Warning text (orange)</p>
+    <p class="text-info">Info text (blue)</p>
+
+    <h3>Spacing Classes</h3>
+    <div style="border: 1px solid #ccc; padding: 10px;">
+      <div class="mt-3" style="border: 1px dashed #999; padding: 5px;">mt-3: Margin top 1.5em</div>
+      <div class="mb-3" style="border: 1px dashed #999; padding: 5px;">mb-3: Margin bottom 1.5em</div>
+      <div class="pt-3" style="border: 1px dashed #999; padding: 5px;">pt-3: Padding top 1.5em</div>
+    </div>
+
+    <h3>Flexbox Utilities</h3>
+    <div class="flex flex-gap-2 flex-wrap">
+      <div style="border: 1px solid #ccc; padding: 10px; flex: 1; min-width: 150px;">Flex item 1</div>
+      <div style="border: 1px solid #ccc; padding: 10px; flex: 1; min-width: 150px;">Flex item 2</div>
+      <div style="border: 1px solid #ccc; padding: 10px; flex: 1; min-width: 150px;">Flex item 3</div>
+    </div>
+
+    <h3>Grid Utilities</h3>
+    <div class="grid grid-3-cols">
+      <div style="border: 1px solid #ccc; padding: 10px;">Grid cell 1</div>
+      <div style="border: 1px solid #ccc; padding: 10px;">Grid cell 2</div>
+      <div style="border: 1px solid #ccc; padding: 10px;">Grid cell 3</div>
+    </div>
+  </section>
+
+  <!-- ===== HORIZONTAL RULE ===== -->
+  <section class="mt-3">
+    <h2>Horizontal Rule</h2>
+    <p>Content above the rule.</p>
+    <hr>
+    <p>Content below the rule. The rule is a simple line, not decorative.</p>
+  </section>
+
+  <!-- ===== FOOTER NOTE ===== -->
+  <section class="mt-3 mb-3">
+    <div class="alert alert--info">
+      <h4>Design System Notes</h4>
+      <p>This showcase demonstrates all available components in the Sokomoko retro design system. For more details, refer to <code>DESIGN_SYSTEM.md</code> in the project root.</p>
+      <p><strong>No animations, gradients, shadows, or decorative effects are used.</strong> Focus is on clarity, accessibility, and mobile-first responsive design.</p>
+    </div>
+  </section>
+
+</div>
+{{ end }}

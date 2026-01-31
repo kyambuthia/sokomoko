@@ -1,15 +1,33 @@
 {{ define "body_area" }}
 <div class="container">
-    <h2>Login</h2>
+  <div style="max-width: 400px; margin: 2em auto;">
+    <h1>Login</h1>
+
     <form action="/login" method="POST">
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" required>
+      <fieldset>
+        <legend>Sign In to Your Account</legend>
 
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
+        <div class="form-group">
+          <label for="email">Email Address *</label>
+          <input type="email" id="email" name="email" placeholder="your@email.com" required>
+        </div>
 
-        <button type="submit">Login</button>
+        <div class="form-group">
+          <label for="password">Password *</label>
+          <input type="password" id="password" name="password" required>
+        </div>
+
+        <button type="submit" class="button--block">Sign In</button>
+      </fieldset>
     </form>
-    <p>Don't have an account? <a href="/signup">Sign Up here</a></p>
+
+    <p style="text-align: center; margin-top: 1.5em;">
+      Don't have an account? <a href="/signup">Sign up here</a>
+    </p>
+
+    <p style="text-align: center; font-size: 0.9rem;">
+      <a href="/forgot-password">Forgot your password?</a>
+    </p>
+  </div>
 </div>
 {{ end }}

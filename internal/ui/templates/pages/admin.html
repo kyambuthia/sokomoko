@@ -1,65 +1,282 @@
-{{ define "title" }}Admin - {{.Title}}{{ end }}
- {{ define "header-area" }} <div class="admin-top-bar">
-    <span>Sokomoko Admin Terminal v1.0</span>
+{{ define "title" }}Admin – {{.Title}}{{ end }}
+
+{{ define "header-area" }}
+<div class="header">
+  <h1 class="site-title">Admin Dashboard</h1>
+  <p class="site-tagline">Sokomoko Administration v1.0</p>
 </div>
 {{ end }}
- {{ define "main-area" }} <div class="main-area">
-    <!-- Admin Header -->
-<div class="wrapper--admin-header">
-<div class="admin-header">
-            <h1>Admin Dashboard</h1>
-<div class="admin-nav">
-<a href="/admin/" class="admin-nav-link {{if eq .Title " Admin Dashboard"}}active{{end}}">Dashboard</a>
-<a href="/admin/products" class="admin-nav-link {{if eq .Title " Product Management"}}active{{end}}">Products</a>
-<a href="/admin/orders" class="admin-nav-link {{if eq .Title " Order Management"}}active{{end}}">Orders</a>
-<a href="/admin/reports" class="admin-nav-link {{if eq .Title " Sales Reports"}}active{{end}}">Reports</a>
-<a href="/admin/deliveries" class="admin-nav-link {{if eq .Title " Delivery Management"}}active{{end}}">Deliveries</a>
-<a href="/" class="admin-nav-link">Back to Store</a>
-            </div>
+
+{{ define "main-area" }}
+<div class="container">
+
+  <!-- Admin Navigation -->
+  <nav class="nav">
+    <ul class="nav__list">
+      <li class="nav__item">
+        <a href="/admin/" class="nav__link {{if eq .Title "Admin Dashboard"}}active{{end}}">Dashboard</a>
+      </li>
+      <li class="nav__item">
+        <a href="/admin/products" class="nav__link {{if eq .Title "Product Management"}}active{{end}}">Products</a>
+      </li>
+      <li class="nav__item">
+        <a href="/admin/orders" class="nav__link {{if eq .Title "Order Management"}}active{{end}}">Orders</a>
+      </li>
+      <li class="nav__item">
+        <a href="/admin/reports" class="nav__link {{if eq .Title "Sales Reports"}}active{{end}}">Reports</a>
+      </li>
+      <li class="nav__item">
+        <a href="/admin/deliveries" class="nav__link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a>
+      </li>
+      <li class="nav__item">
+        <a href="/" class="nav__link">← Store</a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Page Content -->
+  <div class="mt-3">
+    
+    <!-- Dashboard Section -->
+    {{if eq .Title "Admin Dashboard"}}
+    
+    <h1>Dashboard</h1>
+    
+    <h2>Key Metrics</h2>
+    <p>Overview of your store's performance today.</p>
+
+    <!-- Metrics Grid -->
+    <div class="grid grid-3-cols">
+      <!-- Total Products Card -->
+      <div class="card">
+        <div class="card__header">
+          <h3>Total Products</h3>
         </div>
+        <div class="card__body">
+          <div style="padding: 20px; text-align: center;">
+            <div style="font-size: 2.5rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">{{if .ProductCount}}{{.ProductCount}}{{else}}0{{end}}</div>
+            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Products in catalog</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Orders Today Card -->
+      <div class="card">
+        <div class="card__header">
+          <h3>Orders Today</h3>
+        </div>
+        <div class="card__body">
+          <div style="padding: 20px; text-align: center;">
+            <div style="font-size: 2.5rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">{{if .OrdersToday}}{{.OrdersToday}}{{else}}0{{end}}</div>
+            <p style="color: #666666; margin: 0; font-size: 0.9rem;">New orders</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Revenue Today Card -->
+      <div class="card">
+        <div class="card__header">
+          <h3>Revenue Today</h3>
+        </div>
+        <div class="card__body">
+          <div style="padding: 20px; text-align: center;">
+            <div style="font-size: 2.5rem; font-weight: bold; color: #008000; margin-bottom: 0.5em;">{{if .RevenueToday}}${{.RevenueToday}}{{else}}$0.00{{end}}</div>
+            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Daily total</p>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Admin Content -->
-<div class="wrapper--admin-content">
-<div class="admin-content">
-            <h2>{{.Title}}</h2>
-            <p>{{.Message}}</p>
-
-            <!-- Content will be added here based on specific admin functions -->
-<div class="admin-section"> {{if eq .Title "Admin Dashboard"}} <div class="dashboard-stats">
-<div class="stat-card">
-                        <h3>Total Products</h3>
-<p class="stat-number">0</p>
-                    </div>
-<div class="stat-card">
-                        <h3>Orders Today</h3>
-<p class="stat-number">0</p>
-                    </div>
-<div class="stat-card">
-                        <h3>Revenue Today</h3>
-<p class="stat-number">$0.00</p>
-                    </div>
-                </div>
- <div class="admin-actions">
-                    <h3>Quick Actions</h3>
-<div class="action-buttons">
-<a href="/admin/products" class="action-button">Add New Product</a>
-<a href="/admin/orders" class="action-button">View Orders</a>
-                    </div>
-                </div>
-                {{end}}
- {{if eq .Title "Product Management"}} <div class="product-actions">
-                    <h3>Product Actions</h3>
-<div class="action-buttons">
-<button class="action-button" onclick="openAddProductModal()">Add New Product</button>
-<button class="action-button" onclick="openImportModal()">Import Products</button>
-                    </div>
-                </div>
-                {{end}}
-
-                <!-- Additional admin sections will be added here -->
-            </div>
-        </div>
+    <!-- Quick Actions -->
+    <h2 style="margin-top: 2em;">Quick Actions</h2>
+    <div class="flex flex-gap-2 flex-wrap">
+      <a href="/admin/products" class="button">Manage Products</a>
+      <a href="/admin/orders" class="button--secondary">View Orders</a>
+      <a href="/admin/reports" class="button--secondary">View Reports</a>
+      <a href="/admin/deliveries" class="button--secondary">Track Deliveries</a>
     </div>
+
+    <!-- Recent Activity -->
+    <h2 style="margin-top: 2em;">Recent Activity</h2>
+    <div class="card">
+      <div class="card__header">
+        <h3>Latest Updates</h3>
+      </div>
+      <div class="card__body">
+        <p style="padding: 15px 0; margin: 0; color: #666666;">No recent activity to display.</p>
+      </div>
+    </div>
+
+    {{end}}
+
+    <!-- Product Management Section -->
+    {{if eq .Title "Product Management"}}
+    
+    <h1>Product Management</h1>
+    <p>Manage your product catalog, including adding, editing, and deleting products.</p>
+
+    <h2>Actions</h2>
+    <div class="flex flex-gap-2 flex-wrap mb-3">
+      <a href="/admin/products/new" class="button">Add New Product</a>
+      <a href="/admin/products/import" class="button--secondary">Import Products</a>
+      <a href="/admin/products/export" class="button--secondary">Export Products</a>
+    </div>
+
+    <h2>Products List</h2>
+    <div class="card">
+      <div class="card__header">
+        <h3>All Products</h3>
+      </div>
+      <div class="card__body">
+        <table>
+          <thead>
+            <tr>
+              <th>Product Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No products found. <a href="/admin/products/new">Add your first product</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {{end}}
+
+    <!-- Orders Section -->
+    {{if eq .Title "Order Management"}}
+    
+    <h1>Order Management</h1>
+    <p>View and manage all customer orders. Track order status and process refunds.</p>
+
+    <h2>Recent Orders</h2>
+    <div class="card">
+      <div class="card__header">
+        <h3>All Orders</h3>
+      </div>
+      <div class="card__body">
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Customer</th>
+              <th>Date</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 20px; color: #666666;">No orders found.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {{end}}
+
+    <!-- Reports Section -->
+    {{if eq .Title "Sales Reports"}}
+    
+    <h1>Sales Reports</h1>
+    <p>View detailed sales analytics, revenue trends, and performance metrics.</p>
+
+    <h2>Sales Summary</h2>
+    <div class="grid grid-2-cols">
+      <div class="card">
+        <div class="card__header">
+          <h3>Total Revenue</h3>
+        </div>
+        <div class="card__body">
+          <div style="padding: 20px;">
+            <div style="font-size: 2rem; font-weight: bold; color: #008000; margin-bottom: 0.5em;">$0.00</div>
+            <p style="color: #666666; margin: 0; font-size: 0.9rem;">All time</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__header">
+          <h3>Total Orders</h3>
+        </div>
+        <div class="card__body">
+          <div style="padding: 20px;">
+            <div style="font-size: 2rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">0</div>
+            <p style="color: #666666; margin: 0; font-size: 0.9rem;">All time</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2 style="margin-top: 2em;">Sales by Category</h2>
+    <div class="card">
+      <div class="card__header">
+        <h3>Product Categories</h3>
+      </div>
+      <div class="card__body">
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Sales</th>
+              <th>Revenue</th>
+              <th>% of Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="4" style="text-align: center; padding: 20px; color: #666666;">No sales data available yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {{end}}
+
+    <!-- Deliveries Section -->
+    {{if eq .Title "Delivery Management"}}
+    
+    <h1>Delivery Management</h1>
+    <p>Track and manage product deliveries. Update delivery status and customer information.</p>
+
+    <h2>Active Deliveries</h2>
+    <div class="card">
+      <div class="card__header">
+        <h3>All Deliveries</h3>
+      </div>
+      <div class="card__body">
+        <table>
+          <thead>
+            <tr>
+              <th>Delivery ID</th>
+              <th>Order ID</th>
+              <th>Destination</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 20px; color: #666666;">No active deliveries.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {{end}}
+
+  </div>
+
 </div>
 {{ end }}
