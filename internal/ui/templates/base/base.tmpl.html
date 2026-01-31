@@ -4,35 +4,35 @@
         <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <link rel="manifest" href="static/manifest.json" />
+                <link rel="manifest" href="/static/manifest.json" />
                 <title>{{ block "title" . }}{{end}}</title>
-                <link rel="stylesheet" href="static/stylesheets/styles.css">
+                <link rel="stylesheet" href="/static/stylesheets/styles.css">
         </head>
-        <body class="site-body-area">
+        <body class="wrapper">
                 <!-- header-area. -->
-                <div class="wrapper--header-area">
-                        <div class="header-area">
+                <div class="wrapper--header">
+                        <div class="container">
                                 {{ block "header-area" . }}
                                 {{ end }}
                         </div>
                 </div>
 
                 <!-- main-area. -->
-                <div class="wrapper--main-area">
-                        <div class="main-area">
+                <div class="wrapper--main">
+                        <div class="container">
                                 {{ block "main-area" . }}
                                 {{ end }}
                         </div>
                 </div>
 
                 <!-- footer-area. -->
-                 <div class="wrapper--footer-area">
-                        <div class="footer-area">
+                 <div class="wrapper--footer">
+                        <div class="container">
                                 {{ block "footer-area" . }}
                                 {{ end }}
                         </div>
                  </div>
-                <script src="static/scripts/main.js"></script>
+                <script src="/static/scripts/main.js"></script>
         </body>
 </html>
 {{ end }}
