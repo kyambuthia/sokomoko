@@ -8,9 +8,9 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
-func Root(tmpl *template.Template) http.HandlerFunc {
+func Root(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		products, err := db.GetAllProducts()
+		products, err := store.GetAllProducts()
 		if err != nil {
 			log.Printf("Error fetching products: %v", err)
 			// Proceed with empty products or handle error

@@ -7,9 +7,11 @@ import (
 )
 
 func main() {
-	fmt.Println("AdminDashboard:", routes.AdminDashboard != nil)
-	fmt.Println("AdminProducts:", routes.AdminProducts != nil)
-	fmt.Println("AdminOrders:", routes.AdminOrders != nil)
-	fmt.Println("AdminReports:", routes.AdminReports != nil)
-	fmt.Println("AdminDeliveries:", routes.AdminDeliveries != nil)
+	_ = routes.AdminDashboard
+	_ = routes.AdminProducts
+	_ = routes.AdminOrders
+	_ = routes.AdminReports
+	_ = routes.AdminDeliveries
+
+	fmt.Println("Admin handlers wired")
 }

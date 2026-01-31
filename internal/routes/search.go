@@ -15,7 +15,7 @@ type SearchFormValues struct {
 	QueryString string `json:"queryString"`
 }
 
-func Search(tmpl *template.Template) http.HandlerFunc {
+func Search(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		// HANDLE GET REQUESTS -  /search ROUTE
@@ -23,7 +23,7 @@ func Search(tmpl *template.Template) http.HandlerFunc {
 			query := req.URL.Query().Get("q")
 			if query != "" {
 				// Perform search
-				products, err := db.SearchProducts(strings.TrimSpace(query))
+				products, err := store.SearchProducts(strings.TrimSpace(query))
 				if err != nil {
 					log.Printf("Error searching products: %v", err)
 					http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -39,7 +39,9 @@ func Search(tmpl *template.Template) http.HandlerFunc {
 
 				err = tmpl.ExecuteTemplate(w, "root_template", data)
 				if err != nil {
-					log.Fatal(err)
+					log.Printf("Template execution error: %v", err)
+					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					return
 				}
 			} else {
 				data := map[string]interface{}{
@@ -49,7 +51,9 @@ func Search(tmpl *template.Template) http.HandlerFunc {
 				}
 				err := tmpl.ExecuteTemplate(w, "root_template", data)
 				if err != nil {
-					log.Fatal(err)
+					log.Printf("Template execution error: %v", err)
+					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					return
 				}
 			}
 
@@ -71,7 +75,7 @@ func Search(tmpl *template.Template) http.HandlerFunc {
 			}
 
 			// Perform search
-			products, err := db.SearchProducts(strings.TrimSpace(formData.QueryString))
+			products, err := store.SearchProducts(strings.TrimSpace(formData.QueryString))
 			if err != nil {
 				log.Printf("Error searching products: %v", err)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
