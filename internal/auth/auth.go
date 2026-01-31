@@ -21,7 +21,7 @@ func Auth(tmpl *template.Template) http.HandlerFunc {
 }
 
 // SignUp handles user registration
-func SignUp(tmpl *template.Template) http.HandlerFunc {
+func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			tmpl.ExecuteTemplate(w, "signup.html", nil)
@@ -68,20 +68,19 @@ func SignUp(tmpl *template.Template) http.HandlerFunc {
 			Slug:         username, // Simple slug
 		}
 
-		_, err = db.CreateUser(user)
+		_, err = store.CreateUser(user)
 		if err != nil {
 			log.Printf("Error creating user: %v", err)
 			http.Error(w, "Failed to create user. Username or email might already exist.", http.StatusConflict)
 			return
 		}
 
-		w.WriteHeader(http.StatusCreated)
 		http.Redirect(w, r, "/login", http.StatusFound)
 	}
 }
 
 // Login handles user authentication
-func Login(tmpl *template.Template) http.HandlerFunc {
+func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			tmpl.ExecuteTemplate(w, "root_template", nil)
@@ -101,7 +100,7 @@ func Login(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		user, err := db.GetUserByUsername(username)
+		user, err := store.GetUserByUsername(username)
 		if err != nil || user == nil {
 			log.Printf("Login failed for user %s: %v", username, err)
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
@@ -127,7 +126,7 @@ func Login(tmpl *template.Template) http.HandlerFunc {
 		expiresAt := time.Now().Add(24 * time.Hour)
 
 		// Create session in DB
-		err = db.CreateSession(db.Session{
+		err = store.CreateSession(db.Session{
 			ID:        sessionToken,
 			UserID:    user.ID,
 			ExpiresAt: expiresAt,
@@ -151,7 +150,7 @@ func Login(tmpl *template.Template) http.HandlerFunc {
 }
 
 // AdminLogin handles admin authentication and ensures only admins can login
-func AdminLogin(tmpl *template.Template) http.HandlerFunc {
+func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			tmpl.ExecuteTemplate(w, "root_template", nil)
@@ -166,7 +165,7 @@ func AdminLogin(tmpl *template.Template) http.HandlerFunc {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		user, err := db.GetUserByUsername(username)
+		user, err := store.GetUserByUsername(username)
 		if err != nil || user == nil || user.Role != "admin" {
 			log.Printf("Admin login failed for user %s: %v", username, err)
 			http.Error(w, "Invalid admin credentials", http.StatusUnauthorized)
@@ -185,7 +184,7 @@ func AdminLogin(tmpl *template.Template) http.HandlerFunc {
 		expiresAt := time.Now().Add(24 * time.Hour)
 
 		// Create session in DB
-		err = db.CreateSession(db.Session{
+		err = store.CreateSession(db.Session{
 			ID:        sessionToken,
 			UserID:    user.ID,
 			ExpiresAt: expiresAt,
@@ -209,12 +208,12 @@ func AdminLogin(tmpl *template.Template) http.HandlerFunc {
 }
 
 // Logout handles user logout
-func Logout() http.HandlerFunc {
+func Logout(store *db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_token")
 		if err == nil {
 			// Delete session from DB
-			_ = db.DeleteSession(cookie.Value)
+			_ = store.DeleteSession(cookie.Value)
 		}
 
 		http.SetCookie(w, &http.Cookie{
@@ -235,7 +234,7 @@ type contextKey string
 const userContextKey contextKey = "user"
 
 // AuthMiddleware provides authentication middleware for protected routes
-func AuthMiddleware(next http.Handler) http.Handler {
+func AuthMiddleware(store *db.Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_token")
 		if err != nil {
@@ -247,20 +246,20 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		sess, err := db.GetSession(cookie.Value)
+		sess, err := store.GetSession(cookie.Value)
 		if err != nil || sess == nil || sess.ExpiresAt.Before(time.Now()) {
 			// Session invalid or expired
 			if sess != nil {
-				_ = db.DeleteSession(cookie.Value)
+				_ = store.DeleteSession(cookie.Value)
 			}
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
-		user, err := db.GetUserByID(sess.UserID)
+		user, err := store.GetUserByID(sess.UserID)
 		if err != nil || user == nil {
 			log.Printf("Error retrieving user from DB for session %d: %v", sess.UserID, err)
-			_ = db.DeleteSession(cookie.Value)
+			_ = store.DeleteSession(cookie.Value)
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}

@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -21,6 +20,8 @@ import (
 
 const testDBPath = "./test_auth.db"
 
+var testStore *db.Store
+
 func TestMain(m *testing.M) {
 	setupTestDB()
 	code := m.Run()
@@ -30,26 +31,21 @@ func TestMain(m *testing.M) {
 
 func setupTestDB() {
 	var err error
-	db.DB, err = sql.Open("sqlite3", testDBPath)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = db.DB.Exec(db.SchemaSQL)
+	testStore, err = db.OpenStoreNoSeed(testDBPath)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func teardownTestDB() {
-	if db.DB != nil {
-		db.DB.Close()
+	if testStore != nil {
+		_ = testStore.Close()
 	}
 	os.Remove(testDBPath)
 }
 
 func clearUsersTable() {
-	_, err := db.DB.Exec("DELETE FROM users")
+	_, err := testStore.DB.Exec("DELETE FROM users")
 	if err != nil {
 		panic(err)
 	}
@@ -70,7 +66,7 @@ func createTestUser(username, email, password, role string) *db.User {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+user.Salt), bcrypt.DefaultCost)
 	user.PasswordHash = string(hashedPassword)
 
-	id, err := db.CreateUser(user)
+	id, err := testStore.CreateUser(user)
 	if err != nil {
 		panic(err)
 	}
@@ -93,7 +89,7 @@ func TestSignUp(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	SignUp(tmpl).ServeHTTP(rr, req)
+	SignUp(testStore, tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
@@ -102,7 +98,7 @@ func TestSignUp(t *testing.T) {
 		t.Errorf("handler returned wrong redirect location: got %v want %v", location, "/login")
 	}
 
-	user, err := db.GetUserByUsername("testuser1")
+	user, err := testStore.GetUserByUsername("testuser1")
 	if err != nil || user == nil {
 		t.Fatalf("User not found after signup: %v", err)
 	}
@@ -113,7 +109,7 @@ func TestSignUp(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	SignUp(tmpl).ServeHTTP(rr, req)
+	SignUp(testStore, tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusConflict {
 		t.Errorf("handler returned wrong status code for existing user: got %v want %v", status, http.StatusConflict)
@@ -127,7 +123,7 @@ func TestSignUp(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	SignUp(tmpl).ServeHTTP(rr, req)
+	SignUp(testStore, tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
 		t.Errorf("handler returned wrong status code for missing fields: got %v want %v", status, http.StatusBadRequest)
@@ -149,7 +145,7 @@ func TestLogin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	Login(tmpl).ServeHTTP(rr, req)
+	Login(testStore, tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
@@ -168,7 +164,7 @@ func TestLogin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	Login(tmpl).ServeHTTP(rr, req)
+	Login(testStore, tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusUnauthorized {
 		t.Errorf("handler returned wrong status code for incorrect password: got %v want %v", status, http.StatusUnauthorized)
@@ -181,7 +177,7 @@ func TestLogin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	Login(tmpl).ServeHTTP(rr, req)
+	Login(testStore, tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusUnauthorized {
 		t.Errorf("handler returned wrong status code for non-existent user: got %v want %v", status, http.StatusUnauthorized)
@@ -206,12 +202,12 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test access with valid session
 	sessionToken := "valid_session_token"
-	db.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour)})
+	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
 
-	AuthMiddleware(protectedHandler).ServeHTTP(rr, req)
+	AuthMiddleware(testStore, protectedHandler).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code for valid session: got %v want %v", status, http.StatusOK)
@@ -224,7 +220,7 @@ func TestAuthMiddleware(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	rr = httptest.NewRecorder()
 
-	AuthMiddleware(protectedHandler).ServeHTTP(rr, req)
+	AuthMiddleware(testStore, protectedHandler).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code for no session: got %v want %v", status, http.StatusFound)
@@ -235,12 +231,12 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test access with expired session
 	sessionToken = "expired_session_token"
-	db.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(-time.Hour)})
+	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(-time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
 
-	AuthMiddleware(protectedHandler).ServeHTTP(rr, req)
+	AuthMiddleware(testStore, protectedHandler).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code for expired session: got %v want %v", status, http.StatusFound)
