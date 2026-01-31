@@ -3,12 +3,13 @@ package db
 import (
 	"os"
 	"testing"
-	"database/sql"
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
 )
 
 const testDBPath = "./test_t.db"
+
+var testStore *Store
 
 func TestMain(m *testing.M) {
 	// Setup: Initialize a test database
@@ -25,37 +26,26 @@ func TestMain(m *testing.M) {
 
 func setupTestDB() {
 	var err error
-	DB, err = sql.Open("sqlite3", testDBPath)
-	if err != nil {
-		panic(err)
-	}
-
-	if err = DB.Ping(); err != nil {
-		panic(err)
-	}
-
-	// Apply schema
-		_, err = DB.Exec(SchemaSQL)
+	testStore, err = OpenStoreNoSeed(testDBPath)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func teardownTestDB() {
-	if DB != nil {
-		DB.Close()
+	if testStore != nil {
+		_ = testStore.Close()
 	}
 	os.Remove(testDBPath)
 }
 
 func TestInitDB(t *testing.T) {
-	// InitDB is called in TestMain, so we just need to ensure DB is not nil
-	if DB == nil {
-		t.Error("DB connection is nil after InitDB")
+	if testStore == nil || testStore.DB == nil {
+		t.Error("DB connection is nil after setup")
 	}
 
 	// Verify tables exist
-	rows, err := DB.Query("SELECT name FROM sqlite_master WHERE type='table';")
+	rows, err := testStore.DB.Query("SELECT name FROM sqlite_master WHERE type='table';")
 	if err != nil {
 		t.Fatalf("Failed to query tables: %v", err)
 	}
@@ -96,7 +86,7 @@ func TestCreateUser(t *testing.T) {
 		Role:         "user",
 	}
 
-	id, err := CreateUser(user)
+	id, err := testStore.CreateUser(user)
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
@@ -106,7 +96,7 @@ func TestCreateUser(t *testing.T) {
 	}
 
 	// Verify user exists in DB
-	retrievedUser, err := GetUserByID(int(id))
+	retrievedUser, err := testStore.GetUserByID(int(id))
 	if err != nil {
 		t.Fatalf("GetUserByID failed: %v", err)
 	}
@@ -129,12 +119,12 @@ func TestGetUserByUsername(t *testing.T) {
 		Salt:         "salt",
 		Role:         "user",
 	}
-	_, err := CreateUser(user)
+	_, err := testStore.CreateUser(user)
 	if err != nil {
 		t.Fatalf("Failed to create user for test: %v", err)
 	}
 
-	foundUser, err := GetUserByUsername(username)
+	foundUser, err := testStore.GetUserByUsername(username)
 	if err != nil {
 		t.Fatalf("GetUserByUsername failed: %v", err)
 	}
@@ -148,7 +138,7 @@ func TestGetUserByUsername(t *testing.T) {
 	}
 
 	// Test non-existent user
-	notFoundUser, err := GetUserByUsername("nonexistent")
+	notFoundUser, err := testStore.GetUserByUsername("nonexistent")
 	if err != nil {
 		t.Fatalf("GetUserByUsername for non-existent user failed: %v", err)
 	}
@@ -165,12 +155,12 @@ func TestGetUserByID(t *testing.T) {
 		Salt:         "salt",
 		Role:         "user",
 	}
-	id, err := CreateUser(user)
+	id, err := testStore.CreateUser(user)
 	if err != nil {
 		t.Fatalf("Failed to create user for test: %v", err)
 	}
 
-	foundUser, err := GetUserByID(int(id))
+	foundUser, err := testStore.GetUserByID(int(id))
 	if err != nil {
 		t.Fatalf("GetUserByID failed: %v", err)
 	}
@@ -184,7 +174,7 @@ func TestGetUserByID(t *testing.T) {
 	}
 
 	// Test non-existent user
-	notFoundUser, err := GetUserByID(99999)
+	notFoundUser, err := testStore.GetUserByID(99999)
 	if err != nil {
 		t.Fatalf("GetUserByID for non-existent user failed: %v", err)
 	}
@@ -201,7 +191,7 @@ func TestUpdateUser(t *testing.T) {
 		Salt:         "oldsalt",
 		Role:         "user",
 	}
-	id, err := CreateUser(user)
+	id, err := testStore.CreateUser(user)
 	if err != nil {
 		t.Fatalf("Failed to create user for update test: %v", err)
 	}
@@ -210,12 +200,12 @@ func TestUpdateUser(t *testing.T) {
 	user.Email = "updated@example.com"
 	user.Role = "admin"
 
-	err = UpdateUser(user)
+	err = testStore.UpdateUser(user)
 	if err != nil {
 		t.Fatalf("UpdateUser failed: %v", err)
 	}
 
-	updatedUser, err := GetUserByID(int(id))
+	updatedUser, err := testStore.GetUserByID(int(id))
 	if err != nil {
 		t.Fatalf("GetUserByID after update failed: %v", err)
 	}
@@ -234,17 +224,17 @@ func TestDeleteUser(t *testing.T) {
 		Salt:         "salt",
 		Role:         "user",
 	}
-	id, err := CreateUser(user)
+	id, err := testStore.CreateUser(user)
 	if err != nil {
 		t.Fatalf("Failed to create user for delete test: %v", err)
 	}
 
-	err = DeleteUser(int(id))
+	err = testStore.DeleteUser(int(id))
 	if err != nil {
 		t.Fatalf("DeleteUser failed: %v", err)
 	}
 
-	deletedUser, err := GetUserByID(int(id))
+	deletedUser, err := testStore.GetUserByID(int(id))
 	if err != nil {
 		t.Fatalf("GetUserByID after delete failed: %v", err)
 	}

@@ -11,7 +11,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var DB *sql.DB
+type Store struct {
+	DB *sql.DB
+}
 
 const SchemaSQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -73,32 +75,63 @@ CREATE TABLE IF NOT EXISTS sessions (
 `
 
 func InitDB() {
-	var err error
+	_, err := OpenStoreFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func OpenStoreFromEnv() (*Store, error) {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "./db/t.db"
 	}
-	DB, err = sql.Open("sqlite3", dbPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err = DB.Ping(); err != nil {
-		log.Fatal(err)
-	}
-
-	// Apply schema
-	_, err = DB.Exec(SchemaSQL)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	SeedAdmin()
+	return OpenStore(dbPath)
 }
 
-func SeedAdmin() {
+func OpenStore(dbPath string) (*Store, error) {
+	store, err := openStoreWithSchema(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	store.SeedAdmin()
+	return store, nil
+}
+
+func OpenStoreNoSeed(dbPath string) (*Store, error) {
+	return openStoreWithSchema(dbPath)
+}
+
+func openStoreWithSchema(dbPath string) (*Store, error) {
+	dbConn, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = dbConn.Ping(); err != nil {
+		_ = dbConn.Close()
+		return nil, err
+	}
+
+	_, err = dbConn.Exec(SchemaSQL)
+	if err != nil {
+		_ = dbConn.Close()
+		return nil, err
+	}
+
+	return &Store{DB: dbConn}, nil
+}
+
+func (s *Store) Close() error {
+	if s == nil || s.DB == nil {
+		return nil
+	}
+	return s.DB.Close()
+}
+
+func (s *Store) SeedAdmin() {
 	var count int
-	err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
+	err := s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
 	if err != nil {
 		log.Printf("Error checking for admin user: %v", err)
 		return
@@ -119,7 +152,7 @@ func SeedAdmin() {
 			Slug:         "admin",
 		}
 
-		_, err = CreateUser(user)
+		_, err = s.CreateUser(user)
 		if err != nil {
 			log.Printf("Error seeding admin user: %v", err)
 		} else {
@@ -197,8 +230,12 @@ type Session struct {
 }
 
 // CreateUser inserts a new user into the database
-func CreateUser(user User) (int64, error) {
-	stmt, err := DB.Prepare(
+func (s *Store) CreateUser(user User) (int64, error) {
+	if user.Slug == "" {
+		user.Slug = user.Username
+	}
+
+	stmt, err := s.DB.Prepare(
 		"INSERT INTO users (username, email, password_hash, salt, role, slug) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return 0, err
@@ -218,8 +255,8 @@ func CreateUser(user User) (int64, error) {
 }
 
 // GetUserByUsername retrieves a user by their username
-func GetUserByUsername(username string) (*User, error) {
-	row := DB.QueryRow(
+func (s *Store) GetUserByUsername(username string) (*User, error) {
+	row := s.DB.QueryRow(
 		"SELECT id, username, email, password_hash, salt, role, slug, created_at, updated_at, deleted_at FROM users WHERE username = ? AND deleted_at IS NULL", username)
 
 	user := &User{}
@@ -245,8 +282,8 @@ func GetUserByUsername(username string) (*User, error) {
 }
 
 // GetUserByID retrieves a user by their ID
-func GetUserByID(id int) (*User, error) {
-	row := DB.QueryRow(
+func (s *Store) GetUserByID(id int) (*User, error) {
+	row := s.DB.QueryRow(
 		"SELECT id, username, email, password_hash, salt, role, slug, created_at, updated_at, deleted_at FROM users WHERE id = ? AND deleted_at IS NULL", id)
 
 	user := &User{}
@@ -272,8 +309,8 @@ func GetUserByID(id int) (*User, error) {
 }
 
 // UpdateUser updates an existing user's information
-func UpdateUser(user User) error {
-	stmt, err := DB.Prepare(
+func (s *Store) UpdateUser(user User) error {
+	stmt, err := s.DB.Prepare(
 		"UPDATE users SET username = ?, email = ?, password_hash = ?, salt = ?, role = ?, slug = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
 	if err != nil {
 		return err
@@ -288,8 +325,8 @@ func UpdateUser(user User) error {
 }
 
 // DeleteUser deletes a user from the database by ID
-func DeleteUser(id int) error {
-	stmt, err := DB.Prepare("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+func (s *Store) DeleteUser(id int) error {
+	stmt, err := s.DB.Prepare("UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 	if err != nil {
 		return err
 	}
@@ -303,8 +340,8 @@ func DeleteUser(id int) error {
 }
 
 // CreateCategory inserts a new category into the database
-func CreateCategory(category Category) (int64, error) {
-	stmt, err := DB.Prepare(
+func (s *Store) CreateCategory(category Category) (int64, error) {
+	stmt, err := s.DB.Prepare(
 		"INSERT INTO categories (name, slug, description, parent_id) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return 0, err
@@ -324,8 +361,8 @@ func CreateCategory(category Category) (int64, error) {
 }
 
 // GetCategoryByID retrieves a category by its ID
-func GetCategoryByID(id int) (*Category, error) {
-	row := DB.QueryRow(
+func (s *Store) GetCategoryByID(id int) (*Category, error) {
+	row := s.DB.QueryRow(
 		"SELECT id, name, slug, description, parent_id, created_at, updated_at, deleted_at FROM categories WHERE id = ? AND deleted_at IS NULL", id)
 
 	category := &Category{}
@@ -349,8 +386,8 @@ func GetCategoryByID(id int) (*Category, error) {
 }
 
 // UpdateCategory updates an existing category's information
-func UpdateCategory(category Category) error {
-	stmt, err := DB.Prepare(
+func (s *Store) UpdateCategory(category Category) error {
+	stmt, err := s.DB.Prepare(
 		"UPDATE categories SET name = ?, slug = ?, description = ?, parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
 	if err != nil {
 		return err
@@ -365,8 +402,8 @@ func UpdateCategory(category Category) error {
 }
 
 // DeleteCategory deletes a category from the database by ID
-func DeleteCategory(id int) error {
-	stmt, err := DB.Prepare("UPDATE categories SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+func (s *Store) DeleteCategory(id int) error {
+	stmt, err := s.DB.Prepare("UPDATE categories SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 	if err != nil {
 		return err
 	}
@@ -380,8 +417,8 @@ func DeleteCategory(id int) error {
 }
 
 // CreateProduct inserts a new product into the database
-func CreateProduct(product Product) (int64, error) {
-	stmt, err := DB.Prepare(
+func (s *Store) CreateProduct(product Product) (int64, error) {
+	stmt, err := s.DB.Prepare(
 		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return 0, err
@@ -401,15 +438,15 @@ func CreateProduct(product Product) (int64, error) {
 	// Create images if any
 	for _, img := range product.Images {
 		img.ProductID = int(id)
-		_, _ = CreateProductImage(img)
+		_, _ = s.CreateProductImage(img)
 	}
 
 	return id, nil
 }
 
 // GetProductByID retrieves a product by its ID
-func GetProductByID(id int) (*Product, error) {
-	row := DB.QueryRow(
+func (s *Store) GetProductByID(id int) (*Product, error) {
+	row := s.DB.QueryRow(
 		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.created_at, p.updated_at, p.deleted_at 
 		 FROM products p 
 		 LEFT JOIN categories c ON p.category_id = c.id 
@@ -442,7 +479,7 @@ func GetProductByID(id int) (*Product, error) {
 	}
 
 	// Fetch images
-	images, err := GetProductImages(product.ID)
+	images, err := s.GetProductImages(product.ID)
 	if err != nil {
 		log.Printf("Error fetching images for product %d: %v", product.ID, err)
 	} else {
@@ -453,8 +490,8 @@ func GetProductByID(id int) (*Product, error) {
 }
 
 // UpdateProduct updates an existing product's information
-func UpdateProduct(product Product) error {
-	stmt, err := DB.Prepare(
+func (s *Store) UpdateProduct(product Product) error {
+	stmt, err := s.DB.Prepare(
 		"UPDATE products SET name = ?, slug = ?, description = ?, price = ?, stock_quantity = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
 	if err != nil {
 		return err
@@ -469,8 +506,8 @@ func UpdateProduct(product Product) error {
 }
 
 // DeleteProduct deletes a product from the database by ID
-func DeleteProduct(id int) error {
-	stmt, err := DB.Prepare("UPDATE products SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+func (s *Store) DeleteProduct(id int) error {
+	stmt, err := s.DB.Prepare("UPDATE products SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
 	if err != nil {
 		return err
 	}
@@ -484,12 +521,12 @@ func DeleteProduct(id int) error {
 }
 
 // SearchProducts searches for products by name or description
-func SearchProducts(query string) ([]Product, error) {
+func (s *Store) SearchProducts(query string) ([]Product, error) {
 	if query == "" {
 		return []Product{}, nil
 	}
 
-	rows, err := DB.Query(
+	rows, err := s.DB.Query(
 		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.created_at, p.updated_at, p.deleted_at 
 		 FROM products p 
 		 LEFT JOIN categories c ON p.category_id = c.id 
@@ -526,7 +563,7 @@ func SearchProducts(query string) ([]Product, error) {
 		}
 
 		// Fetch images
-		imgs, _ := GetProductImages(product.ID)
+		imgs, _ := s.GetProductImages(product.ID)
 		product.Images = imgs
 
 		products = append(products, product)
@@ -535,8 +572,8 @@ func SearchProducts(query string) ([]Product, error) {
 }
 
 // GetAllProducts retrieves all products from the database
-func GetAllProducts() ([]Product, error) {
-	rows, err := DB.Query(
+func (s *Store) GetAllProducts() ([]Product, error) {
+	rows, err := s.DB.Query(
 		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.created_at, p.updated_at, p.deleted_at 
 		 FROM products p 
 		 LEFT JOIN categories c ON p.category_id = c.id 
@@ -572,7 +609,7 @@ func GetAllProducts() ([]Product, error) {
 		}
 
 		// Fetch images
-		imgs, _ := GetProductImages(product.ID)
+		imgs, _ := s.GetProductImages(product.ID)
 		product.Images = imgs
 
 		products = append(products, product)
@@ -582,8 +619,8 @@ func GetAllProducts() ([]Product, error) {
 
 // --- Image Management ---
 
-func CreateProductImage(img ProductImage) (int64, error) {
-	stmt, err := DB.Prepare("INSERT INTO product_images (product_id, url, alt_text, display_order) VALUES (?, ?, ?, ?)")
+func (s *Store) CreateProductImage(img ProductImage) (int64, error) {
+	stmt, err := s.DB.Prepare("INSERT INTO product_images (product_id, url, alt_text, display_order) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return 0, err
 	}
@@ -596,8 +633,8 @@ func CreateProductImage(img ProductImage) (int64, error) {
 	return res.LastInsertId()
 }
 
-func GetProductImages(productID int) ([]ProductImage, error) {
-	rows, err := DB.Query("SELECT id, product_id, url, alt_text, display_order, created_at FROM product_images WHERE product_id = ? ORDER BY display_order", productID)
+func (s *Store) GetProductImages(productID int) ([]ProductImage, error) {
+	rows, err := s.DB.Query("SELECT id, product_id, url, alt_text, display_order, created_at FROM product_images WHERE product_id = ? ORDER BY display_order", productID)
 	if err != nil {
 		return nil, err
 	}
@@ -615,43 +652,43 @@ func GetProductImages(productID int) ([]ProductImage, error) {
 	return images, nil
 }
 
-func DeleteProductImage(id int) error {
-	_, err := DB.Exec("DELETE FROM product_images WHERE id = ?", id)
+func (s *Store) DeleteProductImage(id int) error {
+	_, err := s.DB.Exec("DELETE FROM product_images WHERE id = ?", id)
 	return err
 }
 
 // --- Session Management ---
 
-func CreateSession(s Session) error {
-	stmt, err := DB.Prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)")
+func (s *Store) CreateSession(sess Session) error {
+	stmt, err := s.DB.Prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(s.ID, s.UserID, s.ExpiresAt)
+	_, err = stmt.Exec(sess.ID, sess.UserID, sess.ExpiresAt)
 	return err
 }
 
-func GetSession(id string) (*Session, error) {
-	row := DB.QueryRow("SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", id)
-	s := &Session{}
-	err := row.Scan(&s.ID, &s.UserID, &s.ExpiresAt, &s.CreatedAt)
+func (s *Store) GetSession(id string) (*Session, error) {
+	row := s.DB.QueryRow("SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", id)
+	sess := &Session{}
+	err := row.Scan(&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return s, nil
+	return sess, nil
 }
 
-func DeleteSession(id string) error {
-	_, err := DB.Exec("DELETE FROM sessions WHERE id = ?", id)
+func (s *Store) DeleteSession(id string) error {
+	_, err := s.DB.Exec("DELETE FROM sessions WHERE id = ?", id)
 	return err
 }
 
-func CleanupSessions() error {
-	_, err := DB.Exec("DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP")
+func (s *Store) CleanupSessions() error {
+	_, err := s.DB.Exec("DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP")
 	return err
 }
