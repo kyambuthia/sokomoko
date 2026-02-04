@@ -10,6 +10,8 @@ type Templates struct {
 	Account    *template.Template
 	Admin      *template.Template
 	AdminLogin *template.Template
+	Login      *template.Template
+	Signup     *template.Template
 }
 
 func ParseTemplates() (*Templates, error) {
@@ -52,11 +54,23 @@ func ParseTemplates() (*Templates, error) {
 		return nil, err
 	}
 
+	loginTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/login.html")
+	if err != nil {
+		return nil, err
+	}
+
+	signupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/signup.html")
+	if err != nil {
+		return nil, err
+	}
+
 	return &Templates{
 		Index:      indexTmpl,
 		Search:     searchTmpl,
 		Account:    accountTmpl,
 		Admin:      adminTmpl,
 		AdminLogin: adminLoginTmpl,
+		Login:      loginTmpl,
+		Signup:     signupTmpl,
 	}, nil
 }

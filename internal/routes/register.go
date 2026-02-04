@@ -10,6 +10,9 @@ import (
 func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/", Root(a))
 	mux.HandleFunc("/search", Search(a))
+	mux.HandleFunc("/login", auth.Login(a.Store, a.Templates.Login))
+	mux.HandleFunc("/signup", auth.SignUp(a.Store, a.Templates.Signup))
+	mux.HandleFunc("/logout", auth.Logout(a.Store))
 	mux.HandleFunc("/account", Auth(a))
 	mux.Handle("/static/", Static(a.StaticFS))
 }

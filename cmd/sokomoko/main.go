@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
@@ -58,8 +61,28 @@ func main() {
 
 	fmt.Printf("\n --- RUNNING --- \n server is listening on PORT %s \nCTRL-C to EXIT\n", srvr.Addr)
 
-	err = srvr.ListenAndServe()
-	if err != nil {
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+		<-sigint
+
+		log.Println("Server is shutting down...")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := srvr.Shutdown(ctx); err != nil {
+			log.Printf("Error during server shutdown: %v", err)
+		}
+
+		close(idleConnsClosed)
+	}()
+
+	if err := srvr.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+
+	<-idleConnsClosed
+	log.Println("Server stopped gracefully")
 }
