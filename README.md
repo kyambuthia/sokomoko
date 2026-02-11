@@ -39,7 +39,7 @@ sokomoko/
 ## 🛠️ Requirements
 
 - **Go** (version 1.21 or higher)
-- **SQLite3** (included with Go; no separate installation needed)
+- **SQLite3 CLI** (bundled in this repo; no separate installation needed)
 - **Git** (for cloning the repository)
 - **Terminal/Command line** (bash, zsh, PowerShell, etc.)
 
@@ -87,6 +87,19 @@ This will:
 - Download all required dependencies listed in `go.mod`
 - Remove any unused dependencies
 - Update `go.sum` with checksums
+
+### Step 3.1: SQLite3 CLI (Bundled)
+
+This repo includes prebuilt `sqlite3` binaries for Windows, Linux, and macOS so users do not need to download SQLite separately. Paths:
+
+```
+bin/sqlite3/windows-x64/sqlite3.exe
+bin/sqlite3/linux-x64/sqlite3
+bin/sqlite3/macos-x64/sqlite3
+bin/sqlite3/macos-arm64/sqlite3
+```
+
+Use the binary that matches your OS/architecture if you want to inspect or manage the database manually. The app itself uses a Go SQLite driver and does not require the CLI to run.
 
 ### Step 4: (Optional) Configure Local DNS for Subdomains
 
