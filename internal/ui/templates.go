@@ -15,6 +15,10 @@ type Templates struct {
 }
 
 func ParseTemplates() (*Templates, error) {
+	funcMap := template.FuncMap{
+		"asset": AssetURL,
+	}
+
 	baseTemplateFiles := []string{
 		"templates/base/base.tmpl.html",
 		"templates/base/banner.tmpl.html",
@@ -24,7 +28,7 @@ func ParseTemplates() (*Templates, error) {
 		"templates/base/footer.tmpl.html",
 	}
 
-	base, err := template.ParseFS(TmplData, baseTemplateFiles...)
+	base, err := template.New("base").Funcs(funcMap).ParseFS(TmplData, baseTemplateFiles...)
 	if err != nil {
 		return nil, err
 	}
