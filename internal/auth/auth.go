@@ -7,11 +7,28 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const (
+	sessionCookieName = "session_token"
+	sessionDuration   = 24 * time.Hour
+)
+
+func shouldUseSecureCookies(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	return strings.EqualFold(os.Getenv("ENV"), "production")
+}
 
 // Auth handles the /auth/ route and renders the login page
 func Auth(tmpl *template.Template) http.HandlerFunc {
@@ -34,8 +51,9 @@ func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		username := r.FormValue("username")
-		email := r.FormValue("email")
+		email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
 		password := r.FormValue("password")
+		username = strings.TrimSpace(username)
 
 		if username == "" || email == "" || password == "" {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
@@ -92,7 +110,7 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		username := r.FormValue("username")
+		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
 
 		if username == "" || password == "" {
@@ -123,7 +141,7 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		sessionToken := base64.URLEncoding.EncodeToString(b)
-		expiresAt := time.Now().Add(24 * time.Hour)
+		expiresAt := time.Now().Add(sessionDuration)
 
 		// Create session in DB
 		err = store.CreateSession(db.Session{
@@ -138,10 +156,13 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		http.SetCookie(w, &http.Cookie{
-			Name:     "session_token",
+			Name:     sessionCookieName,
 			Value:    sessionToken,
 			Expires:  expiresAt,
+			MaxAge:   int(sessionDuration.Seconds()),
+			Path:     "/",
 			HttpOnly: true,
+			Secure:   shouldUseSecureCookies(r),
 			SameSite: http.SameSiteLaxMode,
 		})
 
@@ -162,8 +183,12 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		username := r.FormValue("username")
+		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
+		if username == "" || password == "" {
+			http.Error(w, "Username and password are required", http.StatusBadRequest)
+			return
+		}
 
 		user, err := store.GetUserByUsername(username)
 		if err != nil || user == nil || user.Role != "admin" {
@@ -179,9 +204,13 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		// Success
 		b := make([]byte, 32)
-		rand.Read(b)
+		if _, err := rand.Read(b); err != nil {
+			log.Printf("Error generating admin session token: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		sessionToken := base64.URLEncoding.EncodeToString(b)
-		expiresAt := time.Now().Add(24 * time.Hour)
+		expiresAt := time.Now().Add(sessionDuration)
 
 		// Create session in DB
 		err = store.CreateSession(db.Session{
@@ -196,10 +225,13 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		http.SetCookie(w, &http.Cookie{
-			Name:     "session_token",
+			Name:     sessionCookieName,
 			Value:    sessionToken,
 			Expires:  expiresAt,
+			MaxAge:   int(sessionDuration.Seconds()),
+			Path:     "/",
 			HttpOnly: true,
+			Secure:   shouldUseSecureCookies(r),
 			SameSite: http.SameSiteLaxMode,
 		})
 
@@ -210,18 +242,25 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 // Logout handles user logout
 func Logout(store *db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("session_token")
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		cookie, err := r.Cookie(sessionCookieName)
 		if err == nil {
 			// Delete session from DB
 			_ = store.DeleteSession(cookie.Value)
 		}
 
 		http.SetCookie(w, &http.Cookie{
-			Name:     "session_token",
+			Name:     sessionCookieName,
 			Value:    "",
-			Expires:  time.Now().Add(-time.Hour),
+			Expires:  time.Unix(0, 0),
+			MaxAge:   -1,
+			Path:     "/",
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   shouldUseSecureCookies(r),
 			SameSite: http.SameSiteLaxMode,
 		})
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -236,7 +275,7 @@ const userContextKey contextKey = "user"
 // AuthMiddleware provides authentication middleware for protected routes
 func AuthMiddleware(store *db.Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("session_token")
+		cookie, err := r.Cookie(sessionCookieName)
 		if err != nil {
 			if err == http.ErrNoCookie {
 				http.Redirect(w, r, "/login", http.StatusFound)

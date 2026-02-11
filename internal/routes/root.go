@@ -9,7 +9,11 @@ import (
 
 func Root(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		products, _ := a.Store.GetAllProducts() // Proceed with empty products or handle error
+		products, err := a.Store.GetAllProducts()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 
 		data := struct {
 			HasProducts bool

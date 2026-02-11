@@ -1,9 +1,14 @@
 package db
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
@@ -22,7 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     slug TEXT UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -46,8 +51,8 @@ CREATE TABLE IF NOT EXISTS products (
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     description TEXT,
-    price REAL NOT NULL,
-    stock_quantity INTEGER NOT NULL DEFAULT 0,
+    price REAL NOT NULL CHECK (price >= 0),
+    stock_quantity INTEGER NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
     category_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -72,6 +77,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `
 
 func InitDB() {
@@ -113,6 +123,11 @@ func openStoreWithSchema(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
+	if _, err = dbConn.Exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;"); err != nil {
+		_ = dbConn.Close()
+		return nil, err
+	}
+
 	_, err = dbConn.Exec(SchemaSQL)
 	if err != nil {
 		_ = dbConn.Close()
@@ -138,27 +153,63 @@ func (s *Store) SeedAdmin() {
 	}
 
 	if count == 0 {
-		password := "adminpass"
-		// Use a simple salt for seeding
-		salt := "static_seed_salt"
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+		password := strings.TrimSpace(os.Getenv("ADMIN_PASSWORD"))
+		if password == "" {
+			log.Printf("No ADMIN_PASSWORD configured; skipping admin bootstrap user seeding")
+			return
+		}
+
+		salt, err := generateSalt()
+		if err != nil {
+			log.Printf("Error generating admin salt: %v", err)
+			return
+		}
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("Error hashing admin password: %v", err)
+			return
+		}
+
+		adminUsername := strings.TrimSpace(os.Getenv("ADMIN_USERNAME"))
+		if adminUsername == "" {
+			adminUsername = "admin"
+		}
+
+		adminEmail := strings.TrimSpace(os.Getenv("ADMIN_EMAIL"))
+		if adminEmail == "" {
+			adminEmail = "admin@sokomoko.com"
+		}
 
 		user := User{
-			Username:     "admin",
-			Email:        "admin@sokomoko.com",
+			Username:     adminUsername,
+			Email:        adminEmail,
 			PasswordHash: string(hashedPassword),
 			Salt:         salt,
 			Role:         "admin",
-			Slug:         "admin",
+			Slug:         adminUsername,
 		}
 
 		_, err = s.CreateUser(user)
 		if err != nil {
 			log.Printf("Error seeding admin user: %v", err)
 		} else {
-			log.Println("Default admin user created: admin / adminpass")
+			log.Printf("Admin bootstrap user created: %s", adminUsername)
 		}
 	}
+}
+
+func generateSalt() (string, error) {
+	saltBytes := make([]byte, 16)
+	if _, err := rand.Read(saltBytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(saltBytes), nil
+}
+
+func hashSessionID(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 // User represents a user in the system
@@ -666,16 +717,21 @@ func (s *Store) CreateSession(sess Session) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(sess.ID, sess.UserID, sess.ExpiresAt)
+	_, err = stmt.Exec(hashSessionID(sess.ID), sess.UserID, sess.ExpiresAt)
 	return err
 }
 
 func (s *Store) GetSession(id string) (*Session, error) {
-	row := s.DB.QueryRow("SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", id)
+	row := s.DB.QueryRow("SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", hashSessionID(id))
 	sess := &Session{}
 	err := row.Scan(&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		// Backward compatibility for legacy sessions saved as plain token IDs.
+		row = s.DB.QueryRow("SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", id)
+		err = row.Scan(&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt)
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -684,7 +740,7 @@ func (s *Store) GetSession(id string) (*Session, error) {
 }
 
 func (s *Store) DeleteSession(id string) error {
-	_, err := s.DB.Exec("DELETE FROM sessions WHERE id = ?", id)
+	_, err := s.DB.Exec("DELETE FROM sessions WHERE id = ? OR id = ?", hashSessionID(id), id)
 	return err
 }
 

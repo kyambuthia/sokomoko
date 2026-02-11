@@ -77,6 +77,8 @@ func Search(a *app.App) http.HandlerFunc {
 			if err != nil {
 				log.Printf("Error encoding products: %v", err)
 			}
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}
 }
