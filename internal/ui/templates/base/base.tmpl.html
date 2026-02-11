@@ -8,26 +8,26 @@
                 <title>{{ block "title" . }}{{end}}</title>
                 <link rel="stylesheet" href="/static/stylesheets/styles.css">
         </head>
-        <body class="wrapper">
+        <body class="site">
                 <!-- header-area. -->
-                <div class="wrapper--header">
-                        <div class="container">
+                <div class="site__header wrapper--header">
+                        <div class="site__container container">
                                 {{ block "header-area" . }}
                                 {{ end }}
                         </div>
                 </div>
 
                 <!-- main-area. -->
-                <div class="wrapper--main">
-                        <div class="container">
+                <div class="site__main wrapper--main">
+                        <div class="site__container container">
                                 {{ block "main-area" . }}
                                 {{ end }}
                         </div>
                 </div>
 
                 <!-- footer-area. -->
-                 <div class="wrapper--footer">
-                        <div class="container">
+                 <div class="site__footer wrapper--footer">
+                        <div class="site__container container">
                                 {{ block "footer-area" . }}
                                 {{ end }}
                         </div>

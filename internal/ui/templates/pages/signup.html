@@ -1,51 +1,33 @@
-{{ define "body_area" }}
-<div class="container">
-  <div style="max-width: 450px; margin: 2em auto;">
-    <h1>Create Account</h1>
+{{ define "title" }}Create Account{{ end }}
 
-    <form action="/signup" method="POST">
-      <fieldset>
-        <legend>Sign Up</legend>
+{{ define "main-area" }}
+<section class="auth-panel auth-sheet">
+  <h1 class="auth-panel__title auth-sheet__title">Create Account</h1>
+  <p class="auth-panel__meta auth-sheet__meta">Open a customer account to place and track orders.</p>
 
-        <div class="form-group">
-          <label for="name">Full Name *</label>
-          <input type="text" id="name" name="name" placeholder="John Doe" required>
-        </div>
+  <form action="/signup" method="POST" class="auth-panel__form form">
+    <fieldset class="form__fieldset">
+      <legend class="form__legend">Registration</legend>
 
-        <div class="form-group">
-          <label for="email">Email Address *</label>
-          <input type="email" id="email" name="email" placeholder="your@email.com" required>
-        </div>
+      <div class="form__group form-group">
+        <label class="form__label" for="username">Username</label>
+        <input class="form__input" type="text" id="username" name="username" placeholder="choose a username" required autofocus>
+      </div>
 
-        <div class="form-group">
-          <label for="phonenumber">Phone Number</label>
-          <input type="tel" id="phonenumber" name="phonenumber" placeholder="555-1234">
-        </div>
+      <div class="form__group form-group">
+        <label class="form__label" for="email">Email</label>
+        <input class="form__input" type="email" id="email" name="email" placeholder="you@example.com" required>
+      </div>
 
-        <div class="form-group">
-          <label for="password">Password *</label>
-          <input type="password" id="password" name="password" placeholder="At least 8 characters" required>
-        </div>
+      <div class="form__group form-group">
+        <label class="form__label" for="password">Password</label>
+        <input class="form__input" type="password" id="password" name="password" required>
+      </div>
 
-        <div class="form-group">
-          <label for="confirm_password">Confirm Password *</label>
-          <input type="password" id="confirm_password" name="confirm_password" required>
-        </div>
+      <button type="submit" class="btn btn--full button button--block">Create Account</button>
+    </fieldset>
+  </form>
 
-        <div class="checkbox-group">
-          <div class="checkbox-item">
-            <input type="checkbox" id="terms" name="terms" required>
-            <label for="terms" class="inline">I agree to the terms and conditions</label>
-          </div>
-        </div>
-
-        <button type="submit" class="button--block">Create Account</button>
-      </fieldset>
-    </form>
-
-    <p style="text-align: center; margin-top: 1.5em;">
-      Already have an account? <a href="/login">Sign in here</a>
-    </p>
-  </div>
-</div>
+  <p class="auth-panel__alt">Already registered? <a href="/login">Sign in</a>.</p>
+</section>
 {{ end }}

@@ -1,10 +1,18 @@
 {{ define "title" }}Search{{ end }}
 
 {{ define "main-area" }}
-    <h1>Search Products</h1>
-    <form id="searchForm" action="/search" method="GET" class="flex flex-wrap flex-gap-1">
-        <input type="search" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}" class="flex-1" />
-        <button type="submit" class="button">Search</button>
+<section class="search-page">
+    <header class="search-page__header">
+        <h1 class="search-page__title">Search Products</h1>
+        <p class="search-page__lead">Find products by name or description.</p>
+    </header>
+
+    <form id="searchForm" action="/search" method="GET" class="search-bar">
+        <div class="search-bar__field">
+            <label class="search-bar__label" for="searchInput">Search</label>
+            <input type="search" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}" class="search-bar__input" />
+        </div>
+        <button type="submit" class="btn search-bar__button">Search</button>
     </form>
 
     <!-- Search Results -->
@@ -12,31 +20,32 @@
             <h2>Search Results for "{{.Query}}"</h2>
 
             {{if .NoResults}}
-            <div class="alert alert--info">
+            <div class="notice notice--info alert alert--info">
                 <p>No products found matching your search.</p>
                 <p>Try searching with different keywords.</p>
             </div>
             {{else}}
-            <div class="product-grid">
+            <div class="product-list product-grid">
                 {{range .Products}}
-                <div class="product-card">
-                    <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-card__image" width="200" height="200">
-                    <div class="product-card__content">
-                        <h3 class="product-card__title">{{.Name}}</h3>
-                        <p class="product-card__description">{{.Description}}</p>
-                        <div class="product-card__price">${{printf "%.2f" .Price}}</div>
+                <article class="product-tile product-card">
+                    <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
+                    <div class="product-tile__body product-card__content">
+                        <h3 class="product-tile__name product-card__title">{{.Name}}</h3>
+                        <p class="product-tile__description product-card__description">{{.Description}}</p>
+                        <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
                         {{if .StockQuantity}}
-                        <p class="text-success mb-1">✓ In Stock ({{.StockQuantity}})</p>
+                        <p class="stock-state stock-state--in">In stock ({{.StockQuantity}})</p>
                         {{else}}
-                        <p class="text-danger mb-1">Out of Stock</p>
+                        <p class="stock-state stock-state--out">Out of stock</p>
                         {{end}}
-                        <div class="product-card__footer">
-                            <button class="product-card__button button button--small button--block">View Details</button>
+                        <div class="product-tile__footer product-card__footer">
+                            <button class="btn btn--full product-card__button">View details</button>
                         </div>
                     </div>
-                </div>
+                </article>
                 {{end}}
             </div>
             {{end}}
     {{end}}
+</section>
 {{ end }}

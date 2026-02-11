@@ -1,6 +1,21 @@
 {{ define "title" }}accounts{{ end }}
 
 {{ define "main-area" }}
-        <h2>Accounts</h2>
-        <p>create an account to shop on the store.</p>
+<section class="account-page auth-panel auth-sheet">
+        <h1 class="auth-panel__title auth-sheet__title">Your Account</h1>
+        <p class="auth-panel__meta auth-sheet__meta">You are signed in. Use this area to access account details and order history.</p>
+
+        <div class="panel card">
+                <div class="card__body">
+                        <p>Need to switch accounts?</p>
+                        <div class="account-actions">
+                                <a href="/login" class="btn button">Sign In</a>
+                                <a href="/signup" class="btn btn--secondary button--secondary">Create Account</a>
+                                <form action="/logout" method="POST" class="account-actions__form">
+                                        <button type="submit" class="btn btn--secondary button--secondary">Sign Out</button>
+                                </form>
+                        </div>
+                </div>
+        </div>
+</section>
 {{ end }}

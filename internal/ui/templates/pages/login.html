@@ -1,33 +1,28 @@
-{{ define "body_area" }}
-<div class="container">
-  <div style="max-width: 400px; margin: 2em auto;">
-    <h1>Login</h1>
+{{ define "title" }}Login{{ end }}
 
-    <form action="/login" method="POST">
-      <fieldset>
-        <legend>Sign In to Your Account</legend>
+{{ define "main-area" }}
+<section class="auth-panel auth-sheet">
+  <h1 class="auth-panel__title auth-sheet__title">Sign In</h1>
+  <p class="auth-panel__meta auth-sheet__meta">Access your Sokomoko account.</p>
 
-        <div class="form-group">
-          <label for="email">Email Address *</label>
-          <input type="email" id="email" name="email" placeholder="your@email.com" required>
-        </div>
+  <form action="/login" method="POST" class="auth-panel__form form">
+    <fieldset class="form__fieldset">
+      <legend class="form__legend">Account Access</legend>
 
-        <div class="form-group">
-          <label for="password">Password *</label>
-          <input type="password" id="password" name="password" required>
-        </div>
+      <div class="form__group form-group">
+        <label class="form__label" for="username">Username</label>
+        <input class="form__input" type="text" id="username" name="username" placeholder="your username" required autofocus>
+      </div>
 
-        <button type="submit" class="button--block">Sign In</button>
-      </fieldset>
-    </form>
+      <div class="form__group form-group">
+        <label class="form__label" for="password">Password</label>
+        <input class="form__input" type="password" id="password" name="password" required>
+      </div>
 
-    <p style="text-align: center; margin-top: 1.5em;">
-      Don't have an account? <a href="/signup">Sign up here</a>
-    </p>
+      <button type="submit" class="btn btn--full button button--block">Sign In</button>
+    </fieldset>
+  </form>
 
-    <p style="text-align: center; font-size: 0.9rem;">
-      <a href="/forgot-password">Forgot your password?</a>
-    </p>
-  </div>
-</div>
+  <p class="auth-panel__alt">No account yet? <a href="/signup">Create one</a>.</p>
+</section>
 {{ end }}
