@@ -8,20 +8,20 @@
   </header>
 
   <section class="partner-metrics">
-    <article class="partner-metric"><h3 class="partner-metric__label">New</h3><p class="partner-metric__value">{{.NewCount}}</p><p class="partner-metric__note">Awaiting acceptance</p></article>
-    <article class="partner-metric"><h3 class="partner-metric__label">In Progress</h3><p class="partner-metric__value">{{.InProgressCount}}</p><p class="partner-metric__note">Accepted/packing</p></article>
-    <article class="partner-metric"><h3 class="partner-metric__label">Dispatched</h3><p class="partner-metric__value">{{.DispatchedCount}}</p><p class="partner-metric__note">Shipped orders</p></article>
+    <ui-metric-card label="New" value="{{.NewCount}}" note="Awaiting acceptance"></ui-metric-card>
+    <ui-metric-card label="In Progress" value="{{.InProgressCount}}" note="Accepted/packing"></ui-metric-card>
+    <ui-metric-card label="Dispatched" value="{{.DispatchedCount}}" note="Shipped orders"></ui-metric-card>
   </section>
 
   {{if gt .OverdueCount 0}}
-  <div class="notice notice--danger alert alert--danger"><p><strong>{{.OverdueCount}}</strong> orders are overdue for acceptance (older than 2 hours).</p></div>
+  <ui-alert variant="danger"><p><strong>{{.OverdueCount}}</strong> orders are overdue for acceptance (older than 2 hours).</p></ui-alert>
   {{end}}
 
   {{if .Message}}
-  <div class="notice notice--success alert alert--success"><p>{{.Message}}</p></div>
+  <ui-alert variant="success"><p>{{.Message}}</p></ui-alert>
   {{end}}
   {{if .Error}}
-  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
   <section class="partner-actions">

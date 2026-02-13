@@ -2,58 +2,57 @@
 
 {{ define "main-area" }}
 <section class="search-page">
-    <header class="search-page__header">
-        <h1 class="search-page__title">Search Products</h1>
-        <p class="search-page__lead">Find products by name or description.</p>
-    </header>
+  <header class="search-page__header">
+    <h1 class="search-page__title">Search Products</h1>
+    <p class="search-page__lead">Find products by name or description.</p>
+  </header>
 
-    <form id="searchForm" action="/search" method="GET" class="search-bar">
-        <div class="search-bar__field">
-            <label class="search-bar__label" for="searchInput">Search</label>
-            <input type="search" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}" class="search-bar__input" />
+  <form id="searchForm" action="/search" method="GET" class="search-bar">
+    <div class="search-bar__field">
+      <label class="search-bar__label" for="searchInput">Search</label>
+      <input type="search" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}" class="search-bar__input" />
+    </div>
+    <button type="submit" class="btn search-bar__button">Search</button>
+  </form>
+
+  {{if .Query}}
+  <h2>Search Results for "{{.Query}}"</h2>
+
+  {{if .NoResults}}
+  <ui-alert variant="info">
+    <p>No products found matching your search.</p>
+    <p>Try searching with different keywords.</p>
+  </ui-alert>
+  {{else}}
+  <div class="product-list product-grid">
+    {{range .Products}}
+    <article class="product-tile product-card">
+      <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
+      <div class="product-tile__body product-card__content">
+        <h3 class="product-tile__name product-card__title">{{.Name}}</h3>
+        <p class="product-tile__description product-card__description">{{.Description}}</p>
+        <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
+        {{if .StockQuantity}}
+        <p class="stock-state stock-state--in">In stock ({{.StockQuantity}})</p>
+        {{else}}
+        <p class="stock-state stock-state--out">Out of stock</p>
+        {{end}}
+        <div class="product-tile__footer product-card__footer">
+          {{if .StockQuantity}}
+          <form action="/cart/add" method="POST">
+            <input type="hidden" name="product_id" value="{{.ID}}">
+            <input type="hidden" name="quantity" value="1">
+            <button type="submit" class="btn btn--full product-card__button">Add to cart</button>
+          </form>
+          {{else}}
+          <button class="btn btn--full product-card__button" type="button" disabled>Unavailable</button>
+          {{end}}
         </div>
-        <button type="submit" class="btn search-bar__button">Search</button>
-    </form>
-
-    <!-- Search Results -->
-    {{if .Query}}
-            <h2>Search Results for "{{.Query}}"</h2>
-
-            {{if .NoResults}}
-            <div class="notice notice--info alert alert--info">
-                <p>No products found matching your search.</p>
-                <p>Try searching with different keywords.</p>
-            </div>
-            {{else}}
-            <div class="product-list product-grid">
-                {{range .Products}}
-                <article class="product-tile product-card">
-                    <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
-                    <div class="product-tile__body product-card__content">
-                        <h3 class="product-tile__name product-card__title">{{.Name}}</h3>
-                        <p class="product-tile__description product-card__description">{{.Description}}</p>
-                        <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
-                        {{if .StockQuantity}}
-                        <p class="stock-state stock-state--in">In stock ({{.StockQuantity}})</p>
-                        {{else}}
-                        <p class="stock-state stock-state--out">Out of stock</p>
-                        {{end}}
-                        <div class="product-tile__footer product-card__footer">
-                            {{if .StockQuantity}}
-                            <form action="/cart/add" method="POST">
-                                <input type="hidden" name="product_id" value="{{.ID}}">
-                                <input type="hidden" name="quantity" value="1">
-                                <button type="submit" class="btn btn--full product-card__button">Add to cart</button>
-                            </form>
-                            {{else}}
-                            <button class="btn btn--full product-card__button" type="button" disabled>Unavailable</button>
-                            {{end}}
-                        </div>
-                    </div>
-                </article>
-                {{end}}
-            </div>
-            {{end}}
+      </div>
+    </article>
     {{end}}
+  </div>
+  {{end}}
+  {{end}}
 </section>
 {{ end }}

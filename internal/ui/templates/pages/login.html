@@ -6,7 +6,7 @@
   <p class="auth-panel__meta auth-sheet__meta">Access your Sokomoko account.</p>
 
   {{if .Error}}
-  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
   <form action="/login" method="POST" class="auth-panel__form form">

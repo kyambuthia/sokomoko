@@ -8,42 +8,16 @@
   </header>
 
   <section class="partner-metrics">
-    <article class="partner-metric">
-      <h3 class="partner-metric__label">Products</h3>
-      <p class="partner-metric__value">{{.ProductCount}}</p>
-      <p class="partner-metric__note">Catalog entries</p>
-    </article>
-    <article class="partner-metric">
-      <h3 class="partner-metric__label">Workspace</h3>
-      <p class="partner-metric__value">{{.StoreSlug}}</p>
-      <p class="partner-metric__note">Store slug</p>
-    </article>
-    <article class="partner-metric">
-      <h3 class="partner-metric__label">Access</h3>
-      <p class="partner-metric__value">{{.Role}}</p>
-      <p class="partner-metric__note">Current role</p>
-    </article>
-    <article class="partner-metric">
-      <h3 class="partner-metric__label">New Orders</h3>
-      <p class="partner-metric__value">{{.NewOrders}}</p>
-      <p class="partner-metric__note">Awaiting acceptance</p>
-    </article>
-    <article class="partner-metric">
-      <h3 class="partner-metric__label">In Progress</h3>
-      <p class="partner-metric__value">{{.InProgressOrders}}</p>
-      <p class="partner-metric__note">Accepted or packing</p>
-    </article>
-    <article class="partner-metric">
-      <h3 class="partner-metric__label">Dispatched</h3>
-      <p class="partner-metric__value">{{.DispatchedOrders}}</p>
-      <p class="partner-metric__note">On the road</p>
-    </article>
+    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog entries"></ui-metric-card>
+    <ui-metric-card label="Workspace" value="{{.StoreSlug}}" note="Store slug"></ui-metric-card>
+    <ui-metric-card label="Access" value="{{.Role}}" note="Current role"></ui-metric-card>
+    <ui-metric-card label="New Orders" value="{{.NewOrders}}" note="Awaiting acceptance"></ui-metric-card>
+    <ui-metric-card label="In Progress" value="{{.InProgressOrders}}" note="Accepted or packing"></ui-metric-card>
+    <ui-metric-card label="Dispatched" value="{{.DispatchedOrders}}" note="On the road"></ui-metric-card>
   </section>
 
   {{if gt .OverdueOrders 0}}
-  <div class="notice notice--danger alert alert--danger">
-    <p><strong>{{.OverdueOrders}}</strong> orders are overdue for acceptance (older than 2 hours).</p>
-  </div>
+  <ui-alert variant="danger"><p><strong>{{.OverdueOrders}}</strong> orders are overdue for acceptance (older than 2 hours).</p></ui-alert>
   {{end}}
 
   <section class="partner-actions">

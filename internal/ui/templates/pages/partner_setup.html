@@ -6,11 +6,11 @@
   <p class="auth-panel__meta">Configure your store identity on <code>partner.localhost</code>. This is separate from site management on <code>admin.localhost</code>.</p>
 
   {{if .Message}}
-  <div class="notice notice--info"><p>{{.Message}}</p></div>
+  <ui-alert variant="info"><p>{{.Message}}</p></ui-alert>
   {{end}}
 
   {{if .Error}}
-  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
   <form class="auth-panel__form form" action="/setup" method="POST">

@@ -34,21 +34,9 @@
 
   {{if eq .Title "Admin Dashboard"}}
   <section class="admin-metrics">
-    <article class="admin-metric">
-      <h3 class="admin-metric__label">Products</h3>
-      <p class="admin-metric__value">{{.ProductCount}}</p>
-      <p class="admin-metric__note">Catalog items</p>
-    </article>
-    <article class="admin-metric">
-      <h3 class="admin-metric__label">Active Sessions</h3>
-      <p class="admin-metric__value">{{.SessionCount}}</p>
-      <p class="admin-metric__note">Signed-in users</p>
-    </article>
-    <article class="admin-metric">
-      <h3 class="admin-metric__label">Staff Accounts</h3>
-      <p class="admin-metric__value">{{.StaffCount}}</p>
-      <p class="admin-metric__note">Admin-managed staff</p>
-    </article>
+    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog items"></ui-metric-card>
+    <ui-metric-card label="Active Sessions" value="{{.SessionCount}}" note="Signed-in users"></ui-metric-card>
+    <ui-metric-card label="Staff Accounts" value="{{.StaffCount}}" note="Admin-managed staff"></ui-metric-card>
   </section>
 
   <section class="panel card">
@@ -111,8 +99,8 @@
   {{end}}
 
   {{if eq .Title "Order Management"}}
-  {{if .OrderMessage}}<div class="notice notice--success alert alert--success"><p>{{.OrderMessage}}</p></div>{{end}}
-  {{if .OrderError}}<div class="notice notice--danger alert alert--danger"><p>{{.OrderError}}</p></div>{{end}}
+  {{if .OrderMessage}}<ui-alert variant="success"><p>{{.OrderMessage}}</p></ui-alert>{{end}}
+  {{if .OrderError}}<ui-alert variant="danger"><p>{{.OrderError}}</p></ui-alert>{{end}}
 
   <section class="panel card">
     <div class="card__header"><h3>Order Queue</h3></div>
@@ -180,9 +168,9 @@
 
   {{if eq .Title "Sales Reports"}}
   <section class="admin-metrics">
-    <article class="admin-metric"><h3 class="admin-metric__label">Total Revenue</h3><p class="admin-metric__value">${{printf "%.2f" .RevenueTotal}}</p><p class="admin-metric__note">Non-cancelled orders</p></article>
-    <article class="admin-metric"><h3 class="admin-metric__label">Total Orders</h3><p class="admin-metric__value">{{.OrderCount}}</p><p class="admin-metric__note">All statuses</p></article>
-    <article class="admin-metric"><h3 class="admin-metric__label">Active Users</h3><p class="admin-metric__value">{{.SessionCount}}</p><p class="admin-metric__note">Current sessions</p></article>
+    <ui-metric-card label="Total Revenue" value="${{printf "%.2f" .RevenueTotal}}" note="Non-cancelled orders"></ui-metric-card>
+    <ui-metric-card label="Total Orders" value="{{.OrderCount}}" note="All statuses"></ui-metric-card>
+    <ui-metric-card label="Active Users" value="{{.SessionCount}}" note="Current sessions"></ui-metric-card>
   </section>
   <section class="panel card">
     <div class="card__header"><h3>Fulfillment Split</h3></div>
@@ -199,8 +187,8 @@
   {{end}}
 
   {{if eq .Title "Team Management"}}
-  {{if .TeamMessage}}<div class="notice notice--success alert alert--success"><p>{{.TeamMessage}}</p></div>{{end}}
-  {{if .TeamError}}<div class="notice notice--danger alert alert--danger"><p>{{.TeamError}}</p></div>{{end}}
+  {{if .TeamMessage}}<ui-alert variant="success"><p>{{.TeamMessage}}</p></ui-alert>{{end}}
+  {{if .TeamError}}<ui-alert variant="danger"><p>{{.TeamError}}</p></ui-alert>{{end}}
 
   <section class="panel card">
     <div class="card__header"><h3>User Directory</h3></div>

@@ -8,10 +8,10 @@
   </header>
 
   {{if .Message}}
-  <div class="notice notice--success alert alert--success"><p>{{.Message}}</p></div>
+  <ui-alert variant="success"><p>{{.Message}}</p></ui-alert>
   {{end}}
   {{if .Error}}
-  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
   {{if .Items}}
