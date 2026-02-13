@@ -7,6 +7,16 @@
     <p class="partner-page__lead">Accept, pack, dispatch, and complete customer orders.</p>
   </header>
 
+  <section class="partner-metrics">
+    <article class="partner-metric"><h3 class="partner-metric__label">New</h3><p class="partner-metric__value">{{.NewCount}}</p><p class="partner-metric__note">Awaiting acceptance</p></article>
+    <article class="partner-metric"><h3 class="partner-metric__label">In Progress</h3><p class="partner-metric__value">{{.InProgressCount}}</p><p class="partner-metric__note">Accepted/packing</p></article>
+    <article class="partner-metric"><h3 class="partner-metric__label">Dispatched</h3><p class="partner-metric__value">{{.DispatchedCount}}</p><p class="partner-metric__note">Shipped orders</p></article>
+  </section>
+
+  {{if gt .OverdueCount 0}}
+  <div class="notice notice--danger alert alert--danger"><p><strong>{{.OverdueCount}}</strong> orders are overdue for acceptance (older than 2 hours).</p></div>
+  {{end}}
+
   {{if .Message}}
   <div class="notice notice--success alert alert--success"><p>{{.Message}}</p></div>
   {{end}}
@@ -14,8 +24,17 @@
   <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
   {{end}}
 
+  <section class="partner-actions">
+    <a href="/orders" class="btn {{if eq .Filter "all"}}{{else}}btn--secondary{{end}}">All</a>
+    <a href="/orders?status=new" class="btn {{if eq .Filter "new"}}{{else}}btn--secondary{{end}}">New</a>
+    <a href="/orders?status=accepted" class="btn {{if eq .Filter "accepted"}}{{else}}btn--secondary{{end}}">Accepted</a>
+    <a href="/orders?status=packing" class="btn {{if eq .Filter "packing"}}{{else}}btn--secondary{{end}}">Packing</a>
+    <a href="/orders?status=dispatched" class="btn {{if eq .Filter "dispatched"}}{{else}}btn--secondary{{end}}">Dispatched</a>
+    <a href="/orders?status=completed" class="btn {{if eq .Filter "completed"}}{{else}}btn--secondary{{end}}">Completed</a>
+  </section>
+
   <section class="panel card">
-    <div class="card__header"><h3>Orders</h3></div>
+    <div class="card__header"><h3>Orders ({{.Filter}})</h3></div>
     <div class="card__body">
       {{if .Orders}}
         {{range .Orders}}
@@ -43,6 +62,7 @@
                   <option value="packing" {{if eq .PartnerStatus "packing"}}selected{{end}}>packing</option>
                   <option value="dispatched" {{if eq .PartnerStatus "dispatched"}}selected{{end}}>dispatched</option>
                   <option value="completed" {{if eq .PartnerStatus "completed"}}selected{{end}}>completed</option>
+                  <option value="cancelled" {{if eq .PartnerStatus "cancelled"}}selected{{end}}>cancelled</option>
                 </select>
               </div>
               <div class="form__group form-group">

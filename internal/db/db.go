@@ -613,6 +613,14 @@ type FulfillmentOrder struct {
 	Items           []OrderItem
 }
 
+type PartnerOrderSummary struct {
+	NewCount        int
+	InProgressCount int
+	DispatchedCount int
+	CompletedCount  int
+	OverdueCount    int
+}
+
 type AuditLog struct {
 	ID          int
 	ActorUserID sql.NullInt64
@@ -1720,6 +1728,26 @@ func (s *Store) ListOrdersForFulfillment() ([]FulfillmentOrder, error) {
 }
 
 func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
+	var currentPartnerStatus string
+	var currentDeliveryStatus string
+	err := s.DB.QueryRow(
+		"SELECT partner_status, delivery_status FROM orders WHERE id = ?",
+		orderID,
+	).Scan(&currentPartnerStatus, &currentDeliveryStatus)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("order not found")
+	}
+	if err != nil {
+		return err
+	}
+
+	if !isAllowedPartnerTransition(currentPartnerStatus, partnerStatus) {
+		return fmt.Errorf("invalid partner status transition")
+	}
+	if !isAllowedDeliveryTransition(currentDeliveryStatus, deliveryStatus) {
+		return fmt.Errorf("invalid delivery status transition")
+	}
+
 	statusMap := map[string]string{
 		"new":        "pending",
 		"accepted":   "processing",
@@ -1743,13 +1771,112 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 		return fmt.Errorf("invalid delivery status")
 	}
 
-	_, err := s.DB.Exec(
+	_, err = s.DB.Exec(
 		`UPDATE orders
 		 SET status = ?, partner_status = ?, delivery_status = ?, delivery_notice = ?, updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ?`,
 		nextStatus, partnerStatus, deliveryStatus, strings.TrimSpace(deliveryNotice), orderID,
 	)
 	return err
+}
+
+func isAllowedPartnerTransition(from, to string) bool {
+	allowed := map[string]map[string]bool{
+		"new": {
+			"new":       true,
+			"accepted":  true,
+			"cancelled": true,
+		},
+		"accepted": {
+			"accepted":  true,
+			"packing":   true,
+			"cancelled": true,
+		},
+		"packing": {
+			"packing":    true,
+			"dispatched": true,
+			"cancelled":  true,
+		},
+		"dispatched": {
+			"dispatched": true,
+			"completed":  true,
+		},
+		"completed": {
+			"completed": true,
+		},
+		"cancelled": {
+			"cancelled": true,
+		},
+	}
+	return allowed[from][to]
+}
+
+func isAllowedDeliveryTransition(from, to string) bool {
+	allowed := map[string]map[string]bool{
+		"queued": {
+			"queued":     true,
+			"processing": true,
+			"shipped":    true,
+			"delivered":  true,
+		},
+		"processing": {
+			"processing": true,
+			"shipped":    true,
+			"delivered":  true,
+		},
+		"shipped": {
+			"shipped":   true,
+			"delivered": true,
+		},
+		"delivered": {
+			"delivered": true,
+		},
+	}
+	return allowed[from][to]
+}
+
+func (s *Store) GetPartnerOrderSummary() (PartnerOrderSummary, error) {
+	summary := PartnerOrderSummary{}
+
+	row := s.DB.QueryRow(
+		`SELECT
+		    SUM(CASE WHEN partner_status = 'new' THEN 1 ELSE 0 END),
+		    SUM(CASE WHEN partner_status IN ('accepted', 'packing') THEN 1 ELSE 0 END),
+		    SUM(CASE WHEN partner_status = 'dispatched' THEN 1 ELSE 0 END),
+		    SUM(CASE WHEN partner_status = 'completed' THEN 1 ELSE 0 END)
+		 FROM orders
+		 WHERE status != 'cancelled'`,
+	)
+	var newCount, inProgress, dispatched, completed sql.NullInt64
+	if err := row.Scan(&newCount, &inProgress, &dispatched, &completed); err != nil {
+		return summary, err
+	}
+
+	if newCount.Valid {
+		summary.NewCount = int(newCount.Int64)
+	}
+	if inProgress.Valid {
+		summary.InProgressCount = int(inProgress.Int64)
+	}
+	if dispatched.Valid {
+		summary.DispatchedCount = int(dispatched.Int64)
+	}
+	if completed.Valid {
+		summary.CompletedCount = int(completed.Int64)
+	}
+
+	overdueRow := s.DB.QueryRow(
+		`SELECT COUNT(*)
+		 FROM orders
+		 WHERE partner_status IN ('new', 'accepted')
+		   AND status != 'cancelled'
+		   AND created_at <= datetime('now', '-2 hours')`,
+	)
+	if err := overdueRow.Scan(&summary.OverdueCount); err != nil {
+		return summary, err
+	}
+
+	return summary, nil
 }
 
 func (s *Store) ListAllOrders() ([]FulfillmentOrder, error) {

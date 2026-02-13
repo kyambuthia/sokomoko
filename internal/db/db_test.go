@@ -325,6 +325,12 @@ func TestCartCheckoutAndFulfillmentFlow(t *testing.T) {
 		t.Fatal("expected at least one order")
 	}
 
+	if err := testStore.UpdateOrderFulfillment(int(orderID), "accepted", "processing", "Order accepted by partner."); err != nil {
+		t.Fatalf("update fulfillment (accepted): %v", err)
+	}
+	if err := testStore.UpdateOrderFulfillment(int(orderID), "packing", "processing", "Order is being packed."); err != nil {
+		t.Fatalf("update fulfillment (packing): %v", err)
+	}
 	if err := testStore.UpdateOrderFulfillment(int(orderID), "dispatched", "shipped", "Your order is on the way."); err != nil {
 		t.Fatalf("update fulfillment: %v", err)
 	}
@@ -335,6 +341,67 @@ func TestCartCheckoutAndFulfillmentFlow(t *testing.T) {
 	}
 	if len(partnerOrders) == 0 {
 		t.Fatal("expected partner orders")
+	}
+
+	summary, err := testStore.GetPartnerOrderSummary()
+	if err != nil {
+		t.Fatalf("summary error: %v", err)
+	}
+	if summary.DispatchedCount < 1 {
+		t.Fatalf("expected at least 1 dispatched order, got %d", summary.DispatchedCount)
+	}
+}
+
+func TestOrderFulfillmentTransitionValidation(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	username := fmt.Sprintf("buyer_transition_%d", suffix)
+	email := fmt.Sprintf("buyer_transition_%d@example.com", suffix)
+
+	userID, err := testStore.CreateUser(User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         username,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Transition Category %d", suffix),
+		Slug:        fmt.Sprintf("transition-category-%d", suffix),
+		Description: "for transition test",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Transition Product",
+		Slug:          fmt.Sprintf("transition-product-%d", suffix),
+		Description:   "transition product",
+		Price:         11.0,
+		StockQuantity: 5,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
+		t.Fatalf("add to cart: %v", err)
+	}
+	orderID, err := testStore.PlaceOrderFromCart(int(userID), "456 Transition St")
+	if err != nil {
+		t.Fatalf("place order: %v", err)
+	}
+
+	// Invalid jump: new -> completed should fail.
+	err = testStore.UpdateOrderFulfillment(int(orderID), "completed", "delivered", "done")
+	if err == nil {
+		t.Fatal("expected invalid transition error")
 	}
 }
 

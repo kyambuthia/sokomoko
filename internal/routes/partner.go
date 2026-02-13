@@ -22,14 +22,19 @@ type PartnerSetupData struct {
 }
 
 type PartnerDashboardData struct {
-	Title        string
-	StoreName    string
-	StoreSlug    string
-	Description  string
-	ContactEmail string
-	ProductCount int
-	Role         string
-	Username     string
+	Title            string
+	StoreName        string
+	StoreSlug        string
+	Description      string
+	ContactEmail     string
+	ProductCount     int
+	NewOrders        int
+	InProgressOrders int
+	DispatchedOrders int
+	CompletedOrders  int
+	OverdueOrders    int
+	Role             string
+	Username         string
 }
 
 type PartnerProductsData struct {
@@ -178,6 +183,11 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		orderSummary, err := a.Store.GetPartnerOrderSummary()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 
 		role := "staff"
 		username := ""
@@ -188,14 +198,19 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 		}
 
 		a.Render(w, a.Templates.PartnerDashboard, PartnerDashboardData{
-			Title:        "Partner Dashboard",
-			StoreName:    settings.StoreName,
-			StoreSlug:    settings.StoreSlug,
-			Description:  settings.Description,
-			ContactEmail: settings.ContactEmail,
-			ProductCount: len(products),
-			Role:         role,
-			Username:     username,
+			Title:            "Partner Dashboard",
+			StoreName:        settings.StoreName,
+			StoreSlug:        settings.StoreSlug,
+			Description:      settings.Description,
+			ContactEmail:     settings.ContactEmail,
+			ProductCount:     len(products),
+			NewOrders:        orderSummary.NewCount,
+			InProgressOrders: orderSummary.InProgressCount,
+			DispatchedOrders: orderSummary.DispatchedCount,
+			CompletedOrders:  orderSummary.CompletedCount,
+			OverdueOrders:    orderSummary.OverdueCount,
+			Role:             role,
+			Username:         username,
 		})
 	}
 }

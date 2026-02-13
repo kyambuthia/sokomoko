@@ -23,7 +23,28 @@
       <p class="partner-metric__value">{{.Role}}</p>
       <p class="partner-metric__note">Current role</p>
     </article>
+    <article class="partner-metric">
+      <h3 class="partner-metric__label">New Orders</h3>
+      <p class="partner-metric__value">{{.NewOrders}}</p>
+      <p class="partner-metric__note">Awaiting acceptance</p>
+    </article>
+    <article class="partner-metric">
+      <h3 class="partner-metric__label">In Progress</h3>
+      <p class="partner-metric__value">{{.InProgressOrders}}</p>
+      <p class="partner-metric__note">Accepted or packing</p>
+    </article>
+    <article class="partner-metric">
+      <h3 class="partner-metric__label">Dispatched</h3>
+      <p class="partner-metric__value">{{.DispatchedOrders}}</p>
+      <p class="partner-metric__note">On the road</p>
+    </article>
   </section>
+
+  {{if gt .OverdueOrders 0}}
+  <div class="notice notice--danger alert alert--danger">
+    <p><strong>{{.OverdueOrders}}</strong> orders are overdue for acceptance (older than 2 hours).</p>
+  </div>
+  {{end}}
 
   <section class="partner-actions">
     <a href="/products" class="btn">Manage products</a>
