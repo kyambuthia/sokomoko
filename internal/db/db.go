@@ -1604,13 +1604,21 @@ func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, e
 			return 0, err
 		}
 
-		if _, err = tx.Exec(
+		result, updateErr := tx.Exec(
 			`UPDATE products
 			 SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP
 			 WHERE id = ? AND stock_quantity >= ?`,
 			line.Quantity, line.ProductID, line.Quantity,
-		); err != nil {
-			return 0, err
+		)
+		if updateErr != nil {
+			return 0, updateErr
+		}
+		affected, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return 0, rowsErr
+		}
+		if affected == 0 {
+			return 0, fmt.Errorf("insufficient stock for %s", line.ProductName)
 		}
 	}
 

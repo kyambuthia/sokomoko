@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -49,14 +50,20 @@ func setupTestServer() {
 
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()
+	partnerMux := http.NewServeMux()
 
 	routes.RegisterPublic(a, mainMux)
 	routes.RegisterAdmin(a, adminMux)
+	routes.RegisterPartner(a, partnerMux)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := r.Host
 		if strings.HasPrefix(host, "admin.") {
 			adminMux.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(host, "partner.") {
+			partnerMux.ServeHTTP(w, r)
 			return
 		}
 		mainMux.ServeHTTP(w, r)
@@ -79,6 +86,24 @@ func clearUsersTable() {
 	if testStore != nil {
 		testStore.DB.Exec("DELETE FROM users")
 	}
+}
+
+func clearAllTables() {
+	if testStore == nil || testStore.DB == nil {
+		return
+	}
+	testStore.DB.Exec("DELETE FROM order_items")
+	testStore.DB.Exec("DELETE FROM orders")
+	testStore.DB.Exec("DELETE FROM cart_items")
+	testStore.DB.Exec("DELETE FROM carts")
+	testStore.DB.Exec("DELETE FROM product_images")
+	testStore.DB.Exec("DELETE FROM products")
+	testStore.DB.Exec("DELETE FROM categories")
+	testStore.DB.Exec("DELETE FROM audit_logs")
+	testStore.DB.Exec("DELETE FROM password_reset_tokens")
+	testStore.DB.Exec("DELETE FROM sessions")
+	testStore.DB.Exec("DELETE FROM users")
+	testStore.DB.Exec("DELETE FROM store_settings")
 }
 
 func makeRequest(method, path string, data url.Values, cookies []*http.Cookie, host string) (*http.Response, string) {
@@ -127,6 +152,78 @@ func getSessionCookie(resp *http.Response) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func createTestUser(t *testing.T, username, email, password, role string) int64 {
+	t.Helper()
+
+	saltBytes := make([]byte, 16)
+	_, _ = rand.Read(saltBytes)
+	salt := base64.URLEncoding.EncodeToString(saltBytes)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+
+	user := db.User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: string(hashedPassword),
+		Salt:         salt,
+		Role:         role,
+		Slug:         username,
+	}
+
+	userID, err := testStore.CreateUser(user)
+	if err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+	return userID
+}
+
+func loginAndGetSessionCookie(t *testing.T, host, username, password string) *http.Cookie {
+	t.Helper()
+	data := url.Values{}
+	data.Set("username", username)
+	data.Set("password", password)
+
+	resp, _ := makeRequest(http.MethodPost, "/login", data, nil, host)
+	if resp == nil {
+		t.Fatal("login request failed")
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("login status = %d, expected %d", resp.StatusCode, http.StatusFound)
+	}
+	cookie := getSessionCookie(resp)
+	if cookie == nil {
+		t.Fatal("expected session cookie")
+	}
+	return cookie
+}
+
+func createTestProduct(t *testing.T, name, slug string, price float64, stock int) int64 {
+	t.Helper()
+	categoryID, err := testStore.CreateCategory(db.Category{
+		Name:        "Test Category " + slug,
+		Slug:        "test-category-" + slug,
+		Description: "test",
+	})
+	if err != nil {
+		t.Fatalf("create category failed: %v", err)
+	}
+	productID, err := testStore.CreateProduct(db.Product{
+		Name:          name,
+		Slug:          slug,
+		Description:   "test product",
+		Price:         price,
+		StockQuantity: stock,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product failed: %v", err)
+	}
+	return productID
+}
+
+func sqlNullInt64(v int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: v, Valid: true}
 }
 
 func TestIntegration_GetLoginPage(t *testing.T) {
@@ -553,5 +650,156 @@ func TestIntegration_Login_MissingFields(t *testing.T) {
 				t.Errorf("%s returned %v, expected %v", tc.name, resp.StatusCode, http.StatusBadRequest)
 			}
 		})
+	}
+}
+
+func TestIntegration_CartRequiresAuth(t *testing.T) {
+	clearAllTables()
+
+	resp, _ := makeRequest(http.MethodGet, "/cart", nil, nil, "")
+	if resp == nil {
+		t.Fatal("request failed")
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("GET /cart status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+	if got := resp.Header.Get("Location"); got != "/login" {
+		t.Fatalf("expected redirect /login, got %s", got)
+	}
+}
+
+func TestIntegration_CartCheckoutFlow(t *testing.T) {
+	clearAllTables()
+
+	suffix := time.Now().UnixNano()
+	username := fmt.Sprintf("buyer_%d", suffix)
+	email := fmt.Sprintf("buyer_%d@example.com", suffix)
+	password := "strongpass123"
+	userID := createTestUser(t, username, email, password, "user")
+	cookie := loginAndGetSessionCookie(t, "", username, password)
+
+	productID := createTestProduct(t, "Checkout Product", fmt.Sprintf("checkout-product-%d", suffix), 15.5, 8)
+
+	addData := url.Values{}
+	addData.Set("product_id", fmt.Sprintf("%d", productID))
+	addData.Set("quantity", "2")
+	resp, _ := makeRequest(http.MethodPost, "/cart/add", addData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /cart/add status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	resp, body := makeRequest(http.MethodGet, "/cart", nil, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /cart status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, "Checkout Product") {
+		t.Fatal("cart page does not include expected product")
+	}
+
+	checkoutData := url.Values{}
+	checkoutData.Set("delivery_address", "123 Integration Street")
+	resp, _ = makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	orders, err := testStore.ListOrdersByUser(int(userID))
+	if err != nil {
+		t.Fatalf("list orders failed: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("expected 1 order, got %d", len(orders))
+	}
+	if orders[0].Status != "pending" {
+		t.Fatalf("expected pending order, got %s", orders[0].Status)
+	}
+}
+
+func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
+	clearAllTables()
+
+	suffix := time.Now().UnixNano()
+	createTestUser(t, fmt.Sprintf("admin_%d", suffix), fmt.Sprintf("admin_%d@example.com", suffix), "adminpass123", "admin")
+	userID := createTestUser(t, fmt.Sprintf("cust_%d", suffix), fmt.Sprintf("cust_%d@example.com", suffix), "userpass123", "user")
+	createTestUser(t, fmt.Sprintf("staff_%d", suffix), fmt.Sprintf("staff_%d@example.com", suffix), "staffpass123", "staff")
+
+	productID := createTestProduct(t, "Partner Queue Product", fmt.Sprintf("partner-queue-%d", suffix), 9.0, 5)
+	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
+		t.Fatalf("add cart failed: %v", err)
+	}
+	orderID, err := testStore.PlaceOrderFromCart(int(userID), "456 Partner Lane")
+	if err != nil {
+		t.Fatalf("place order failed: %v", err)
+	}
+	if orderID == 0 {
+		t.Fatal("expected non-zero order id")
+	}
+
+	userSessionToken := fmt.Sprintf("user_session_%d", suffix)
+	if err := testStore.CreateSession(db.Session{ID: userSessionToken, UserID: int(userID), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatalf("create user session failed: %v", err)
+	}
+
+	resp, _ := makeRequest(http.MethodGet, "/orders", nil, []*http.Cookie{{Name: "session_token", Value: userSessionToken}}, "partner.localhost")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("user access to partner /orders status=%d expected=%d", resp.StatusCode, http.StatusForbidden)
+	}
+
+	staffCookie := loginAndGetSessionCookie(t, "partner.localhost", fmt.Sprintf("staff_%d", suffix), "staffpass123")
+	resp, _ = makeRequest(http.MethodGet, "/orders", nil, []*http.Cookie{staffCookie}, "partner.localhost")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("staff access to partner /orders status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+
+	badUpdate := url.Values{}
+	badUpdate.Set("order_id", fmt.Sprintf("%d", orderID))
+	badUpdate.Set("partner_status", "completed")
+	badUpdate.Set("delivery_status", "delivered")
+	badUpdate.Set("delivery_notice", "done")
+	resp, body := makeRequest(http.MethodPost, "/orders", badUpdate, []*http.Cookie{staffCookie}, "partner.localhost")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("invalid transition update status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, "Unable to update order") {
+		t.Fatal("expected invalid transition error in response body")
+	}
+
+	goodUpdate := url.Values{}
+	goodUpdate.Set("order_id", fmt.Sprintf("%d", orderID))
+	goodUpdate.Set("partner_status", "accepted")
+	goodUpdate.Set("delivery_status", "processing")
+	goodUpdate.Set("delivery_notice", "Order accepted")
+	resp, _ = makeRequest(http.MethodPost, "/orders", goodUpdate, []*http.Cookie{staffCookie}, "partner.localhost")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("valid transition update status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+
+	orders, err := testStore.ListOrdersForFulfillment()
+	if err != nil {
+		t.Fatalf("list fulfillment orders failed: %v", err)
+	}
+	if len(orders) == 0 || orders[0].PartnerStatus == "new" {
+		t.Fatal("expected updated partner status after valid transition")
+	}
+
+}
+
+func TestIntegration_AdminAudit_ForbiddenForStaff(t *testing.T) {
+	clearAllTables()
+
+	suffix := time.Now().UnixNano()
+	createTestUser(t, fmt.Sprintf("admin_%d", suffix), fmt.Sprintf("admin_%d@example.com", suffix), "adminpass123", "admin")
+	createTestUser(t, fmt.Sprintf("staff_%d", suffix), fmt.Sprintf("staff_%d@example.com", suffix), "staffpass123", "staff")
+
+	staffCookie := loginAndGetSessionCookie(t, "admin.localhost", fmt.Sprintf("staff_%d", suffix), "staffpass123")
+	resp, _ := makeRequest(http.MethodGet, "/audit", nil, []*http.Cookie{staffCookie}, "admin.localhost")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("staff access to /audit status=%d expected=%d", resp.StatusCode, http.StatusForbidden)
+	}
+
+	adminCookie := loginAndGetSessionCookie(t, "admin.localhost", fmt.Sprintf("admin_%d", suffix), "adminpass123")
+	resp, _ = makeRequest(http.MethodGet, "/audit", nil, []*http.Cookie{adminCookie}, "admin.localhost")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin access to /audit status=%d expected=%d", resp.StatusCode, http.StatusOK)
 	}
 }

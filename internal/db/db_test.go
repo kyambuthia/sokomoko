@@ -6,6 +6,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -402,6 +403,90 @@ func TestOrderFulfillmentTransitionValidation(t *testing.T) {
 	err = testStore.UpdateOrderFulfillment(int(orderID), "completed", "delivered", "done")
 	if err == nil {
 		t.Fatal("expected invalid transition error")
+	}
+}
+
+func TestConcurrentCheckoutStockContention(t *testing.T) {
+	suffix := time.Now().UnixNano()
+
+	userA, err := testStore.CreateUser(User{
+		Username:     fmt.Sprintf("concurrent_a_%d", suffix),
+		Email:        fmt.Sprintf("concurrent_a_%d@example.com", suffix),
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("concurrent-a-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create user A: %v", err)
+	}
+	userB, err := testStore.CreateUser(User{
+		Username:     fmt.Sprintf("concurrent_b_%d", suffix),
+		Email:        fmt.Sprintf("concurrent_b_%d@example.com", suffix),
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("concurrent-b-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create user B: %v", err)
+	}
+
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Concurrent Category %d", suffix),
+		Slug:        fmt.Sprintf("concurrent-category-%d", suffix),
+		Description: "concurrency",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Concurrent Product",
+		Slug:          fmt.Sprintf("concurrent-product-%d", suffix),
+		Description:   "limited stock",
+		Price:         20,
+		StockQuantity: 1,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	if err := testStore.AddToCart(int(userA), int(productID), 1); err != nil {
+		t.Fatalf("add cart A: %v", err)
+	}
+	if err := testStore.AddToCart(int(userB), int(productID), 1); err != nil {
+		t.Fatalf("add cart B: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	var successCount int
+	var failCount int
+	var mu sync.Mutex
+
+	tryCheckout := func(userID int) {
+		defer wg.Done()
+		_, placeErr := testStore.PlaceOrderFromCart(userID, "Concurrent Street")
+		mu.Lock()
+		defer mu.Unlock()
+		if placeErr == nil {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+
+	wg.Add(2)
+	go tryCheckout(int(userA))
+	go tryCheckout(int(userB))
+	wg.Wait()
+
+	if successCount != 1 {
+		t.Fatalf("expected exactly 1 successful checkout, got %d", successCount)
+	}
+	if failCount != 1 {
+		t.Fatalf("expected exactly 1 failed checkout, got %d", failCount)
 	}
 }
 
