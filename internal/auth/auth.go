@@ -46,6 +46,25 @@ type StaffSignupPageData struct {
 	ShowForm bool
 }
 
+type SignupPageData struct {
+	Title    string
+	Username string
+	Email    string
+	Error    string
+}
+
+type LoginPageData struct {
+	Title    string
+	Username string
+	Error    string
+}
+
+type AdminLoginPageData struct {
+	Title    string
+	Username string
+	Error    string
+}
+
 type PasswordResetRequestData struct {
 	Title      string
 	Heading    string
@@ -192,11 +211,18 @@ func findUserByIdentifier(store *db.Store, identifier string) (*db.User, error) 
 	return store.GetUserByUsername(trimmed)
 }
 
+func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode int, data any) {
+	w.WriteHeader(statusCode)
+	_ = tmpl.ExecuteTemplate(w, "root_template", data)
+}
+
 // SignUp handles normal user registration.
 func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		data := SignupPageData{Title: "Create Account"}
+
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", nil)
+			tmpl.ExecuteTemplate(w, "root_template", data)
 			return
 		}
 
@@ -208,20 +234,25 @@ func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		username := strings.TrimSpace(r.FormValue("username"))
 		email := normalizeEmail(r.FormValue("email"))
 		password := r.FormValue("password")
+		data.Username = username
+		data.Email = email
 
 		if username == "" || email == "" || password == "" {
-			http.Error(w, "All fields are required", http.StatusBadRequest)
+			data.Error = "All fields are required"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 		if !isStrongEnoughPassword(password) {
-			http.Error(w, "Password must be at least 10 characters", http.StatusBadRequest)
+			data.Error = "Password must be at least 10 characters"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 
 		_, err := createUserWithPassword(store, username, email, password, "user")
 		if err != nil {
 			log.Printf("Error creating user: %v", err)
-			http.Error(w, "Failed to create user. Username or email might already exist.", http.StatusConflict)
+			data.Error = "Failed to create user. Username or email might already exist."
+			renderWithStatus(w, tmpl, http.StatusConflict, data)
 			return
 		}
 
@@ -277,8 +308,10 @@ func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 // Login handles normal user authentication.
 func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		data := LoginPageData{Title: "Login"}
+
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", nil)
+			tmpl.ExecuteTemplate(w, "root_template", data)
 			return
 		}
 
@@ -289,22 +322,26 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
+		data.Username = username
 
 		if username == "" || password == "" {
-			http.Error(w, "Username and password are required", http.StatusBadRequest)
+			data.Error = "Username and password are required"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 
 		user, err := store.GetUserByUsername(username)
 		if err != nil || user == nil || user.Role != "user" {
 			log.Printf("Login failed for user %s: %v", username, err)
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			data.Error = "Invalid credentials"
+			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
 			return
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password+user.Salt)); err != nil {
 			log.Printf("Password mismatch for user %s: %v", username, err)
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			data.Error = "Invalid credentials"
+			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
 			return
 		}
 
@@ -321,6 +358,8 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 // AdminLogin handles admin/staff authentication.
 func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		data := AdminLoginPageData{Title: "Admin Login"}
+
 		hasAdmin, err := store.HasAdminUser()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -332,7 +371,7 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", nil)
+			tmpl.ExecuteTemplate(w, "root_template", data)
 			return
 		}
 
@@ -343,20 +382,24 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
+		data.Username = username
 		if username == "" || password == "" {
-			http.Error(w, "Username and password are required", http.StatusBadRequest)
+			data.Error = "Username and password are required"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 
 		user, err := store.GetUserByUsername(username)
 		if err != nil || user == nil || !containsRole([]string{"admin", "staff"}, user.Role) {
 			log.Printf("Admin/staff login failed for user %s: %v", username, err)
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			data.Error = "Invalid credentials"
+			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
 			return
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password+user.Salt)); err != nil {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			data.Error = "Invalid credentials"
+			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
 			return
 		}
 

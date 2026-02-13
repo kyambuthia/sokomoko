@@ -5,18 +5,22 @@
   <h1 class="auth-panel__title auth-sheet__title">Create Account</h1>
   <p class="auth-panel__meta auth-sheet__meta">Open a customer account to place and track orders.</p>
 
+  {{if .Error}}
+  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  {{end}}
+
   <form action="/signup" method="POST" class="auth-panel__form form">
     <fieldset class="form__fieldset">
       <legend class="form__legend">Registration</legend>
 
       <div class="form__group form-group">
         <label class="form__label" for="username">Username</label>
-        <input class="form__input" type="text" id="username" name="username" placeholder="choose a username" required autofocus>
+        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="choose a username" required autofocus>
       </div>
 
       <div class="form__group form-group">
         <label class="form__label" for="email">Email</label>
-        <input class="form__input" type="email" id="email" name="email" placeholder="you@example.com" required>
+        <input class="form__input" type="email" id="email" name="email" value="{{.Email}}" placeholder="you@example.com" required>
       </div>
 
       <div class="form__group form-group">
