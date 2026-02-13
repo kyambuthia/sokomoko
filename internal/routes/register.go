@@ -73,8 +73,56 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 	adminHandlers.HandleFunc("/orders", AdminOrders(a))
 	adminHandlers.HandleFunc("/reports", AdminReports(a))
 	adminHandlers.HandleFunc("/deliveries", AdminDeliveries(a))
+	adminHandlers.Handle("/team", auth.RequireRole("admin", http.HandlerFunc(AdminTeam(a))))
 
 	protectedAdmin := auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, adminHandlers))
 	mux.Handle("/", protectedAdmin)
+	mux.Handle("/static/", Static(a.StaticFS))
+}
+
+func RegisterPartner(a *app.App, mux *http.ServeMux) {
+	mux.HandleFunc("/", PartnerRoot(a))
+	mux.HandleFunc("/login", auth.AdminLogin(a.Store, a.Templates.AdminLogin))
+	mux.Handle(
+		"/signup",
+		auth.AuthMiddleware(a.Store, auth.RequireRole("admin", auth.StaffSignUp(a.Store, a.Templates.StaffSignup))),
+	)
+	mux.HandleFunc(
+		"/password-reset/request",
+		auth.PasswordResetRequest(
+			a.Store,
+			a.Templates.PasswordResetRequest,
+			[]string{"admin", "staff"},
+			"Reset Partner Password",
+			"Enter username or email to request a password reset for partner access.",
+		),
+	)
+	mux.HandleFunc(
+		"/password-reset/confirm",
+		auth.PasswordResetConfirm(
+			a.Store,
+			a.Templates.PasswordResetConfirm,
+			[]string{"admin", "staff"},
+			"Set New Partner Password",
+			"Choose a new password for your partner account.",
+			"/login",
+		),
+	)
+	mux.Handle(
+		"/setup",
+		auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, http.HandlerFunc(PartnerSetup(a)))),
+	)
+	mux.Handle(
+		"/dashboard",
+		auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, http.HandlerFunc(PartnerDashboard(a)))),
+	)
+	mux.Handle(
+		"/products",
+		auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, http.HandlerFunc(PartnerProducts(a)))),
+	)
+	mux.Handle(
+		"/products/new",
+		auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, http.HandlerFunc(PartnerProductNew(a)))),
+	)
 	mux.Handle("/static/", Static(a.StaticFS))
 }

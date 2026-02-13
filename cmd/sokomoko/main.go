@@ -33,15 +33,24 @@ func main() {
 
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()
+	partnerMux := http.NewServeMux()
 
 	routes.RegisterPublic(a, mainMux)
 	routes.RegisterAdmin(a, adminMux)
+	routes.RegisterPartner(a, partnerMux)
 
 	// Subdomain Router
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := r.Host
+		if strings.Contains(host, ":") {
+			host = strings.Split(host, ":")[0]
+		}
 		if strings.HasPrefix(host, "admin.") {
 			adminMux.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(host, "partner.") {
+			partnerMux.ServeHTTP(w, r)
 			return
 		}
 		mainMux.ServeHTTP(w, r)

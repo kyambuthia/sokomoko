@@ -12,6 +12,10 @@ type Templates struct {
 	AdminLogin           *template.Template
 	AdminSetup           *template.Template
 	StaffSignup          *template.Template
+	PartnerSetup         *template.Template
+	PartnerDashboard     *template.Template
+	PartnerProducts      *template.Template
+	PartnerProductNew    *template.Template
 	Login                *template.Template
 	Signup               *template.Template
 	PasswordResetRequest *template.Template
@@ -72,6 +76,26 @@ func ParseTemplates() (*Templates, error) {
 		return nil, err
 	}
 
+	partnerSetupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_setup.html")
+	if err != nil {
+		return nil, err
+	}
+
+	partnerDashboardTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_dashboard.html")
+	if err != nil {
+		return nil, err
+	}
+
+	partnerProductsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_products.html")
+	if err != nil {
+		return nil, err
+	}
+
+	partnerProductNewTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_product_new.html")
+	if err != nil {
+		return nil, err
+	}
+
 	loginTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/login.html")
 	if err != nil {
 		return nil, err
@@ -100,6 +124,10 @@ func ParseTemplates() (*Templates, error) {
 		AdminLogin:           adminLoginTmpl,
 		AdminSetup:           adminSetupTmpl,
 		StaffSignup:          staffSignupTmpl,
+		PartnerSetup:         partnerSetupTmpl,
+		PartnerDashboard:     partnerDashboardTmpl,
+		PartnerProducts:      partnerProductsTmpl,
+		PartnerProductNew:    partnerProductNewTmpl,
 		Login:                loginTmpl,
 		Signup:               signupTmpl,
 		PasswordResetRequest: passwordResetRequestTmpl,

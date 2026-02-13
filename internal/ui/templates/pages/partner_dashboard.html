@@ -1,38 +1,30 @@
-{{ define "body_area" }}
-<div class="container">
-    <h2>Partner Dashboard</h2>
-    <p>Welcome, {{ .User.Email }} ({{ .User.Role }})!</p>
-    <p>This is your exclusive dashboard for managing your products and orders.</p>
-    <p><a href="/partner/products/add">Add New Product</a></p>
+{{ define "title" }}Partner Dashboard{{ end }}
 
-    <h3>Your Products</h3>
-    {{ if .Products }}
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Description</th>
-                    <th>Price</th>
-                    <th>Category</th>
-                    <th>Stock</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{ range .Products }}
-                <tr>
-                    <td>{{ .ID }}</td>
-                    <td>{{ .Name }}</td>
-                    <td>{{ .Description }}</td>
-                    <td>{{ .Price }}</td>
-                    <td>{{ .Category }}</td>
-                    <td>{{ .StockQuantity }}</td>
-                </tr>
-                {{ end }}
-            </tbody>
-        </table>
-    {{ else }}
-        <p>You have not added any products yet.</p>
-    {{ end }}
-</div>
+{{ define "main-area" }}
+<section class="catalog-page">
+  <header class="catalog-page__intro">
+    <h1 class="catalog-page__title">Partner Dashboard</h1>
+    <p class="catalog-page__lead">Store operations and setup live on <code>partner.localhost</code>. Site/platform management remains on <code>admin.localhost</code>.</p>
+  </header>
+
+  <div class="panel card">
+    <div class="card__header"><h3>Store</h3></div>
+    <div class="card__body">
+      <p><strong>Name:</strong> {{.StoreName}}</p>
+      <p><strong>Slug:</strong> {{.StoreSlug}}</p>
+      <p><strong>Contact:</strong> {{.ContactEmail}}</p>
+      <p><strong>Description:</strong> {{if .Description}}{{.Description}}{{else}}Not set{{end}}</p>
+    </div>
+  </div>
+
+  <div class="panel card">
+    <div class="card__header"><h3>Session Context</h3></div>
+    <div class="card__body">
+      <p><strong>Signed in as:</strong> {{.Username}} ({{.Role}})</p>
+      <p><strong>Products in catalog:</strong> {{.ProductCount}}</p>
+      <p><a href="/products">Manage products</a></p>
+      <p><a href="/setup">Update store setup</a></p>
+    </div>
+  </div>
+</section>
 {{ end }}

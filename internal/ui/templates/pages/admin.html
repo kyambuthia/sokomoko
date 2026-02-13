@@ -30,6 +30,9 @@
       </li>
       {{if eq .Role "admin"}}
       <li class="nav__item">
+        <a href="/team" class="nav__link {{if eq .Title "Team Management"}}active{{end}}">Team</a>
+      </li>
+      <li class="nav__item">
         <a href="/staff/signup" class="nav__link">Staff Accounts</a>
       </li>
       {{end}}
@@ -48,7 +51,7 @@
     <h1>Dashboard</h1>
     
     <h2>Key Metrics</h2>
-    <p>Overview of your store's performance today.</p>
+    <p>Overview of your platform operations.</p>
 
     <!-- Metrics Grid -->
     <div class="grid grid-3-cols">
@@ -65,30 +68,36 @@
         </div>
       </div>
 
-      <!-- Orders Today Card -->
+      <!-- Active Sessions Card -->
       <div class="card">
         <div class="card__header">
-          <h3>Orders Today</h3>
+          <h3>Active Sessions</h3>
         </div>
         <div class="card__body">
           <div style="padding: 20px; text-align: center;">
-            <div style="font-size: 2.5rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">{{if .OrdersToday}}{{.OrdersToday}}{{else}}0{{end}}</div>
-            <p style="color: #666666; margin: 0; font-size: 0.9rem;">New orders</p>
+            <div style="font-size: 2.5rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">{{.SessionCount}}</div>
+            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Signed-in users</p>
           </div>
         </div>
       </div>
 
-      <!-- Revenue Today Card -->
+      <!-- Team Size Card -->
       <div class="card">
         <div class="card__header">
-          <h3>Revenue Today</h3>
+          <h3>Team Size</h3>
         </div>
         <div class="card__body">
           <div style="padding: 20px; text-align: center;">
-            <div style="font-size: 2.5rem; font-weight: bold; color: #008000; margin-bottom: 0.5em;">{{if .RevenueToday}}${{.RevenueToday}}{{else}}$0.00{{end}}</div>
-            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Daily total</p>
+            <div style="font-size: 2.5rem; font-weight: bold; color: #008000; margin-bottom: 0.5em;">{{.StaffCount}}</div>
+            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Staff accounts</p>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 1em;">
+      <div class="card__body">
+        <p style="margin: 0;"><strong>Users:</strong> {{.UserCount}} customers, {{.StaffCount}} staff, {{.AdminCount}} admins</p>
       </div>
     </div>
 
@@ -100,6 +109,7 @@
       <a href="/reports" class="button--secondary">View Reports</a>
       <a href="/deliveries" class="button--secondary">Track Deliveries</a>
       {{if eq .Role "admin"}}
+      <a href="/team" class="button--secondary">Manage Team</a>
       <a href="/staff/signup" class="button--secondary">Create Staff</a>
       {{end}}
     </div>
@@ -147,9 +157,21 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No products found. <a href="/products/new">Add your first product</a></td>
-            </tr>
+            {{if .Products}}
+              {{range .Products}}
+              <tr>
+                <td>{{.Name}}</td>
+                <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
+                <td>${{printf "%.2f" .Price}}</td>
+                <td>{{.StockQuantity}}</td>
+                <td>—</td>
+              </tr>
+              {{end}}
+            {{else}}
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No products found. <a href="/products/new">Add your first product</a></td>
+              </tr>
+            {{end}}
           </tbody>
         </table>
       </div>
@@ -282,6 +304,63 @@
       </div>
     </div>
 
+    {{end}}
+
+    {{if eq .Title "Team Management"}}
+    <h1>Team Management</h1>
+    <p>Manage platform identities across admins, staff, and customers.</p>
+
+    {{if .TeamMessage}}
+    <div class="alert alert--success"><p>{{.TeamMessage}}</p></div>
+    {{end}}
+    {{if .TeamError}}
+    <div class="alert alert--error"><p>{{.TeamError}}</p></div>
+    {{end}}
+
+    <div class="card">
+      <div class="card__header">
+        <h3>Users</h3>
+      </div>
+      <div class="card__body">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{if .TeamMembers}}
+              {{range .TeamMembers}}
+              <tr>
+                <td>{{.ID}}</td>
+                <td>{{.Username}}</td>
+                <td>{{.Email}}</td>
+                <td>{{.Role}}</td>
+                <td>
+                  {{if ne .Role "admin"}}
+                  <form method="POST" action="/team" style="margin:0;">
+                    <input type="hidden" name="user_id" value="{{.ID}}">
+                    <button type="submit" class="button--secondary button--small">Deactivate</button>
+                  </form>
+                  {{else}}
+                  <span>Protected</span>
+                  {{end}}
+                </td>
+              </tr>
+              {{end}}
+            {{else}}
+            <tr>
+              <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No users found.</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
     {{end}}
 
   </div>

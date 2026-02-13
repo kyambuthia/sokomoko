@@ -1,0 +1,46 @@
+{{ define "title" }}Partner Products{{ end }}
+
+{{ define "main-area" }}
+<section class="catalog-page">
+  <header class="catalog-page__intro">
+    <h1 class="catalog-page__title">Partner Products</h1>
+    <p class="catalog-page__lead">Manage the store catalog for your partner workspace.</p>
+  </header>
+
+  <div class="panel card">
+    <div class="card__body">
+      <p><a class="btn" href="/products/new">Add Product</a> <a class="btn btn--secondary" href="/dashboard">Back to Dashboard</a></p>
+    </div>
+  </div>
+
+  <div class="panel card">
+    <div class="card__header"><h3>Catalog</h3></div>
+    <div class="card__body">
+      {{if .Products}}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Price</th>
+            <th>Stock</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Products}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
+            <td>${{printf "%.2f" .Price}}</td>
+            <td>{{.StockQuantity}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>No products in catalog yet.</p>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{ end }}

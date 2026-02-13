@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -88,12 +89,23 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS store_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    store_name TEXT NOT NULL,
+    store_slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    contact_email TEXT NOT NULL,
+    initialized_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_password_reset_expires_at ON password_reset_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_store_settings_slug ON store_settings(store_slug);
 `
 
 func InitDB() {
@@ -303,6 +315,16 @@ type PasswordResetToken struct {
 	ExpiresAt time.Time
 	UsedAt    sql.NullTime
 	CreatedAt time.Time
+}
+
+type StoreSettings struct {
+	ID            int
+	StoreName     string
+	StoreSlug     string
+	Description   string
+	ContactEmail  string
+	InitializedAt time.Time
+	UpdatedAt     time.Time
 }
 
 // CreateUser inserts a new user into the database
@@ -544,6 +566,34 @@ func (s *Store) DeleteCategory(id int) error {
 		return err
 	}
 	return nil
+}
+
+func (s *Store) GetAllCategories() ([]Category, error) {
+	rows, err := s.DB.Query(
+		"SELECT id, name, slug, description, parent_id, created_at, updated_at, deleted_at FROM categories WHERE deleted_at IS NULL ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	categories := []Category{}
+	for rows.Next() {
+		category := Category{}
+		if err := rows.Scan(
+			&category.ID,
+			&category.Name,
+			&category.Slug,
+			&category.Description,
+			&category.ParentID,
+			&category.CreatedAt,
+			&category.UpdatedAt,
+			&category.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		categories = append(categories, category)
+	}
+	return categories, nil
 }
 
 // CreateProduct inserts a new product into the database
@@ -922,4 +972,116 @@ func (s *Store) UsePasswordResetToken(token, passwordHash, salt string) (bool, e
 		return false, err
 	}
 	return true, nil
+}
+
+func (s *Store) GetStoreSettings() (*StoreSettings, error) {
+	row := s.DB.QueryRow(
+		`SELECT id, store_name, store_slug, description, contact_email, initialized_at, updated_at
+		 FROM store_settings
+		 WHERE id = 1`,
+	)
+	settings := &StoreSettings{}
+	err := row.Scan(
+		&settings.ID,
+		&settings.StoreName,
+		&settings.StoreSlug,
+		&settings.Description,
+		&settings.ContactEmail,
+		&settings.InitializedAt,
+		&settings.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return settings, nil
+}
+
+func (s *Store) UpsertStoreSettings(settings StoreSettings) error {
+	stmt, err := s.DB.Prepare(
+		`INSERT INTO store_settings (id, store_name, store_slug, description, contact_email)
+		 VALUES (1, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   store_name = excluded.store_name,
+		   store_slug = excluded.store_slug,
+		   description = excluded.description,
+		   contact_email = excluded.contact_email,
+		   updated_at = CURRENT_TIMESTAMP`,
+	)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(settings.StoreName, settings.StoreSlug, settings.Description, settings.ContactEmail)
+	return err
+}
+
+func (s *Store) CountProducts() (int, error) {
+	row := s.DB.QueryRow("SELECT COUNT(*) FROM products WHERE deleted_at IS NULL")
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (s *Store) CountActiveSessions() (int, error) {
+	row := s.DB.QueryRow("SELECT COUNT(*) FROM sessions WHERE expires_at > CURRENT_TIMESTAMP")
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (s *Store) ListUsersByRoles(roles []string) ([]User, error) {
+	if len(roles) == 0 {
+		return []User{}, nil
+	}
+
+	placeholders := make([]string, len(roles))
+	args := make([]interface{}, 0, len(roles))
+	for i, role := range roles {
+		placeholders[i] = "?"
+		args = append(args, role)
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, username, email, password_hash, salt, role, slug, created_at, updated_at, deleted_at
+		 FROM users
+		 WHERE role IN (%s) AND deleted_at IS NULL
+		 ORDER BY role, username`,
+		strings.Join(placeholders, ","),
+	)
+
+	rows, err := s.DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := []User{}
+	for rows.Next() {
+		user := User{}
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&user.PasswordHash,
+			&user.Salt,
+			&user.Role,
+			&user.Slug,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+			&user.DeletedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
 }
