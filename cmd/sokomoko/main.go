@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,22 +12,29 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/auth"
+	"github.com/kyambuthia/sokomoko/internal/bootstrap"
+	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
 func main() {
+	cfg := config.LoadFromEnv()
+	auth.SetEnvironment(cfg.Environment)
+
 	templates, err := ui.ParseTemplates()
 	if err != nil {
 		log.Fatalf("Error parsing templates: %v", err)
 	}
 
-	store, err := db.OpenStoreFromEnv()
+	store, err := db.OpenStore(cfg.DBPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer store.Close()
+	bootstrap.Initialize(store)
 
 	a := app.New(store, templates, ui.StaticFS)
 
@@ -40,7 +46,7 @@ func main() {
 	routes.RegisterAdmin(a, adminMux)
 	routes.RegisterPartner(a, partnerMux)
 
-	allowedHosts := parseAllowedHosts(os.Getenv("ALLOWED_HOSTS"))
+	allowedHosts := parseAllowedHosts(cfg.AllowedHostsRaw)
 	if len(allowedHosts) == 0 {
 		allowedHosts = map[string]struct{}{
 			"localhost":         {},
@@ -79,13 +85,8 @@ func main() {
 		app.RequestLogger(),
 	)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "6969"
-	}
-
 	srvr := &http.Server{
-		Addr:              ":" + port,
+		Addr:              ":" + cfg.Port,
 		Handler:           handler,
 		IdleTimeout:       60 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -93,7 +94,7 @@ func main() {
 		WriteTimeout:      15 * time.Second,
 	}
 
-	fmt.Printf("\n --- RUNNING --- \n server is listening on PORT %s \nCTRL-C to EXIT\n", srvr.Addr)
+	printStartupSummary(cfg, srvr, allowedHosts)
 
 	idleConnsClosed := make(chan struct{})
 	cleanupDone := make(chan struct{})
@@ -101,15 +102,15 @@ func main() {
 	go func() {
 		sigint := make(chan os.Signal, 1)
 		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
-		<-sigint
+		sig := <-sigint
 
-		log.Println("Server is shutting down...")
+		log.Printf("[shutdown] signal=%s received, shutting down server", sig.String())
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		if err := srvr.Shutdown(ctx); err != nil {
-			log.Printf("Error during server shutdown: %v", err)
+			log.Printf("[shutdown] graceful shutdown failed: %v", err)
 		}
 
 		close(cleanupDone)
@@ -121,7 +122,7 @@ func main() {
 	}
 
 	<-idleConnsClosed
-	log.Println("Server stopped gracefully")
+	log.Println("[shutdown] server stopped gracefully")
 }
 
 func parseAllowedHosts(raw string) map[string]struct{} {
@@ -161,9 +162,32 @@ func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
 	for {
 		select {
 		case <-done:
+			log.Println("[cleanup] background cleanup stopped")
 			return
 		case <-ticker.C:
 			run()
 		}
 	}
+}
+
+func printStartupSummary(cfg config.Config, server *http.Server, allowedHosts map[string]struct{}) {
+	hosts := sortedHostList(allowedHosts)
+
+	log.Printf("[startup] sokomoko booting")
+	log.Printf("[startup] env=%s port=%s db=%s", cfg.Environment, cfg.Port, cfg.DBPath)
+	log.Printf("[startup] bind=%s", server.Addr)
+	log.Printf("[startup] trusted_hosts=%s", strings.Join(hosts, ","))
+	log.Printf("[startup] storefront=%s", localURL("localhost", cfg.Port))
+	log.Printf("[startup] admin=%s", localURL("admin.localhost", cfg.Port))
+	log.Printf("[startup] partner=%s", localURL("partner.localhost", cfg.Port))
+	log.Printf("[startup] health=%s", localURL("localhost", cfg.Port)+"/healthz")
+	log.Printf("[startup] ready=%s", localURL("localhost", cfg.Port)+"/readyz")
+	log.Printf("[startup] press Ctrl+C to stop")
+}
+
+func localURL(host, port string) string {
+	if port == "80" {
+		return "http://" + host
+	}
+	return "http://" + host + ":" + port
 }

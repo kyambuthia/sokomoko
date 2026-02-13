@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 )
 
 type CartPageData struct {
@@ -31,6 +33,8 @@ type CheckoutPageData struct {
 }
 
 func CartPage(a *app.App) http.HandlerFunc {
+	svc := commerceSvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -43,7 +47,7 @@ func CartPage(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		items, subtotal, err := a.Store.GetCartItems(user.ID)
+		items, subtotal, err := svc.GetCart(user.ID)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -61,6 +65,8 @@ func CartPage(a *app.App) http.HandlerFunc {
 }
 
 func CartAdd(a *app.App) http.HandlerFunc {
+	svc := commerceSvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -74,7 +80,7 @@ func CartAdd(a *app.App) http.HandlerFunc {
 		}
 
 		productID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("product_id")))
-		if err != nil || productID <= 0 {
+		if err != nil {
 			http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
 			return
 		}
@@ -85,18 +91,19 @@ func CartAdd(a *app.App) http.HandlerFunc {
 			}
 		}
 
-		product, err := a.Store.GetProductByID(productID)
-		if err != nil || product == nil {
-			http.Redirect(w, r, "/cart?error=Product+not+found", http.StatusFound)
-			return
-		}
-		if product.StockQuantity <= 0 {
-			http.Redirect(w, r, "/cart?error=Product+is+out+of+stock", http.StatusFound)
-			return
-		}
-
-		if err := a.Store.AddToCart(user.ID, productID, qty); err != nil {
-			http.Redirect(w, r, "/cart?error=Unable+to+add+item", http.StatusFound)
+		if err := svc.AddToCart(user.ID, productID, qty); err != nil {
+			switch {
+			case errors.Is(err, commerceSvc.ErrInvalidProduct):
+				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
+			case errors.Is(err, commerceSvc.ErrInvalidQuantity):
+				http.Redirect(w, r, "/cart?error=Invalid+quantity", http.StatusFound)
+			case errors.Is(err, commerceSvc.ErrProductNotFound):
+				http.Redirect(w, r, "/cart?error=Product+not+found", http.StatusFound)
+			case errors.Is(err, commerceSvc.ErrOutOfStock):
+				http.Redirect(w, r, "/cart?error=Product+is+out+of+stock", http.StatusFound)
+			default:
+				http.Redirect(w, r, "/cart?error=Unable+to+add+item", http.StatusFound)
+			}
 			return
 		}
 
@@ -105,6 +112,8 @@ func CartAdd(a *app.App) http.HandlerFunc {
 }
 
 func CartUpdate(a *app.App) http.HandlerFunc {
+	svc := commerceSvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -118,7 +127,7 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 		}
 
 		productID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("product_id")))
-		if err != nil || productID <= 0 {
+		if err != nil {
 			http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
 			return
 		}
@@ -128,7 +137,15 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		if err := a.Store.UpdateCartQuantity(user.ID, productID, qty); err != nil {
+		if err := svc.UpdateCartItem(user.ID, productID, qty); err != nil {
+			if errors.Is(err, commerceSvc.ErrInvalidProduct) {
+				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
+				return
+			}
+			if errors.Is(err, commerceSvc.ErrInvalidQuantity) {
+				http.Redirect(w, r, "/cart?error=Invalid+quantity", http.StatusFound)
+				return
+			}
 			http.Redirect(w, r, "/cart?error=Unable+to+update+item", http.StatusFound)
 			return
 		}
@@ -137,6 +154,8 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 }
 
 func CartRemove(a *app.App) http.HandlerFunc {
+	svc := commerceSvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -150,12 +169,16 @@ func CartRemove(a *app.App) http.HandlerFunc {
 		}
 
 		productID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("product_id")))
-		if err != nil || productID <= 0 {
+		if err != nil {
 			http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
 			return
 		}
 
-		if err := a.Store.RemoveFromCart(user.ID, productID); err != nil {
+		if err := svc.RemoveFromCart(user.ID, productID); err != nil {
+			if errors.Is(err, commerceSvc.ErrInvalidProduct) {
+				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
+				return
+			}
 			http.Redirect(w, r, "/cart?error=Unable+to+remove+item", http.StatusFound)
 			return
 		}
@@ -164,6 +187,8 @@ func CartRemove(a *app.App) http.HandlerFunc {
 }
 
 func Checkout(a *app.App) http.HandlerFunc {
+	svc := commerceSvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetUserFromContext(r.Context())
 		if user == nil {
@@ -171,7 +196,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		items, subtotal, err := a.Store.GetCartItems(user.ID)
+		items, subtotal, err := svc.GetCart(user.ID)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -195,20 +220,22 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		address := strings.TrimSpace(r.FormValue("delivery_address"))
 		data.DeliveryAddress = address
-		if address == "" {
-			data.Error = "Delivery address is required"
-			a.Render(w, a.Templates.Checkout, data)
-			return
-		}
 		if len(items) == 0 {
 			data.Error = "Cart is empty"
 			a.Render(w, a.Templates.Checkout, data)
 			return
 		}
 
-		orderID, err := a.Store.PlaceOrderFromCart(user.ID, address)
+		orderID, err := svc.Checkout(user.ID, address)
 		if err != nil {
-			data.Error = fmt.Sprintf("Checkout failed: %s", err.Error())
+			switch {
+			case errors.Is(err, commerceSvc.ErrDeliveryAddress):
+				data.Error = "Delivery address is required"
+			case errors.Is(err, commerceSvc.ErrCartEmpty):
+				data.Error = "Cart is empty"
+			default:
+				data.Error = fmt.Sprintf("Checkout failed: %s", err.Error())
+			}
 			a.Render(w, a.Templates.Checkout, data)
 			return
 		}

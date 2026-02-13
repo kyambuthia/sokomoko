@@ -8,7 +8,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +21,16 @@ const (
 	sessionDuration    = 24 * time.Hour
 	resetTokenDuration = 45 * time.Minute
 )
+
+var runtimeEnvironment = "development"
+
+func SetEnvironment(env string) {
+	clean := strings.TrimSpace(strings.ToLower(env))
+	if clean == "" {
+		clean = "development"
+	}
+	runtimeEnvironment = clean
+}
 
 type StaffCredential struct {
 	Username     string
@@ -92,7 +101,7 @@ func shouldUseSecureCookies(r *http.Request) bool {
 	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		return true
 	}
-	return strings.EqualFold(os.Getenv("ENV"), "production")
+	return runtimeEnvironment == "production"
 }
 
 func normalizeEmail(value string) string {
@@ -200,7 +209,7 @@ func recommendedStaffCount(productCount int) (int, string) {
 }
 
 func shouldExposeResetLink() bool {
-	return !strings.EqualFold(os.Getenv("ENV"), "production")
+	return runtimeEnvironment != "production"
 }
 
 func findUserByIdentifier(store *db.Store, identifier string) (*db.User, error) {
