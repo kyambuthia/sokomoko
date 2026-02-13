@@ -21,7 +21,7 @@
   <div class="panel card">
     <div class="card__body">
       <p><strong>Staffing guidance:</strong> {{.StaffRationale}}</p>
-      <p>Recommended initial staff accounts: <strong>{{.RecommendedStaff}}</strong></p>
+      <p class="mb-0">Recommended initial staff accounts: <strong>{{.RecommendedStaff}}</strong></p>
     </div>
   </div>
 
@@ -64,7 +64,8 @@
     </div>
     <div class="card__body">
       {{if .StaffCredentials}}
-      <table>
+      <div class="table-wrap">
+      <table class="data-table data-table--admin">
         <thead>
           <tr>
             <th>Username</th>
@@ -82,9 +83,10 @@
           {{end}}
         </tbody>
       </table>
-      <p>Store these credentials securely. Staff can sign in at <a href="/login">admin login</a>.</p>
+      </div>
+      <p class="mb-0">Store these credentials securely. Staff can sign in at <a href="/login">admin login</a>.</p>
       {{else}}
-      <p>No staff accounts were created.</p>
+      <p class="table-empty">No staff accounts were created.</p>
       {{end}}
     </div>
   </div>

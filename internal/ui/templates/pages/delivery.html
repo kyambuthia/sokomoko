@@ -1,6 +1,17 @@
-{{ define "body_area" }}
-    {{ template "site_nav_area" }}
-        <h2>Delivery</h2>
-        <p>See details of the delivery progress of your item</p>
-    {{template "footer_area" }}
+{{ define "title" }}Delivery{{ end }}
+
+{{ define "main-area" }}
+<section class="catalog-page">
+  <header class="catalog-page__intro">
+    <h1 class="catalog-page__title">Delivery Tracking</h1>
+    <p class="catalog-page__lead">Track shipment progress and delivery milestones.</p>
+  </header>
+
+  <div class="panel card">
+    <div class="card__body">
+      <p>Delivery events will be displayed here once your order ships.</p>
+      <p class="auth-panel__links"><a href="/account">Go to account</a></p>
+    </div>
+  </div>
+</section>
 {{ end }}

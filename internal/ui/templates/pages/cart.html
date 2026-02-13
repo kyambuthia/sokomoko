@@ -1,7 +1,20 @@
-{{ define "body_area" }}
-        {{ template "site_nav_area" }}
-        <h2>Cart</h2>
+{{ define "title" }}Cart{{ end }}
 
-        <p>This are the items in your cart</p>
-	{{ template "footer_area" }}
+{{ define "main-area" }}
+<section class="catalog-page">
+  <header class="catalog-page__intro">
+    <h1 class="catalog-page__title">Cart</h1>
+    <p class="catalog-page__lead">Review your selected products before checkout.</p>
+  </header>
+
+  <div class="panel card">
+    <div class="card__body">
+      <p>Your cart items will appear here.</p>
+      <div class="partner-actions">
+        <a href="/" class="btn btn--secondary">Continue shopping</a>
+        <a href="/checkout" class="btn">Proceed to checkout</a>
+      </div>
+    </div>
+  </div>
+</section>
 {{ end }}

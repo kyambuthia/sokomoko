@@ -1,160 +1,92 @@
 {{ define "title" }}Admin – {{.Title}}{{ end }}
 
 {{ define "header-area" }}
-<div class="header">
-  <h1 class="site-title">Admin Dashboard</h1>
-  <p class="site-tagline">Sokomoko Administration v1.0</p>
-</div>
+<header class="site-header header">
+  <div class="site-header__brand">
+    <p class="site-header__title site-title">SOKOMOKO ADMIN</p>
+    <p class="site-header__tagline site-tagline">Platform management</p>
+  </div>
+</header>
 {{ end }}
 
 {{ define "main-area" }}
-<div class="container">
-
-  <!-- Admin Navigation -->
-  <nav class="nav">
-    <ul class="nav__list">
-      <li class="nav__item">
-        <a href="/" class="nav__link {{if eq .Title "Admin Dashboard"}}active{{end}}">Dashboard</a>
-      </li>
-      <li class="nav__item">
-        <a href="/products" class="nav__link {{if eq .Title "Product Management"}}active{{end}}">Products</a>
-      </li>
-      <li class="nav__item">
-        <a href="/orders" class="nav__link {{if eq .Title "Order Management"}}active{{end}}">Orders</a>
-      </li>
-      <li class="nav__item">
-        <a href="/reports" class="nav__link {{if eq .Title "Sales Reports"}}active{{end}}">Reports</a>
-      </li>
-      <li class="nav__item">
-        <a href="/deliveries" class="nav__link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a>
-      </li>
+<section class="admin-page">
+  <nav class="site-nav nav">
+    <ul class="site-nav__list nav__list">
+      <li class="site-nav__item nav__item"><a href="/" class="site-nav__link nav__link {{if eq .Title "Admin Dashboard"}}active{{end}}">Dashboard</a></li>
+      <li class="site-nav__item nav__item"><a href="/products" class="site-nav__link nav__link {{if eq .Title "Product Management"}}active{{end}}">Products</a></li>
+      <li class="site-nav__item nav__item"><a href="/orders" class="site-nav__link nav__link {{if eq .Title "Order Management"}}active{{end}}">Orders</a></li>
+      <li class="site-nav__item nav__item"><a href="/reports" class="site-nav__link nav__link {{if eq .Title "Sales Reports"}}active{{end}}">Reports</a></li>
+      <li class="site-nav__item nav__item"><a href="/deliveries" class="site-nav__link nav__link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a></li>
       {{if eq .Role "admin"}}
-      <li class="nav__item">
-        <a href="/team" class="nav__link {{if eq .Title "Team Management"}}active{{end}}">Team</a>
-      </li>
-      <li class="nav__item">
-        <a href="/staff/signup" class="nav__link">Staff Accounts</a>
-      </li>
+      <li class="site-nav__item nav__item"><a href="/team" class="site-nav__link nav__link {{if eq .Title "Team Management"}}active{{end}}">Team</a></li>
+      <li class="site-nav__item nav__item"><a href="/staff/signup" class="site-nav__link nav__link">Staff Accounts</a></li>
       {{end}}
-      <li class="nav__item">
-        <a href="/" class="nav__link">← Store</a>
-      </li>
+      <li class="site-nav__item nav__item"><a href="/" class="site-nav__link nav__link">Storefront</a></li>
     </ul>
   </nav>
 
-  <!-- Page Content -->
-  <div class="mt-3">
-    
-    <!-- Dashboard Section -->
-    {{if eq .Title "Admin Dashboard"}}
-    
-    <h1>Dashboard</h1>
-    
-    <h2>Key Metrics</h2>
-    <p>Overview of your platform operations.</p>
+  <header class="admin-page__header">
+    <h1 class="admin-page__title">{{.Title}}</h1>
+    <p class="admin-page__lead">{{.Message}}</p>
+  </header>
 
-    <!-- Metrics Grid -->
-    <div class="grid grid-3-cols">
-      <!-- Total Products Card -->
-      <div class="card">
-        <div class="card__header">
-          <h3>Total Products</h3>
-        </div>
-        <div class="card__body">
-          <div style="padding: 20px; text-align: center;">
-            <div style="font-size: 2.5rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">{{if .ProductCount}}{{.ProductCount}}{{else}}0{{end}}</div>
-            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Products in catalog</p>
-          </div>
-        </div>
-      </div>
+  {{if eq .Title "Admin Dashboard"}}
+  <section class="admin-metrics">
+    <article class="admin-metric">
+      <h3 class="admin-metric__label">Products</h3>
+      <p class="admin-metric__value">{{.ProductCount}}</p>
+      <p class="admin-metric__note">Catalog items</p>
+    </article>
+    <article class="admin-metric">
+      <h3 class="admin-metric__label">Active Sessions</h3>
+      <p class="admin-metric__value">{{.SessionCount}}</p>
+      <p class="admin-metric__note">Signed-in users</p>
+    </article>
+    <article class="admin-metric">
+      <h3 class="admin-metric__label">Staff Accounts</h3>
+      <p class="admin-metric__value">{{.StaffCount}}</p>
+      <p class="admin-metric__note">Admin-managed staff</p>
+    </article>
+  </section>
 
-      <!-- Active Sessions Card -->
-      <div class="card">
-        <div class="card__header">
-          <h3>Active Sessions</h3>
-        </div>
-        <div class="card__body">
-          <div style="padding: 20px; text-align: center;">
-            <div style="font-size: 2.5rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">{{.SessionCount}}</div>
-            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Signed-in users</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Team Size Card -->
-      <div class="card">
-        <div class="card__header">
-          <h3>Team Size</h3>
-        </div>
-        <div class="card__body">
-          <div style="padding: 20px; text-align: center;">
-            <div style="font-size: 2.5rem; font-weight: bold; color: #008000; margin-bottom: 0.5em;">{{.StaffCount}}</div>
-            <p style="color: #666666; margin: 0; font-size: 0.9rem;">Staff accounts</p>
-          </div>
-        </div>
-      </div>
+  <section class="panel card">
+    <div class="card__body">
+      <p class="admin-summary"><strong>Users:</strong> {{.UserCount}} customers, {{.StaffCount}} staff, {{.AdminCount}} admins</p>
     </div>
+  </section>
 
-    <div class="card" style="margin-top: 1em;">
-      <div class="card__body">
-        <p style="margin: 0;"><strong>Users:</strong> {{.UserCount}} customers, {{.StaffCount}} staff, {{.AdminCount}} admins</p>
-      </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <h2 style="margin-top: 2em;">Quick Actions</h2>
-    <div class="flex flex-gap-2 flex-wrap">
-      <a href="/products" class="button">Manage Products</a>
-      <a href="/orders" class="button--secondary">View Orders</a>
-      <a href="/reports" class="button--secondary">View Reports</a>
-      <a href="/deliveries" class="button--secondary">Track Deliveries</a>
-      {{if eq .Role "admin"}}
-      <a href="/team" class="button--secondary">Manage Team</a>
-      <a href="/staff/signup" class="button--secondary">Create Staff</a>
-      {{end}}
-    </div>
-
-    <!-- Recent Activity -->
-    <h2 style="margin-top: 2em;">Recent Activity</h2>
-    <div class="card">
-      <div class="card__header">
-        <h3>Latest Updates</h3>
-      </div>
-      <div class="card__body">
-        <p style="padding: 15px 0; margin: 0; color: #666666;">No recent activity to display.</p>
-      </div>
-    </div>
-
+  <section class="admin-actions">
+    <a href="/products" class="btn">Manage Products</a>
+    <a href="/orders" class="btn btn--secondary">View Orders</a>
+    <a href="/reports" class="btn btn--secondary">View Reports</a>
+    <a href="/deliveries" class="btn btn--secondary">Track Deliveries</a>
+    {{if eq .Role "admin"}}
+    <a href="/team" class="btn btn--secondary">Manage Team</a>
+    <a href="/staff/signup" class="btn btn--secondary">Create Staff</a>
     {{end}}
+  </section>
 
-    <!-- Product Management Section -->
-    {{if eq .Title "Product Management"}}
-    
-    <h1>Product Management</h1>
-    <p>Manage your product catalog, including adding, editing, and deleting products.</p>
+  <section class="panel card">
+    <div class="card__header"><h3>Recent Activity</h3></div>
+    <div class="card__body"><p class="text-muted">No recent activity to display.</p></div>
+  </section>
+  {{end}}
 
-    <h2>Actions</h2>
-    <div class="flex flex-gap-2 flex-wrap mb-3">
-      <a href="/products/new" class="button">Add New Product</a>
-      <a href="/products/import" class="button--secondary">Import Products</a>
-      <a href="/products/export" class="button--secondary">Export Products</a>
-    </div>
+  {{if eq .Title "Product Management"}}
+  <section class="admin-actions">
+    <a href="/products/new" class="btn">Add New Product</a>
+    <a href="/products/import" class="btn btn--secondary">Import Products</a>
+    <a href="/products/export" class="btn btn--secondary">Export Products</a>
+  </section>
 
-    <h2>Products List</h2>
-    <div class="card">
-      <div class="card__header">
-        <h3>All Products</h3>
-      </div>
-      <div class="card__body">
-        <table>
+  <section class="panel card">
+    <div class="card__header"><h3>Catalog</h3></div>
+    <div class="card__body">
+      <div class="table-wrap">
+        <table class="data-table data-table--admin">
           <thead>
-            <tr>
-              <th>Product Name</th>
-              <th>Category</th>
-              <th>Price</th>
-              <th>Stock</th>
-              <th>Actions</th>
-            </tr>
+            <tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th></tr>
           </thead>
           <tbody>
             {{if .Products}}
@@ -164,173 +96,46 @@
                 <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
                 <td>${{printf "%.2f" .Price}}</td>
                 <td>{{.StockQuantity}}</td>
-                <td>—</td>
+                <td>{{if gt .StockQuantity 0}}Active{{else}}Out of stock{{end}}</td>
               </tr>
               {{end}}
             {{else}}
-              <tr>
-                <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No products found. <a href="/products/new">Add your first product</a></td>
-              </tr>
+              <tr><td colspan="5" class="table-empty">No products found. <a href="/products/new">Add your first product</a>.</td></tr>
             {{end}}
           </tbody>
         </table>
       </div>
     </div>
+  </section>
+  {{end}}
 
-    {{end}}
+  {{if eq .Title "Order Management"}}
+  <section class="panel card"><div class="card__body"><p>Order pipeline integration is next. This panel is reserved for live order queues and status controls.</p></div></section>
+  {{end}}
 
-    <!-- Orders Section -->
-    {{if eq .Title "Order Management"}}
-    
-    <h1>Order Management</h1>
-    <p>View and manage all customer orders. Track order status and process refunds.</p>
+  {{if eq .Title "Sales Reports"}}
+  <section class="admin-metrics">
+    <article class="admin-metric"><h3 class="admin-metric__label">Total Revenue</h3><p class="admin-metric__value">$0.00</p><p class="admin-metric__note">All time</p></article>
+    <article class="admin-metric"><h3 class="admin-metric__label">Total Orders</h3><p class="admin-metric__value">0</p><p class="admin-metric__note">All time</p></article>
+    <article class="admin-metric"><h3 class="admin-metric__label">Active Users</h3><p class="admin-metric__value">{{.SessionCount}}</p><p class="admin-metric__note">Current sessions</p></article>
+  </section>
+  {{end}}
 
-    <h2>Recent Orders</h2>
-    <div class="card">
-      <div class="card__header">
-        <h3>All Orders</h3>
-      </div>
-      <div class="card__body">
-        <table>
+  {{if eq .Title "Delivery Management"}}
+  <section class="panel card"><div class="card__body"><p>Delivery pipeline placeholders are ready for integration with dispatch and tracking providers.</p></div></section>
+  {{end}}
+
+  {{if eq .Title "Team Management"}}
+  {{if .TeamMessage}}<div class="notice notice--success alert alert--success"><p>{{.TeamMessage}}</p></div>{{end}}
+  {{if .TeamError}}<div class="notice notice--danger alert alert--danger"><p>{{.TeamError}}</p></div>{{end}}
+
+  <section class="panel card">
+    <div class="card__header"><h3>User Directory</h3></div>
+    <div class="card__body">
+      <div class="table-wrap">
+        <table class="data-table data-table--admin">
           <thead>
-            <tr>
-              <th>Order ID</th>
-              <th>Customer</th>
-              <th>Date</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colspan="6" style="text-align: center; padding: 20px; color: #666666;">No orders found.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    {{end}}
-
-    <!-- Reports Section -->
-    {{if eq .Title "Sales Reports"}}
-    
-    <h1>Sales Reports</h1>
-    <p>View detailed sales analytics, revenue trends, and performance metrics.</p>
-
-    <h2>Sales Summary</h2>
-    <div class="grid grid-2-cols">
-      <div class="card">
-        <div class="card__header">
-          <h3>Total Revenue</h3>
-        </div>
-        <div class="card__body">
-          <div style="padding: 20px;">
-            <div style="font-size: 2rem; font-weight: bold; color: #008000; margin-bottom: 0.5em;">$0.00</div>
-            <p style="color: #666666; margin: 0; font-size: 0.9rem;">All time</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card__header">
-          <h3>Total Orders</h3>
-        </div>
-        <div class="card__body">
-          <div style="padding: 20px;">
-            <div style="font-size: 2rem; font-weight: bold; color: #000000; margin-bottom: 0.5em;">0</div>
-            <p style="color: #666666; margin: 0; font-size: 0.9rem;">All time</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <h2 style="margin-top: 2em;">Sales by Category</h2>
-    <div class="card">
-      <div class="card__header">
-        <h3>Product Categories</h3>
-      </div>
-      <div class="card__body">
-        <table>
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Sales</th>
-              <th>Revenue</th>
-              <th>% of Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colspan="4" style="text-align: center; padding: 20px; color: #666666;">No sales data available yet.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    {{end}}
-
-    <!-- Deliveries Section -->
-    {{if eq .Title "Delivery Management"}}
-    
-    <h1>Delivery Management</h1>
-    <p>Track and manage product deliveries. Update delivery status and customer information.</p>
-
-    <h2>Active Deliveries</h2>
-    <div class="card">
-      <div class="card__header">
-        <h3>All Deliveries</h3>
-      </div>
-      <div class="card__body">
-        <table>
-          <thead>
-            <tr>
-              <th>Delivery ID</th>
-              <th>Order ID</th>
-              <th>Destination</th>
-              <th>Status</th>
-              <th>Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colspan="6" style="text-align: center; padding: 20px; color: #666666;">No active deliveries.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    {{end}}
-
-    {{if eq .Title "Team Management"}}
-    <h1>Team Management</h1>
-    <p>Manage platform identities across admins, staff, and customers.</p>
-
-    {{if .TeamMessage}}
-    <div class="alert alert--success"><p>{{.TeamMessage}}</p></div>
-    {{end}}
-    {{if .TeamError}}
-    <div class="alert alert--error"><p>{{.TeamError}}</p></div>
-    {{end}}
-
-    <div class="card">
-      <div class="card__header">
-        <h3>Users</h3>
-      </div>
-      <div class="card__body">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Username</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Action</th>
-            </tr>
+            <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Action</th></tr>
           </thead>
           <tbody>
             {{if .TeamMembers}}
@@ -342,9 +147,9 @@
                 <td>{{.Role}}</td>
                 <td>
                   {{if ne .Role "admin"}}
-                  <form method="POST" action="/team" style="margin:0;">
+                  <form method="POST" action="/team" class="table-action-form">
                     <input type="hidden" name="user_id" value="{{.ID}}">
-                    <button type="submit" class="button--secondary button--small">Deactivate</button>
+                    <button type="submit" class="btn btn--secondary btn--small">Deactivate</button>
                   </form>
                   {{else}}
                   <span>Protected</span>
@@ -353,17 +158,13 @@
               </tr>
               {{end}}
             {{else}}
-            <tr>
-              <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No users found.</td>
-            </tr>
+              <tr><td colspan="5" class="table-empty">No users found.</td></tr>
             {{end}}
           </tbody>
         </table>
       </div>
     </div>
-    {{end}}
-
-  </div>
-
-</div>
+  </section>
+  {{end}}
+</section>
 {{ end }}

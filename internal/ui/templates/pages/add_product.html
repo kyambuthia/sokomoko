@@ -1,64 +1,61 @@
-{{ define "body_area" }}
-<div class="container">
-  <div style="max-width: 600px;">
-    <h1>Add New Product</h1>
-    <p style="color: #666666; margin-bottom: 1.5em;">Fill in the form below to add a new product to your catalog.</p>
+{{ define "title" }}Add Product{{ end }}
 
-    <form action="/partner/products/add" method="POST">
-      <fieldset>
-        <legend>Product Information</legend>
+{{ define "main-area" }}
+<section class="auth-panel auth-sheet">
+  <h1 class="auth-panel__title">Add New Product</h1>
+  <p class="auth-panel__meta">Fill in product details to publish a new catalog item.</p>
 
-        <div class="form-group">
-          <label for="name">Product Name *</label>
-          <input type="text" id="name" name="name" placeholder="e.g. Wireless Bluetooth Speaker" required>
-        </div>
+  <form action="/partner/products/add" method="POST" class="auth-panel__form form">
+    <fieldset class="form__fieldset">
+      <legend class="form__legend">Product Information</legend>
 
-        <div class="form-group">
-          <label for="description">Description *</label>
-          <textarea id="description" name="description" placeholder="Describe your product, features, specifications..." rows="5" required></textarea>
-        </div>
-
-        <div class="grid grid-2-cols">
-          <div class="form-group">
-            <label for="price">Price (USD) *</label>
-            <input type="number" id="price" name="price" step="0.01" placeholder="0.00" required>
-          </div>
-
-          <div class="form-group">
-            <label for="stock_quantity">Stock Quantity *</label>
-            <input type="number" id="stock_quantity" name="stock_quantity" placeholder="0" required>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="category">Category</label>
-          <select id="category" name="category">
-            <option value="">-- Select a Category --</option>
-            <option value="electronics">Electronics</option>
-            <option value="clothing">Clothing</option>
-            <option value="home">Home & Garden</option>
-            <option value="sports">Sports & Outdoors</option>
-            <option value="books">Books & Media</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-      </fieldset>
-
-      <div style="display: flex; gap: 12px; margin-top: 1.5em;">
-        <button type="submit" class="button button--large" style="flex: 1;">Add Product</button>
-        <a href="/partner/dashboard" class="button button--secondary button--large" style="flex: 1; text-align: center; border-bottom: none;">Cancel</a>
+      <div class="form__group form-group">
+        <label class="form__label" for="name">Product Name</label>
+        <input class="form__input" type="text" id="name" name="name" placeholder="e.g. Wireless Bluetooth Speaker" required>
       </div>
-    </form>
 
-    <div class="alert alert--info" style="margin-top: 1.5em;">
-      <h4>Tips for Better Product Listings</h4>
-      <ul style="margin: 0; padding-left: 1.5em;">
-        <li>Use clear, descriptive product names</li>
-        <li>Include important specifications and features</li>
-        <li>Set accurate pricing and stock levels</li>
-        <li>Select the correct category for better discoverability</li>
-      </ul>
-    </div>
+      <div class="form__group form-group">
+        <label class="form__label" for="description">Description</label>
+        <textarea class="form__textarea" id="description" name="description" rows="5" placeholder="Describe product features and specifications" required></textarea>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="price">Price (USD)</label>
+        <input class="form__input" type="number" id="price" name="price" step="0.01" min="0" placeholder="0.00" required>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="stock_quantity">Stock Quantity</label>
+        <input class="form__input" type="number" id="stock_quantity" name="stock_quantity" min="0" placeholder="0" required>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="category">Category</label>
+        <select class="form__select" id="category" name="category">
+          <option value="">Select category</option>
+          <option value="electronics">Electronics</option>
+          <option value="clothing">Clothing</option>
+          <option value="home">Home and Garden</option>
+          <option value="sports">Sports and Outdoors</option>
+          <option value="books">Books and Media</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="partner-actions">
+        <button type="submit" class="btn">Add Product</button>
+        <a href="/partner/dashboard" class="btn btn--secondary">Cancel</a>
+      </div>
+    </fieldset>
+  </form>
+
+  <div class="notice notice--info alert alert--info">
+    <h4>Listing Tips</h4>
+    <ul>
+      <li>Use clear product names.</li>
+      <li>Include critical specs and dimensions.</li>
+      <li>Keep price and stock accurate.</li>
+    </ul>
   </div>
-</div>
+</section>
 {{ end }}

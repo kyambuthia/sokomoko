@@ -1,21 +1,22 @@
-{{ define "body_area" }}
+{{ define "title" }}Legacy Index{{ end }}
 
-{{ template "site_nav_area" }}
+{{ define "main-area" }}
+<section class="catalog-page">
+  <header class="catalog-page__intro">
+    <h1 class="catalog-page__title">Products Available</h1>
+    <p class="catalog-page__lead">Legacy page retained for compatibility.</p>
+  </header>
 
-<div class="feed-header-area">
-        <h2>Products Available</h2>
-</div>
-
-<div class="product-feed"> 
+  <div class="product-list product-grid">
   {{ range .Products }}
-        <div class="product-card-area">
-                <h3>{{.Name}}</h3>
-                <p>{{.Description}}</p>
-                <p>Price: {{.Price}}</p>
-        </div>
+    <article class="product-tile product-card">
+      <div class="product-tile__body product-card__content">
+        <h3 class="product-tile__name product-card__title">{{.Name}}</h3>
+        <p class="product-tile__description product-card__description">{{.Description}}</p>
+        <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
+      </div>
+    </article>
   {{ end }}
-</div>
-
-{{ template "footer_area" }}
+  </div>
+</section>
 {{ end }}
-

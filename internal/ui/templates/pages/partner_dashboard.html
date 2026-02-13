@@ -1,13 +1,37 @@
 {{ define "title" }}Partner Dashboard{{ end }}
 
 {{ define "main-area" }}
-<section class="catalog-page">
-  <header class="catalog-page__intro">
-    <h1 class="catalog-page__title">Partner Dashboard</h1>
-    <p class="catalog-page__lead">Store operations and setup live on <code>partner.localhost</code>. Site/platform management remains on <code>admin.localhost</code>.</p>
+<section class="partner-page">
+  <header class="partner-page__header">
+    <h1 class="partner-page__title">Partner Dashboard</h1>
+    <p class="partner-page__lead">Store operations and setup live on <code>partner.localhost</code>. Site/platform management remains on <code>admin.localhost</code>.</p>
   </header>
 
-  <div class="panel card">
+  <section class="partner-metrics">
+    <article class="partner-metric">
+      <h3 class="partner-metric__label">Products</h3>
+      <p class="partner-metric__value">{{.ProductCount}}</p>
+      <p class="partner-metric__note">Catalog entries</p>
+    </article>
+    <article class="partner-metric">
+      <h3 class="partner-metric__label">Workspace</h3>
+      <p class="partner-metric__value">{{.StoreSlug}}</p>
+      <p class="partner-metric__note">Store slug</p>
+    </article>
+    <article class="partner-metric">
+      <h3 class="partner-metric__label">Access</h3>
+      <p class="partner-metric__value">{{.Role}}</p>
+      <p class="partner-metric__note">Current role</p>
+    </article>
+  </section>
+
+  <section class="partner-actions">
+    <a href="/products" class="btn">Manage products</a>
+    <a href="/products/new" class="btn btn--secondary">Add product</a>
+    <a href="/setup" class="btn btn--secondary">Update store setup</a>
+  </section>
+
+  <section class="panel card">
     <div class="card__header"><h3>Store</h3></div>
     <div class="card__body">
       <p><strong>Name:</strong> {{.StoreName}}</p>
@@ -15,16 +39,14 @@
       <p><strong>Contact:</strong> {{.ContactEmail}}</p>
       <p><strong>Description:</strong> {{if .Description}}{{.Description}}{{else}}Not set{{end}}</p>
     </div>
-  </div>
+  </section>
 
-  <div class="panel card">
+  <section class="panel card">
     <div class="card__header"><h3>Session Context</h3></div>
     <div class="card__body">
       <p><strong>Signed in as:</strong> {{.Username}} ({{.Role}})</p>
       <p><strong>Products in catalog:</strong> {{.ProductCount}}</p>
-      <p><a href="/products">Manage products</a></p>
-      <p><a href="/setup">Update store setup</a></p>
     </div>
-  </div>
+  </section>
 </section>
 {{ end }}

@@ -1,23 +1,27 @@
 {{ define "title" }}Partner Products{{ end }}
 
 {{ define "main-area" }}
-<section class="catalog-page">
-  <header class="catalog-page__intro">
-    <h1 class="catalog-page__title">Partner Products</h1>
-    <p class="catalog-page__lead">Manage the store catalog for your partner workspace.</p>
+<section class="partner-page">
+  <header class="partner-page__header">
+    <h1 class="partner-page__title">Partner Products</h1>
+    <p class="partner-page__lead">Manage the store catalog for your partner workspace.</p>
   </header>
 
-  <div class="panel card">
+  <section class="panel card">
     <div class="card__body">
-      <p><a class="btn" href="/products/new">Add Product</a> <a class="btn btn--secondary" href="/dashboard">Back to Dashboard</a></p>
+      <div class="partner-actions">
+        <a class="btn" href="/products/new">Add Product</a>
+        <a class="btn btn--secondary" href="/dashboard">Back to Dashboard</a>
+      </div>
     </div>
-  </div>
+  </section>
 
-  <div class="panel card">
+  <section class="panel card">
     <div class="card__header"><h3>Catalog</h3></div>
     <div class="card__body">
       {{if .Products}}
-      <table>
+      <div class="table-wrap">
+      <table class="data-table data-table--partner">
         <thead>
           <tr>
             <th>Name</th>
@@ -37,10 +41,11 @@
           {{end}}
         </tbody>
       </table>
+      </div>
       {{else}}
-      <p>No products in catalog yet.</p>
+      <p class="table-empty">No products in catalog yet.</p>
       {{end}}
     </div>
-  </div>
+  </section>
 </section>
 {{ end }}

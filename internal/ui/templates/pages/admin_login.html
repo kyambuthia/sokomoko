@@ -14,7 +14,6 @@
     <h1 class="auth-panel__title auth-sheet__title">Admin and Staff Access</h1>
     <p class="auth-panel__meta auth-sheet__meta">Sign in with admin or staff credentials to access the dashboard.</p>
 
-    <!-- Login Form -->
     <form action="/login" method="POST" class="auth-panel__form form">
       <fieldset class="form__fieldset">
         <legend class="form__legend">Admin Credentials</legend>
@@ -29,17 +28,15 @@
           <input class="form__input" type="password" id="password" name="password" placeholder="Enter your password" required>
         </div>
 
-        <button type="submit" class="btn btn--full button--block">Sign In</button>
+        <button type="submit" class="btn btn--full">Sign In</button>
       </fieldset>
     </form>
 
-    <!-- Security Notice -->
     <div class="notice notice--info alert alert--info">
       <h4>Security Notice</h4>
       <p>Only authorized administrators can access this area.</p>
     </div>
 
-    <!-- Bootstrap Credentials Note -->
     <div class="panel card">
       <div class="card__header">
         <h3>Bootstrap Credentials</h3>
@@ -53,6 +50,6 @@
         </p>
       </div>
     </div>
-    <p><a href="/password-reset/request">Forgot password?</a></p>
+    <p class="auth-panel__links"><a href="/password-reset/request">Forgot password?</a></p>
 </section>
 {{ end }}

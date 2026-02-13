@@ -5,6 +5,10 @@
   <h1 class="auth-panel__title">Create Staff Account</h1>
   <p class="auth-panel__meta">Admin-only action. Staff can access dashboard and operations routes.</p>
 
+  <div class="notice notice--info alert alert--info">
+    <p>Use this form only for operational staff. Do not share admin credentials.</p>
+  </div>
+
   {{if .Message}}
   <div class="notice notice--info"><p>{{.Message}}</p></div>
   {{end}}
