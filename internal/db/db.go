@@ -99,6 +99,52 @@ CREATE TABLE IF NOT EXISTS store_settings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS carts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS cart_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cart_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (cart_id, product_id),
+    FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')),
+    partner_status TEXT NOT NULL DEFAULT 'new' CHECK (partner_status IN ('new', 'accepted', 'packing', 'dispatched', 'completed', 'cancelled')),
+    delivery_status TEXT NOT NULL DEFAULT 'queued' CHECK (delivery_status IN ('queued', 'processing', 'shipped', 'delivered')),
+    total_amount REAL NOT NULL CHECK (total_amount >= 0),
+    delivery_address TEXT NOT NULL,
+    delivery_notice TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price REAL NOT NULL CHECK (unit_price >= 0),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id);
@@ -106,6 +152,11 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_password_reset_expires_at ON password_reset_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_store_settings_slug ON store_settings(store_slug);
+CREATE INDEX IF NOT EXISTS idx_carts_user_id ON carts(user_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_cart_id ON cart_items(cart_id);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_partner_status ON orders(partner_status);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 `
 
 func InitDB() {
@@ -153,9 +204,9 @@ func openStoreWithSchema(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	// SQLite behaves best with a constrained connection pool for web workloads.
-	dbConn.SetMaxOpenConns(1)
-	dbConn.SetMaxIdleConns(1)
+	// Keep pool bounded but allow nested read queries used by rendering paths.
+	dbConn.SetMaxOpenConns(10)
+	dbConn.SetMaxIdleConns(10)
 	dbConn.SetConnMaxLifetime(0)
 
 	_, err = dbConn.Exec(SchemaSQL)
@@ -503,6 +554,51 @@ type StoreSettings struct {
 	ContactEmail  string
 	InitializedAt time.Time
 	UpdatedAt     time.Time
+}
+
+type CartItem struct {
+	ProductID       int
+	ProductName     string
+	ProductSlug     string
+	ProductImageURL string
+	UnitPrice       float64
+	Quantity        int
+	StockQuantity   int
+	LineTotal       float64
+}
+
+type OrderItem struct {
+	ProductID   int
+	ProductName string
+	Quantity    int
+	UnitPrice   float64
+	LineTotal   float64
+}
+
+type CustomerOrder struct {
+	ID              int
+	Status          string
+	PartnerStatus   string
+	DeliveryStatus  string
+	DeliveryAddress string
+	DeliveryNotice  string
+	TotalAmount     float64
+	CreatedAt       time.Time
+	Items           []OrderItem
+}
+
+type FulfillmentOrder struct {
+	ID              int
+	CustomerUserID  int
+	CustomerName    string
+	Status          string
+	PartnerStatus   string
+	DeliveryStatus  string
+	DeliveryNotice  string
+	DeliveryAddress string
+	TotalAmount     float64
+	CreatedAt       time.Time
+	Items           []OrderItem
 }
 
 // CreateUser inserts a new user into the database
@@ -1269,4 +1365,367 @@ func (s *Store) ListUsersByRoles(roles []string) ([]User, error) {
 		users = append(users, user)
 	}
 	return users, nil
+}
+
+func (s *Store) ensureCart(userID int) (int64, error) {
+	var cartID int64
+	err := s.DB.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
+	if err == nil {
+		return cartID, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+
+	res, err := s.DB.Exec("INSERT INTO carts (user_id) VALUES (?)", userID)
+	if err != nil {
+		// Handle races where cart was created concurrently.
+		if queryErr := s.DB.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID); queryErr == nil {
+			return cartID, nil
+		}
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (s *Store) AddToCart(userID, productID, quantity int) error {
+	if quantity <= 0 {
+		return fmt.Errorf("quantity must be greater than zero")
+	}
+	cartID, err := s.ensureCart(userID)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.DB.Exec(
+		`INSERT INTO cart_items (cart_id, product_id, quantity)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(cart_id, product_id) DO UPDATE SET
+		   quantity = quantity + excluded.quantity,
+		   updated_at = CURRENT_TIMESTAMP`,
+		cartID, productID, quantity,
+	)
+	return err
+}
+
+func (s *Store) UpdateCartQuantity(userID, productID, quantity int) error {
+	cartID, err := s.ensureCart(userID)
+	if err != nil {
+		return err
+	}
+
+	if quantity <= 0 {
+		_, err = s.DB.Exec("DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?", cartID, productID)
+		return err
+	}
+
+	_, err = s.DB.Exec(
+		"UPDATE cart_items SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE cart_id = ? AND product_id = ?",
+		quantity, cartID, productID,
+	)
+	return err
+}
+
+func (s *Store) RemoveFromCart(userID, productID int) error {
+	cartID, err := s.ensureCart(userID)
+	if err != nil {
+		return err
+	}
+	_, err = s.DB.Exec("DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?", cartID, productID)
+	return err
+}
+
+func (s *Store) ClearCart(userID int) error {
+	cartID, err := s.ensureCart(userID)
+	if err != nil {
+		return err
+	}
+	_, err = s.DB.Exec("DELETE FROM cart_items WHERE cart_id = ?", cartID)
+	return err
+}
+
+func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
+	cartID, err := s.ensureCart(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.DB.Query(
+		`SELECT p.id, p.name, p.slug, p.price, p.stock_quantity, ci.quantity
+		 FROM cart_items ci
+		 JOIN products p ON p.id = ci.product_id
+		 WHERE ci.cart_id = ? AND p.deleted_at IS NULL
+		 ORDER BY p.name`,
+		cartID,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	items := []CartItem{}
+	subtotal := 0.0
+	for rows.Next() {
+		item := CartItem{}
+		if err := rows.Scan(
+			&item.ProductID,
+			&item.ProductName,
+			&item.ProductSlug,
+			&item.UnitPrice,
+			&item.StockQuantity,
+			&item.Quantity,
+		); err != nil {
+			return nil, 0, err
+		}
+		item.ProductImageURL = "/static/images/placeholder.png"
+		if imgs, imgErr := s.GetProductImages(item.ProductID); imgErr == nil && len(imgs) > 0 {
+			item.ProductImageURL = imgs[0].URL
+		}
+		item.LineTotal = item.UnitPrice * float64(item.Quantity)
+		subtotal += item.LineTotal
+		items = append(items, item)
+	}
+	return items, subtotal, nil
+}
+
+func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, error) {
+	address := strings.TrimSpace(deliveryAddress)
+	if address == "" {
+		return 0, fmt.Errorf("delivery address is required")
+	}
+
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var cartID int64
+	err = tx.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
+	if err == sql.ErrNoRows {
+		return 0, fmt.Errorf("cart is empty")
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	type cartLine struct {
+		ProductID     int
+		ProductName   string
+		Quantity      int
+		UnitPrice     float64
+		StockQuantity int
+	}
+	lines := []cartLine{}
+	rows, err := tx.Query(
+		`SELECT p.id, p.name, ci.quantity, p.price, p.stock_quantity
+		 FROM cart_items ci
+		 JOIN products p ON p.id = ci.product_id
+		 WHERE ci.cart_id = ? AND p.deleted_at IS NULL
+		 ORDER BY p.name`,
+		cartID,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	total := 0.0
+	for rows.Next() {
+		line := cartLine{}
+		if scanErr := rows.Scan(&line.ProductID, &line.ProductName, &line.Quantity, &line.UnitPrice, &line.StockQuantity); scanErr != nil {
+			return 0, scanErr
+		}
+		if line.Quantity > line.StockQuantity {
+			return 0, fmt.Errorf("insufficient stock for %s", line.ProductName)
+		}
+		lines = append(lines, line)
+		total += line.UnitPrice * float64(line.Quantity)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	if len(lines) == 0 {
+		return 0, fmt.Errorf("cart is empty")
+	}
+
+	res, err := tx.Exec(
+		`INSERT INTO orders (user_id, status, partner_status, delivery_status, total_amount, delivery_address, delivery_notice)
+		 VALUES (?, 'pending', 'new', 'queued', ?, ?, ?)`,
+		userID, total, address, "Order received. Awaiting partner acceptance.",
+	)
+	if err != nil {
+		return 0, err
+	}
+	orderID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	for _, line := range lines {
+		if _, err = tx.Exec(
+			`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price)
+			 VALUES (?, ?, ?, ?, ?)`,
+			orderID, line.ProductID, line.ProductName, line.Quantity, line.UnitPrice,
+		); err != nil {
+			return 0, err
+		}
+
+		if _, err = tx.Exec(
+			`UPDATE products
+			 SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP
+			 WHERE id = ? AND stock_quantity >= ?`,
+			line.Quantity, line.ProductID, line.Quantity,
+		); err != nil {
+			return 0, err
+		}
+	}
+
+	if _, err = tx.Exec("DELETE FROM cart_items WHERE cart_id = ?", cartID); err != nil {
+		return 0, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	return orderID, nil
+}
+
+func (s *Store) listOrderItems(orderID int) ([]OrderItem, error) {
+	rows, err := s.DB.Query(
+		`SELECT product_id, product_name, quantity, unit_price
+		 FROM order_items
+		 WHERE order_id = ?
+		 ORDER BY id`,
+		orderID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []OrderItem{}
+	for rows.Next() {
+		item := OrderItem{}
+		if err := rows.Scan(&item.ProductID, &item.ProductName, &item.Quantity, &item.UnitPrice); err != nil {
+			return nil, err
+		}
+		item.LineTotal = item.UnitPrice * float64(item.Quantity)
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (s *Store) ListOrdersByUser(userID int) ([]CustomerOrder, error) {
+	rows, err := s.DB.Query(
+		`SELECT id, status, partner_status, delivery_status, delivery_address, COALESCE(delivery_notice, ''), total_amount, created_at
+		 FROM orders
+		 WHERE user_id = ?
+		 ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	orders := []CustomerOrder{}
+	for rows.Next() {
+		order := CustomerOrder{}
+		if err := rows.Scan(
+			&order.ID,
+			&order.Status,
+			&order.PartnerStatus,
+			&order.DeliveryStatus,
+			&order.DeliveryAddress,
+			&order.DeliveryNotice,
+			&order.TotalAmount,
+			&order.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items, err := s.listOrderItems(order.ID)
+		if err != nil {
+			return nil, err
+		}
+		order.Items = items
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (s *Store) ListOrdersForFulfillment() ([]FulfillmentOrder, error) {
+	rows, err := s.DB.Query(
+		`SELECT o.id, o.user_id, u.username, o.status, o.partner_status, o.delivery_status, COALESCE(o.delivery_notice, ''), o.delivery_address, o.total_amount, o.created_at
+		 FROM orders o
+		 JOIN users u ON u.id = o.user_id
+		 WHERE o.status != 'cancelled'
+		 ORDER BY o.created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	orders := []FulfillmentOrder{}
+	for rows.Next() {
+		order := FulfillmentOrder{}
+		if err := rows.Scan(
+			&order.ID,
+			&order.CustomerUserID,
+			&order.CustomerName,
+			&order.Status,
+			&order.PartnerStatus,
+			&order.DeliveryStatus,
+			&order.DeliveryNotice,
+			&order.DeliveryAddress,
+			&order.TotalAmount,
+			&order.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items, err := s.listOrderItems(order.ID)
+		if err != nil {
+			return nil, err
+		}
+		order.Items = items
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
+	statusMap := map[string]string{
+		"new":        "pending",
+		"accepted":   "processing",
+		"packing":    "processing",
+		"dispatched": "shipped",
+		"completed":  "delivered",
+		"cancelled":  "cancelled",
+	}
+	nextStatus, ok := statusMap[partnerStatus]
+	if !ok {
+		return fmt.Errorf("invalid partner status")
+	}
+
+	validDelivery := map[string]bool{
+		"queued":     true,
+		"processing": true,
+		"shipped":    true,
+		"delivered":  true,
+	}
+	if !validDelivery[deliveryStatus] {
+		return fmt.Errorf("invalid delivery status")
+	}
+
+	_, err := s.DB.Exec(
+		`UPDATE orders
+		 SET status = ?, partner_status = ?, delivery_status = ?, delivery_notice = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ?`,
+		nextStatus, partnerStatus, deliveryStatus, strings.TrimSpace(deliveryNotice), orderID,
+	)
+	return err
 }

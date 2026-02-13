@@ -7,14 +7,65 @@
     <p class="catalog-page__lead">Review your selected products before checkout.</p>
   </header>
 
-  <div class="panel card">
+  {{if .Message}}
+  <div class="notice notice--success alert alert--success"><p>{{.Message}}</p></div>
+  {{end}}
+  {{if .Error}}
+  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  {{end}}
+
+  {{if .Items}}
+  <section class="panel card">
+    <div class="card__header"><h3>Items</h3></div>
     <div class="card__body">
-      <p>Your cart items will appear here.</p>
+      <div class="table-wrap">
+        <table class="data-table data-table--partner">
+          <thead>
+            <tr><th>Product</th><th>Price</th><th>Quantity</th><th>Total</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {{range .Items}}
+            <tr>
+              <td>{{.ProductName}}</td>
+              <td>${{printf "%.2f" .UnitPrice}}</td>
+              <td>
+                <form action="/cart/update" method="POST" class="table-action-form">
+                  <input type="hidden" name="product_id" value="{{.ProductID}}">
+                  <input class="form__input" type="number" min="0" name="quantity" value="{{.Quantity}}">
+                  <button type="submit" class="btn btn--secondary btn--small">Update</button>
+                </form>
+              </td>
+              <td>${{printf "%.2f" .LineTotal}}</td>
+              <td>
+                <form action="/cart/remove" method="POST" class="table-action-form">
+                  <input type="hidden" name="product_id" value="{{.ProductID}}">
+                  <button type="submit" class="btn btn--secondary btn--small">Remove</button>
+                </form>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel card">
+    <div class="card__body">
+      <p><strong>Subtotal:</strong> ${{printf "%.2f" .Subtotal}}</p>
       <div class="partner-actions">
         <a href="/" class="btn btn--secondary">Continue shopping</a>
         <a href="/checkout" class="btn">Proceed to checkout</a>
       </div>
     </div>
-  </div>
+  </section>
+  {{else}}
+  <section class="panel card">
+    <div class="card__body">
+      <p class="table-empty">Your cart is empty.</p>
+      <p class="auth-panel__links"><a href="/">Browse products</a></p>
+    </div>
+  </section>
+  {{end}}
 </section>
 {{ end }}

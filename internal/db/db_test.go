@@ -1,10 +1,13 @@
 package db
 
 import (
-	"os"
-	"testing"
+	"database/sql"
+	"fmt"
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
+	"os"
+	"testing"
+	"time"
 )
 
 const testDBPath = "./test_t.db"
@@ -14,7 +17,7 @@ var testStore *Store
 func TestMain(m *testing.M) {
 	// Setup: Initialize a test database
 	setupTestDB()
-	
+
 	// Run tests
 	code := m.Run()
 
@@ -26,6 +29,7 @@ func TestMain(m *testing.M) {
 
 func setupTestDB() {
 	var err error
+	_ = os.Remove(testDBPath)
 	testStore, err = OpenStoreNoSeed(testDBPath)
 	if err != nil {
 		panic(err)
@@ -242,4 +246,98 @@ func TestDeleteUser(t *testing.T) {
 	if deletedUser != nil {
 		t.Error("User found after deletion, expected nil")
 	}
+}
+
+func TestCartCheckoutAndFulfillmentFlow(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	username := fmt.Sprintf("buyer_%d", suffix)
+	email := fmt.Sprintf("buyer_flow_%d@example.com", suffix)
+
+	userID, err := testStore.CreateUser(User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         username,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Flow Category %d", suffix),
+		Slug:        fmt.Sprintf("flow-category-%d", suffix),
+		Description: "for flow test",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Flow Product",
+		Slug:          fmt.Sprintf("flow-product-%d", suffix),
+		Description:   "flow product",
+		Price:         12.5,
+		StockQuantity: 10,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	if err := testStore.AddToCart(int(userID), int(productID), 2); err != nil {
+		t.Fatalf("add to cart: %v", err)
+	}
+
+	items, subtotal, err := testStore.GetCartItems(int(userID))
+	if err != nil {
+		t.Fatalf("get cart items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 cart item, got %d", len(items))
+	}
+	if subtotal <= 0 {
+		t.Fatalf("expected positive subtotal, got %.2f", subtotal)
+	}
+
+	orderID, err := testStore.PlaceOrderFromCart(int(userID), "123 Test Street")
+	if err != nil {
+		t.Fatalf("place order: %v", err)
+	}
+	if orderID == 0 {
+		t.Fatal("expected non-zero order id")
+	}
+
+	product, err := testStore.GetProductByID(int(productID))
+	if err != nil {
+		t.Fatalf("load product: %v", err)
+	}
+	if product.StockQuantity != 8 {
+		t.Fatalf("expected stock 8, got %d", product.StockQuantity)
+	}
+
+	orders, err := testStore.ListOrdersByUser(int(userID))
+	if err != nil {
+		t.Fatalf("list customer orders: %v", err)
+	}
+	if len(orders) == 0 {
+		t.Fatal("expected at least one order")
+	}
+
+	if err := testStore.UpdateOrderFulfillment(int(orderID), "dispatched", "shipped", "Your order is on the way."); err != nil {
+		t.Fatalf("update fulfillment: %v", err)
+	}
+
+	partnerOrders, err := testStore.ListOrdersForFulfillment()
+	if err != nil {
+		t.Fatalf("list partner orders: %v", err)
+	}
+	if len(partnerOrders) == 0 {
+		t.Fatal("expected partner orders")
+	}
+}
+
+func sqlNullInt64(v int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: v, Valid: true}
 }

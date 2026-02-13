@@ -1,21 +1,57 @@
-{{ define "title" }}accounts{{ end }}
+{{ define "title" }}{{.Title}}{{ end }}
 
 {{ define "main-area" }}
-<section class="account-page auth-panel auth-sheet">
-        <h1 class="auth-panel__title auth-sheet__title">Your Account</h1>
-        <p class="auth-panel__meta auth-sheet__meta">You are signed in. Use this area to access account details and order history.</p>
+<section class="account-page">
+  <header class="catalog-page__intro">
+    <h1 class="catalog-page__title">{{.Title}}</h1>
+    <p class="catalog-page__lead">Track orders, delivery notices, and manage account access.</p>
+  </header>
 
-        <div class="panel card">
-                <div class="card__body">
-                        <p>Need to switch accounts?</p>
-                        <div class="account-actions">
-                                <a href="/login" class="btn">Sign In</a>
-                                <a href="/signup" class="btn btn--secondary">Create Account</a>
-                                <form action="/logout" method="POST" class="account-actions__form">
-                                        <button type="submit" class="btn btn--secondary">Sign Out</button>
-                                </form>
-                        </div>
-                </div>
-        </div>
+  {{if .Message}}
+  <div class="notice notice--success alert alert--success"><p>{{.Message}}</p></div>
+  {{end}}
+  {{if .Error}}
+  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  {{end}}
+
+  <section class="panel card">
+    <div class="card__header"><h3>Recent Orders</h3></div>
+    <div class="card__body">
+      {{if .Orders}}
+      <div class="table-wrap">
+        <table class="data-table data-table--partner">
+          <thead>
+            <tr><th>Order</th><th>Status</th><th>Delivery</th><th>Total</th><th>Notice</th></tr>
+          </thead>
+          <tbody>
+            {{range .Orders}}
+            <tr>
+              <td>#{{.ID}}</td>
+              <td>{{.Status}} ({{.PartnerStatus}})</td>
+              <td>{{.DeliveryStatus}}</td>
+              <td>${{printf "%.2f" .TotalAmount}}</td>
+              <td>{{if .DeliveryNotice}}{{.DeliveryNotice}}{{else}}No updates yet{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <p class="table-empty">No orders yet.</p>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="panel card">
+    <div class="card__body">
+      <div class="account-actions">
+        <a href="/cart" class="btn">View Cart</a>
+        <a href="/" class="btn btn--secondary">Continue Shopping</a>
+        <form action="/logout" method="POST" class="account-actions__form">
+          <button type="submit" class="btn btn--secondary">Sign Out</button>
+        </form>
+      </div>
+    </div>
+  </section>
 </section>
 {{ end }}

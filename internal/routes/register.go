@@ -14,6 +14,11 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/search", Search(a))
 	mux.HandleFunc("/login", auth.Login(a.Store, a.Templates.Login))
 	mux.HandleFunc("/signup", auth.SignUp(a.Store, a.Templates.Signup))
+	mux.Handle("/cart", auth.AuthMiddleware(a.Store, http.HandlerFunc(CartPage(a))))
+	mux.Handle("/cart/add", auth.AuthMiddleware(a.Store, http.HandlerFunc(CartAdd(a))))
+	mux.Handle("/cart/update", auth.AuthMiddleware(a.Store, http.HandlerFunc(CartUpdate(a))))
+	mux.Handle("/cart/remove", auth.AuthMiddleware(a.Store, http.HandlerFunc(CartRemove(a))))
+	mux.Handle("/checkout", auth.AuthMiddleware(a.Store, http.HandlerFunc(Checkout(a))))
 	mux.HandleFunc(
 		"/password-reset/request",
 		auth.PasswordResetRequest(
@@ -129,6 +134,10 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle(
 		"/products/new",
 		auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, http.HandlerFunc(PartnerProductNew(a)))),
+	)
+	mux.Handle(
+		"/orders",
+		auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, http.HandlerFunc(PartnerOrders(a)))),
 	)
 	mux.Handle("/static/", Static(a.StaticFS))
 }

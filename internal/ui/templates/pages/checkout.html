@@ -3,13 +3,45 @@
 {{ define "main-area" }}
 <section class="auth-panel auth-sheet">
   <h1 class="auth-panel__title">Checkout</h1>
-  <p class="auth-panel__meta">Complete payment details and confirm delivery information.</p>
+  <p class="auth-panel__meta">Confirm delivery details and place your order.</p>
 
-  <div class="panel card">
+  {{if .Message}}
+  <div class="notice notice--success alert alert--success"><p>{{.Message}}</p></div>
+  {{end}}
+  {{if .Error}}
+  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  {{end}}
+
+  {{if .CanCheckout}}
+  <section class="panel card">
+    <div class="card__header"><h3>Order Summary</h3></div>
     <div class="card__body">
-      <p>Checkout flow is being integrated. Return shortly to complete your order.</p>
+      <ul>
+        {{range .Items}}
+        <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
+        {{end}}
+      </ul>
+      <p><strong>Subtotal:</strong> ${{printf "%.2f" .Subtotal}}</p>
+    </div>
+  </section>
+
+  <form action="/checkout" method="POST" class="auth-panel__form form">
+    <fieldset class="form__fieldset">
+      <legend class="form__legend">Delivery</legend>
+      <div class="form__group form-group">
+        <label class="form__label" for="delivery_address">Delivery address</label>
+        <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="4" required>{{.DeliveryAddress}}</textarea>
+      </div>
+      <button type="submit" class="btn btn--full">Place order</button>
+    </fieldset>
+  </form>
+  {{else}}
+  <section class="panel card">
+    <div class="card__body">
+      <p class="table-empty">Cart is empty. Add items before checkout.</p>
       <p class="auth-panel__links"><a href="/">Back to storefront</a></p>
     </div>
-  </div>
+  </section>
+  {{end}}
 </section>
 {{ end }}

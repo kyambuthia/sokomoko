@@ -7,6 +7,8 @@ import (
 type Templates struct {
 	Index                *template.Template
 	Search               *template.Template
+	Cart                 *template.Template
+	Checkout             *template.Template
 	Account              *template.Template
 	Admin                *template.Template
 	AdminLogin           *template.Template
@@ -16,6 +18,7 @@ type Templates struct {
 	PartnerDashboard     *template.Template
 	PartnerProducts      *template.Template
 	PartnerProductNew    *template.Template
+	PartnerOrders        *template.Template
 	Login                *template.Template
 	Signup               *template.Template
 	PasswordResetRequest *template.Template
@@ -47,6 +50,16 @@ func ParseTemplates() (*Templates, error) {
 	}
 
 	searchTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/search.html")
+	if err != nil {
+		return nil, err
+	}
+
+	cartTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/cart.html")
+	if err != nil {
+		return nil, err
+	}
+
+	checkoutTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/checkout.html")
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +109,11 @@ func ParseTemplates() (*Templates, error) {
 		return nil, err
 	}
 
+	partnerOrdersTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_orders.html")
+	if err != nil {
+		return nil, err
+	}
+
 	loginTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/login.html")
 	if err != nil {
 		return nil, err
@@ -119,6 +137,8 @@ func ParseTemplates() (*Templates, error) {
 	return &Templates{
 		Index:                indexTmpl,
 		Search:               searchTmpl,
+		Cart:                 cartTmpl,
+		Checkout:             checkoutTmpl,
 		Account:              accountTmpl,
 		Admin:                adminTmpl,
 		AdminLogin:           adminLoginTmpl,
@@ -128,6 +148,7 @@ func ParseTemplates() (*Templates, error) {
 		PartnerDashboard:     partnerDashboardTmpl,
 		PartnerProducts:      partnerProductsTmpl,
 		PartnerProductNew:    partnerProductNewTmpl,
+		PartnerOrders:        partnerOrdersTmpl,
 		Login:                loginTmpl,
 		Signup:               signupTmpl,
 		PasswordResetRequest: passwordResetRequestTmpl,
