@@ -7,16 +7,14 @@
     <p class="catalog-page__lead">Browse our collection of quality products. Use search to find exactly what you need.</p>
   </header>
 
-  <form method="GET" action="/search" class="search-bar">
-    <div class="search-bar__field">
-      <label class="search-bar__label" for="catalog-search">Search products</label>
-      <input id="catalog-search" type="search" name="q" placeholder="Search products..." class="search-bar__input" required minlength="2">
-      <p class="search-bar__hint">Try product names, categories, or materials.</p>
-    </div>
-    <div class="search-bar__actions">
-      <button type="submit" class="btn search-bar__button">Search</button>
-    </div>
-  </form>
+  <ui-search-form
+    action="/search"
+    label="Search products"
+    placeholder="Search products..."
+    hint="Try product names, categories, or materials."
+    submit-label="Search"
+    show-clear="false"
+  ></ui-search-form>
 
   {{if .HasProducts}}
   <div class="product-list product-grid">
@@ -26,12 +24,14 @@
       <div class="product-tile__body product-card__content">
         <h3 class="product-tile__name product-card__title">{{.Name}}</h3>
         <p class="product-tile__description product-card__description">{{.Description}}</p>
-        <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
-        {{if .StockQuantity}}
-        <p class="stock-state stock-state--in">In stock ({{.StockQuantity}})</p>
-        {{else}}
-        <p class="stock-state stock-state--out">Out of stock</p>
-        {{end}}
+        <div class="product-card__meta">
+          <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
+          {{if .StockQuantity}}
+          <p class="stock-state stock-state--in">{{.StockQuantity}} in stock</p>
+          {{else}}
+          <p class="stock-state stock-state--out">Out of stock</p>
+          {{end}}
+        </div>
         <div class="product-tile__footer product-card__footer">
           {{if .StockQuantity}}
           <form action="/cart/add" method="POST">

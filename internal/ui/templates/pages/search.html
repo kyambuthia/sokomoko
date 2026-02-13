@@ -7,17 +7,16 @@
     <p class="search-page__lead">Find products by name or description.</p>
   </header>
 
-  <form id="searchForm" action="/search" method="GET" class="search-bar">
-    <div class="search-bar__field">
-      <label class="search-bar__label" for="searchInput">Search</label>
-      <input type="search" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}" class="search-bar__input" required minlength="2" />
-      <p class="search-bar__hint">Search by product name, category, or keywords from descriptions.</p>
-    </div>
-    <div class="search-bar__actions">
-      <button type="submit" class="btn search-bar__button">Search</button>
-      {{if .Query}}<a href="/search" class="btn btn--secondary search-bar__button">Clear</a>{{end}}
-    </div>
-  </form>
+  <ui-search-form
+    action="/search"
+    value="{{.Query}}"
+    label="Search"
+    placeholder="Search for products..."
+    hint="Search by product name, category, or keywords from descriptions."
+    submit-label="Search"
+    clear-url="/search"
+    show-clear="{{if .Query}}true{{else}}false{{end}}"
+  ></ui-search-form>
 
   {{if .Query}}
   <section class="search-results">
@@ -37,12 +36,14 @@
       <div class="product-tile__body product-card__content">
         <h3 class="product-tile__name product-card__title">{{.Name}}</h3>
         <p class="product-tile__description product-card__description">{{.Description}}</p>
-        <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
-        {{if .StockQuantity}}
-        <p class="stock-state stock-state--in">In stock ({{.StockQuantity}})</p>
-        {{else}}
-        <p class="stock-state stock-state--out">Out of stock</p>
-        {{end}}
+        <div class="product-card__meta">
+          <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
+          {{if .StockQuantity}}
+          <p class="stock-state stock-state--in">{{.StockQuantity}} in stock</p>
+          {{else}}
+          <p class="stock-state stock-state--out">Out of stock</p>
+          {{end}}
+        </div>
         <div class="product-tile__footer product-card__footer">
           {{if .StockQuantity}}
           <form action="/cart/add" method="POST">

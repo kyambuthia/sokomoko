@@ -134,12 +134,70 @@ class UIMetricCard extends HTMLElement {
   }
 }
 
+class UISearchForm extends HTMLElement {
+  static nextID = 0;
+
+  connectedCallback() {
+    if (this.dataset.rendered === "true") {
+      return;
+    }
+    this.dataset.rendered = "true";
+
+    const action = this.getAttribute("action") || "/search";
+    const queryValue = this.getAttribute("value") || "";
+    const label = this.getAttribute("label") || "Search";
+    const placeholder = this.getAttribute("placeholder") || "Search products...";
+    const hint = this.getAttribute("hint") || "";
+    const submitLabel = this.getAttribute("submit-label") || "Search";
+    const showClear = this.getAttribute("show-clear") === "true";
+    const clearURL = this.getAttribute("clear-url") || action;
+    const inputID = `ui-search-input-${UISearchForm.nextID++}`;
+
+    this.classList.add("search-form-component");
+    this.innerHTML = `
+      <form action="${escapeHTML(action)}" method="GET" class="search-bar">
+        <div class="search-bar__field">
+          <label class="search-bar__label" for="${inputID}">${escapeHTML(label)}</label>
+          <input
+            type="search"
+            id="${inputID}"
+            name="q"
+            placeholder="${escapeHTML(placeholder)}"
+            value="${escapeHTML(queryValue)}"
+            class="search-bar__input"
+            required
+            minlength="2"
+          />
+          ${hint ? `<p class="search-bar__hint">${escapeHTML(hint)}</p>` : ""}
+        </div>
+        <div class="search-bar__actions">
+          <button type="submit" class="btn search-bar__button">${escapeHTML(submitLabel)}</button>
+          ${showClear ? `<a href="${escapeHTML(clearURL)}" class="btn btn--secondary search-bar__button">Clear</a>` : ""}
+        </div>
+      </form>
+    `;
+  }
+}
+
 if (!customElements.get("ui-alert")) {
   customElements.define("ui-alert", UIAlert);
 }
 
 if (!customElements.get("ui-metric-card")) {
   customElements.define("ui-metric-card", UIMetricCard);
+}
+
+if (!customElements.get("ui-search-form")) {
+  customElements.define("ui-search-form", UISearchForm);
+}
+
+function escapeHTML(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -201,54 +259,4 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  const searchForm = document.querySelector("#searchForm");
-
-  if (searchForm) {
-    searchForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-
-      const formData = new FormData(searchForm);
-      const queryString = formData.get("q")?.toString().trim();
-
-      if (!queryString) {
-        return;
-      }
-
-      window.location.href = `/search?q=${encodeURIComponent(queryString)}`;
-    });
-  }
-
-  const searchInput = document.querySelector("#searchInput");
-  if (searchInput) {
-    let debounceTimer;
-
-    searchInput.addEventListener("input", (e) => {
-      clearTimeout(debounceTimer);
-      const query = e.target.value.trim();
-
-      if (query.length < 2) {
-        return;
-      }
-
-      debounceTimer = setTimeout(async () => {
-        try {
-          const response = await fetch("/search", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ queryString: query }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          await response.json();
-        } catch (error) {
-          console.error("Search failed:", error);
-        }
-      }, 300);
-    });
-  }
 });

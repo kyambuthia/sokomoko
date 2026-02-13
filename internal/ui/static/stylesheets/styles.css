@@ -675,6 +675,7 @@ input[type="reset"]:disabled,
   grid-template-rows: auto 1fr;
   border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: 0 1px 0 var(--paper-shadow);
 }
 
 .product-tile__image,
@@ -682,55 +683,92 @@ input[type="reset"]:disabled,
   width: 100%;
   aspect-ratio: 4/3;
   object-fit: contain;
-  padding: 0.75rem;
+  padding: 0.9rem;
   border-bottom: 1px solid var(--paper-line);
-  background: #fff;
+  background: #faf8f3;
 }
 
 .product-tile__body,
 .product-card__content {
   display: grid;
-  gap: 0.45rem;
-  padding: 0.9rem;
+  gap: 0.55rem;
+  padding: 0.95rem;
 }
 
 .product-tile__name,
 .product-card__title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.98rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .product-tile__description,
 .product-card__description {
   margin: 0;
   color: var(--paper-muted);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.45em;
+}
+
+.product-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
 }
 
 .product-tile__price,
 .product-card__price {
   margin: 0;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .product-tile__footer,
 .product-card__footer {
-  margin-top: 0.2rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--paper-line);
+  margin-top: auto;
+  padding-top: 0.45rem;
 }
 
 .stock-state {
   margin: 0;
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--paper-line-strong);
+  background: #f8f5ee;
+  white-space: nowrap;
 }
 
 .stock-state--in {
   color: var(--paper-success);
+  border-color: #9fc7ad;
+  background: #f2f9f5;
 }
 
 .stock-state--out {
   color: var(--paper-danger);
+  border-color: #d7abab;
+  background: #fcf3f3;
+}
+
+.product-card__button {
+  min-height: 38px;
+  font-size: 0.88rem;
 }
 
 .info-panel {
