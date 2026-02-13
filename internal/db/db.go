@@ -145,6 +145,17 @@ CREATE TABLE IF NOT EXISTS order_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_user_id INTEGER,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id INTEGER,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id);
@@ -157,6 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_cart_items_cart_id ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_partner_status ON orders(partner_status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 `
 
 func InitDB() {
@@ -599,6 +611,16 @@ type FulfillmentOrder struct {
 	TotalAmount     float64
 	CreatedAt       time.Time
 	Items           []OrderItem
+}
+
+type AuditLog struct {
+	ID          int
+	ActorUserID sql.NullInt64
+	Action      string
+	TargetType  string
+	TargetID    sql.NullInt64
+	Details     string
+	CreatedAt   time.Time
 }
 
 // CreateUser inserts a new user into the database
@@ -1728,4 +1750,166 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 		nextStatus, partnerStatus, deliveryStatus, strings.TrimSpace(deliveryNotice), orderID,
 	)
 	return err
+}
+
+func (s *Store) ListAllOrders() ([]FulfillmentOrder, error) {
+	rows, err := s.DB.Query(
+		`SELECT o.id, o.user_id, u.username, o.status, o.partner_status, o.delivery_status, COALESCE(o.delivery_notice, ''), o.delivery_address, o.total_amount, o.created_at
+		 FROM orders o
+		 JOIN users u ON u.id = o.user_id
+		 ORDER BY o.created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	orders := []FulfillmentOrder{}
+	for rows.Next() {
+		order := FulfillmentOrder{}
+		if err := rows.Scan(
+			&order.ID,
+			&order.CustomerUserID,
+			&order.CustomerName,
+			&order.Status,
+			&order.PartnerStatus,
+			&order.DeliveryStatus,
+			&order.DeliveryNotice,
+			&order.DeliveryAddress,
+			&order.TotalAmount,
+			&order.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items, err := s.listOrderItems(order.ID)
+		if err != nil {
+			return nil, err
+		}
+		order.Items = items
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (s *Store) UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error {
+	validStatus := map[string]bool{
+		"pending":    true,
+		"processing": true,
+		"shipped":    true,
+		"delivered":  true,
+		"cancelled":  true,
+	}
+	validPartner := map[string]bool{
+		"new":        true,
+		"accepted":   true,
+		"packing":    true,
+		"dispatched": true,
+		"completed":  true,
+		"cancelled":  true,
+	}
+	validDelivery := map[string]bool{
+		"queued":     true,
+		"processing": true,
+		"shipped":    true,
+		"delivered":  true,
+	}
+	if !validStatus[status] || !validPartner[partnerStatus] || !validDelivery[deliveryStatus] {
+		return fmt.Errorf("invalid order state")
+	}
+
+	_, err := s.DB.Exec(
+		`UPDATE orders
+		 SET status = ?, partner_status = ?, delivery_status = ?, delivery_notice = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ?`,
+		status, partnerStatus, deliveryStatus, strings.TrimSpace(deliveryNotice), orderID,
+	)
+	return err
+}
+
+func (s *Store) GetOrderStatusCounts() (map[string]int, error) {
+	rows, err := s.DB.Query("SELECT status, COUNT(*) FROM orders GROUP BY status")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := map[string]int{
+		"pending":    0,
+		"processing": 0,
+		"shipped":    0,
+		"delivered":  0,
+		"cancelled":  0,
+	}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		counts[status] = count
+	}
+	return counts, nil
+}
+
+func (s *Store) SumOrderRevenue() (float64, error) {
+	row := s.DB.QueryRow("SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status != 'cancelled'")
+	var total float64
+	if err := row.Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error {
+	if strings.TrimSpace(action) == "" || strings.TrimSpace(targetType) == "" {
+		return fmt.Errorf("action and target_type are required")
+	}
+
+	var actor sql.NullInt64
+	if actorUserID > 0 {
+		actor = sql.NullInt64{Int64: int64(actorUserID), Valid: true}
+	}
+	var target sql.NullInt64
+	if targetID > 0 {
+		target = sql.NullInt64{Int64: int64(targetID), Valid: true}
+	}
+
+	_, err := s.DB.Exec(
+		"INSERT INTO audit_logs (actor_user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)",
+		actor, strings.TrimSpace(action), strings.TrimSpace(targetType), target, strings.TrimSpace(details),
+	)
+	return err
+}
+
+func (s *Store) ListAuditLogs(limit int) ([]AuditLog, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	rows, err := s.DB.Query(
+		"SELECT id, actor_user_id, action, target_type, target_id, COALESCE(details, ''), created_at FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT ?",
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	logs := []AuditLog{}
+	for rows.Next() {
+		entry := AuditLog{}
+		if err := rows.Scan(
+			&entry.ID,
+			&entry.ActorUserID,
+			&entry.Action,
+			&entry.TargetType,
+			&entry.TargetID,
+			&entry.Details,
+			&entry.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		logs = append(logs, entry)
+	}
+	return logs, nil
 }

@@ -3,6 +3,7 @@ package routes
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
@@ -10,18 +11,27 @@ import (
 )
 
 type AdminPageData struct {
-	Title        string
-	Message      string
-	Role         string
-	ProductCount int
-	SessionCount int
-	AdminCount   int
-	StaffCount   int
-	UserCount    int
-	Products     []db.Product
-	TeamMembers  []db.User
-	TeamError    string
-	TeamMessage  string
+	Title          string
+	Message        string
+	Role           string
+	ProductCount   int
+	SessionCount   int
+	AdminCount     int
+	StaffCount     int
+	UserCount      int
+	Products       []db.Product
+	TeamMembers    []db.User
+	Orders         []db.FulfillmentOrder
+	AuditLogs      []db.AuditLog
+	OrderCount     int
+	RevenueTotal   float64
+	PendingCount   int
+	ShippedCount   int
+	DeliveredCount int
+	TeamError      string
+	TeamMessage    string
+	OrderError     string
+	OrderMessage   string
 }
 
 func adminRoleFromContext(r *http.Request) string {
@@ -120,7 +130,7 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 // AdminOrders handles order management.
 func AdminOrders(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -131,9 +141,39 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		if r.Method == http.MethodPost {
+			orderID, parseErr := strconv.Atoi(r.FormValue("order_id"))
+			if parseErr != nil || orderID <= 0 {
+				metrics.OrderError = "Invalid order id"
+			} else {
+				status := strings.TrimSpace(r.FormValue("status"))
+				partnerStatus := strings.TrimSpace(r.FormValue("partner_status"))
+				deliveryStatus := strings.TrimSpace(r.FormValue("delivery_status"))
+				notice := strings.TrimSpace(r.FormValue("delivery_notice"))
+				if updateErr := a.Store.UpdateOrderByAdmin(orderID, status, partnerStatus, deliveryStatus, notice); updateErr != nil {
+					metrics.OrderError = "Unable to update order state"
+				} else {
+					metrics.OrderMessage = "Order updated"
+					user := auth.GetUserFromContext(r.Context())
+					actorID := 0
+					if user != nil {
+						actorID = user.ID
+					}
+					_ = a.Store.CreateAuditLog(actorID, "order.update", "order", orderID, "status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
+				}
+			}
+		}
+
+		orders, err := a.Store.ListAllOrders()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		metrics.Title = "Order Management"
-		metrics.Message = "Order tracking features are staged for the next iteration"
+		metrics.Message = "Review and control order lifecycle state"
 		metrics.Role = adminRoleFromContext(r)
+		metrics.Orders = orders
 		renderAdminPage(a, w, metrics)
 	}
 }
@@ -152,9 +192,25 @@ func AdminReports(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		revenueTotal, err := a.Store.SumOrderRevenue()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		statusCounts, err := a.Store.GetOrderStatusCounts()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		metrics.Title = "Sales Reports"
-		metrics.Message = "Reporting baselines are active; advanced analytics pending"
+		metrics.Message = "Live operational metrics from orders and fulfillment"
 		metrics.Role = adminRoleFromContext(r)
+		metrics.RevenueTotal = revenueTotal
+		metrics.PendingCount = statusCounts["pending"] + statusCounts["processing"]
+		metrics.ShippedCount = statusCounts["shipped"]
+		metrics.DeliveredCount = statusCounts["delivered"]
+		metrics.OrderCount = metrics.PendingCount + metrics.ShippedCount + metrics.DeliveredCount + statusCounts["cancelled"]
 		renderAdminPage(a, w, metrics)
 	}
 }
@@ -216,6 +272,12 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 						metrics.TeamError = "Unable to deactivate user"
 					} else {
 						metrics.TeamMessage = "User account deactivated"
+						user := auth.GetUserFromContext(r.Context())
+						actorID := 0
+						if user != nil {
+							actorID = user.ID
+						}
+						_ = a.Store.CreateAuditLog(actorID, "user.deactivate", "user", userID, "deactivated via admin team")
 					}
 				}
 			}
@@ -227,6 +289,33 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			return
 		}
 		metrics.TeamMembers = teamMembers
+		renderAdminPage(a, w, metrics)
+	}
+}
+
+func AdminAudit(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		metrics, err := buildAdminMetrics(a)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		logs, err := a.Store.ListAuditLogs(100)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		metrics.Title = "Audit Log"
+		metrics.Message = "Recent privileged actions"
+		metrics.Role = adminRoleFromContext(r)
+		metrics.AuditLogs = logs
 		renderAdminPage(a, w, metrics)
 	}
 }

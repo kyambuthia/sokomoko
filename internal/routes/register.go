@@ -82,6 +82,7 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 	adminHandlers.HandleFunc("/orders", AdminOrders(a))
 	adminHandlers.HandleFunc("/reports", AdminReports(a))
 	adminHandlers.HandleFunc("/deliveries", AdminDeliveries(a))
+	adminHandlers.Handle("/audit", auth.RequireRole("admin", http.HandlerFunc(AdminAudit(a))))
 	adminHandlers.Handle("/team", auth.RequireRole("admin", http.HandlerFunc(AdminTeam(a))))
 
 	protectedAdmin := auth.AuthMiddleware(a.Store, auth.RequireAnyRole([]string{"admin", "staff"}, adminHandlers))

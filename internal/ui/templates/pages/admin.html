@@ -20,6 +20,7 @@
       <li class="site-nav__item nav__item"><a href="/deliveries" class="site-nav__link nav__link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a></li>
       {{if eq .Role "admin"}}
       <li class="site-nav__item nav__item"><a href="/team" class="site-nav__link nav__link {{if eq .Title "Team Management"}}active{{end}}">Team</a></li>
+      <li class="site-nav__item nav__item"><a href="/audit" class="site-nav__link nav__link {{if eq .Title "Audit Log"}}active{{end}}">Audit</a></li>
       <li class="site-nav__item nav__item"><a href="/staff/signup" class="site-nav__link nav__link">Staff Accounts</a></li>
       {{end}}
       <li class="site-nav__item nav__item"><a href="/" class="site-nav__link nav__link">Storefront</a></li>
@@ -110,14 +111,86 @@
   {{end}}
 
   {{if eq .Title "Order Management"}}
-  <section class="panel card"><div class="card__body"><p>Order pipeline integration is next. This panel is reserved for live order queues and status controls.</p></div></section>
+  {{if .OrderMessage}}<div class="notice notice--success alert alert--success"><p>{{.OrderMessage}}</p></div>{{end}}
+  {{if .OrderError}}<div class="notice notice--danger alert alert--danger"><p>{{.OrderError}}</p></div>{{end}}
+
+  <section class="panel card">
+    <div class="card__header"><h3>Order Queue</h3></div>
+    <div class="card__body">
+      {{if .Orders}}
+      {{range .Orders}}
+      <article class="panel card mb-2">
+        <div class="card__header"><h3>Order #{{.ID}} - {{.CustomerName}}</h3></div>
+        <div class="card__body">
+          <p><strong>Total:</strong> ${{printf "%.2f" .TotalAmount}}</p>
+          <p><strong>Delivery Address:</strong> {{.DeliveryAddress}}</p>
+          <p><strong>Current:</strong> {{.Status}} / {{.PartnerStatus}} / {{.DeliveryStatus}}</p>
+          <ul>
+            {{range .Items}}
+            <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
+            {{end}}
+          </ul>
+          <form action="/orders" method="POST" class="form">
+            <input type="hidden" name="order_id" value="{{.ID}}">
+            <div class="form__group form-group">
+              <label class="form__label" for="status_{{.ID}}">Order status</label>
+              <select class="form__select" id="status_{{.ID}}" name="status">
+                <option value="pending" {{if eq .Status "pending"}}selected{{end}}>pending</option>
+                <option value="processing" {{if eq .Status "processing"}}selected{{end}}>processing</option>
+                <option value="shipped" {{if eq .Status "shipped"}}selected{{end}}>shipped</option>
+                <option value="delivered" {{if eq .Status "delivered"}}selected{{end}}>delivered</option>
+                <option value="cancelled" {{if eq .Status "cancelled"}}selected{{end}}>cancelled</option>
+              </select>
+            </div>
+            <div class="form__group form-group">
+              <label class="form__label" for="partner_status_{{.ID}}">Partner status</label>
+              <select class="form__select" id="partner_status_{{.ID}}" name="partner_status">
+                <option value="new" {{if eq .PartnerStatus "new"}}selected{{end}}>new</option>
+                <option value="accepted" {{if eq .PartnerStatus "accepted"}}selected{{end}}>accepted</option>
+                <option value="packing" {{if eq .PartnerStatus "packing"}}selected{{end}}>packing</option>
+                <option value="dispatched" {{if eq .PartnerStatus "dispatched"}}selected{{end}}>dispatched</option>
+                <option value="completed" {{if eq .PartnerStatus "completed"}}selected{{end}}>completed</option>
+                <option value="cancelled" {{if eq .PartnerStatus "cancelled"}}selected{{end}}>cancelled</option>
+              </select>
+            </div>
+            <div class="form__group form-group">
+              <label class="form__label" for="delivery_status_{{.ID}}">Delivery status</label>
+              <select class="form__select" id="delivery_status_{{.ID}}" name="delivery_status">
+                <option value="queued" {{if eq .DeliveryStatus "queued"}}selected{{end}}>queued</option>
+                <option value="processing" {{if eq .DeliveryStatus "processing"}}selected{{end}}>processing</option>
+                <option value="shipped" {{if eq .DeliveryStatus "shipped"}}selected{{end}}>shipped</option>
+                <option value="delivered" {{if eq .DeliveryStatus "delivered"}}selected{{end}}>delivered</option>
+              </select>
+            </div>
+            <div class="form__group form-group">
+              <label class="form__label" for="delivery_notice_{{.ID}}">Delivery notice</label>
+              <textarea class="form__textarea" id="delivery_notice_{{.ID}}" name="delivery_notice" rows="2">{{.DeliveryNotice}}</textarea>
+            </div>
+            <button type="submit" class="btn">Save update</button>
+          </form>
+        </div>
+      </article>
+      {{end}}
+      {{else}}
+      <p class="table-empty">No orders found.</p>
+      {{end}}
+    </div>
+  </section>
   {{end}}
 
   {{if eq .Title "Sales Reports"}}
   <section class="admin-metrics">
-    <article class="admin-metric"><h3 class="admin-metric__label">Total Revenue</h3><p class="admin-metric__value">$0.00</p><p class="admin-metric__note">All time</p></article>
-    <article class="admin-metric"><h3 class="admin-metric__label">Total Orders</h3><p class="admin-metric__value">0</p><p class="admin-metric__note">All time</p></article>
+    <article class="admin-metric"><h3 class="admin-metric__label">Total Revenue</h3><p class="admin-metric__value">${{printf "%.2f" .RevenueTotal}}</p><p class="admin-metric__note">Non-cancelled orders</p></article>
+    <article class="admin-metric"><h3 class="admin-metric__label">Total Orders</h3><p class="admin-metric__value">{{.OrderCount}}</p><p class="admin-metric__note">All statuses</p></article>
     <article class="admin-metric"><h3 class="admin-metric__label">Active Users</h3><p class="admin-metric__value">{{.SessionCount}}</p><p class="admin-metric__note">Current sessions</p></article>
+  </section>
+  <section class="panel card">
+    <div class="card__header"><h3>Fulfillment Split</h3></div>
+    <div class="card__body">
+      <p><strong>Pending/Processing:</strong> {{.PendingCount}}</p>
+      <p><strong>Shipped:</strong> {{.ShippedCount}}</p>
+      <p class="mb-0"><strong>Delivered:</strong> {{.DeliveredCount}}</p>
+    </div>
   </section>
   {{end}}
 
@@ -163,6 +236,34 @@
           </tbody>
         </table>
       </div>
+    </div>
+  </section>
+  {{end}}
+
+  {{if eq .Title "Audit Log"}}
+  <section class="panel card">
+    <div class="card__header"><h3>Recent Events</h3></div>
+    <div class="card__body">
+      {{if .AuditLogs}}
+      <div class="table-wrap">
+        <table class="data-table data-table--admin">
+          <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+          <tbody>
+          {{range .AuditLogs}}
+          <tr>
+            <td>{{.CreatedAt}}</td>
+            <td>{{if .ActorUserID.Valid}}{{.ActorUserID.Int64}}{{else}}system{{end}}</td>
+            <td>{{.Action}}</td>
+            <td>{{.TargetType}} {{if .TargetID.Valid}}#{{.TargetID.Int64}}{{end}}</td>
+            <td>{{.Details}}</td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <p class="table-empty">No audit events yet.</p>
+      {{end}}
     </div>
   </section>
   {{end}}
