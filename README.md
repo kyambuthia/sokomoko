@@ -9,9 +9,9 @@ Lightweight e-commerce app built with Go + SQLite + server-rendered HTML.
 
 ## Repo Layout
 ```text
-cmd/sokomoko/        Main server entrypoint
+cmd/sokomoko/        Main server entrypoint (host-based routing)
 internal/app/        App wiring and template renderer
-internal/routes/     Public/admin route registration
+internal/routes/     Public/admin/partner route registration
 internal/auth/       Login/signup/session/auth middleware
 internal/db/         Store, schema bootstrap, queries, seed data
 internal/ui/         Embedded templates/static files
@@ -38,39 +38,50 @@ Example:
 PORT=8080 DB_PATH=./db/t.db go run ./cmd/sokomoko
 ```
 
-## Runtime Notes
-- DB schema is applied automatically on startup.
-- Admin bootstrap user is seeded only when `ADMIN_PASSWORD` is set and no admin exists.
-- Optional bootstrap variables:
-  - `ADMIN_USERNAME` (default: `admin`)
-  - `ADMIN_EMAIL` (default: `admin@sokomoko.com`)
-- Static file serving checks disk first (`internal/ui/static`), then embedded assets.
+## Domain Architecture
+The server routes by host:
+- `localhost:6969`: customer storefront and customer account auth
+- `admin.localhost:6969`: platform/site management (admin + staff)
+- `partner.localhost:6969`: store setup and partner operations
 
-## Route Map
-Public host (`localhost:6969`):
-- `GET /`
-- `GET|POST /search`
-- `GET|POST /login`
-- `GET|POST /signup`
-- `POST /logout`
-- `GET /account`
-- `GET /static/*`
-
-Admin host (`admin.localhost:6969`):
-- `GET|POST /login`
-- `GET /` (admin dashboard, auth required)
-- `GET /products` (auth required)
-- `GET /orders` (auth required)
-- `GET /reports` (auth required)
-- `GET /deliveries` (auth required)
-- `GET /static/*`
-
-## Optional: Local Admin Subdomain
-Add to hosts file if `admin.localhost` does not resolve:
+Add host entries locally:
 ```text
 127.0.0.1 localhost
 127.0.0.1 admin.localhost
+127.0.0.1 partner.localhost
 ```
+
+## Auth and Setup Flows
+Customer (`localhost`):
+- Signup: `/signup`
+- Login: `/login`
+- Password reset request: `/password-reset/request`
+- Password reset confirm: `/password-reset/confirm`
+- Account: `/account`
+
+Admin/Staff (`admin.localhost`):
+- First-run bootstrap: `/setup` (creates root admin, optional staff)
+- Login: `/login`
+- Staff creation (admin-only): `/staff/signup`
+- Password reset request: `/password-reset/request`
+- Password reset confirm: `/password-reset/confirm`
+- Management dashboard/routes: `/`, `/products`, `/orders`, `/reports`, `/deliveries`
+
+Partner (`partner.localhost`):
+- Login: `/login` (admin/staff)
+- Store setup: `/setup`
+- Partner dashboard: `/dashboard`
+- Password reset request: `/password-reset/request`
+- Password reset confirm: `/password-reset/confirm`
+
+## Runtime Notes
+- DB schema is applied automatically on startup.
+- First-run admin setup is done on `admin.localhost/setup` if no admin exists.
+- Staff role is supported alongside admin and user.
+- Password reset uses one-time, expiring reset tokens.
+- Store setup is persisted in `store_settings`.
+- Static file serving checks disk first (`internal/ui/static`), then embedded assets.
+- Static asset URLs are cache-busted using dynamic version query strings.
 
 ## Development Commands
 ```bash
@@ -91,6 +102,7 @@ go fmt ./...
 
 ## Troubleshooting
 - Port in use: set another port (`PORT=8080`).
+- Host mismatch: confirm `/etc/hosts` or Windows hosts file has `admin.localhost` and `partner.localhost`.
 - SQLite lock issues during local dev: stop duplicate server processes.
 - Module issues: `go mod tidy`.
 
