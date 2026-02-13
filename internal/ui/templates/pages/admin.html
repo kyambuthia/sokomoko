@@ -14,20 +14,25 @@
   <nav class="nav">
     <ul class="nav__list">
       <li class="nav__item">
-        <a href="/admin/" class="nav__link {{if eq .Title "Admin Dashboard"}}active{{end}}">Dashboard</a>
+        <a href="/" class="nav__link {{if eq .Title "Admin Dashboard"}}active{{end}}">Dashboard</a>
       </li>
       <li class="nav__item">
-        <a href="/admin/products" class="nav__link {{if eq .Title "Product Management"}}active{{end}}">Products</a>
+        <a href="/products" class="nav__link {{if eq .Title "Product Management"}}active{{end}}">Products</a>
       </li>
       <li class="nav__item">
-        <a href="/admin/orders" class="nav__link {{if eq .Title "Order Management"}}active{{end}}">Orders</a>
+        <a href="/orders" class="nav__link {{if eq .Title "Order Management"}}active{{end}}">Orders</a>
       </li>
       <li class="nav__item">
-        <a href="/admin/reports" class="nav__link {{if eq .Title "Sales Reports"}}active{{end}}">Reports</a>
+        <a href="/reports" class="nav__link {{if eq .Title "Sales Reports"}}active{{end}}">Reports</a>
       </li>
       <li class="nav__item">
-        <a href="/admin/deliveries" class="nav__link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a>
+        <a href="/deliveries" class="nav__link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a>
       </li>
+      {{if eq .Role "admin"}}
+      <li class="nav__item">
+        <a href="/staff/signup" class="nav__link">Staff Accounts</a>
+      </li>
+      {{end}}
       <li class="nav__item">
         <a href="/" class="nav__link">← Store</a>
       </li>
@@ -90,10 +95,13 @@
     <!-- Quick Actions -->
     <h2 style="margin-top: 2em;">Quick Actions</h2>
     <div class="flex flex-gap-2 flex-wrap">
-      <a href="/admin/products" class="button">Manage Products</a>
-      <a href="/admin/orders" class="button--secondary">View Orders</a>
-      <a href="/admin/reports" class="button--secondary">View Reports</a>
-      <a href="/admin/deliveries" class="button--secondary">Track Deliveries</a>
+      <a href="/products" class="button">Manage Products</a>
+      <a href="/orders" class="button--secondary">View Orders</a>
+      <a href="/reports" class="button--secondary">View Reports</a>
+      <a href="/deliveries" class="button--secondary">Track Deliveries</a>
+      {{if eq .Role "admin"}}
+      <a href="/staff/signup" class="button--secondary">Create Staff</a>
+      {{end}}
     </div>
 
     <!-- Recent Activity -->
@@ -117,9 +125,9 @@
 
     <h2>Actions</h2>
     <div class="flex flex-gap-2 flex-wrap mb-3">
-      <a href="/admin/products/new" class="button">Add New Product</a>
-      <a href="/admin/products/import" class="button--secondary">Import Products</a>
-      <a href="/admin/products/export" class="button--secondary">Export Products</a>
+      <a href="/products/new" class="button">Add New Product</a>
+      <a href="/products/import" class="button--secondary">Import Products</a>
+      <a href="/products/export" class="button--secondary">Export Products</a>
     </div>
 
     <h2>Products List</h2>
@@ -140,7 +148,7 @@
           </thead>
           <tbody>
             <tr>
-              <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No products found. <a href="/admin/products/new">Add your first product</a></td>
+              <td colspan="5" style="text-align: center; padding: 20px; color: #666666;">No products found. <a href="/products/new">Add your first product</a></td>
             </tr>
           </tbody>
         </table>

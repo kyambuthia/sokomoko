@@ -1,0 +1,93 @@
+{{ define "title" }}Initial Admin Setup{{ end }}
+
+{{ define "main-area" }}
+<section class="auth-panel auth-sheet">
+  <h1 class="auth-panel__title">Initial Admin Setup</h1>
+  <p class="auth-panel__meta">First run detected. Create the root admin account and optionally provision staff accounts.</p>
+
+  {{if .Message}}
+  <div class="notice notice--info">
+    <p>{{.Message}}</p>
+  </div>
+  {{end}}
+
+  {{if .Error}}
+  <div class="notice notice--danger alert alert--danger">
+    <p>{{.Error}}</p>
+  </div>
+  {{end}}
+
+  {{if .ShowForm}}
+  <div class="panel card">
+    <div class="card__body">
+      <p><strong>Staffing guidance:</strong> {{.StaffRationale}}</p>
+      <p>Recommended initial staff accounts: <strong>{{.RecommendedStaff}}</strong></p>
+    </div>
+  </div>
+
+  <form class="auth-panel__form form" action="/setup" method="POST">
+    <fieldset class="form__fieldset">
+      <legend class="form__legend">Root Admin</legend>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="admin_username">Admin username</label>
+        <input class="form__input" type="text" id="admin_username" name="admin_username" required autofocus>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="admin_email">Admin email</label>
+        <input class="form__input" type="email" id="admin_email" name="admin_email" required>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="admin_password">Root password</label>
+        <input class="form__input" type="password" id="admin_password" name="admin_password" required>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="confirm_password">Confirm root password</label>
+        <input class="form__input" type="password" id="confirm_password" name="confirm_password" required>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="staff_count">Initial staff accounts</label>
+        <input class="form__input" type="number" id="staff_count" name="staff_count" min="0" max="20" value="{{.RecommendedStaff}}">
+      </div>
+
+      <button class="btn btn--full" type="submit">Create root admin</button>
+    </fieldset>
+  </form>
+  {{else}}
+  <div class="panel card">
+    <div class="card__header">
+      <h3>Temporary Staff Credentials</h3>
+    </div>
+    <div class="card__body">
+      {{if .StaffCredentials}}
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Temporary Password</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .StaffCredentials}}
+          <tr>
+            <td>{{.Username}}</td>
+            <td>{{.Email}}</td>
+            <td><code>{{.TempPassword}}</code></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      <p>Store these credentials securely. Staff can sign in at <a href="/login">admin login</a>.</p>
+      {{else}}
+      <p>No staff accounts were created.</p>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+</section>
+{{ end }}

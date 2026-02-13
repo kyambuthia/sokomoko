@@ -1,0 +1,41 @@
+{{ define "title" }}Create Staff Account{{ end }}
+
+{{ define "main-area" }}
+<section class="auth-panel auth-sheet">
+  <h1 class="auth-panel__title">Create Staff Account</h1>
+  <p class="auth-panel__meta">Admin-only action. Staff can access dashboard and operations routes.</p>
+
+  {{if .Message}}
+  <div class="notice notice--info"><p>{{.Message}}</p></div>
+  {{end}}
+
+  {{if .Error}}
+  <div class="notice notice--danger alert alert--danger"><p>{{.Error}}</p></div>
+  {{end}}
+
+  {{if .ShowForm}}
+  <form class="auth-panel__form form" action="/staff/signup" method="POST">
+    <fieldset class="form__fieldset">
+      <legend class="form__legend">Staff Details</legend>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="username">Username</label>
+        <input class="form__input" type="text" id="username" name="username" required autofocus>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="email">Email</label>
+        <input class="form__input" type="email" id="email" name="email" required>
+      </div>
+
+      <div class="form__group form-group">
+        <label class="form__label" for="password">Password</label>
+        <input class="form__input" type="password" id="password" name="password" required>
+      </div>
+
+      <button class="btn btn--full" type="submit">Create staff account</button>
+    </fieldset>
+  </form>
+  {{end}}
+</section>
+{{ end }}

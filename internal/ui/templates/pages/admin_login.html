@@ -11,8 +11,8 @@
 
 {{ define "main-area" }}
 <section class="auth-panel auth-sheet">
-    <h1 class="auth-panel__title auth-sheet__title">Administrator Access</h1>
-    <p class="auth-panel__meta auth-sheet__meta">Sign in with admin credentials to access the dashboard.</p>
+    <h1 class="auth-panel__title auth-sheet__title">Admin and Staff Access</h1>
+    <p class="auth-panel__meta auth-sheet__meta">Sign in with admin or staff credentials to access the dashboard.</p>
 
     <!-- Login Form -->
     <form action="/login" method="POST" class="auth-panel__form form">
@@ -53,5 +53,6 @@
         </p>
       </div>
     </div>
+    <p><a href="/password-reset/request">Forgot password?</a></p>
 </section>
 {{ end }}

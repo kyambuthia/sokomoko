@@ -5,13 +5,17 @@ import (
 )
 
 type Templates struct {
-	Index      *template.Template
-	Search     *template.Template
-	Account    *template.Template
-	Admin      *template.Template
-	AdminLogin *template.Template
-	Login      *template.Template
-	Signup     *template.Template
+	Index                *template.Template
+	Search               *template.Template
+	Account              *template.Template
+	Admin                *template.Template
+	AdminLogin           *template.Template
+	AdminSetup           *template.Template
+	StaffSignup          *template.Template
+	Login                *template.Template
+	Signup               *template.Template
+	PasswordResetRequest *template.Template
+	PasswordResetConfirm *template.Template
 }
 
 func ParseTemplates() (*Templates, error) {
@@ -58,6 +62,16 @@ func ParseTemplates() (*Templates, error) {
 		return nil, err
 	}
 
+	adminSetupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/admin_setup.html")
+	if err != nil {
+		return nil, err
+	}
+
+	staffSignupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/staff_signup.html")
+	if err != nil {
+		return nil, err
+	}
+
 	loginTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/login.html")
 	if err != nil {
 		return nil, err
@@ -68,13 +82,27 @@ func ParseTemplates() (*Templates, error) {
 		return nil, err
 	}
 
+	passwordResetRequestTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/password_reset_request.html")
+	if err != nil {
+		return nil, err
+	}
+
+	passwordResetConfirmTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/password_reset_confirm.html")
+	if err != nil {
+		return nil, err
+	}
+
 	return &Templates{
-		Index:      indexTmpl,
-		Search:     searchTmpl,
-		Account:    accountTmpl,
-		Admin:      adminTmpl,
-		AdminLogin: adminLoginTmpl,
-		Login:      loginTmpl,
-		Signup:     signupTmpl,
+		Index:                indexTmpl,
+		Search:               searchTmpl,
+		Account:              accountTmpl,
+		Admin:                adminTmpl,
+		AdminLogin:           adminLoginTmpl,
+		AdminSetup:           adminSetupTmpl,
+		StaffSignup:          staffSignupTmpl,
+		Login:                loginTmpl,
+		Signup:               signupTmpl,
+		PasswordResetRequest: passwordResetRequestTmpl,
+		PasswordResetConfirm: passwordResetConfirmTmpl,
 	}, nil
 }

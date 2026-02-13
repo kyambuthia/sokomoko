@@ -4,54 +4,53 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/auth"
 )
+
+func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, title, message string) {
+	role := "staff"
+	user := auth.GetUserFromContext(r.Context())
+	if user != nil {
+		role = user.Role
+	}
+	a.Render(w, a.Templates.Admin, map[string]interface{}{
+		"Title":   title,
+		"Message": message,
+		"Role":    role,
+	})
+}
 
 // AdminDashboard serves the main admin dashboard
 func AdminDashboard(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		a.Render(w, a.Templates.Admin, map[string]interface{}{
-			"Title":   "Admin Dashboard",
-			"Message": "Welcome to Admin Dashboard",
-		})
+		renderAdminPage(a, w, r, "Admin Dashboard", "Welcome to Admin Dashboard")
 	}
 }
 
 // AdminProducts handles product management
 func AdminProducts(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		a.Render(w, a.Templates.Admin, map[string]interface{}{
-			"Title":   "Product Management",
-			"Message": "Manage your products here",
-		})
+		renderAdminPage(a, w, r, "Product Management", "Manage your products here")
 	}
 }
 
 // AdminOrders handles order management
 func AdminOrders(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		a.Render(w, a.Templates.Admin, map[string]interface{}{
-			"Title":   "Order Management",
-			"Message": "View and manage orders",
-		})
+		renderAdminPage(a, w, r, "Order Management", "View and manage orders")
 	}
 }
 
 // AdminReports handles sales reports
 func AdminReports(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		a.Render(w, a.Templates.Admin, map[string]interface{}{
-			"Title":   "Sales Reports",
-			"Message": "View your sales analytics",
-		})
+		renderAdminPage(a, w, r, "Sales Reports", "View your sales analytics")
 	}
 }
 
 // AdminDeliveries handles delivery management
 func AdminDeliveries(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		a.Render(w, a.Templates.Admin, map[string]interface{}{
-			"Title":   "Delivery Management",
-			"Message": "Manage product deliveries",
-		})
+		renderAdminPage(a, w, r, "Delivery Management", "Manage product deliveries")
 	}
 }

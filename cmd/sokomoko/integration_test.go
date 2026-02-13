@@ -413,9 +413,27 @@ func TestIntegration_AdminLogin_RegularUser(t *testing.T) {
 	clearUsersTable()
 
 	timestamp := time.Now().Unix()
+	adminUsername := fmt.Sprintf("admin_%d", timestamp)
+	adminEmail := fmt.Sprintf("admin_%d@example.com", timestamp)
 	username := fmt.Sprintf("regular_%d", timestamp)
 	email := fmt.Sprintf("regular_%d@example.com", timestamp)
 	password := "userpass"
+	adminPassword := "adminpass"
+
+	adminSaltBytes := make([]byte, 16)
+	_, _ = rand.Read(adminSaltBytes)
+	adminSalt := base64.URLEncoding.EncodeToString(adminSaltBytes)
+	adminHashedPassword, _ := bcrypt.GenerateFromPassword([]byte(adminPassword+adminSalt), bcrypt.DefaultCost)
+
+	adminUser := db.User{
+		Username:     adminUsername,
+		Email:        adminEmail,
+		PasswordHash: string(adminHashedPassword),
+		Salt:         adminSalt,
+		Role:         "admin",
+		Slug:         adminUsername,
+	}
+	testStore.CreateUser(adminUser)
 
 	saltBytes := make([]byte, 16)
 	_, _ = rand.Read(saltBytes)
