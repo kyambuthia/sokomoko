@@ -10,9 +10,12 @@
   <form method="GET" action="/search" class="search-bar">
     <div class="search-bar__field">
       <label class="search-bar__label" for="catalog-search">Search products</label>
-      <input id="catalog-search" type="search" name="q" placeholder="Search products..." class="search-bar__input">
+      <input id="catalog-search" type="search" name="q" placeholder="Search products..." class="search-bar__input" required minlength="2">
+      <p class="search-bar__hint">Try product names, categories, or materials.</p>
     </div>
-    <button type="submit" class="btn search-bar__button">Search</button>
+    <div class="search-bar__actions">
+      <button type="submit" class="btn search-bar__button">Search</button>
+    </div>
   </form>
 
   {{if .HasProducts}}

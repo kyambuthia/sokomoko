@@ -11,8 +11,10 @@
 
 {{ define "main-area" }}
 <section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title auth-sheet__title">Admin and Staff Access</h1>
-  <p class="auth-panel__meta auth-sheet__meta">Sign in with admin or staff credentials to access the dashboard.</p>
+  <header class="auth-panel__header">
+    <h1 class="auth-panel__title auth-sheet__title">Admin and Staff Access</h1>
+    <p class="auth-panel__meta auth-sheet__meta">Sign in with admin or staff credentials to access the dashboard.</p>
+  </header>
 
   {{if .Error}}
   <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
@@ -24,12 +26,15 @@
 
       <div class="form__group form-group">
         <label class="form__label" for="username">Username</label>
-        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="Enter your username" required autofocus>
+        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="Enter your username" required autofocus autocomplete="username">
       </div>
 
       <div class="form__group form-group">
         <label class="form__label" for="password">Password</label>
-        <input class="form__input" type="password" id="password" name="password" placeholder="Enter your password" required>
+        <div class="form__input-wrap">
+          <input class="form__input" type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password" data-password-input>
+          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="password">Show</button>
+        </div>
       </div>
 
       <button type="submit" class="btn btn--full">Sign In</button>

@@ -2,8 +2,10 @@
 
 {{ define "main-area" }}
 <section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title">Become a Partner</h1>
-  <p class="auth-panel__meta">Create a seller account to start selling on Sokomoko.</p>
+  <header class="auth-panel__header">
+    <h1 class="auth-panel__title">Become a Partner</h1>
+    <p class="auth-panel__meta">Create a seller account to start selling on Sokomoko.</p>
+  </header>
 
   <form action="/partner/signup" method="POST" class="auth-panel__form form">
     <fieldset class="form__fieldset">
@@ -16,7 +18,7 @@
 
       <div class="form__group form-group">
         <label class="form__label" for="email">Email Address</label>
-        <input class="form__input" type="email" id="email" name="email" placeholder="you@example.com" required>
+        <input class="form__input" type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
       </div>
 
       <div class="form__group form-group">
@@ -26,18 +28,24 @@
 
       <div class="form__group form-group">
         <label class="form__label" for="password">Password</label>
-        <input class="form__input" type="password" id="password" name="password" placeholder="At least 8 characters" required>
+        <div class="form__input-wrap">
+          <input class="form__input" type="password" id="password" name="password" placeholder="At least 8 characters" required autocomplete="new-password" data-password-input>
+          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="password">Show</button>
+        </div>
       </div>
 
       <div class="form__group form-group">
         <label class="form__label" for="confirm_password">Confirm Password</label>
-        <input class="form__input" type="password" id="confirm_password" name="confirm_password" required>
+        <div class="form__input-wrap">
+          <input class="form__input" type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" data-password-input>
+          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="confirm_password">Show</button>
+        </div>
       </div>
 
       <div class="form__group form-group">
-        <label class="form__label" for="terms">
+        <label class="form__label form__check" for="terms">
           <input type="checkbox" id="terms" name="terms" required>
-          I agree to the Sokomoko Partner Terms of Service
+          <span>I agree to the Sokomoko Partner Terms of Service</span>
         </label>
       </div>
 

@@ -2,8 +2,10 @@
 
 {{ define "main-area" }}
 <section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title auth-sheet__title">Create Account</h1>
-  <p class="auth-panel__meta auth-sheet__meta">Open a customer account to place and track orders.</p>
+  <header class="auth-panel__header">
+    <h1 class="auth-panel__title auth-sheet__title">Create Account</h1>
+    <p class="auth-panel__meta auth-sheet__meta">Open a customer account to place and track orders.</p>
+  </header>
 
   {{if .Error}}
   <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
@@ -15,17 +17,22 @@
 
       <div class="form__group form-group">
         <label class="form__label" for="username">Username</label>
-        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="choose a username" required autofocus>
+        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="choose a username" required autofocus autocomplete="username">
+        <small class="form__hint">Use 3 to 24 characters. Letters and numbers work best.</small>
       </div>
 
       <div class="form__group form-group">
         <label class="form__label" for="email">Email</label>
-        <input class="form__input" type="email" id="email" name="email" value="{{.Email}}" placeholder="you@example.com" required>
+        <input class="form__input" type="email" id="email" name="email" value="{{.Email}}" placeholder="you@example.com" required autocomplete="email">
       </div>
 
       <div class="form__group form-group">
         <label class="form__label" for="password">Password</label>
-        <input class="form__input" type="password" id="password" name="password" required>
+        <div class="form__input-wrap">
+          <input class="form__input" type="password" id="password" name="password" required autocomplete="new-password" data-password-input>
+          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="password">Show</button>
+        </div>
+        <small class="form__hint">Use at least 8 characters with a mix of letters and numbers.</small>
       </div>
 
       <button type="submit" class="btn btn--full">Create Account</button>

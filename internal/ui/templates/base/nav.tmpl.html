@@ -1,18 +1,29 @@
 {{ define "nav-area" }}
-<nav class="site-nav nav">
-    <ul class="site-nav__list nav__list">
-        <li class="site-nav__item nav__item">
-            <a href="/" class="site-nav__link nav__link">Home</a>
-        </li>
-        <li class="site-nav__item nav__item">
-            <a href="/search" class="site-nav__link nav__link">Search</a>
-        </li>
-        <li class="site-nav__item nav__item">
-            <a href="/account" class="site-nav__link nav__link">Account</a>
-        </li>
-        <li class="site-nav__item nav__item">
-            <a href="/cart" class="site-nav__link nav__link">Cart</a>
-        </li>
-    </ul>
+<nav class="site-nav nav" data-nav>
+    <button
+        type="button"
+        class="site-nav__toggle nav__toggle"
+        data-nav-toggle
+        aria-expanded="false"
+        aria-controls="primary-site-nav"
+    >
+        Menu
+    </button>
+    <div class="site-nav__menu nav__menu" id="primary-site-nav" data-nav-menu>
+        <ul class="site-nav__list nav__list">
+            <li class="site-nav__item nav__item">
+                <a href="/" class="site-nav__link nav__link">Home</a>
+            </li>
+            <li class="site-nav__item nav__item">
+                <a href="/search" class="site-nav__link nav__link">Search</a>
+            </li>
+            <li class="site-nav__item nav__item">
+                <a href="/account" class="site-nav__link nav__link">Account</a>
+            </li>
+            <li class="site-nav__item nav__item">
+                <a href="/cart" class="site-nav__link nav__link">Cart</a>
+            </li>
+        </ul>
+    </div>
 </nav>
 {{ end }}

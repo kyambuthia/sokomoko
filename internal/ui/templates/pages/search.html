@@ -10,13 +10,19 @@
   <form id="searchForm" action="/search" method="GET" class="search-bar">
     <div class="search-bar__field">
       <label class="search-bar__label" for="searchInput">Search</label>
-      <input type="search" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}" class="search-bar__input" />
+      <input type="search" id="searchInput" name="q" placeholder="Search for products..." value="{{.Query}}" class="search-bar__input" required minlength="2" />
+      <p class="search-bar__hint">Search by product name, category, or keywords from descriptions.</p>
     </div>
-    <button type="submit" class="btn search-bar__button">Search</button>
+    <div class="search-bar__actions">
+      <button type="submit" class="btn search-bar__button">Search</button>
+      {{if .Query}}<a href="/search" class="btn btn--secondary search-bar__button">Clear</a>{{end}}
+    </div>
   </form>
 
   {{if .Query}}
-  <h2>Search Results for "{{.Query}}"</h2>
+  <section class="search-results">
+  <h2 class="search-results__title">Search Results for "{{.Query}}"</h2>
+  <p class="search-results__meta">Showing matches available in the current catalog.</p>
 
   {{if .NoResults}}
   <ui-alert variant="info">
@@ -53,6 +59,7 @@
     {{end}}
   </div>
   {{end}}
+  </section>
   {{end}}
 </section>
 {{ end }}

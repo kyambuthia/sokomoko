@@ -143,6 +143,64 @@ if (!customElements.get("ui-metric-card")) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  const passwordToggles = document.querySelectorAll("[data-password-toggle]");
+  passwordToggles.forEach((toggleButton) => {
+    const targetId = toggleButton.getAttribute("data-target");
+    if (!targetId) {
+      return;
+    }
+    const input = document.getElementById(targetId);
+    if (!input) {
+      return;
+    }
+    toggleButton.addEventListener("click", () => {
+      const isPassword = input.getAttribute("type") === "password";
+      input.setAttribute("type", isPassword ? "text" : "password");
+      toggleButton.textContent = isPassword ? "Hide" : "Show";
+    });
+  });
+
+  const forms = document.querySelectorAll("form");
+  forms.forEach((form) => {
+    form.addEventListener("submit", () => {
+      const method = (form.getAttribute("method") || "get").toLowerCase();
+      if (method === "get" || form.hasAttribute("data-no-submit-state")) {
+        return;
+      }
+      if (!form.checkValidity()) {
+        return;
+      }
+      const submitButtons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+      submitButtons.forEach((button) => {
+        button.dataset.originalLabel = button.tagName === "INPUT" ? button.value : button.textContent;
+        if (button.tagName === "INPUT") {
+          button.value = "Submitting...";
+        } else {
+          button.textContent = "Submitting...";
+        }
+        button.disabled = true;
+      });
+    });
+  });
+
+  const navBlocks = document.querySelectorAll("[data-nav]");
+  navBlocks.forEach((nav) => {
+    const toggle = nav.querySelector("[data-nav-toggle]");
+    const menu = nav.querySelector("[data-nav-menu]");
+    if (!toggle || !menu) {
+      return;
+    }
+
+    nav.classList.add("is-collapsed");
+    toggle.setAttribute("aria-expanded", "false");
+
+    toggle.addEventListener("click", () => {
+      const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!isExpanded));
+      nav.classList.toggle("is-collapsed", isExpanded);
+    });
+  });
+
   const searchForm = document.querySelector("#searchForm");
 
   if (searchForm) {

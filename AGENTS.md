@@ -55,6 +55,22 @@ sokomoko/
 
 ## Code Style Guidelines
 
+## UI Design Ethos (Mandatory)
+
+The UI direction is paper-clean, structured, and quiet. Every change to templates, CSS, and JS should reinforce this.
+
+### Design Tenets
+- Plain paper baseline: white sheet surfaces, subtle borders, minimal shadows, and low-saturation accents.
+- Capsule controls: all primary interactive controls (`.btn`, nav links, toggles) should use rounded capsule radii.
+- Top navigation only: navigation stays in the header area on desktop and mobile; avoid sidebar navigation.
+- Mobile-first layout: default styles target small screens, then scale up with `min-width` media queries.
+- Strong spacing rhythm: use tokenized spacing (`--space-*`) and avoid ad-hoc pixel spacing.
+- BEM-first components: prefer `block__element--modifier` naming and keep selectors shallow.
+- Local-first typography: use local/system monospace stacks only; never add hosted web fonts.
+- Gentle hierarchy: rely on spacing, border contrast, and weight before adding visual effects.
+- Progressive enhancement: core navigation and forms must work without JS; JS adds behavior only.
+- Consistency over novelty: reuse existing component primitives before introducing new variants.
+
 ### Go Code Style
 
 #### Imports

@@ -2,19 +2,17 @@
 
 {{ define "main-area" }}
 <section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title">Initial Admin Setup</h1>
-  <p class="auth-panel__meta">First run detected. Create the root admin account and optionally provision staff accounts.</p>
+  <header class="auth-panel__header">
+    <h1 class="auth-panel__title">Initial Admin Setup</h1>
+    <p class="auth-panel__meta">First run detected. Create the root admin account and optionally provision staff accounts.</p>
+  </header>
 
   {{if .Message}}
-  <div class="notice notice--info">
-    <p>{{.Message}}</p>
-  </div>
+  <ui-alert variant="info"><p>{{.Message}}</p></ui-alert>
   {{end}}
 
   {{if .Error}}
-  <div class="notice notice--danger alert alert--danger">
-    <p>{{.Error}}</p>
-  </div>
+  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
   {{if .ShowForm}}
@@ -41,12 +39,18 @@
 
       <div class="form__group form-group">
         <label class="form__label" for="admin_password">Root password</label>
-        <input class="form__input" type="password" id="admin_password" name="admin_password" required>
+        <div class="form__input-wrap">
+          <input class="form__input" type="password" id="admin_password" name="admin_password" required autocomplete="new-password" data-password-input>
+          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="admin_password">Show</button>
+        </div>
       </div>
 
       <div class="form__group form-group">
         <label class="form__label" for="confirm_password">Confirm root password</label>
-        <input class="form__input" type="password" id="confirm_password" name="confirm_password" required>
+        <div class="form__input-wrap">
+          <input class="form__input" type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" data-password-input>
+          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="confirm_password">Show</button>
+        </div>
       </div>
 
       <div class="form__group form-group">
