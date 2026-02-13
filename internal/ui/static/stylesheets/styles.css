@@ -613,6 +613,15 @@ input[type="reset"]:disabled,
   border-radius: var(--radius-md);
 }
 
+.search-form-component {
+  display: block;
+  width: 100%;
+}
+
+.search-form-component .search-bar {
+  margin: 0;
+}
+
 .search-bar__field {
   display: grid;
   gap: 0.4rem;
@@ -638,6 +647,7 @@ input[type="reset"]:disabled,
   display: flex;
   gap: 0.55rem;
   width: 100%;
+  justify-content: flex-end;
 }
 
 .search-bar__button {
@@ -1116,6 +1126,7 @@ tbody tr:hover {
 
   .search-bar__actions {
     width: auto;
+    align-self: end;
   }
 
   .search-bar__button {
