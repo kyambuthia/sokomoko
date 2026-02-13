@@ -71,6 +71,11 @@ func buildAdminMetrics(a *app.App) (AdminPageData, error) {
 // AdminDashboard serves the main admin dashboard.
 func AdminDashboard(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		metrics, err := buildAdminMetrics(a)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -87,6 +92,11 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 // AdminProducts handles product management.
 func AdminProducts(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		metrics, err := buildAdminMetrics(a)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -110,6 +120,11 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 // AdminOrders handles order management.
 func AdminOrders(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		metrics, err := buildAdminMetrics(a)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -126,6 +141,11 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 // AdminReports handles sales reports.
 func AdminReports(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		metrics, err := buildAdminMetrics(a)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -142,6 +162,11 @@ func AdminReports(a *app.App) http.HandlerFunc {
 // AdminDeliveries handles delivery management.
 func AdminDeliveries(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		metrics, err := buildAdminMetrics(a)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -158,6 +183,11 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 // AdminTeam lists users and allows admin-only staff/user deactivation.
 func AdminTeam(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		metrics, err := buildAdminMetrics(a)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

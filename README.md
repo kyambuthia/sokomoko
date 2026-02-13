@@ -32,10 +32,16 @@ Server default: `http://localhost:6969`
 ## Configuration
 - `PORT` (default: `6969`)
 - `DB_PATH` (default: `./db/t.db`)
+- `ALLOWED_HOSTS` (comma-separated trusted hosts; default: `localhost,127.0.0.1,admin.localhost,partner.localhost`)
+- `ENV` (`production` enables stricter cookie behavior in auth flows)
 
 Example:
 ```bash
-PORT=8080 DB_PATH=./db/t.db go run ./cmd/sokomoko
+PORT=8080 \
+DB_PATH=./db/t.db \
+ALLOWED_HOSTS=shop.example.com,admin.example.com,partner.example.com \
+ENV=production \
+go run ./cmd/sokomoko
 ```
 
 ## Domain Architecture
@@ -82,6 +88,8 @@ Partner (`partner.localhost`):
 - Store setup is persisted in `store_settings`.
 - Static file serving checks disk first (`internal/ui/static`), then embedded assets.
 - Static asset URLs are cache-busted using dynamic version query strings.
+- Built-in hardening includes: security headers, panic recovery, request IDs, request logging, 1MB request body limit, same-origin checks for cookie-authenticated unsafe requests, trusted-host validation, and periodic cleanup of expired sessions/reset tokens.
+- Health endpoints: `/healthz` (liveness), `/readyz` (database readiness) on public/admin/partner hosts.
 
 ## Development Commands
 ```bash

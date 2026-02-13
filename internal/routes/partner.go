@@ -73,6 +73,11 @@ func partnerSlugify(value string) string {
 
 func PartnerRoot(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		settings, err := a.Store.GetStoreSettings()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

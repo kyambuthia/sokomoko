@@ -153,6 +153,11 @@ func openStoreWithSchema(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
+	// SQLite behaves best with a constrained connection pool for web workloads.
+	dbConn.SetMaxOpenConns(1)
+	dbConn.SetMaxIdleConns(1)
+	dbConn.SetConnMaxLifetime(0)
+
 	_, err = dbConn.Exec(SchemaSQL)
 	if err != nil {
 		_ = dbConn.Close()
@@ -1048,6 +1053,13 @@ func (s *Store) DeleteSession(id string) error {
 
 func (s *Store) CleanupSessions() error {
 	_, err := s.DB.Exec("DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP")
+	return err
+}
+
+func (s *Store) CleanupPasswordResetTokens() error {
+	_, err := s.DB.Exec(
+		"DELETE FROM password_reset_tokens WHERE used_at IS NOT NULL OR expires_at < CURRENT_TIMESTAMP",
+	)
 	return err
 }
 

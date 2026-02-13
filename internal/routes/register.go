@@ -8,6 +8,8 @@ import (
 )
 
 func RegisterPublic(a *app.App, mux *http.ServeMux) {
+	mux.HandleFunc("/healthz", Health())
+	mux.HandleFunc("/readyz", Ready(a))
 	mux.HandleFunc("/", Root(a))
 	mux.HandleFunc("/search", Search(a))
 	mux.HandleFunc("/login", auth.Login(a.Store, a.Templates.Login))
@@ -39,6 +41,8 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 }
 
 func RegisterAdmin(a *app.App, mux *http.ServeMux) {
+	mux.HandleFunc("/healthz", Health())
+	mux.HandleFunc("/readyz", Ready(a))
 	mux.HandleFunc("/setup", auth.AdminSetup(a.Store, a.Templates.AdminSetup))
 	mux.HandleFunc("/login", auth.AdminLogin(a.Store, a.Templates.AdminLogin))
 	mux.HandleFunc(
@@ -81,6 +85,8 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 }
 
 func RegisterPartner(a *app.App, mux *http.ServeMux) {
+	mux.HandleFunc("/healthz", Health())
+	mux.HandleFunc("/readyz", Ready(a))
 	mux.HandleFunc("/", PartnerRoot(a))
 	mux.HandleFunc("/login", auth.AdminLogin(a.Store, a.Templates.AdminLogin))
 	mux.Handle(

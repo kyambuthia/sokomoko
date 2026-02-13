@@ -9,6 +9,11 @@ import (
 
 func Root(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		products, err := a.Store.GetAllProducts()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
