@@ -871,6 +871,7 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 	defer rows.Close()
 
 	var products []Product
+	productIDs := []int{}
 	for rows.Next() {
 		product := Product{}
 		var categoryName sql.NullString
@@ -894,11 +895,15 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 			product.Category = categoryName.String
 		}
 
-		// Fetch images
-		imgs, _ := s.GetProductImages(product.ID)
-		product.Images = imgs
-
 		products = append(products, product)
+		productIDs = append(productIDs, product.ID)
+	}
+	imagesByProduct, err := s.GetProductImagesByProductIDs(productIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range products {
+		products[i].Images = imagesByProduct[products[i].ID]
 	}
 	return products, nil
 }
@@ -917,6 +922,7 @@ func (s *Store) GetAllProducts() ([]Product, error) {
 	defer rows.Close()
 
 	var products []Product
+	productIDs := []int{}
 	for rows.Next() {
 		product := Product{}
 		var categoryName sql.NullString
@@ -940,11 +946,15 @@ func (s *Store) GetAllProducts() ([]Product, error) {
 			product.Category = categoryName.String
 		}
 
-		// Fetch images
-		imgs, _ := s.GetProductImages(product.ID)
-		product.Images = imgs
-
 		products = append(products, product)
+		productIDs = append(productIDs, product.ID)
+	}
+	imagesByProduct, err := s.GetProductImagesByProductIDs(productIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range products {
+		products[i].Images = imagesByProduct[products[i].ID]
 	}
 	return products, nil
 }
@@ -982,6 +992,42 @@ func (s *Store) GetProductImages(productID int) ([]ProductImage, error) {
 		images = append(images, img)
 	}
 	return images, nil
+}
+
+func (s *Store) GetProductImagesByProductIDs(productIDs []int) (map[int][]ProductImage, error) {
+	imagesByProduct := map[int][]ProductImage{}
+	if len(productIDs) == 0 {
+		return imagesByProduct, nil
+	}
+
+	placeholders := make([]string, len(productIDs))
+	args := make([]interface{}, 0, len(productIDs))
+	for i, id := range productIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, product_id, url, alt_text, display_order, created_at
+		 FROM product_images
+		 WHERE product_id IN (%s)
+		 ORDER BY product_id, display_order`,
+		strings.Join(placeholders, ","),
+	)
+	rows, err := s.DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		img := ProductImage{}
+		if err := rows.Scan(&img.ID, &img.ProductID, &img.URL, &img.AltText, &img.DisplayOrder, &img.CreatedAt); err != nil {
+			return nil, err
+		}
+		imagesByProduct[img.ProductID] = append(imagesByProduct[img.ProductID], img)
+	}
+	return imagesByProduct, nil
 }
 
 func (s *Store) DeleteProductImage(id int) error {
@@ -1343,6 +1389,7 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 
 	items := []CartItem{}
 	subtotal := 0.0
+	productIDs := []int{}
 	for rows.Next() {
 		item := CartItem{}
 		if err := rows.Scan(
@@ -1356,12 +1403,20 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 			return nil, 0, err
 		}
 		item.ProductImageURL = "/static/images/placeholder.png"
-		if imgs, imgErr := s.GetProductImages(item.ProductID); imgErr == nil && len(imgs) > 0 {
-			item.ProductImageURL = imgs[0].URL
-		}
 		item.LineTotal = item.UnitPrice * float64(item.Quantity)
 		subtotal += item.LineTotal
 		items = append(items, item)
+		productIDs = append(productIDs, item.ProductID)
+	}
+
+	imagesByProduct, err := s.GetProductImagesByProductIDs(productIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range items {
+		if imgs := imagesByProduct[items[i].ProductID]; len(imgs) > 0 {
+			items[i].ProductImageURL = imgs[0].URL
+		}
 	}
 	return items, subtotal, nil
 }
@@ -1481,28 +1536,49 @@ func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, e
 }
 
 func (s *Store) listOrderItems(orderID int) ([]OrderItem, error) {
-	rows, err := s.DB.Query(
-		`SELECT product_id, product_name, quantity, unit_price
+	itemsByOrder, err := s.listOrderItemsByOrderIDs([]int{orderID})
+	if err != nil {
+		return nil, err
+	}
+	return itemsByOrder[orderID], nil
+}
+
+func (s *Store) listOrderItemsByOrderIDs(orderIDs []int) (map[int][]OrderItem, error) {
+	itemsByOrder := map[int][]OrderItem{}
+	if len(orderIDs) == 0 {
+		return itemsByOrder, nil
+	}
+
+	placeholders := make([]string, len(orderIDs))
+	args := make([]interface{}, 0, len(orderIDs))
+	for i, id := range orderIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(
+		`SELECT order_id, product_id, product_name, quantity, unit_price
 		 FROM order_items
-		 WHERE order_id = ?
-		 ORDER BY id`,
-		orderID,
+		 WHERE order_id IN (%s)
+		 ORDER BY order_id, id`,
+		strings.Join(placeholders, ","),
 	)
+	rows, err := s.DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	items := []OrderItem{}
 	for rows.Next() {
+		var orderID int
 		item := OrderItem{}
-		if err := rows.Scan(&item.ProductID, &item.ProductName, &item.Quantity, &item.UnitPrice); err != nil {
+		if err := rows.Scan(&orderID, &item.ProductID, &item.ProductName, &item.Quantity, &item.UnitPrice); err != nil {
 			return nil, err
 		}
 		item.LineTotal = item.UnitPrice * float64(item.Quantity)
-		items = append(items, item)
+		itemsByOrder[orderID] = append(itemsByOrder[orderID], item)
 	}
-	return items, nil
+	return itemsByOrder, nil
 }
 
 func (s *Store) ListOrdersByUser(userID int) ([]CustomerOrder, error) {
@@ -1519,6 +1595,7 @@ func (s *Store) ListOrdersByUser(userID int) ([]CustomerOrder, error) {
 	defer rows.Close()
 
 	orders := []CustomerOrder{}
+	orderIDs := []int{}
 	for rows.Next() {
 		order := CustomerOrder{}
 		if err := rows.Scan(
@@ -1533,12 +1610,16 @@ func (s *Store) ListOrdersByUser(userID int) ([]CustomerOrder, error) {
 		); err != nil {
 			return nil, err
 		}
-		items, err := s.listOrderItems(order.ID)
-		if err != nil {
-			return nil, err
-		}
-		order.Items = items
 		orders = append(orders, order)
+		orderIDs = append(orderIDs, order.ID)
+	}
+
+	itemsByOrder, err := s.listOrderItemsByOrderIDs(orderIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range orders {
+		orders[i].Items = itemsByOrder[orders[i].ID]
 	}
 	return orders, nil
 }
@@ -1557,6 +1638,7 @@ func (s *Store) ListOrdersForFulfillment() ([]FulfillmentOrder, error) {
 	defer rows.Close()
 
 	orders := []FulfillmentOrder{}
+	orderIDs := []int{}
 	for rows.Next() {
 		order := FulfillmentOrder{}
 		if err := rows.Scan(
@@ -1573,12 +1655,16 @@ func (s *Store) ListOrdersForFulfillment() ([]FulfillmentOrder, error) {
 		); err != nil {
 			return nil, err
 		}
-		items, err := s.listOrderItems(order.ID)
-		if err != nil {
-			return nil, err
-		}
-		order.Items = items
 		orders = append(orders, order)
+		orderIDs = append(orderIDs, order.ID)
+	}
+
+	itemsByOrder, err := s.listOrderItemsByOrderIDs(orderIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range orders {
+		orders[i].Items = itemsByOrder[orders[i].ID]
 	}
 	return orders, nil
 }
@@ -1758,6 +1844,7 @@ func (s *Store) ListAllOrders() ([]FulfillmentOrder, error) {
 	defer rows.Close()
 
 	orders := []FulfillmentOrder{}
+	orderIDs := []int{}
 	for rows.Next() {
 		order := FulfillmentOrder{}
 		if err := rows.Scan(
@@ -1774,12 +1861,16 @@ func (s *Store) ListAllOrders() ([]FulfillmentOrder, error) {
 		); err != nil {
 			return nil, err
 		}
-		items, err := s.listOrderItems(order.ID)
-		if err != nil {
-			return nil, err
-		}
-		order.Items = items
 		orders = append(orders, order)
+		orderIDs = append(orderIDs, order.ID)
+	}
+
+	itemsByOrder, err := s.listOrderItemsByOrderIDs(orderIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range orders {
+		orders[i].Items = itemsByOrder[orders[i].ID]
 	}
 	return orders, nil
 }
