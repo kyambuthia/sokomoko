@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"crypto/rand"
@@ -260,8 +261,18 @@ func findUserByIdentifier(store *db.Store, identifier string) (*db.User, error) 
 }
 
 func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode int, data any) {
-	w.WriteHeader(statusCode)
-	_ = tmpl.ExecuteTemplate(w, "root_template", data)
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "root_template", data); err != nil {
+		log.Printf("Template execution error: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if statusCode > 0 {
+		w.WriteHeader(statusCode)
+	}
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		log.Printf("Response write error: %v", err)
+	}
 }
 
 // SignUp handles normal user registration.
@@ -270,7 +281,7 @@ func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		data := SignupPageData{Title: "Create Account"}
 
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -317,7 +328,7 @@ func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -332,24 +343,24 @@ func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		if username == "" || email == "" || password == "" {
 			data.Error = "All fields are required"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 		if !isStrongEnoughPassword(password) {
 			data.Error = "Password must be at least 10 characters"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
 		_, err := createUserWithPassword(store, username, email, password, "staff")
 		if err != nil {
 			data.Error = "Failed to create staff account. Username or email may already exist."
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
 		data.Message = "Staff account created successfully."
-		tmpl.ExecuteTemplate(w, "root_template", data)
+		renderWithStatus(w, tmpl, 0, data)
 	}
 }
 
@@ -359,7 +370,7 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		data := LoginPageData{Title: "Login"}
 
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -419,7 +430,7 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -492,7 +503,7 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -509,17 +520,17 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		if adminUsername == "" || adminEmail == "" || adminPassword == "" || confirmPassword == "" {
 			data.Error = "All admin fields are required"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 		if adminPassword != confirmPassword {
 			data.Error = "Passwords do not match"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 		if !isStrongEnoughPassword(adminPassword) {
 			data.Error = "Admin password must be at least 10 characters"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -528,7 +539,7 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			parsed, parseErr := strconv.Atoi(staffCountRaw)
 			if parseErr != nil || parsed < 0 || parsed > 20 {
 				data.Error = "Staff count must be a number between 0 and 20"
-				tmpl.ExecuteTemplate(w, "root_template", data)
+				renderWithStatus(w, tmpl, 0, data)
 				return
 			}
 			staffCount = parsed
@@ -536,7 +547,7 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		if _, err := createUserWithPassword(store, adminUsername, adminEmail, adminPassword, "admin"); err != nil {
 			data.Error = "Failed to create admin account. Username or email may already exist."
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -551,11 +562,11 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 				username := fmt.Sprintf("staff%02d%s", i, suffix)
 				email := fmt.Sprintf("%s@sokomoko.local", username)
 				tempPassword, tokenErr := generateOpaqueToken(9)
-				if tokenErr != nil {
-					data.Error = "Failed to generate staff credentials"
-					tmpl.ExecuteTemplate(w, "root_template", data)
-					return
-				}
+					if tokenErr != nil {
+						data.Error = "Failed to generate staff credentials"
+						renderWithStatus(w, tmpl, 0, data)
+						return
+					}
 				tempPassword += "Aa1!"
 
 				if _, err := createUserWithPassword(store, username, email, tempPassword, "staff"); err != nil {
@@ -569,17 +580,17 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 				created = true
 				break
 			}
-			if !created {
-				data.Error = "Failed to provision all staff accounts."
-				tmpl.ExecuteTemplate(w, "root_template", data)
-				return
+				if !created {
+					data.Error = "Failed to provision all staff accounts."
+					renderWithStatus(w, tmpl, 0, data)
+					return
+				}
 			}
-		}
 
 		data.ShowForm = false
 		data.Message = "Root admin account has been created. Save the temporary staff credentials now."
 		data.StaffCredentials = staffCredentials
-		tmpl.ExecuteTemplate(w, "root_template", data)
+		renderWithStatus(w, tmpl, 0, data)
 	}
 }
 
@@ -592,7 +603,7 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 		}
 
 		if r.Method == http.MethodGet {
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 		if r.Method != http.MethodPost {
@@ -604,7 +615,7 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 		data.Identifier = identifier
 		if identifier == "" {
 			data.Error = "Enter username or email"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -630,7 +641,7 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 			}
 		}
 
-		tmpl.ExecuteTemplate(w, "root_template", data)
+		renderWithStatus(w, tmpl, 0, data)
 	}
 }
 
@@ -648,7 +659,7 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 			data.Token = token
 			if token == "" {
 				data.Error = "Missing reset token"
-				tmpl.ExecuteTemplate(w, "root_template", data)
+				renderWithStatus(w, tmpl, 0, data)
 				return
 			}
 
@@ -659,18 +670,18 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 			}
 			if resetToken == nil {
 				data.Error = "Reset token is invalid or expired"
-				tmpl.ExecuteTemplate(w, "root_template", data)
+				renderWithStatus(w, tmpl, 0, data)
 				return
 			}
 
 			user, err := store.GetUserByID(resetToken.UserID)
 			if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
 				data.Error = "Reset token is invalid for this account type"
-				tmpl.ExecuteTemplate(w, "root_template", data)
+				renderWithStatus(w, tmpl, 0, data)
 				return
 			}
 
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -686,17 +697,17 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 
 		if token == "" || password == "" || confirmPassword == "" {
 			data.Error = "All fields are required"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 		if password != confirmPassword {
 			data.Error = "Passwords do not match"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 		if !isStrongEnoughPassword(password) {
 			data.Error = "Password must be at least 10 characters"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -707,14 +718,14 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 		}
 		if resetToken == nil {
 			data.Error = "Reset token is invalid or expired"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
 		user, err := store.GetUserByID(resetToken.UserID)
 		if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
 			data.Error = "Reset token is invalid for this account type"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
@@ -731,13 +742,13 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 		}
 		if !used {
 			data.Error = "Reset token is invalid or expired"
-			tmpl.ExecuteTemplate(w, "root_template", data)
+			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
 
 		data.ShowForm = false
 		data.Message = "Password reset successful. You can now sign in at " + loginPath
-		tmpl.ExecuteTemplate(w, "root_template", data)
+		renderWithStatus(w, tmpl, 0, data)
 	}
 }
 

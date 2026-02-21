@@ -78,7 +78,7 @@ func TestSignUp(t *testing.T) {
 	clearUsersTable()
 
 	tmpl := template.New("signup.html")
-	template.Must(tmpl.Parse("{{define \"signup.html\"}}Sign Up Page{{end}}"))
+	template.Must(tmpl.Parse("{{define \"root_template\"}}Sign Up Page{{end}}"))
 
 	// Test successful signup
 	data := url.Values{}
@@ -135,7 +135,7 @@ func TestLogin(t *testing.T) {
 	createTestUser("loginuser", "login@example.com", "loginpass", "user")
 
 	tmpl := template.New("login.html")
-	template.Must(tmpl.Parse("{{define \"login.html\"}}Login Page{{end}}"))
+	template.Must(tmpl.Parse("{{define \"root_template\"}}Login Page{{end}}"))
 
 	// Test successful login
 	data := url.Values{}
