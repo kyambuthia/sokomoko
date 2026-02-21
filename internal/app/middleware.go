@@ -112,7 +112,7 @@ func CSRFSameOrigin(sessionCookieName string) Middleware {
 			referer := strings.TrimSpace(r.Header.Get("Referer"))
 
 			if origin == "" && referer == "" {
-				next.ServeHTTP(w, r)
+				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
 			if origin != "" && !sameHost(origin, r) {

@@ -48,6 +48,22 @@ func TestCSRFSameOriginAllowsSameOriginWithSession(t *testing.T) {
 	}
 }
 
+func TestCSRFSameOriginBlocksMissingOriginAndRefererWithSession(t *testing.T) {
+	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), CSRFSameOrigin("session_token"))
+
+	req := httptest.NewRequest(http.MethodPost, "http://admin.localhost/team", strings.NewReader("x=1"))
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: "abc"})
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
 func TestSecurityHeaders(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
