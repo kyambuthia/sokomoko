@@ -406,6 +406,20 @@ func TestOrderFulfillmentTransitionValidation(t *testing.T) {
 	}
 }
 
+func TestUpdateOrderFulfillment_OrderNotFound(t *testing.T) {
+	err := testStore.UpdateOrderFulfillment(999999, "new", "queued", "no-op")
+	if err == nil {
+		t.Fatal("expected not found error")
+	}
+}
+
+func TestUpdateOrderByAdmin_OrderNotFound(t *testing.T) {
+	err := testStore.UpdateOrderByAdmin(999999, "pending", "new", "queued", "no-op")
+	if err == nil {
+		t.Fatal("expected not found error")
+	}
+}
+
 func TestConcurrentCheckoutStockContention(t *testing.T) {
 	suffix := time.Now().UnixNano()
 

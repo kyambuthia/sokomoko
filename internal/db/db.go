@@ -1627,13 +1627,23 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 		return fmt.Errorf("invalid delivery status")
 	}
 
-	_, err = s.DB.Exec(
+	result, err := s.DB.Exec(
 		`UPDATE orders
 		 SET status = ?, partner_status = ?, delivery_status = ?, delivery_notice = ?, updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ?`,
 		nextStatus, partnerStatus, deliveryStatus, strings.TrimSpace(deliveryNotice), orderID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return fmt.Errorf("order not found")
+	}
+	return nil
 }
 
 func isAllowedPartnerTransition(from, to string) bool {
@@ -1800,13 +1810,23 @@ func (s *Store) UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryS
 		return fmt.Errorf("invalid order state")
 	}
 
-	_, err := s.DB.Exec(
+	result, err := s.DB.Exec(
 		`UPDATE orders
 		 SET status = ?, partner_status = ?, delivery_status = ?, delivery_notice = ?, updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ?`,
 		status, partnerStatus, deliveryStatus, strings.TrimSpace(deliveryNotice), orderID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return fmt.Errorf("order not found")
+	}
+	return nil
 }
 
 func (s *Store) GetOrderStatusCounts() (map[string]int, error) {
