@@ -23,6 +23,7 @@ import (
 func main() {
 	cfg := config.LoadFromEnv()
 	auth.SetEnvironment(cfg.Environment)
+	auth.SetAdminSetupToken(cfg.AdminSetupToken)
 
 	templates, err := ui.ParseTemplates()
 	if err != nil {

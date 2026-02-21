@@ -7,6 +7,7 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	t.Setenv("PORT", "")
 	t.Setenv("DB_PATH", "")
 	t.Setenv("ALLOWED_HOSTS", "")
+	t.Setenv("ADMIN_SETUP_TOKEN", "")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != defaultEnvironment {
@@ -21,6 +22,9 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if cfg.AllowedHostsRaw != "" {
 		t.Fatalf("AllowedHostsRaw = %q, want empty", cfg.AllowedHostsRaw)
 	}
+	if cfg.AdminSetupToken != "" {
+		t.Fatalf("AdminSetupToken = %q, want empty", cfg.AdminSetupToken)
+	}
 }
 
 func TestLoadFromEnv_Values(t *testing.T) {
@@ -28,6 +32,7 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	t.Setenv("PORT", "8080")
 	t.Setenv("DB_PATH", "/tmp/app.db")
 	t.Setenv("ALLOWED_HOSTS", "localhost,admin.localhost")
+	t.Setenv("ADMIN_SETUP_TOKEN", "s3cr3t")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != "production" {
@@ -41,6 +46,9 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	}
 	if cfg.AllowedHostsRaw != "localhost,admin.localhost" {
 		t.Fatalf("AllowedHostsRaw = %q, unexpected", cfg.AllowedHostsRaw)
+	}
+	if cfg.AdminSetupToken != "s3cr3t" {
+		t.Fatalf("AdminSetupToken = %q, want s3cr3t", cfg.AdminSetupToken)
 	}
 	if !cfg.IsProduction() {
 		t.Fatal("IsProduction() = false, want true")

@@ -2,11 +2,13 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +25,7 @@ const (
 )
 
 var runtimeEnvironment = "development"
+var runtimeAdminSetupToken string
 
 func SetEnvironment(env string) {
 	clean := strings.TrimSpace(strings.ToLower(env))
@@ -30,6 +33,10 @@ func SetEnvironment(env string) {
 		clean = "development"
 	}
 	runtimeEnvironment = clean
+}
+
+func SetAdminSetupToken(token string) {
+	runtimeAdminSetupToken = strings.TrimSpace(token)
 }
 
 type StaffCredential struct {
@@ -192,6 +199,38 @@ func containsRole(roles []string, role string) bool {
 		}
 	}
 	return false
+}
+
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil {
+		host = strings.TrimSpace(r.RemoteAddr)
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func validAdminSetupToken(r *http.Request) bool {
+	expected := strings.TrimSpace(runtimeAdminSetupToken)
+	if expected == "" {
+		return false
+	}
+
+	provided := strings.TrimSpace(r.Header.Get("X-Admin-Setup-Token"))
+	if provided == "" {
+		provided = strings.TrimSpace(r.FormValue("setup_token"))
+	}
+	if len(provided) != len(expected) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+}
+
+func isAdminSetupAuthorized(r *http.Request) bool {
+	if strings.TrimSpace(runtimeAdminSetupToken) != "" {
+		return validAdminSetupToken(r)
+	}
+	return isLoopbackRequest(r)
 }
 
 func recommendedStaffCount(productCount int) (int, string) {
@@ -432,6 +471,10 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 		if hasAdmin {
 			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		if !isAdminSetupAuthorized(r) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 
