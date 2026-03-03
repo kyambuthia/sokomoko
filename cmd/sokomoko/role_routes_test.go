@@ -98,6 +98,21 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 		[]*http.Cookie{adminCookie},
 		http.StatusOK,
 	)
+	expectRouteStatus(
+		t,
+		http.MethodPost,
+		"/orders",
+		"admin.localhost",
+		url.Values{
+			"order_id":        {fmt.Sprintf("%d", orderID)},
+			"status":          {"bogus"},
+			"partner_status":  {"accepted"},
+			"delivery_status": {"processing"},
+			"delivery_notice": {"invalid status test"},
+		},
+		[]*http.Cookie{adminCookie},
+		http.StatusBadRequest,
+	)
 
 	expectRouteStatus(
 		t,

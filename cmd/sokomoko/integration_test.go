@@ -757,8 +757,8 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	badUpdate.Set("delivery_status", "delivered")
 	badUpdate.Set("delivery_notice", "done")
 	resp, body := makeRequest(http.MethodPost, "/orders", badUpdate, []*http.Cookie{staffCookie}, "partner.localhost")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("invalid transition update status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid transition update status=%d expected=%d", resp.StatusCode, http.StatusBadRequest)
 	}
 	if !strings.Contains(body, "Unable to update order") {
 		t.Fatal("expected invalid transition error in response body")

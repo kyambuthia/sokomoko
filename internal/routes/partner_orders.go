@@ -38,17 +38,20 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 		if data.Filter == "" {
 			data.Filter = "all"
 		}
+		responseStatus := http.StatusOK
 
 		if r.Method == http.MethodPost {
 			orderID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("order_id")))
 			if err != nil || orderID <= 0 {
 				data.Error = "Invalid order id"
+				responseStatus = http.StatusBadRequest
 			} else {
 				partnerStatus := strings.TrimSpace(r.FormValue("partner_status"))
 				deliveryStatus := strings.TrimSpace(r.FormValue("delivery_status"))
 				note := strings.TrimSpace(r.FormValue("delivery_notice"))
 				if err := a.Store.UpdateOrderFulfillment(orderID, partnerStatus, deliveryStatus, note); err != nil {
 					data.Error = "Unable to update order: " + err.Error()
+					responseStatus = http.StatusBadRequest
 				} else {
 					data.Message = "Order fulfillment updated"
 					_ = a.Store.CreateAuditLog(user.ID, "partner.fulfillment.update", "order", orderID, "partner="+partnerStatus+",delivery="+deliveryStatus)
@@ -84,6 +87,9 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 		data.CompletedCount = summary.CompletedCount
 		data.OverdueCount = summary.OverdueCount
 
+		if responseStatus != http.StatusOK {
+			w.WriteHeader(responseStatus)
+		}
 		a.Render(w, a.Templates.PartnerOrders, data)
 	}
 }

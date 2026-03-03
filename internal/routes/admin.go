@@ -141,6 +141,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		responseStatus := http.StatusOK
 		if r.Method == http.MethodPost {
 			user := auth.GetUserFromContext(r.Context())
 			if user == nil || user.Role != "admin" {
@@ -151,6 +152,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			orderID, parseErr := strconv.Atoi(r.FormValue("order_id"))
 			if parseErr != nil || orderID <= 0 {
 				metrics.OrderError = "Invalid order id"
+				responseStatus = http.StatusBadRequest
 			} else {
 				status := strings.TrimSpace(r.FormValue("status"))
 				partnerStatus := strings.TrimSpace(r.FormValue("partner_status"))
@@ -158,6 +160,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 				notice := strings.TrimSpace(r.FormValue("delivery_notice"))
 				if updateErr := a.Store.UpdateOrderByAdmin(orderID, status, partnerStatus, deliveryStatus, notice); updateErr != nil {
 					metrics.OrderError = "Unable to update order state"
+					responseStatus = http.StatusBadRequest
 				} else {
 					metrics.OrderMessage = "Order updated"
 					actorID := 0
@@ -179,6 +182,9 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 		metrics.Message = "Review and control order lifecycle state"
 		metrics.Role = adminRoleFromContext(r)
 		metrics.Orders = orders
+		if responseStatus != http.StatusOK {
+			w.WriteHeader(responseStatus)
+		}
 		renderAdminPage(a, w, metrics)
 	}
 }
