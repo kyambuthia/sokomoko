@@ -9,6 +9,8 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	t.Setenv("ALLOWED_HOSTS", "")
 	t.Setenv("ADMIN_SETUP_TOKEN", "")
 	t.Setenv("SESSION_COOKIE_DOMAIN", "")
+	t.Setenv("POST_RATE_LIMIT_MAX", "")
+	t.Setenv("POST_RATE_LIMIT_WINDOW_SECONDS", "")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != defaultEnvironment {
@@ -29,6 +31,12 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if cfg.SessionCookieDomain != "" {
 		t.Fatalf("SessionCookieDomain = %q, want empty", cfg.SessionCookieDomain)
 	}
+	if cfg.PostRateLimitMax != defaultPostRateMax {
+		t.Fatalf("PostRateLimitMax = %d, want %d", cfg.PostRateLimitMax, defaultPostRateMax)
+	}
+	if cfg.PostRateLimitWindow != defaultPostRateWin {
+		t.Fatalf("PostRateLimitWindow = %d, want %d", cfg.PostRateLimitWindow, defaultPostRateWin)
+	}
 }
 
 func TestLoadFromEnv_Values(t *testing.T) {
@@ -38,6 +46,8 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	t.Setenv("ALLOWED_HOSTS", "localhost,admin.localhost")
 	t.Setenv("ADMIN_SETUP_TOKEN", "s3cr3t")
 	t.Setenv("SESSION_COOKIE_DOMAIN", ".EXAMPLE.COM")
+	t.Setenv("POST_RATE_LIMIT_MAX", "15")
+	t.Setenv("POST_RATE_LIMIT_WINDOW_SECONDS", "90")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != "production" {
@@ -57,6 +67,12 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	}
 	if cfg.SessionCookieDomain != ".example.com" {
 		t.Fatalf("SessionCookieDomain = %q, want .example.com", cfg.SessionCookieDomain)
+	}
+	if cfg.PostRateLimitMax != 15 {
+		t.Fatalf("PostRateLimitMax = %d, want 15", cfg.PostRateLimitMax)
+	}
+	if cfg.PostRateLimitWindow != 90 {
+		t.Fatalf("PostRateLimitWindow = %d, want 90", cfg.PostRateLimitWindow)
 	}
 	if !cfg.IsProduction() {
 		t.Fatal("IsProduction() = false, want true")

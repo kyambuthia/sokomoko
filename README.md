@@ -35,6 +35,8 @@ Server default: `http://localhost:6969`
 - `ALLOWED_HOSTS` (comma-separated trusted hosts; default: `localhost,127.0.0.1,admin.localhost,partner.localhost`)
 - `ENV` (`production` enables stricter cookie behavior in auth flows)
 - `SESSION_COOKIE_DOMAIN` (optional; set to a shared domain such as `.example.com` to reuse login sessions across subdomains)
+- `POST_RATE_LIMIT_MAX` (optional; max POST requests allowed per IP in each rate-limit window; default: `0` disabled)
+- `POST_RATE_LIMIT_WINDOW_SECONDS` (optional; window size for POST rate limit; default: `60`)
 
 Example:
 ```bash
@@ -42,6 +44,8 @@ PORT=8080 \
 DB_PATH=./db/t.db \
 ALLOWED_HOSTS=shop.example.com,admin.example.com,partner.example.com \
 SESSION_COOKIE_DOMAIN=.example.com \
+POST_RATE_LIMIT_MAX=120 \
+POST_RATE_LIMIT_WINDOW_SECONDS=60 \
 ENV=production \
 go run ./cmd/sokomoko
 ```
@@ -91,6 +95,7 @@ Partner (`partner.localhost`):
 - Static file serving checks disk first (`internal/ui/static`), then embedded assets.
 - Static asset URLs are cache-busted using dynamic version query strings.
 - Built-in hardening includes: security headers, panic recovery, request IDs, request logging, 1MB request body limit, same-origin checks for cookie-authenticated unsafe requests, trusted-host validation, and periodic cleanup of expired sessions/reset tokens.
+- Optional IP-based POST rate limiting can be enabled via `POST_RATE_LIMIT_MAX` and `POST_RATE_LIMIT_WINDOW_SECONDS`.
 - Health endpoints: `/healthz` (liveness), `/readyz` (database readiness) on public/admin/partner hosts.
 
 ## Development Commands

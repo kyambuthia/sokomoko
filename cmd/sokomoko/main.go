@@ -79,12 +79,7 @@ func main() {
 
 	handler := app.Chain(
 		router,
-		app.Recoverer(),
-		app.RequestID(),
-		app.SecurityHeaders(),
-		app.BodyLimit(1<<20),
-		app.CSRFSameOrigin("session_token"),
-		app.RequestLogger(),
+		buildMiddlewares(cfg)...,
 	)
 
 	srvr := &http.Server{
@@ -138,6 +133,24 @@ func parseAllowedHosts(raw string) map[string]struct{} {
 	return hosts
 }
 
+func buildMiddlewares(cfg config.Config) []app.Middleware {
+	middlewares := []app.Middleware{
+		app.Recoverer(),
+		app.RequestID(),
+		app.SecurityHeaders(),
+		app.BodyLimit(1 << 20),
+		app.CSRFSameOrigin("session_token"),
+	}
+
+	if cfg.PostRateLimitMax > 0 {
+		window := time.Duration(cfg.PostRateLimitWindow) * time.Second
+		middlewares = append(middlewares, app.RateLimitByIP(cfg.PostRateLimitMax, window, http.MethodPost))
+	}
+
+	middlewares = append(middlewares, app.RequestLogger())
+	return middlewares
+}
+
 func sortedHostList(hosts map[string]struct{}) []string {
 	list := make([]string, 0, len(hosts))
 	for host := range hosts {
@@ -179,6 +192,9 @@ func printStartupSummary(cfg config.Config, server *http.Server, allowedHosts ma
 	log.Printf("[startup] env=%s port=%s db=%s", cfg.Environment, cfg.Port, cfg.DBPath)
 	if cfg.SessionCookieDomain != "" {
 		log.Printf("[startup] session_cookie_domain=%s", cfg.SessionCookieDomain)
+	}
+	if cfg.PostRateLimitMax > 0 {
+		log.Printf("[startup] post_rate_limit=%d requests/%ds", cfg.PostRateLimitMax, cfg.PostRateLimitWindow)
 	}
 	log.Printf("[startup] bind=%s", server.Addr)
 	log.Printf("[startup] trusted_hosts=%s", strings.Join(hosts, ","))
