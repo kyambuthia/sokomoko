@@ -26,10 +26,28 @@ type CheckoutPageData struct {
 	Title           string
 	Items           []db.CartItem
 	Subtotal        float64
+	ShippingFee     float64
+	TaxAmount       float64
+	TotalAmount     float64
 	DeliveryAddress string
+	PaymentMethod   string
+	PaymentMethods  []PaymentMethodOption
 	Error           string
 	Message         string
 	CanCheckout     bool
+}
+
+type PaymentMethodOption struct {
+	Value string
+	Label string
+}
+
+func checkoutPaymentOptions() []PaymentMethodOption {
+	return []PaymentMethodOption{
+		{Value: commerceSvc.PaymentMethodCashOnDelivery, Label: "Cash on Delivery"},
+		{Value: commerceSvc.PaymentMethodCardPlaceholder, Label: "Card (placeholder)"},
+		{Value: commerceSvc.PaymentMethodMobilePlaceholder, Label: "Mobile Money (placeholder)"},
+	}
 }
 
 func CartPage(a *app.App) http.HandlerFunc {
@@ -101,6 +119,8 @@ func CartAdd(a *app.App) http.HandlerFunc {
 				http.Redirect(w, r, "/cart?error=Product+not+found", http.StatusFound)
 			case errors.Is(err, commerceSvc.ErrOutOfStock):
 				http.Redirect(w, r, "/cart?error=Product+is+out+of+stock", http.StatusFound)
+			case errors.Is(err, commerceSvc.ErrInsufficientStock):
+				http.Redirect(w, r, "/cart?error=Requested+quantity+exceeds+available+stock", http.StatusFound)
 			default:
 				http.Redirect(w, r, "/cart?error=Unable+to+add+item", http.StatusFound)
 			}
@@ -144,6 +164,10 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 			}
 			if errors.Is(err, commerceSvc.ErrInvalidQuantity) {
 				http.Redirect(w, r, "/cart?error=Invalid+quantity", http.StatusFound)
+				return
+			}
+			if errors.Is(err, commerceSvc.ErrOutOfStock) || errors.Is(err, commerceSvc.ErrInsufficientStock) {
+				http.Redirect(w, r, "/cart?error=Requested+quantity+exceeds+available+stock", http.StatusFound)
 				return
 			}
 			http.Redirect(w, r, "/cart?error=Unable+to+update+item", http.StatusFound)
@@ -201,12 +225,22 @@ func Checkout(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
+		if paymentMethod == "" {
+			paymentMethod = commerceSvc.PaymentMethodCashOnDelivery
+		}
+		summary := commerceSvc.CalculateCheckoutSummary(subtotal)
 
 		data := CheckoutPageData{
-			Title:       "Checkout",
-			Items:       items,
-			Subtotal:    subtotal,
-			CanCheckout: len(items) > 0,
+			Title:          "Checkout",
+			Items:          items,
+			Subtotal:       summary.Subtotal,
+			ShippingFee:    summary.ShippingFee,
+			TaxAmount:      summary.TaxAmount,
+			TotalAmount:    summary.Total,
+			PaymentMethod:  paymentMethod,
+			PaymentMethods: checkoutPaymentOptions(),
+			CanCheckout:    len(items) > 0,
 		}
 
 		if r.Method == http.MethodGet {
@@ -226,13 +260,17 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		orderID, err := svc.Checkout(user.ID, address)
+		orderID, finalSummary, err := svc.CheckoutWithPayment(user.ID, address, paymentMethod)
 		if err != nil {
 			switch {
 			case errors.Is(err, commerceSvc.ErrDeliveryAddress):
 				data.Error = "Delivery address is required"
 			case errors.Is(err, commerceSvc.ErrCartEmpty):
 				data.Error = "Cart is empty"
+			case errors.Is(err, commerceSvc.ErrInvalidPaymentMethod):
+				data.Error = "Choose a supported payment method"
+			case errors.Is(err, commerceSvc.ErrInsufficientStock):
+				data.Error = "One or more cart items exceed available stock. Review your cart quantities."
 			default:
 				data.Error = fmt.Sprintf("Checkout failed: %s", err.Error())
 			}
@@ -240,7 +278,12 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		msg := fmt.Sprintf("Order %d placed successfully. Delivery notice will update as partner fulfills.", orderID)
+		msg := fmt.Sprintf(
+			"Order %d placed successfully. Total $%.2f using %s. Delivery notice will update as partner fulfills.",
+			orderID,
+			finalSummary.Total,
+			commerceSvc.PaymentMethodLabel(paymentMethod),
+		)
 		http.Redirect(w, r, "/account?message="+url.QueryEscape(msg), http.StatusFound)
 	}
 }

@@ -22,6 +22,9 @@
         {{end}}
       </ul>
       <p><strong>Subtotal:</strong> ${{printf "%.2f" .Subtotal}}</p>
+      <p><strong>Shipping:</strong> ${{printf "%.2f" .ShippingFee}}</p>
+      <p><strong>Estimated Tax:</strong> ${{printf "%.2f" .TaxAmount}}</p>
+      <p><strong>Total:</strong> ${{printf "%.2f" .TotalAmount}}</p>
     </div>
   </section>
 
@@ -31,6 +34,14 @@
       <div class="form__group form-group">
         <label class="form__label" for="delivery_address">Delivery address</label>
         <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="4" required>{{.DeliveryAddress}}</textarea>
+      </div>
+      <div class="form__group form-group">
+        <label class="form__label" for="payment_method">Payment method</label>
+        <select class="form__select" id="payment_method" name="payment_method" required>
+          {{range .PaymentMethods}}
+          <option value="{{.Value}}" {{if eq $.PaymentMethod .Value}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </select>
       </div>
       <button type="submit" class="btn btn--full">Place order</button>
     </fieldset>

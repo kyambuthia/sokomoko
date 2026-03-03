@@ -1422,9 +1422,21 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 }
 
 func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, error) {
+	return s.placeOrderFromCart(userID, deliveryAddress, 0, "", false)
+}
+
+// PlaceOrderFromCartWithPricing places an order with a precomputed final total and optional notice.
+func (s *Store) PlaceOrderFromCartWithPricing(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string) (int64, error) {
+	return s.placeOrderFromCart(userID, deliveryAddress, totalAmount, deliveryNotice, true)
+}
+
+func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, useCustomPricing bool) (int64, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
 		return 0, fmt.Errorf("delivery address is required")
+	}
+	if useCustomPricing && totalAmount < 0 {
+		return 0, fmt.Errorf("total amount must be non-negative")
 	}
 
 	tx, err := s.DB.Begin()
@@ -1465,8 +1477,9 @@ func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, e
 	if err != nil {
 		return 0, err
 	}
+	defer rows.Close()
 
-	total := 0.0
+	subtotal := 0.0
 	for rows.Next() {
 		line := cartLine{}
 		if scanErr := rows.Scan(&line.ProductID, &line.ProductName, &line.Quantity, &line.UnitPrice, &line.StockQuantity); scanErr != nil {
@@ -1476,19 +1489,28 @@ func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, e
 			return 0, fmt.Errorf("insufficient stock for %s", line.ProductName)
 		}
 		lines = append(lines, line)
-		total += line.UnitPrice * float64(line.Quantity)
+		subtotal += line.UnitPrice * float64(line.Quantity)
 	}
-	if err := rows.Close(); err != nil {
+	if err := rows.Err(); err != nil {
 		return 0, err
 	}
 	if len(lines) == 0 {
 		return 0, fmt.Errorf("cart is empty")
 	}
 
+	orderTotal := subtotal
+	if useCustomPricing {
+		orderTotal = totalAmount
+	}
+	notice := strings.TrimSpace(deliveryNotice)
+	if notice == "" {
+		notice = "Order received. Awaiting partner acceptance."
+	}
+
 	res, err := tx.Exec(
 		`INSERT INTO orders (user_id, status, partner_status, delivery_status, total_amount, delivery_address, delivery_notice)
 		 VALUES (?, 'pending', 'new', 'queued', ?, ?, ?)`,
-		userID, total, address, "Order received. Awaiting partner acceptance.",
+		userID, orderTotal, address, notice,
 	)
 	if err != nil {
 		return 0, err

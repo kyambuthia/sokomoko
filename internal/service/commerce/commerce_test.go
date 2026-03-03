@@ -2,6 +2,7 @@ package commerce
 
 import (
 	"database/sql"
+	"math"
 	"os"
 	"testing"
 
@@ -87,6 +88,36 @@ func TestAddToCart_OutOfStock(t *testing.T) {
 	}
 }
 
+func TestAddToCart_InsufficientStock(t *testing.T) {
+	svc, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, svc, 2)
+	if err := svc.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("initial add error = %v", err)
+	}
+
+	err := svc.AddToCart(userID, productID, 1)
+	if err != ErrInsufficientStock {
+		t.Fatalf("error = %v, want %v", err, ErrInsufficientStock)
+	}
+}
+
+func TestUpdateCartItem_InsufficientStock(t *testing.T) {
+	svc, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, svc, 3)
+	if err := svc.AddToCart(userID, productID, 1); err != nil {
+		t.Fatalf("initial add error = %v", err)
+	}
+
+	err := svc.UpdateCartItem(userID, productID, 5)
+	if err != ErrInsufficientStock {
+		t.Fatalf("error = %v, want %v", err, ErrInsufficientStock)
+	}
+}
+
 func TestCheckout_ValidationErrors(t *testing.T) {
 	svc, cleanup := newTestService(t)
 	defer cleanup()
@@ -99,5 +130,67 @@ func TestCheckout_ValidationErrors(t *testing.T) {
 
 	if _, err := svc.Checkout(userID, "Nairobi"); err != ErrCartEmpty {
 		t.Fatalf("cart error = %v, want %v", err, ErrCartEmpty)
+	}
+}
+
+func TestCalculateCheckoutSummary(t *testing.T) {
+	summary := CalculateCheckoutSummary(20)
+	if summary.Subtotal != 20 {
+		t.Fatalf("subtotal = %.2f, want 20.00", summary.Subtotal)
+	}
+	if summary.ShippingFee != 6.50 {
+		t.Fatalf("shipping = %.2f, want 6.50", summary.ShippingFee)
+	}
+	if summary.TaxAmount != 1.60 {
+		t.Fatalf("tax = %.2f, want 1.60", summary.TaxAmount)
+	}
+	if summary.Total != 28.10 {
+		t.Fatalf("total = %.2f, want 28.10", summary.Total)
+	}
+}
+
+func TestCheckoutWithPayment_InvalidMethod(t *testing.T) {
+	svc, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, svc, 3)
+	if err := svc.AddToCart(userID, productID, 1); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "wire_transfer"); err != ErrInvalidPaymentMethod {
+		t.Fatalf("error = %v, want %v", err, ErrInvalidPaymentMethod)
+	}
+}
+
+func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
+	svc, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, svc, 5)
+	if err := svc.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder)
+	if err != nil {
+		t.Fatalf("checkout error = %v", err)
+	}
+	if orderID == 0 {
+		t.Fatal("expected non-zero order id")
+	}
+
+	orders, err := svc.store.ListOrdersByUser(userID)
+	if err != nil {
+		t.Fatalf("list orders error = %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("orders length = %d, want 1", len(orders))
+	}
+	if math.Abs(orders[0].TotalAmount-summary.Total) > 0.001 {
+		t.Fatalf("order total = %.2f, want %.2f", orders[0].TotalAmount, summary.Total)
+	}
+	if orders[0].DeliveryNotice == "" {
+		t.Fatal("expected delivery notice to include payment/price context")
 	}
 }
