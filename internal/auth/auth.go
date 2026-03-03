@@ -11,6 +11,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/mail"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,7 @@ const (
 var runtimeEnvironment = "development"
 var runtimeAdminSetupToken string
 var runtimeSessionCookieDomain string
+var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
 
 func SetEnvironment(env string) {
 	clean := strings.TrimSpace(strings.ToLower(env))
@@ -199,6 +202,22 @@ func isStrongEnoughPassword(password string) bool {
 	return len(strings.TrimSpace(password)) >= 10
 }
 
+func isValidUsername(username string) bool {
+	return usernamePattern.MatchString(strings.TrimSpace(username))
+}
+
+func isValidEmail(email string) bool {
+	clean := strings.TrimSpace(strings.ToLower(email))
+	if clean == "" || len(clean) > 254 {
+		return false
+	}
+	parsed, err := mail.ParseAddress(clean)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(parsed.Address), clean)
+}
+
 func containsRole(roles []string, role string) bool {
 	for _, r := range roles {
 		if r == role {
@@ -333,6 +352,16 @@ func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
+		if !isValidUsername(username) {
+			data.Error = "Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		if !isValidEmail(email) {
+			data.Error = "Enter a valid email address"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
 		if !isStrongEnoughPassword(password) {
 			data.Error = "Password must be at least 10 characters"
 			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
@@ -376,12 +405,22 @@ func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		if username == "" || email == "" || password == "" {
 			data.Error = "All fields are required"
-			renderWithStatus(w, tmpl, 0, data)
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		if !isValidUsername(username) {
+			data.Error = "Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		if !isValidEmail(email) {
+			data.Error = "Enter a valid email address"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 		if !isStrongEnoughPassword(password) {
 			data.Error = "Password must be at least 10 characters"
-			renderWithStatus(w, tmpl, 0, data)
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 
@@ -554,17 +593,27 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		if adminUsername == "" || adminEmail == "" || adminPassword == "" || confirmPassword == "" {
 			data.Error = "All admin fields are required"
-			renderWithStatus(w, tmpl, 0, data)
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		if !isValidUsername(adminUsername) {
+			data.Error = "Admin username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		if !isValidEmail(adminEmail) {
+			data.Error = "Enter a valid admin email address"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 		if adminPassword != confirmPassword {
 			data.Error = "Passwords do not match"
-			renderWithStatus(w, tmpl, 0, data)
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 		if !isStrongEnoughPassword(adminPassword) {
 			data.Error = "Admin password must be at least 10 characters"
-			renderWithStatus(w, tmpl, 0, data)
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
 
@@ -573,7 +622,7 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			parsed, parseErr := strconv.Atoi(staffCountRaw)
 			if parseErr != nil || parsed < 0 || parsed > 20 {
 				data.Error = "Staff count must be a number between 0 and 20"
-				renderWithStatus(w, tmpl, 0, data)
+				renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 				return
 			}
 			staffCount = parsed

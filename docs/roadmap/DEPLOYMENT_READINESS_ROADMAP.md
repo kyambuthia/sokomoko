@@ -50,6 +50,6 @@ Ship Sokomoko to production with baseline security, reliability, observability, 
 
 ## Work Started This Session
 - [x] Create this roadmap and prioritize by deployment criticality.
-- [ ] Implement request rate limiting with test coverage.
-- [ ] Implement stronger account input validation with test coverage.
+- [x] Implement request rate limiting with test coverage.
+- [x] Implement stronger account input validation with test coverage.
 - [ ] Re-run full user/admin/staff end-to-end flows after changes.

@@ -131,6 +131,48 @@ func TestSignUp(t *testing.T) {
 	}
 }
 
+func TestSignUp_InvalidUsername(t *testing.T) {
+	clearUsersTable()
+
+	tmpl := template.New("signup.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}Sign Up Page{{end}}"))
+
+	data := url.Values{}
+	data.Set("username", "x")
+	data.Set("email", "valid@example.com")
+	data.Set("password", "password123")
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	SignUp(testStore, tmpl).ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d", status, http.StatusBadRequest)
+	}
+}
+
+func TestSignUp_InvalidEmail(t *testing.T) {
+	clearUsersTable()
+
+	tmpl := template.New("signup.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}Sign Up Page{{end}}"))
+
+	data := url.Values{}
+	data.Set("username", "valid_user")
+	data.Set("email", "invalid-email")
+	data.Set("password", "password123")
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	SignUp(testStore, tmpl).ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d", status, http.StatusBadRequest)
+	}
+}
+
 func TestLogin(t *testing.T) {
 	clearUsersTable()
 	createTestUser("loginuser", "login@example.com", "loginpass", "user")
@@ -182,6 +224,27 @@ func TestLogin(t *testing.T) {
 
 	if status := rr.Code; status != http.StatusUnauthorized {
 		t.Errorf("handler returned wrong status code for non-existent user: got %v want %v", status, http.StatusUnauthorized)
+	}
+}
+
+func TestStaffSignUp_InvalidEmail(t *testing.T) {
+	clearUsersTable()
+
+	tmpl := template.New("staff_signup.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}Staff Signup{{end}}"))
+
+	data := url.Values{}
+	data.Set("username", "staff_user")
+	data.Set("email", "bad-email")
+	data.Set("password", "password123")
+	req := httptest.NewRequest(http.MethodPost, "/staff/signup", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	StaffSignUp(testStore, tmpl).ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d", status, http.StatusBadRequest)
 	}
 }
 
@@ -241,6 +304,21 @@ func TestMapAccountCreationError(t *testing.T) {
 	status, _ = mapAccountCreationError(errors.New("unexpected failure"), "conflict")
 	if status != http.StatusInternalServerError {
 		t.Fatalf("generic error status=%d want=%d", status, http.StatusInternalServerError)
+	}
+}
+
+func TestUsernameAndEmailValidationHelpers(t *testing.T) {
+	if !isValidUsername("user_name-12") {
+		t.Fatal("expected username to be valid")
+	}
+	if isValidUsername("x") {
+		t.Fatal("expected short username to be invalid")
+	}
+	if !isValidEmail("person@example.com") {
+		t.Fatal("expected email to be valid")
+	}
+	if isValidEmail("person@") {
+		t.Fatal("expected malformed email to be invalid")
 	}
 }
 
