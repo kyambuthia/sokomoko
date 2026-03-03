@@ -202,7 +202,7 @@ func TestIntegration_StaffCanAccessStaffRoutesAndBlockedFromAdminOnly(t *testing
 			"delivery_notice": {"updated by staff"},
 		},
 		[]*http.Cookie{staffCookie},
-		http.StatusOK,
+		http.StatusForbidden,
 	)
 
 	adminOnly := []string{"/team", "/audit", "/staff/signup"}

@@ -142,6 +142,12 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 		}
 
 		if r.Method == http.MethodPost {
+			user := auth.GetUserFromContext(r.Context())
+			if user == nil || user.Role != "admin" {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+
 			orderID, parseErr := strconv.Atoi(r.FormValue("order_id"))
 			if parseErr != nil || orderID <= 0 {
 				metrics.OrderError = "Invalid order id"
@@ -154,7 +160,6 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 					metrics.OrderError = "Unable to update order state"
 				} else {
 					metrics.OrderMessage = "Order updated"
-					user := auth.GetUserFromContext(r.Context())
 					actorID := 0
 					if user != nil {
 						actorID = user.ID

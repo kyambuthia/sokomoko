@@ -128,6 +128,7 @@
             <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
             {{end}}
           </ul>
+          {{if eq $.Role "admin"}}
           <form action="/orders" method="POST" class="form">
             <input type="hidden" name="order_id" value="{{.ID}}">
             <div class="form__group form-group">
@@ -166,6 +167,9 @@
             </div>
             <button type="submit" class="btn">Save update</button>
           </form>
+          {{else}}
+          <p class="text-muted">Read-only for staff. Only admins can change order state from this page.</p>
+          {{end}}
         </div>
       </article>
       {{end}}
