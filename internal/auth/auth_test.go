@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -223,6 +224,23 @@ func TestLogin_SetsConfiguredSessionCookieDomain(t *testing.T) {
 	}
 	if sessionCookie.Domain != "example.com" {
 		t.Fatalf("session cookie domain = %q, want %q", sessionCookie.Domain, "example.com")
+	}
+}
+
+func TestMapAccountCreationError(t *testing.T) {
+	status, _ := mapAccountCreationError(errors.New("sqlite3: constraint failed: UNIQUE constraint failed: users.username"), "conflict")
+	if status != http.StatusConflict {
+		t.Fatalf("unique constraint status=%d want=%d", status, http.StatusConflict)
+	}
+
+	status, _ = mapAccountCreationError(errors.New("sqlite3: database is locked"), "conflict")
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("locked db status=%d want=%d", status, http.StatusServiceUnavailable)
+	}
+
+	status, _ = mapAccountCreationError(errors.New("unexpected failure"), "conflict")
+	if status != http.StatusInternalServerError {
+		t.Fatalf("generic error status=%d want=%d", status, http.StatusInternalServerError)
 	}
 }
 

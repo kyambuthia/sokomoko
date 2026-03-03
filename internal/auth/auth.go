@@ -258,6 +258,32 @@ func shouldExposeResetLink() bool {
 	return runtimeEnvironment != "production"
 }
 
+func isUniqueConstraintErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "unique constraint failed")
+}
+
+func isTransientDBErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "database is busy")
+}
+
+func mapAccountCreationError(err error, conflictMessage string) (int, string) {
+	if isUniqueConstraintErr(err) {
+		return http.StatusConflict, conflictMessage
+	}
+	if isTransientDBErr(err) {
+		return http.StatusServiceUnavailable, "Service is temporarily busy. Please retry in a moment."
+	}
+	return http.StatusInternalServerError, "Unable to create account right now. Please retry."
+}
+
 func findUserByIdentifier(store *db.Store, identifier string) (*db.User, error) {
 	trimmed := strings.TrimSpace(identifier)
 	if strings.Contains(trimmed, "@") {
@@ -316,8 +342,9 @@ func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		_, err := createUserWithPassword(store, username, email, password, "user")
 		if err != nil {
 			log.Printf("Error creating user: %v", err)
-			data.Error = "Failed to create user. Username or email might already exist."
-			renderWithStatus(w, tmpl, http.StatusConflict, data)
+			statusCode, message := mapAccountCreationError(err, "Failed to create user. Username or email might already exist.")
+			data.Error = message
+			renderWithStatus(w, tmpl, statusCode, data)
 			return
 		}
 
@@ -360,8 +387,9 @@ func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 
 		_, err := createUserWithPassword(store, username, email, password, "staff")
 		if err != nil {
-			data.Error = "Failed to create staff account. Username or email may already exist."
-			renderWithStatus(w, tmpl, 0, data)
+			statusCode, message := mapAccountCreationError(err, "Failed to create staff account. Username or email may already exist.")
+			data.Error = message
+			renderWithStatus(w, tmpl, statusCode, data)
 			return
 		}
 
@@ -552,8 +580,9 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if _, err := createUserWithPassword(store, adminUsername, adminEmail, adminPassword, "admin"); err != nil {
-			data.Error = "Failed to create admin account. Username or email may already exist."
-			renderWithStatus(w, tmpl, 0, data)
+			statusCode, message := mapAccountCreationError(err, "Failed to create admin account. Username or email may already exist.")
+			data.Error = message
+			renderWithStatus(w, tmpl, statusCode, data)
 			return
 		}
 
@@ -576,6 +605,11 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 				tempPassword += "Aa1!"
 
 				if _, err := createUserWithPassword(store, username, email, tempPassword, "staff"); err != nil {
+					if !isUniqueConstraintErr(err) {
+						data.Error = "Failed to provision staff accounts."
+						renderWithStatus(w, tmpl, 0, data)
+						return
+					}
 					continue
 				}
 				staffCredentials = append(staffCredentials, StaffCredential{
