@@ -48,6 +48,40 @@ func TestCSRFSameOriginAllowsSameOriginWithSession(t *testing.T) {
 	}
 }
 
+func TestCSRFSameOriginBlocksDifferentPortWithSession(t *testing.T) {
+	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), CSRFSameOrigin("session_token"))
+
+	req := httptest.NewRequest(http.MethodPost, "http://admin.localhost:6969/team", strings.NewReader("x=1"))
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: "abc"})
+	req.Header.Set("Origin", "http://admin.localhost:3000")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestCSRFSameOriginBlocksDifferentSchemeWithSession(t *testing.T) {
+	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), CSRFSameOrigin("session_token"))
+
+	req := httptest.NewRequest(http.MethodPost, "https://admin.localhost/team", strings.NewReader("x=1"))
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: "abc"})
+	req.Header.Set("Origin", "http://admin.localhost")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
 func TestCSRFSameOriginBlocksMissingOriginAndRefererWithSession(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
