@@ -12,20 +12,22 @@ const (
 )
 
 type Config struct {
-	Environment     string
-	Port            string
-	DBPath          string
-	AllowedHostsRaw string
-	AdminSetupToken string
+	Environment         string
+	Port                string
+	DBPath              string
+	AllowedHostsRaw     string
+	AdminSetupToken     string
+	SessionCookieDomain string
 }
 
 func LoadFromEnv() Config {
 	return Config{
-		Environment:     readEnv("ENV", defaultEnvironment),
-		Port:            readEnv("PORT", defaultPort),
-		DBPath:          readEnv("DB_PATH", defaultDBPath),
-		AllowedHostsRaw: strings.TrimSpace(os.Getenv("ALLOWED_HOSTS")),
-		AdminSetupToken: strings.TrimSpace(os.Getenv("ADMIN_SETUP_TOKEN")),
+		Environment:         readEnv("ENV", defaultEnvironment),
+		Port:                readEnv("PORT", defaultPort),
+		DBPath:              readEnv("DB_PATH", defaultDBPath),
+		AllowedHostsRaw:     strings.TrimSpace(os.Getenv("ALLOWED_HOSTS")),
+		AdminSetupToken:     strings.TrimSpace(os.Getenv("ADMIN_SETUP_TOKEN")),
+		SessionCookieDomain: strings.TrimSpace(strings.ToLower(os.Getenv("SESSION_COOKIE_DOMAIN"))),
 	}
 }
 

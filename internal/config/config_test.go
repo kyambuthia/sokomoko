@@ -8,6 +8,7 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	t.Setenv("DB_PATH", "")
 	t.Setenv("ALLOWED_HOSTS", "")
 	t.Setenv("ADMIN_SETUP_TOKEN", "")
+	t.Setenv("SESSION_COOKIE_DOMAIN", "")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != defaultEnvironment {
@@ -25,6 +26,9 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if cfg.AdminSetupToken != "" {
 		t.Fatalf("AdminSetupToken = %q, want empty", cfg.AdminSetupToken)
 	}
+	if cfg.SessionCookieDomain != "" {
+		t.Fatalf("SessionCookieDomain = %q, want empty", cfg.SessionCookieDomain)
+	}
 }
 
 func TestLoadFromEnv_Values(t *testing.T) {
@@ -33,6 +37,7 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	t.Setenv("DB_PATH", "/tmp/app.db")
 	t.Setenv("ALLOWED_HOSTS", "localhost,admin.localhost")
 	t.Setenv("ADMIN_SETUP_TOKEN", "s3cr3t")
+	t.Setenv("SESSION_COOKIE_DOMAIN", ".EXAMPLE.COM")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != "production" {
@@ -49,6 +54,9 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	}
 	if cfg.AdminSetupToken != "s3cr3t" {
 		t.Fatalf("AdminSetupToken = %q, want s3cr3t", cfg.AdminSetupToken)
+	}
+	if cfg.SessionCookieDomain != ".example.com" {
+		t.Fatalf("SessionCookieDomain = %q, want .example.com", cfg.SessionCookieDomain)
 	}
 	if !cfg.IsProduction() {
 		t.Fatal("IsProduction() = false, want true")

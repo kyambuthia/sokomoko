@@ -34,12 +34,14 @@ Server default: `http://localhost:6969`
 - `DB_PATH` (default: `./db/t.db`)
 - `ALLOWED_HOSTS` (comma-separated trusted hosts; default: `localhost,127.0.0.1,admin.localhost,partner.localhost`)
 - `ENV` (`production` enables stricter cookie behavior in auth flows)
+- `SESSION_COOKIE_DOMAIN` (optional; set to a shared domain such as `.example.com` to reuse login sessions across subdomains)
 
 Example:
 ```bash
 PORT=8080 \
 DB_PATH=./db/t.db \
 ALLOWED_HOSTS=shop.example.com,admin.example.com,partner.example.com \
+SESSION_COOKIE_DOMAIN=.example.com \
 ENV=production \
 go run ./cmd/sokomoko
 ```

@@ -3,8 +3,8 @@ package auth
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -27,6 +27,7 @@ const (
 
 var runtimeEnvironment = "development"
 var runtimeAdminSetupToken string
+var runtimeSessionCookieDomain string
 
 func SetEnvironment(env string) {
 	clean := strings.TrimSpace(strings.ToLower(env))
@@ -38,6 +39,10 @@ func SetEnvironment(env string) {
 
 func SetAdminSetupToken(token string) {
 	runtimeAdminSetupToken = strings.TrimSpace(token)
+}
+
+func SetSessionCookieDomain(domain string) {
+	runtimeSessionCookieDomain = strings.TrimSpace(strings.ToLower(domain))
 }
 
 type StaffCredential struct {
@@ -181,6 +186,7 @@ func startSession(w http.ResponseWriter, r *http.Request, store *db.Store, userI
 		Value:    sessionToken,
 		Expires:  expiresAt,
 		MaxAge:   int(sessionDuration.Seconds()),
+		Domain:   runtimeSessionCookieDomain,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   shouldUseSecureCookies(r),
@@ -562,11 +568,11 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 				username := fmt.Sprintf("staff%02d%s", i, suffix)
 				email := fmt.Sprintf("%s@sokomoko.local", username)
 				tempPassword, tokenErr := generateOpaqueToken(9)
-					if tokenErr != nil {
-						data.Error = "Failed to generate staff credentials"
-						renderWithStatus(w, tmpl, 0, data)
-						return
-					}
+				if tokenErr != nil {
+					data.Error = "Failed to generate staff credentials"
+					renderWithStatus(w, tmpl, 0, data)
+					return
+				}
 				tempPassword += "Aa1!"
 
 				if _, err := createUserWithPassword(store, username, email, tempPassword, "staff"); err != nil {
@@ -580,12 +586,12 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 				created = true
 				break
 			}
-				if !created {
-					data.Error = "Failed to provision all staff accounts."
-					renderWithStatus(w, tmpl, 0, data)
-					return
-				}
+			if !created {
+				data.Error = "Failed to provision all staff accounts."
+				renderWithStatus(w, tmpl, 0, data)
+				return
 			}
+		}
 
 		data.ShowForm = false
 		data.Message = "Root admin account has been created. Save the temporary staff credentials now."
@@ -770,6 +776,7 @@ func Logout(store *db.Store) http.HandlerFunc {
 			Value:    "",
 			Expires:  time.Unix(0, 0),
 			MaxAge:   -1,
+			Domain:   runtimeSessionCookieDomain,
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   shouldUseSecureCookies(r),

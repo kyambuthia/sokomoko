@@ -184,6 +184,48 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+func TestLogin_SetsConfiguredSessionCookieDomain(t *testing.T) {
+	clearUsersTable()
+	createTestUser("domainuser", "domain@example.com", "domainpass", "user")
+
+	SetSessionCookieDomain(".example.com")
+	t.Cleanup(func() {
+		SetSessionCookieDomain("")
+	})
+
+	tmpl := template.New("login.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}Login Page{{end}}"))
+
+	data := url.Values{}
+	data.Set("username", "domainuser")
+	data.Set("password", "domainpass")
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	Login(testStore, tmpl).ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Fatalf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
+	}
+	result := rr.Result()
+	defer result.Body.Close()
+
+	var sessionCookie *http.Cookie
+	for _, cookie := range result.Cookies() {
+		if cookie.Name == "session_token" {
+			sessionCookie = cookie
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("session cookie not set")
+	}
+	if sessionCookie.Domain != "example.com" {
+		t.Fatalf("session cookie domain = %q, want %q", sessionCookie.Domain, "example.com")
+	}
+}
+
 func TestAuthMiddleware(t *testing.T) {
 	clearUsersTable()
 	user := createTestUser("authuser", "auth@example.com", "authpass", "user")

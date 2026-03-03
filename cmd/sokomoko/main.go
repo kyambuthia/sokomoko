@@ -24,6 +24,7 @@ func main() {
 	cfg := config.LoadFromEnv()
 	auth.SetEnvironment(cfg.Environment)
 	auth.SetAdminSetupToken(cfg.AdminSetupToken)
+	auth.SetSessionCookieDomain(cfg.SessionCookieDomain)
 
 	templates, err := ui.ParseTemplates()
 	if err != nil {
@@ -176,6 +177,9 @@ func printStartupSummary(cfg config.Config, server *http.Server, allowedHosts ma
 
 	log.Printf("[startup] sokomoko booting")
 	log.Printf("[startup] env=%s port=%s db=%s", cfg.Environment, cfg.Port, cfg.DBPath)
+	if cfg.SessionCookieDomain != "" {
+		log.Printf("[startup] session_cookie_domain=%s", cfg.SessionCookieDomain)
+	}
 	log.Printf("[startup] bind=%s", server.Addr)
 	log.Printf("[startup] trusted_hosts=%s", strings.Join(hosts, ","))
 	log.Printf("[startup] storefront=%s", localURL("localhost", cfg.Port))
