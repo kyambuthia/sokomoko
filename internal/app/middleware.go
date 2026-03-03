@@ -136,7 +136,52 @@ func sameHost(raw string, r *http.Request) bool {
 	if u.Host == "" {
 		return false
 	}
-	return strings.EqualFold(u.Hostname(), canonicalHost(r.Host))
+
+	requestScheme := "http"
+	if isHTTPS(r) {
+		requestScheme = "https"
+	}
+
+	candidateScheme := strings.ToLower(strings.TrimSpace(u.Scheme))
+	if candidateScheme == "" {
+		candidateScheme = requestScheme
+	}
+	if candidateScheme != requestScheme {
+		return false
+	}
+
+	requestHost, requestPort := hostAndPort(r.Host, requestScheme)
+	if requestHost == "" {
+		return false
+	}
+
+	candidateHost := strings.ToLower(strings.TrimSpace(u.Hostname()))
+	candidatePort := normalizePort(u.Port(), candidateScheme)
+
+	return candidateHost == requestHost && candidatePort == requestPort
+}
+
+func hostAndPort(rawHost, scheme string) (string, string) {
+	parsed, err := url.Parse("http://" + strings.TrimSpace(rawHost))
+	if err != nil {
+		return "", normalizePort("", scheme)
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	return host, normalizePort(parsed.Port(), scheme)
+}
+
+func normalizePort(port, scheme string) string {
+	cleanScheme := strings.ToLower(strings.TrimSpace(scheme))
+	if cleanScheme != "https" {
+		cleanScheme = "http"
+	}
+	if strings.TrimSpace(port) != "" {
+		return strings.TrimSpace(port)
+	}
+	if cleanScheme == "https" {
+		return "443"
+	}
+	return "80"
 }
 
 func isHTTPS(r *http.Request) bool {
