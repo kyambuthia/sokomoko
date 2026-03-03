@@ -13,6 +13,10 @@ func Root(a *app.App) http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if req.URL.Path != "/" {
+			NotFound(w, req)
+			return
+		}
 
 		products, err := a.Store.GetAllProducts()
 		if err != nil {

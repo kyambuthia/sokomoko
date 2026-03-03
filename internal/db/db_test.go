@@ -188,6 +188,52 @@ func TestGetUserByID(t *testing.T) {
 	}
 }
 
+func TestGetProductBySlug(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	categoryID, err := testStore.CreateCategory(Category{
+		Name: "Slug Category",
+		Slug: fmt.Sprintf("slug-category-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create category failed: %v", err)
+	}
+
+	productSlug := fmt.Sprintf("slug-product-%d", suffix)
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Slug Product",
+		Slug:          productSlug,
+		Description:   "slug product",
+		Price:         12.5,
+		StockQuantity: 3,
+		CategoryID:    sql.NullInt64{Int64: categoryID, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("create product failed: %v", err)
+	}
+	if productID == 0 {
+		t.Fatal("expected non-zero product id")
+	}
+
+	product, err := testStore.GetProductBySlug(productSlug)
+	if err != nil {
+		t.Fatalf("GetProductBySlug failed: %v", err)
+	}
+	if product == nil {
+		t.Fatal("expected product by slug")
+	}
+	if product.Slug != productSlug {
+		t.Fatalf("product slug = %q, want %q", product.Slug, productSlug)
+	}
+
+	missing, err := testStore.GetProductBySlug("missing-slug")
+	if err != nil {
+		t.Fatalf("GetProductBySlug missing failed: %v", err)
+	}
+	if missing != nil {
+		t.Fatal("expected nil for missing slug")
+	}
+}
+
 func TestUpdateUser(t *testing.T) {
 	user := User{
 		Username:     "updateuser",

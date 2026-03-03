@@ -1,0 +1,45 @@
+{{ define "title" }}{{.Title}} – sokomoko{{ end }}
+
+{{ define "main-area" }}
+<section class="catalog-page">
+  <header class="catalog-page__intro">
+    <p class="auth-panel__links"><a href="/">Back to storefront</a></p>
+    <h1 class="catalog-page__title">{{.Product.Name}}</h1>
+    <p class="catalog-page__lead">{{if .Product.Category}}{{.Product.Category}}{{else}}General Merchandise{{end}}</p>
+  </header>
+
+  <section class="panel card">
+    <div class="card__body">
+      <div class="product-list" style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); align-items:start;">
+        <div>
+          <img src="{{.Product.GetPrimaryImageURL}}" alt="{{.Product.Name}}" class="product-tile__image product-card__image" width="360" height="360">
+        </div>
+
+        <div>
+          <p class="product-tile__price product-card__price">${{printf "%.2f" .Product.Price}}</p>
+          {{if gt .Product.StockQuantity 0}}
+          <p class="stock-state stock-state--in">{{.Product.StockQuantity}} available</p>
+          {{else}}
+          <p class="stock-state stock-state--out">Out of stock</p>
+          {{end}}
+
+          <p class="product-tile__description product-card__description">{{.Product.Description}}</p>
+
+          {{if gt .Product.StockQuantity 0}}
+          <form action="/cart/add" method="POST" class="form" style="max-width:320px;">
+            <input type="hidden" name="product_id" value="{{.Product.ID}}">
+            <div class="form__group form-group">
+              <label class="form__label" for="quantity">Quantity</label>
+              <input class="form__input" id="quantity" type="number" name="quantity" min="1" max="{{.Product.StockQuantity}}" value="1" required>
+            </div>
+            <button type="submit" class="btn btn--full">Add to cart</button>
+          </form>
+          {{else}}
+          <button class="btn btn--full" type="button" disabled>Unavailable</button>
+          {{end}}
+        </div>
+      </div>
+    </div>
+  </section>
+</section>
+{{ end }}

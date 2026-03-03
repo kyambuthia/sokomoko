@@ -7,6 +7,7 @@ import (
 type Templates struct {
 	Index                *template.Template
 	Search               *template.Template
+	Product              *template.Template
 	Cart                 *template.Template
 	Checkout             *template.Template
 	Account              *template.Template
@@ -50,6 +51,11 @@ func ParseTemplates() (*Templates, error) {
 	}
 
 	searchTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/search.html")
+	if err != nil {
+		return nil, err
+	}
+
+	productTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/product.html")
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +143,7 @@ func ParseTemplates() (*Templates, error) {
 	return &Templates{
 		Index:                indexTmpl,
 		Search:               searchTmpl,
+		Product:              productTmpl,
 		Cart:                 cartTmpl,
 		Checkout:             checkoutTmpl,
 		Account:              accountTmpl,

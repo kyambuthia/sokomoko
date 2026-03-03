@@ -20,9 +20,11 @@
   <div class="product-list product-grid">
     {{range .Products}}
     <article class="product-tile product-card">
-      <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
+      <a href="/products/{{.Slug}}" aria-label="View {{.Name}} details">
+        <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
+      </a>
       <div class="product-tile__body product-card__content">
-        <h3 class="product-tile__name product-card__title">{{.Name}}</h3>
+        <h3 class="product-tile__name product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
         <p class="product-tile__description product-card__description">{{.Description}}</p>
         <div class="product-card__meta">
           <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>

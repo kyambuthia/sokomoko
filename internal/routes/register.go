@@ -27,6 +27,7 @@ func withRole(a *app.App, role string, h http.Handler) http.Handler {
 func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
+	mux.HandleFunc("/products/", ProductDetail(a))
 	mux.HandleFunc("/", Root(a))
 	mux.HandleFunc("/search", Search(a))
 	mux.HandleFunc("/login", auth.Login(a.Store, a.Templates.Login))
