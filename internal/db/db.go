@@ -1071,6 +1071,11 @@ func (s *Store) DeleteSession(id string) error {
 	return err
 }
 
+func (s *Store) DeleteSessionsByUserID(userID int) error {
+	_, err := s.DB.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
+	return err
+}
+
 func (s *Store) CleanupSessions() error {
 	_, err := s.DB.Exec("DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP")
 	return err
@@ -1169,6 +1174,11 @@ func (s *Store) UsePasswordResetToken(token, passwordHash, salt string) (bool, e
 		"UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE token_hash = ? AND used_at IS NULL",
 		tokenHash,
 	)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = tx.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
 	if err != nil {
 		return false, err
 	}
