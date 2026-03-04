@@ -135,3 +135,29 @@ func TestBodyLimit(t *testing.T) {
 		t.Fatalf("expected %d, got %d", http.StatusRequestEntityTooLarge, rec.Code)
 	}
 }
+
+func TestRecovererRendersErrorPageWithRequestID(t *testing.T) {
+	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("boom")
+	}), Recoverer(), RequestID())
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/panic", nil)
+	req.Header.Set("X-Request-Id", "req-test-500")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
+		t.Fatalf("expected text/html content type, got %q", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Internal Server Error") {
+		t.Fatal("expected error page heading in body")
+	}
+	if !strings.Contains(body, "req-test-500") {
+		t.Fatal("expected request id in error page body")
+	}
+}

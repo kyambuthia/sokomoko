@@ -11,9 +11,9 @@ import (
 )
 
 type App struct {
-	Store    *db.Store
+	Store     *db.Store
 	Templates *ui.Templates
-	StaticFS embed.FS
+	StaticFS  embed.FS
 }
 
 func New(store *db.Store, templates *ui.Templates, staticFS embed.FS) *App {
@@ -24,7 +24,7 @@ func (a *App) Render(w http.ResponseWriter, tmpl *template.Template, data any) {
 	err := tmpl.ExecuteTemplate(w, "root_template", data)
 	if err != nil {
 		log.Printf("Template execution error: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		RenderErrorPage(w, nil, http.StatusInternalServerError, "Internal Server Error", "We could not render this page.")
 		return
 	}
 }

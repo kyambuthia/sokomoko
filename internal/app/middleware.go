@@ -59,7 +59,7 @@ func Recoverer() Middleware {
 			defer func() {
 				if rec := recover(); rec != nil {
 					log.Printf("panic recovered: %v", rec)
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					RenderErrorPage(w, r, http.StatusInternalServerError, "Internal Server Error", "Something went wrong while processing your request.")
 				}
 			}()
 			next.ServeHTTP(w, r)
