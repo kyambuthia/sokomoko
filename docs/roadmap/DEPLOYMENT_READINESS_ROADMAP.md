@@ -6,11 +6,11 @@ Last updated: March 4, 2026
 Ship Sokomoko to production with baseline security, reliability, observability, and complete customer/admin/staff operational flows.
 
 ## Phase 0: Hard Blockers (Must ship first)
-- [ ] Security: Add request rate limiting for write/auth surfaces.
-- [ ] Security: Finalize strong input validation for account creation/admin setup/staff creation.
+- [x] Security: Add request rate limiting for write/auth surfaces.
+- [x] Security: Finalize strong input validation for account creation/admin setup/staff creation.
 - [ ] Security: Enforce HTTPS-only deployment defaults and verify secure cookie behavior in production.
 - [ ] Reliability: Normalize transient DB failures (locked/busy) to retryable responses and logs.
-- [ ] Reliability: Add production error pages for 404/500 with request ID exposure for support.
+- [x] Reliability: Add production error pages for 404/500 with request ID exposure for support.
 - [ ] Operations: Add backup/restore runbook and automated SQLite backup schedule.
 - [ ] Operations: Add environment validation at startup (required env checks, unsafe default warnings).
 
@@ -25,9 +25,9 @@ Ship Sokomoko to production with baseline security, reliability, observability, 
 
 ## Phase 2: Identity + Account Recovery
 - [ ] Auth: Add login attempt throttling/lockout policy and audit logs for suspicious auth behavior.
-- [ ] Auth: Add email delivery integration for reset links (production-safe path).
+- [x] Auth: Add email delivery integration for reset links (production-safe path).
 - [ ] Auth: Add verified-email flow for new users.
-- [ ] Auth: Invalidate active sessions on password reset/change.
+- [x] Auth: Invalidate active sessions on password reset/change.
 - [ ] Auth: Add optional MFA for admin users.
 
 ## Phase 3: Admin and Staff Operations
@@ -52,4 +52,7 @@ Ship Sokomoko to production with baseline security, reliability, observability, 
 - [x] Create this roadmap and prioritize by deployment criticality.
 - [x] Implement request rate limiting with test coverage.
 - [x] Implement stronger account input validation with test coverage.
-- [ ] Re-run full user/admin/staff end-to-end flows after changes.
+- [x] Invalidate active sessions after password reset with regression tests.
+- [x] Add structured 404/500 error pages that include request IDs.
+- [x] Add SMTP-backed password reset email delivery with config and tests.
+- [x] Re-run full user/admin/staff end-to-end flows after changes.

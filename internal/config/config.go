@@ -12,29 +12,42 @@ const (
 	defaultEnvironment = "development"
 	defaultPostRateMax = 0
 	defaultPostRateWin = 60
+	defaultSMTPPort    = "587"
 )
 
 type Config struct {
-	Environment         string
-	Port                string
-	DBPath              string
-	AllowedHostsRaw     string
-	AdminSetupToken     string
-	SessionCookieDomain string
-	PostRateLimitMax    int
-	PostRateLimitWindow int
+	Environment          string
+	Port                 string
+	DBPath               string
+	AllowedHostsRaw      string
+	AdminSetupToken      string
+	SessionCookieDomain  string
+	PostRateLimitMax     int
+	PostRateLimitWindow  int
+	PasswordResetBaseURL string
+	SMTPHost             string
+	SMTPPort             string
+	SMTPUsername         string
+	SMTPPassword         string
+	SMTPFrom             string
 }
 
 func LoadFromEnv() Config {
 	return Config{
-		Environment:         readEnv("ENV", defaultEnvironment),
-		Port:                readEnv("PORT", defaultPort),
-		DBPath:              readEnv("DB_PATH", defaultDBPath),
-		AllowedHostsRaw:     strings.TrimSpace(os.Getenv("ALLOWED_HOSTS")),
-		AdminSetupToken:     strings.TrimSpace(os.Getenv("ADMIN_SETUP_TOKEN")),
-		SessionCookieDomain: strings.TrimSpace(strings.ToLower(os.Getenv("SESSION_COOKIE_DOMAIN"))),
-		PostRateLimitMax:    readEnvInt("POST_RATE_LIMIT_MAX", defaultPostRateMax),
-		PostRateLimitWindow: readEnvInt("POST_RATE_LIMIT_WINDOW_SECONDS", defaultPostRateWin),
+		Environment:          readEnv("ENV", defaultEnvironment),
+		Port:                 readEnv("PORT", defaultPort),
+		DBPath:               readEnv("DB_PATH", defaultDBPath),
+		AllowedHostsRaw:      strings.TrimSpace(os.Getenv("ALLOWED_HOSTS")),
+		AdminSetupToken:      strings.TrimSpace(os.Getenv("ADMIN_SETUP_TOKEN")),
+		SessionCookieDomain:  strings.TrimSpace(strings.ToLower(os.Getenv("SESSION_COOKIE_DOMAIN"))),
+		PostRateLimitMax:     readEnvInt("POST_RATE_LIMIT_MAX", defaultPostRateMax),
+		PostRateLimitWindow:  readEnvInt("POST_RATE_LIMIT_WINDOW_SECONDS", defaultPostRateWin),
+		PasswordResetBaseURL: strings.TrimSpace(os.Getenv("PASSWORD_RESET_BASE_URL")),
+		SMTPHost:             strings.TrimSpace(strings.ToLower(os.Getenv("SMTP_HOST"))),
+		SMTPPort:             readEnv("SMTP_PORT", defaultSMTPPort),
+		SMTPUsername:         strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		SMTPPassword:         strings.TrimSpace(os.Getenv("SMTP_PASSWORD")),
+		SMTPFrom:             strings.TrimSpace(os.Getenv("SMTP_FROM")),
 	}
 }
 

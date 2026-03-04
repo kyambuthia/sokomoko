@@ -11,6 +11,12 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	t.Setenv("SESSION_COOKIE_DOMAIN", "")
 	t.Setenv("POST_RATE_LIMIT_MAX", "")
 	t.Setenv("POST_RATE_LIMIT_WINDOW_SECONDS", "")
+	t.Setenv("PASSWORD_RESET_BASE_URL", "")
+	t.Setenv("SMTP_HOST", "")
+	t.Setenv("SMTP_PORT", "")
+	t.Setenv("SMTP_USERNAME", "")
+	t.Setenv("SMTP_PASSWORD", "")
+	t.Setenv("SMTP_FROM", "")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != defaultEnvironment {
@@ -37,6 +43,24 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if cfg.PostRateLimitWindow != defaultPostRateWin {
 		t.Fatalf("PostRateLimitWindow = %d, want %d", cfg.PostRateLimitWindow, defaultPostRateWin)
 	}
+	if cfg.PasswordResetBaseURL != "" {
+		t.Fatalf("PasswordResetBaseURL = %q, want empty", cfg.PasswordResetBaseURL)
+	}
+	if cfg.SMTPHost != "" {
+		t.Fatalf("SMTPHost = %q, want empty", cfg.SMTPHost)
+	}
+	if cfg.SMTPPort != defaultSMTPPort {
+		t.Fatalf("SMTPPort = %q, want %q", cfg.SMTPPort, defaultSMTPPort)
+	}
+	if cfg.SMTPUsername != "" {
+		t.Fatalf("SMTPUsername = %q, want empty", cfg.SMTPUsername)
+	}
+	if cfg.SMTPPassword != "" {
+		t.Fatalf("SMTPPassword = %q, want empty", cfg.SMTPPassword)
+	}
+	if cfg.SMTPFrom != "" {
+		t.Fatalf("SMTPFrom = %q, want empty", cfg.SMTPFrom)
+	}
 }
 
 func TestLoadFromEnv_Values(t *testing.T) {
@@ -48,6 +72,12 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	t.Setenv("SESSION_COOKIE_DOMAIN", ".EXAMPLE.COM")
 	t.Setenv("POST_RATE_LIMIT_MAX", "15")
 	t.Setenv("POST_RATE_LIMIT_WINDOW_SECONDS", "90")
+	t.Setenv("PASSWORD_RESET_BASE_URL", "https://shop.example.com")
+	t.Setenv("SMTP_HOST", "SMTP.EXAMPLE.COM")
+	t.Setenv("SMTP_PORT", "2525")
+	t.Setenv("SMTP_USERNAME", "mailer")
+	t.Setenv("SMTP_PASSWORD", "secret")
+	t.Setenv("SMTP_FROM", "alerts@example.com")
 
 	cfg := LoadFromEnv()
 	if cfg.Environment != "production" {
@@ -73,6 +103,24 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	}
 	if cfg.PostRateLimitWindow != 90 {
 		t.Fatalf("PostRateLimitWindow = %d, want 90", cfg.PostRateLimitWindow)
+	}
+	if cfg.PasswordResetBaseURL != "https://shop.example.com" {
+		t.Fatalf("PasswordResetBaseURL = %q, unexpected", cfg.PasswordResetBaseURL)
+	}
+	if cfg.SMTPHost != "smtp.example.com" {
+		t.Fatalf("SMTPHost = %q, want smtp.example.com", cfg.SMTPHost)
+	}
+	if cfg.SMTPPort != "2525" {
+		t.Fatalf("SMTPPort = %q, want 2525", cfg.SMTPPort)
+	}
+	if cfg.SMTPUsername != "mailer" {
+		t.Fatalf("SMTPUsername = %q, want mailer", cfg.SMTPUsername)
+	}
+	if cfg.SMTPPassword != "secret" {
+		t.Fatalf("SMTPPassword = %q, want secret", cfg.SMTPPassword)
+	}
+	if cfg.SMTPFrom != "alerts@example.com" {
+		t.Fatalf("SMTPFrom = %q, want alerts@example.com", cfg.SMTPFrom)
 	}
 	if !cfg.IsProduction() {
 		t.Fatal("IsProduction() = false, want true")

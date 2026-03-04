@@ -227,6 +227,112 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
+	clearUsersTable()
+	user := createTestUser("reset_email_user", "reset_email_user@example.com", "resetpass123", "user")
+
+	SetEnvironment("development")
+	SetPasswordResetBaseURL("https://shop.example.com")
+	t.Cleanup(func() {
+		SetEnvironment("development")
+		SetPasswordResetBaseURL("")
+		SetPasswordResetEmailSender(nil)
+	})
+
+	var sentTo string
+	var sentLink string
+	var sendCount int
+	SetPasswordResetEmailSender(func(ctx context.Context, recipientEmail string, resetLink string) error {
+		sendCount++
+		sentTo = recipientEmail
+		sentLink = resetLink
+		return nil
+	})
+
+	tmpl := template.New("password_reset_request.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}{{.Message}}|{{.Error}}|{{.ResetLink}}{{end}}"))
+
+	data := url.Values{}
+	data.Set("identifier", user.Email)
+	req := httptest.NewRequest(http.MethodPost, "/password-reset/request", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	PasswordResetRequest(testStore, tmpl, []string{"user"}, "Reset Password", "helper").ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d", rr.Code, http.StatusOK)
+	}
+	if sendCount != 1 {
+		t.Fatalf("send count=%d want=1", sendCount)
+	}
+	if sentTo != user.Email {
+		t.Fatalf("sentTo=%q want=%q", sentTo, user.Email)
+	}
+	if !strings.HasPrefix(sentLink, "https://shop.example.com/password-reset/confirm?token=") {
+		t.Fatalf("unexpected reset link: %q", sentLink)
+	}
+	if !strings.Contains(rr.Body.String(), sentLink) {
+		t.Fatal("expected reset link to be rendered in development mode")
+	}
+
+	parsedLink, err := url.Parse(sentLink)
+	if err != nil {
+		t.Fatalf("parse sent reset link: %v", err)
+	}
+	token := parsedLink.Query().Get("token")
+	if token == "" {
+		t.Fatal("expected reset token in sent link")
+	}
+	resetToken, err := testStore.GetValidPasswordResetToken(token)
+	if err != nil {
+		t.Fatalf("get reset token from db: %v", err)
+	}
+	if resetToken == nil || resetToken.UserID != user.ID {
+		t.Fatal("expected valid reset token for requesting user")
+	}
+}
+
+func TestPasswordResetRequest_ProductionDoesNotExposeLinkWhenEmailFails(t *testing.T) {
+	clearUsersTable()
+	user := createTestUser("reset_prod_user", "reset_prod_user@example.com", "resetpass123", "user")
+
+	SetEnvironment("production")
+	SetPasswordResetBaseURL("https://shop.example.com")
+	t.Cleanup(func() {
+		SetEnvironment("development")
+		SetPasswordResetBaseURL("")
+		SetPasswordResetEmailSender(nil)
+	})
+
+	var sendCount int
+	SetPasswordResetEmailSender(func(ctx context.Context, recipientEmail string, resetLink string) error {
+		sendCount++
+		return errors.New("smtp unavailable")
+	})
+
+	tmpl := template.New("password_reset_request.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}{{.Message}}|{{.Error}}|{{.ResetLink}}{{end}}"))
+
+	data := url.Values{}
+	data.Set("identifier", user.Email)
+	req := httptest.NewRequest(http.MethodPost, "/password-reset/request", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	PasswordResetRequest(testStore, tmpl, []string{"user"}, "Reset Password", "helper").ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d", rr.Code, http.StatusOK)
+	}
+	if sendCount != 1 {
+		t.Fatalf("send count=%d want=1", sendCount)
+	}
+	if strings.Contains(rr.Body.String(), "/password-reset/confirm?token=") {
+		t.Fatal("expected reset link not to be exposed in production mode")
+	}
+}
+
 func TestStaffSignUp_InvalidEmail(t *testing.T) {
 	clearUsersTable()
 

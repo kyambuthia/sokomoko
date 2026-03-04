@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,7 +31,11 @@ const (
 var runtimeEnvironment = "development"
 var runtimeAdminSetupToken string
 var runtimeSessionCookieDomain string
+var runtimePasswordResetBaseURL string
+var runtimePasswordResetEmailSender PasswordResetEmailSender
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
+
+type PasswordResetEmailSender func(ctx context.Context, recipientEmail string, resetLink string) error
 
 func SetEnvironment(env string) {
 	clean := strings.TrimSpace(strings.ToLower(env))
@@ -46,6 +51,14 @@ func SetAdminSetupToken(token string) {
 
 func SetSessionCookieDomain(domain string) {
 	runtimeSessionCookieDomain = strings.TrimSpace(strings.ToLower(domain))
+}
+
+func SetPasswordResetBaseURL(baseURL string) {
+	runtimePasswordResetBaseURL = strings.TrimSpace(baseURL)
+}
+
+func SetPasswordResetEmailSender(sender PasswordResetEmailSender) {
+	runtimePasswordResetEmailSender = sender
 }
 
 type StaffCredential struct {
@@ -275,6 +288,39 @@ func recommendedStaffCount(productCount int) (int, string) {
 
 func shouldExposeResetLink() bool {
 	return runtimeEnvironment != "production"
+}
+
+func requestScheme(r *http.Request) string {
+	if r != nil && (r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")) {
+		return "https"
+	}
+	return "http"
+}
+
+func buildPasswordResetLink(r *http.Request, token string) string {
+	relative := "/password-reset/confirm?token=" + url.QueryEscape(token)
+
+	baseURL := strings.TrimSpace(runtimePasswordResetBaseURL)
+	if baseURL != "" {
+		parsed, err := url.Parse(baseURL)
+		if err == nil && parsed.Scheme != "" && parsed.Host != "" {
+			parsed.Path = strings.TrimSuffix(parsed.Path, "/") + "/password-reset/confirm"
+			query := parsed.Query()
+			query.Set("token", token)
+			parsed.RawQuery = query.Encode()
+			return parsed.String()
+		}
+	}
+
+	host := ""
+	if r != nil {
+		host = strings.TrimSpace(r.Host)
+	}
+	if host == "" {
+		return relative
+	}
+
+	return requestScheme(r) + "://" + host + relative
 }
 
 func isUniqueConstraintErr(err error) bool {
@@ -725,8 +771,15 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
+
+			resetLink := buildPasswordResetLink(r, resetToken)
+			if runtimePasswordResetEmailSender != nil {
+				if sendErr := runtimePasswordResetEmailSender(r.Context(), user.Email, resetLink); sendErr != nil {
+					log.Printf("password reset email send failed for user_id=%d: %v", user.ID, sendErr)
+				}
+			}
 			if shouldExposeResetLink() {
-				data.ResetLink = "/password-reset/confirm?token=" + resetToken
+				data.ResetLink = resetLink
 			}
 		}
 

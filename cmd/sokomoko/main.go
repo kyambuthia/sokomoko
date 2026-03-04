@@ -16,6 +16,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/bootstrap"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/notify"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
@@ -25,6 +26,25 @@ func main() {
 	auth.SetEnvironment(cfg.Environment)
 	auth.SetAdminSetupToken(cfg.AdminSetupToken)
 	auth.SetSessionCookieDomain(cfg.SessionCookieDomain)
+	auth.SetPasswordResetBaseURL(cfg.PasswordResetBaseURL)
+	auth.SetPasswordResetEmailSender(nil)
+
+	if cfg.SMTPHost != "" || cfg.SMTPFrom != "" {
+		emailSender, senderErr := notify.NewSMTPSender(notify.SMTPConfig{
+			Host:     cfg.SMTPHost,
+			Port:     cfg.SMTPPort,
+			Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword,
+			From:     cfg.SMTPFrom,
+			AppName:  "Sokomoko",
+		})
+		if senderErr != nil {
+			log.Printf("[startup] password_reset_email=disabled err=%v", senderErr)
+		} else {
+			auth.SetPasswordResetEmailSender(emailSender.SendPasswordResetEmail)
+			log.Printf("[startup] password_reset_email=enabled host=%s port=%s from=%s", cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom)
+		}
+	}
 
 	templates, err := ui.ParseTemplates()
 	if err != nil {

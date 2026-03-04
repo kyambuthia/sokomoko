@@ -37,6 +37,10 @@ Server default: `http://localhost:6969`
 - `SESSION_COOKIE_DOMAIN` (optional; set to a shared domain such as `.example.com` to reuse login sessions across subdomains)
 - `POST_RATE_LIMIT_MAX` (optional; max POST requests allowed per IP in each rate-limit window; default: `0` disabled)
 - `POST_RATE_LIMIT_WINDOW_SECONDS` (optional; window size for POST rate limit; default: `60`)
+- `PASSWORD_RESET_BASE_URL` (optional; absolute base URL for reset links in email, e.g. `https://shop.example.com`)
+- `SMTP_HOST` / `SMTP_PORT` (optional; SMTP server host/port for password reset delivery, default port `587`)
+- `SMTP_USERNAME` / `SMTP_PASSWORD` (optional; SMTP auth credentials)
+- `SMTP_FROM` (optional; sender email for reset delivery, required when SMTP is enabled)
 
 Example:
 ```bash
@@ -46,6 +50,12 @@ ALLOWED_HOSTS=shop.example.com,admin.example.com,partner.example.com \
 SESSION_COOKIE_DOMAIN=.example.com \
 POST_RATE_LIMIT_MAX=120 \
 POST_RATE_LIMIT_WINDOW_SECONDS=60 \
+PASSWORD_RESET_BASE_URL=https://shop.example.com \
+SMTP_HOST=smtp.example.com \
+SMTP_PORT=587 \
+SMTP_USERNAME=mailer \
+SMTP_PASSWORD=change-me \
+SMTP_FROM=no-reply@example.com \
 ENV=production \
 go run ./cmd/sokomoko
 ```
@@ -91,6 +101,7 @@ Partner (`partner.localhost`):
 - First-run admin setup is done on `admin.localhost/setup` if no admin exists.
 - Staff role is supported alongside admin and user.
 - Password reset uses one-time, expiring reset tokens.
+- Password reset can send email links via SMTP when configured (`SMTP_HOST` + `SMTP_FROM`).
 - Store setup is persisted in `store_settings`.
 - Static file serving checks disk first (`internal/ui/static`), then embedded assets.
 - Static asset URLs are cache-busted using dynamic version query strings.
