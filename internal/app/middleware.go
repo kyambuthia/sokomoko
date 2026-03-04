@@ -103,6 +103,10 @@ func CSRFSameOrigin(sessionCookieName string) Middleware {
 				next.ServeHTTP(w, r)
 				return
 			}
+			if isCSRFBypassPath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if _, err := r.Cookie(sessionCookieName); err != nil {
 				next.ServeHTTP(w, r)
 				return
@@ -125,6 +129,15 @@ func CSRFSameOrigin(sessionCookieName string) Middleware {
 			}
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+func isCSRFBypassPath(path string) bool {
+	switch strings.TrimSpace(path) {
+	case "/login", "/signup", "/password-reset/request", "/password-reset/confirm":
+		return true
+	default:
+		return false
 	}
 }
 

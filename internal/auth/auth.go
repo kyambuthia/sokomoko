@@ -26,6 +26,7 @@ const (
 	sessionCookieName  = "session_token"
 	sessionDuration    = 24 * time.Hour
 	resetTokenDuration = 45 * time.Minute
+	resetEmailTimeout  = 5 * time.Second
 )
 
 var runtimeEnvironment = "development"
@@ -321,6 +322,22 @@ func buildPasswordResetLink(r *http.Request, token string) string {
 	}
 
 	return requestScheme(r) + "://" + host + relative
+}
+
+func dispatchPasswordResetEmail(recipientEmail string, resetLink string, userID int) {
+	sender := runtimePasswordResetEmailSender
+	if sender == nil {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), resetEmailTimeout)
+		defer cancel()
+
+		if err := sender(ctx, recipientEmail, resetLink); err != nil {
+			log.Printf("password reset email send failed for user_id=%d: %v", userID, err)
+		}
+	}()
 }
 
 func isUniqueConstraintErr(err error) bool {
@@ -773,11 +790,7 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 			}
 
 			resetLink := buildPasswordResetLink(r, resetToken)
-			if runtimePasswordResetEmailSender != nil {
-				if sendErr := runtimePasswordResetEmailSender(r.Context(), user.Email, resetLink); sendErr != nil {
-					log.Printf("password reset email send failed for user_id=%d: %v", user.ID, sendErr)
-				}
-			}
+			dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
 			if shouldExposeResetLink() {
 				data.ResetLink = resetLink
 			}

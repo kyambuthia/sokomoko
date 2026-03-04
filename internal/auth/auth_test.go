@@ -241,11 +241,11 @@ func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
 
 	var sentTo string
 	var sentLink string
-	var sendCount int
+	sendDone := make(chan struct{}, 1)
 	SetPasswordResetEmailSender(func(ctx context.Context, recipientEmail string, resetLink string) error {
-		sendCount++
 		sentTo = recipientEmail
 		sentLink = resetLink
+		sendDone <- struct{}{}
 		return nil
 	})
 
@@ -263,8 +263,11 @@ func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d want=%d", rr.Code, http.StatusOK)
 	}
-	if sendCount != 1 {
-		t.Fatalf("send count=%d want=1", sendCount)
+
+	select {
+	case <-sendDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for reset email dispatch")
 	}
 	if sentTo != user.Email {
 		t.Fatalf("sentTo=%q want=%q", sentTo, user.Email)
@@ -305,9 +308,9 @@ func TestPasswordResetRequest_ProductionDoesNotExposeLinkWhenEmailFails(t *testi
 		SetPasswordResetEmailSender(nil)
 	})
 
-	var sendCount int
+	sendDone := make(chan struct{}, 1)
 	SetPasswordResetEmailSender(func(ctx context.Context, recipientEmail string, resetLink string) error {
-		sendCount++
+		sendDone <- struct{}{}
 		return errors.New("smtp unavailable")
 	})
 
@@ -325,8 +328,10 @@ func TestPasswordResetRequest_ProductionDoesNotExposeLinkWhenEmailFails(t *testi
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d want=%d", rr.Code, http.StatusOK)
 	}
-	if sendCount != 1 {
-		t.Fatalf("send count=%d want=1", sendCount)
+	select {
+	case <-sendDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for reset email dispatch")
 	}
 	if strings.Contains(rr.Body.String(), "/password-reset/confirm?token=") {
 		t.Fatal("expected reset link not to be exposed in production mode")
