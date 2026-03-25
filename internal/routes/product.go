@@ -2,10 +2,10 @@ package routes
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 )
 
 type ProductPageData struct {
@@ -20,14 +20,13 @@ func ProductDetail(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		slug := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/products/"))
-		if slug == "" || strings.Contains(slug, "/") {
-			NotFound(w, r)
-			return
-		}
-
-		product, err := a.Store.GetProductBySlug(slug)
+		slug := r.URL.Path[len("/products/"):]
+		product, err := a.Catalog.ProductBySlug(slug)
 		if err != nil {
+			if err == catalogsvc.ErrInvalidProductSlug {
+				NotFound(w, r)
+				return
+			}
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}

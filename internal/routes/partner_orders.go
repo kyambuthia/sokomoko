@@ -25,7 +25,7 @@ type PartnerOrdersPageData struct {
 }
 
 func PartnerOrders(a *app.App) http.HandlerFunc {
-	svc := partnersvc.New(a.Store)
+	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetUserFromContext(r.Context())

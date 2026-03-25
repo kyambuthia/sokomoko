@@ -29,7 +29,7 @@ func Auth(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		orders, err := a.Store.ListOrdersByUser(user.ID)
+		orders, err := a.Account.OrdersForUser(user.ID)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

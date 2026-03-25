@@ -8,40 +8,53 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
+	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
+	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
-type Store interface {
-	AddToCart(userID, productID, quantity int) error
-	CountActiveSessions() (int, error)
-	CountProducts() (int, error)
-	CountUsersByRole(role string) (int, error)
-	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
-	CreateProduct(product db.Product) (int64, error)
-	DeleteUser(id int) error
-	GetAllCategories() ([]db.Category, error)
-	GetAllProducts() ([]db.Product, error)
-	GetCartItems(userID int) ([]db.CartItem, float64, error)
-	GetOrderStatusCounts() (map[string]int, error)
-	GetPartnerOrderSummary() (db.PartnerOrderSummary, error)
-	GetProductByID(id int) (*db.Product, error)
-	GetProductBySlug(slug string) (*db.Product, error)
-	GetStoreSettings() (*db.StoreSettings, error)
-	GetUserByID(id int) (*db.User, error)
-	ListAllOrders() ([]db.FulfillmentOrder, error)
-	ListAuditLogs(limit int) ([]db.AuditLog, error)
-	ListOrdersByUser(userID int) ([]db.CustomerOrder, error)
-	ListOrdersForFulfillment() ([]db.FulfillmentOrder, error)
-	ListUsersByRoles(roles []string) ([]db.User, error)
+type ReadinessChecker interface {
 	PingContext(ctx context.Context) error
-	PlaceOrderFromCartWithPricing(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string) (int64, error)
+}
+
+type CatalogService interface {
+	AllProducts() ([]db.Product, error)
+	ProductBySlug(slug string) (*db.Product, error)
+	Search(query string) ([]db.Product, error)
+}
+
+type AccountService interface {
+	OrdersForUser(userID int) ([]db.CustomerOrder, error)
+}
+
+type CommerceService interface {
+	AddToCart(userID, productID, quantity int) error
+	CheckoutWithPayment(userID int, deliveryAddress, paymentMethod string) (int64, commerceSvc.CheckoutSummary, error)
+	GetCart(userID int) ([]db.CartItem, float64, error)
 	RemoveFromCart(userID, productID int) error
-	SearchProducts(query string) ([]db.Product, error)
-	SumOrderRevenue() (float64, error)
-	UpdateCartQuantity(userID, productID, quantity int) error
-	UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
-	UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
-	UpsertStoreSettings(settings db.StoreSettings) error
+	UpdateCartItem(userID, productID, quantity int) error
+}
+
+type AdminService interface {
+	AuditLogs(limit int) ([]db.AuditLog, error)
+	DeactivateUser(actor *db.User, userIDRaw string) error
+	Metrics() (adminsvc.Metrics, error)
+	Orders() ([]db.FulfillmentOrder, error)
+	Products() ([]db.Product, error)
+	Reports() (adminsvc.SalesReport, error)
+	TeamMembers() ([]db.User, error)
+	UpdateOrder(actor *db.User, input adminsvc.UpdateOrderInput) error
+}
+
+type PartnerService interface {
+	CreateProduct(input partnersvc.CreateProductInput) error
+	Dashboard() (partnersvc.DashboardData, error)
+	Orders(filter string) (partnersvc.OrdersData, error)
+	Products() (partnersvc.ProductsData, error)
+	SaveStoreSettings(input partnersvc.StoreSettingsInput) (db.StoreSettings, error)
+	StoreSettings() (*db.StoreSettings, error)
+	UpdateOrder(actor *db.User, input partnersvc.UpdateOrderInput) error
 }
 
 type AuthService interface {
@@ -56,15 +69,42 @@ type AuthService interface {
 	StaffSignUp(tmpl *template.Template) http.HandlerFunc
 }
 
-type App struct {
-	Store     Store
+type Dependencies struct {
+	Readiness ReadinessChecker
+	Catalog   CatalogService
+	Account   AccountService
+	Commerce  CommerceService
+	Admin     AdminService
+	Partner   PartnerService
 	Auth      AuthService
 	Templates *ui.Templates
 	StaticFS  embed.FS
 }
 
-func New(store Store, authService AuthService, templates *ui.Templates, staticFS embed.FS) *App {
-	return &App{Store: store, Auth: authService, Templates: templates, StaticFS: staticFS}
+type App struct {
+	Readiness ReadinessChecker
+	Catalog   CatalogService
+	Account   AccountService
+	Commerce  CommerceService
+	Admin     AdminService
+	Partner   PartnerService
+	Auth      AuthService
+	Templates *ui.Templates
+	StaticFS  embed.FS
+}
+
+func New(deps Dependencies) *App {
+	return &App{
+		Readiness: deps.Readiness,
+		Catalog:   deps.Catalog,
+		Account:   deps.Account,
+		Commerce:  deps.Commerce,
+		Admin:     deps.Admin,
+		Partner:   deps.Partner,
+		Auth:      deps.Auth,
+		Templates: deps.Templates,
+		StaticFS:  deps.StaticFS,
+	}
 }
 
 func (a *App) Render(w http.ResponseWriter, tmpl *template.Template, data any) {

@@ -47,7 +47,7 @@ func renderAdminPage(a *app.App, w http.ResponseWriter, data AdminPageData) {
 	a.Render(w, a.Templates.Admin, data)
 }
 
-func buildAdminMetrics(svc *adminsvc.Service) (AdminPageData, error) {
+func buildAdminMetrics(svc app.AdminService) (AdminPageData, error) {
 	metrics, err := svc.Metrics()
 	if err != nil {
 		return AdminPageData{}, err
@@ -64,7 +64,7 @@ func buildAdminMetrics(svc *adminsvc.Service) (AdminPageData, error) {
 
 // AdminDashboard serves the main admin dashboard.
 func AdminDashboard(a *app.App) http.HandlerFunc {
-	svc := adminsvc.New(a.Store)
+	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -87,7 +87,7 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 
 // AdminProducts handles product management.
 func AdminProducts(a *app.App) http.HandlerFunc {
-	svc := adminsvc.New(a.Store)
+	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -117,7 +117,7 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 
 // AdminOrders handles order management.
 func AdminOrders(a *app.App) http.HandlerFunc {
-	svc := adminsvc.New(a.Store)
+	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -181,7 +181,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 
 // AdminReports handles sales reports.
 func AdminReports(a *app.App) http.HandlerFunc {
-	svc := adminsvc.New(a.Store)
+	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -215,7 +215,7 @@ func AdminReports(a *app.App) http.HandlerFunc {
 
 // AdminDeliveries handles delivery management.
 func AdminDeliveries(a *app.App) http.HandlerFunc {
-	svc := adminsvc.New(a.Store)
+	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -238,7 +238,7 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 
 // AdminTeam lists users and allows admin-only staff/user deactivation.
 func AdminTeam(a *app.App) http.HandlerFunc {
-	svc := adminsvc.New(a.Store)
+	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -286,7 +286,7 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 }
 
 func AdminAudit(a *app.App) http.HandlerFunc {
-	svc := adminsvc.New(a.Store)
+	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

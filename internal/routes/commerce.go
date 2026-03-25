@@ -51,7 +51,7 @@ func checkoutPaymentOptions() []PaymentMethodOption {
 }
 
 func CartPage(a *app.App) http.HandlerFunc {
-	svc := commerceSvc.New(a.Store)
+	svc := a.Commerce
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -83,7 +83,7 @@ func CartPage(a *app.App) http.HandlerFunc {
 }
 
 func CartAdd(a *app.App) http.HandlerFunc {
-	svc := commerceSvc.New(a.Store)
+	svc := a.Commerce
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -132,7 +132,7 @@ func CartAdd(a *app.App) http.HandlerFunc {
 }
 
 func CartUpdate(a *app.App) http.HandlerFunc {
-	svc := commerceSvc.New(a.Store)
+	svc := a.Commerce
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -178,7 +178,7 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 }
 
 func CartRemove(a *app.App) http.HandlerFunc {
-	svc := commerceSvc.New(a.Store)
+	svc := a.Commerce
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -211,7 +211,7 @@ func CartRemove(a *app.App) http.HandlerFunc {
 }
 
 func Checkout(a *app.App) http.HandlerFunc {
-	svc := commerceSvc.New(a.Store)
+	svc := a.Commerce
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetUserFromContext(r.Context())

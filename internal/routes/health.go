@@ -28,7 +28,7 @@ func Ready(a *app.App) http.HandlerFunc {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		if err := a.Store.PingContext(ctx); err != nil {
+		if err := a.Readiness.PingContext(ctx); err != nil {
 			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 			return
 		}

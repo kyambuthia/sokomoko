@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -23,7 +22,7 @@ func Search(a *app.App) http.HandlerFunc {
 			query := req.URL.Query().Get("q")
 			if query != "" {
 				// Perform search
-				products, err := a.Store.SearchProducts(strings.TrimSpace(query))
+				products, err := a.Catalog.Search(query)
 				if err != nil {
 					log.Printf("Error searching products: %v", err)
 					http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -64,7 +63,7 @@ func Search(a *app.App) http.HandlerFunc {
 			}
 
 			// Perform search
-			products, err := a.Store.SearchProducts(strings.TrimSpace(formData.QueryString))
+			products, err := a.Catalog.Search(formData.QueryString)
 			if err != nil {
 				log.Printf("Error searching products: %v", err)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)

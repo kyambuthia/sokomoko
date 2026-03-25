@@ -18,6 +18,11 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/notify"
 	"github.com/kyambuthia/sokomoko/internal/routes"
+	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
+	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
+	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
+	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
+	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
@@ -62,7 +67,17 @@ func main() {
 		PasswordResetEmailSender: resetEmailSender,
 	})
 
-	a := app.New(store, authService, templates, ui.StaticFS)
+	a := app.New(app.Dependencies{
+		Readiness: store,
+		Catalog:   catalogsvc.New(store),
+		Account:   accountsvc.New(store),
+		Commerce:  commerceSvc.New(store),
+		Admin:     adminsvc.New(store),
+		Partner:   partnersvc.New(store),
+		Auth:      authService,
+		Templates: templates,
+		StaticFS:  ui.StaticFS,
+	})
 
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()

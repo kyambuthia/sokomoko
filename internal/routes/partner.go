@@ -53,7 +53,7 @@ type PartnerProductNewData struct {
 }
 
 func PartnerRoot(a *app.App) http.HandlerFunc {
-	svc := partnersvc.New(a.Store)
+	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -75,7 +75,7 @@ func PartnerRoot(a *app.App) http.HandlerFunc {
 }
 
 func PartnerSetup(a *app.App) http.HandlerFunc {
-	svc := partnersvc.New(a.Store)
+	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		existing, err := svc.StoreSettings()
@@ -127,7 +127,7 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 }
 
 func PartnerDashboard(a *app.App) http.HandlerFunc {
-	svc := partnersvc.New(a.Store)
+	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		view, err := svc.Dashboard()
@@ -167,7 +167,7 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 }
 
 func PartnerProducts(a *app.App) http.HandlerFunc {
-	svc := partnersvc.New(a.Store)
+	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		view, err := svc.Products()
@@ -191,7 +191,7 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 }
 
 func PartnerProductNew(a *app.App) http.HandlerFunc {
-	svc := partnersvc.New(a.Store)
+	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		view, err := svc.Products()

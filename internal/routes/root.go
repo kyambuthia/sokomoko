@@ -18,7 +18,7 @@ func Root(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		products, err := a.Store.GetAllProducts()
+		products, err := a.Catalog.AllProducts()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
