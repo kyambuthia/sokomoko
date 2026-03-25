@@ -12,6 +12,8 @@ var (
 	ErrForbiddenOrderUpdate = errors.New("forbidden order update")
 	ErrForbiddenUserAction  = errors.New("forbidden user action")
 	ErrInvalidOrderID       = errors.New("invalid order id")
+	ErrOrderNotFound        = errors.New("order not found")
+	ErrInvalidOrderState    = errors.New("invalid order state")
 	ErrInvalidUserID        = errors.New("invalid user id")
 	ErrUserNotFound         = errors.New("user not found")
 	ErrProtectedUser        = errors.New("protected user")
@@ -143,7 +145,14 @@ func (s *Service) UpdateOrder(actor *db.User, input UpdateOrderInput) error {
 	notice := strings.TrimSpace(input.DeliveryNotice)
 
 	if err := s.store.UpdateOrderByAdmin(orderID, status, partnerStatus, deliveryStatus, notice); err != nil {
-		return err
+		switch {
+		case errors.Is(err, db.ErrOrderNotFound):
+			return ErrOrderNotFound
+		case errors.Is(err, db.ErrInvalidOrderState):
+			return ErrInvalidOrderState
+		default:
+			return err
+		}
 	}
 
 	_ = s.store.CreateAuditLog(actor.ID, "order.update", "order", orderID, "status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)

@@ -7,13 +7,19 @@ import (
 )
 
 var (
-	ErrUniqueConstraint        = errors.New("unique constraint violation")
-	ErrTransient               = errors.New("transient database error")
-	ErrProductSlugConflict     = errors.New("product slug conflict")
-	ErrDeliveryAddressRequired = errors.New("delivery address required")
-	ErrNegativeTotalAmount     = errors.New("negative total amount")
-	ErrCartEmpty               = errors.New("cart is empty")
-	ErrInsufficientStock       = errors.New("insufficient stock")
+	ErrUniqueConstraint          = errors.New("unique constraint violation")
+	ErrTransient                 = errors.New("transient database error")
+	ErrProductSlugConflict       = errors.New("product slug conflict")
+	ErrDeliveryAddressRequired   = errors.New("delivery address required")
+	ErrNegativeTotalAmount       = errors.New("negative total amount")
+	ErrCartEmpty                 = errors.New("cart is empty")
+	ErrInsufficientStock         = errors.New("insufficient stock")
+	ErrOrderNotFound             = errors.New("order not found")
+	ErrInvalidOrderState         = errors.New("invalid order state")
+	ErrInvalidPartnerTransition  = errors.New("invalid partner status transition")
+	ErrInvalidDeliveryTransition = errors.New("invalid delivery status transition")
+	ErrInvalidPartnerStatus      = errors.New("invalid partner status")
+	ErrInvalidDeliveryStatus     = errors.New("invalid delivery status")
 )
 
 func IsUniqueConstraintError(err error) bool {

@@ -16,6 +16,8 @@ var (
 	ErrMissingStoreFields        = errors.New("missing store fields")
 	ErrForbiddenOrderUpdate      = errors.New("forbidden order update")
 	ErrInvalidOrderID            = errors.New("invalid order id")
+	ErrOrderNotFound             = errors.New("order not found")
+	ErrInvalidOrderTransition    = errors.New("invalid order transition")
 	ErrMissingProductFields      = errors.New("missing product fields")
 	ErrInvalidProductPrice       = errors.New("invalid product price")
 	ErrInvalidProductStock       = errors.New("invalid product stock")
@@ -256,7 +258,17 @@ func (s *Service) UpdateOrder(actor *db.User, input UpdateOrderInput) error {
 	note := strings.TrimSpace(input.DeliveryNotice)
 
 	if err := s.store.UpdateOrderFulfillment(orderID, partnerStatus, deliveryStatus, note); err != nil {
-		return err
+		switch {
+		case errors.Is(err, db.ErrOrderNotFound):
+			return ErrOrderNotFound
+		case errors.Is(err, db.ErrInvalidPartnerTransition),
+			errors.Is(err, db.ErrInvalidDeliveryTransition),
+			errors.Is(err, db.ErrInvalidPartnerStatus),
+			errors.Is(err, db.ErrInvalidDeliveryStatus):
+			return ErrInvalidOrderTransition
+		default:
+			return err
+		}
 	}
 
 	_ = s.store.CreateAuditLog(actor.ID, "partner.fulfillment.update", "order", orderID, "partner="+partnerStatus+",delivery="+deliveryStatus)

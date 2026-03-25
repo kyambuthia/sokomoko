@@ -148,6 +148,12 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			case errors.Is(err, adminsvc.ErrInvalidOrderID):
 				metrics.OrderError = "Invalid order id"
 				responseStatus = http.StatusBadRequest
+			case errors.Is(err, adminsvc.ErrOrderNotFound):
+				metrics.OrderError = "Order does not exist"
+				responseStatus = http.StatusBadRequest
+			case errors.Is(err, adminsvc.ErrInvalidOrderState):
+				metrics.OrderError = "Order state is invalid"
+				responseStatus = http.StatusBadRequest
 			case err != nil:
 				metrics.OrderError = "Unable to update order state"
 				responseStatus = http.StatusBadRequest

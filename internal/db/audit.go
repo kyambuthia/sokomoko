@@ -14,17 +14,17 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 		orderID,
 	).Scan(&currentPartnerStatus, &currentDeliveryStatus)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("order not found")
+		return ErrOrderNotFound
 	}
 	if err != nil {
 		return err
 	}
 
 	if !isAllowedPartnerTransition(currentPartnerStatus, partnerStatus) {
-		return fmt.Errorf("invalid partner status transition")
+		return ErrInvalidPartnerTransition
 	}
 	if !isAllowedDeliveryTransition(currentDeliveryStatus, deliveryStatus) {
-		return fmt.Errorf("invalid delivery status transition")
+		return ErrInvalidDeliveryTransition
 	}
 
 	statusMap := map[string]string{
@@ -37,7 +37,7 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 	}
 	nextStatus, ok := statusMap[partnerStatus]
 	if !ok {
-		return fmt.Errorf("invalid partner status")
+		return ErrInvalidPartnerStatus
 	}
 
 	validDelivery := map[string]bool{
@@ -47,7 +47,7 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 		"delivered":  true,
 	}
 	if !validDelivery[deliveryStatus] {
-		return fmt.Errorf("invalid delivery status")
+		return ErrInvalidDeliveryStatus
 	}
 
 	result, err := s.DB.Exec(
@@ -64,7 +64,7 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 		return err
 	}
 	if affected == 0 {
-		return fmt.Errorf("order not found")
+		return ErrOrderNotFound
 	}
 	return nil
 }
@@ -235,7 +235,7 @@ func (s *Store) UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryS
 		"delivered":  true,
 	}
 	if !validStatus[status] || !validPartner[partnerStatus] || !validDelivery[deliveryStatus] {
-		return fmt.Errorf("invalid order state")
+		return ErrInvalidOrderState
 	}
 
 	result, err := s.DB.Exec(
@@ -252,7 +252,7 @@ func (s *Store) UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryS
 		return err
 	}
 	if affected == 0 {
-		return fmt.Errorf("order not found")
+		return ErrOrderNotFound
 	}
 	return nil
 }

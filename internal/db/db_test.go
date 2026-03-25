@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
@@ -454,15 +455,15 @@ func TestOrderFulfillmentTransitionValidation(t *testing.T) {
 
 func TestUpdateOrderFulfillment_OrderNotFound(t *testing.T) {
 	err := testStore.UpdateOrderFulfillment(999999, "new", "queued", "no-op")
-	if err == nil {
-		t.Fatal("expected not found error")
+	if !errors.Is(err, ErrOrderNotFound) {
+		t.Fatalf("expected ErrOrderNotFound, got %v", err)
 	}
 }
 
 func TestUpdateOrderByAdmin_OrderNotFound(t *testing.T) {
 	err := testStore.UpdateOrderByAdmin(999999, "pending", "new", "queued", "no-op")
-	if err == nil {
-		t.Fatal("expected not found error")
+	if !errors.Is(err, ErrOrderNotFound) {
+		t.Fatalf("expected ErrOrderNotFound, got %v", err)
 	}
 }
 

@@ -48,8 +48,14 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			case errors.Is(err, partnersvc.ErrInvalidOrderID):
 				data.Error = "Invalid order id"
 				responseStatus = http.StatusBadRequest
+			case errors.Is(err, partnersvc.ErrOrderNotFound):
+				data.Error = "Unable to update order"
+				responseStatus = http.StatusBadRequest
+			case errors.Is(err, partnersvc.ErrInvalidOrderTransition):
+				data.Error = "Unable to update order"
+				responseStatus = http.StatusBadRequest
 			case err != nil:
-				data.Error = "Unable to update order: " + err.Error()
+				data.Error = "Unable to update order"
 				responseStatus = http.StatusBadRequest
 			default:
 				data.Message = "Order fulfillment updated"
