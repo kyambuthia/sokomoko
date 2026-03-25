@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
@@ -46,7 +47,8 @@ func setupTestServer() {
 		panic(err)
 	}
 
-	a := app.New(testStore, testTemplates, ui.StaticFS)
+	authService := auth.NewService(testStore, auth.Config{})
+	a := app.New(testStore, authService, testTemplates, ui.StaticFS)
 
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()

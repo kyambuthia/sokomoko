@@ -23,11 +23,7 @@ import (
 
 func main() {
 	cfg := config.LoadFromEnv()
-	auth.SetEnvironment(cfg.Environment)
-	auth.SetAdminSetupToken(cfg.AdminSetupToken)
-	auth.SetSessionCookieDomain(cfg.SessionCookieDomain)
-	auth.SetPasswordResetBaseURL(cfg.PasswordResetBaseURL)
-	auth.SetPasswordResetEmailSender(nil)
+	var resetEmailSender auth.PasswordResetEmailSender
 
 	if cfg.SMTPHost != "" || cfg.SMTPFrom != "" {
 		emailSender, senderErr := notify.NewSMTPSender(notify.SMTPConfig{
@@ -41,7 +37,7 @@ func main() {
 		if senderErr != nil {
 			log.Printf("[startup] password_reset_email=disabled err=%v", senderErr)
 		} else {
-			auth.SetPasswordResetEmailSender(emailSender.SendPasswordResetEmail)
+			resetEmailSender = emailSender.SendPasswordResetEmail
 			log.Printf("[startup] password_reset_email=enabled host=%s port=%s from=%s", cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom)
 		}
 	}
@@ -58,7 +54,15 @@ func main() {
 	defer store.Close()
 	bootstrap.Initialize(store)
 
-	a := app.New(store, templates, ui.StaticFS)
+	authService := auth.NewService(store, auth.Config{
+		Environment:              cfg.Environment,
+		AdminSetupToken:          cfg.AdminSetupToken,
+		SessionCookieDomain:      cfg.SessionCookieDomain,
+		PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
+		PasswordResetEmailSender: resetEmailSender,
+	})
+
+	a := app.New(store, authService, templates, ui.StaticFS)
 
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()

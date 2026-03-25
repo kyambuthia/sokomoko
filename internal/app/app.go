@@ -6,18 +6,20 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
 type App struct {
 	Store     *db.Store
+	Auth      *auth.Service
 	Templates *ui.Templates
 	StaticFS  embed.FS
 }
 
-func New(store *db.Store, templates *ui.Templates, staticFS embed.FS) *App {
-	return &App{Store: store, Templates: templates, StaticFS: staticFS}
+func New(store *db.Store, authService *auth.Service, templates *ui.Templates, staticFS embed.FS) *App {
+	return &App{Store: store, Auth: authService, Templates: templates, StaticFS: staticFS}
 }
 
 func (a *App) Render(w http.ResponseWriter, tmpl *template.Template, data any) {

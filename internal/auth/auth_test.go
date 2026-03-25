@@ -23,6 +23,10 @@ const testDBPath = "./test_auth.db"
 
 var testStore *db.Store
 
+func newTestService(cfg Config) *Service {
+	return NewService(testStore, cfg)
+}
+
 func TestMain(m *testing.M) {
 	setupTestDB()
 	code := m.Run()
@@ -90,7 +94,7 @@ func TestSignUp(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	SignUp(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).SignUp(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
@@ -110,7 +114,7 @@ func TestSignUp(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	SignUp(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).SignUp(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusConflict {
 		t.Errorf("handler returned wrong status code for existing user: got %v want %v", status, http.StatusConflict)
@@ -124,7 +128,7 @@ func TestSignUp(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	SignUp(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).SignUp(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
 		t.Errorf("handler returned wrong status code for missing fields: got %v want %v", status, http.StatusBadRequest)
@@ -145,7 +149,7 @@ func TestSignUp_InvalidUsername(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	SignUp(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).SignUp(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
 		t.Fatalf("status=%d want=%d", status, http.StatusBadRequest)
@@ -166,7 +170,7 @@ func TestSignUp_InvalidEmail(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	SignUp(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).SignUp(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
 		t.Fatalf("status=%d want=%d", status, http.StatusBadRequest)
@@ -188,7 +192,7 @@ func TestLogin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	Login(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).Login(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
@@ -207,7 +211,7 @@ func TestLogin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	Login(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).Login(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusUnauthorized {
 		t.Errorf("handler returned wrong status code for incorrect password: got %v want %v", status, http.StatusUnauthorized)
@@ -220,7 +224,7 @@ func TestLogin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
 
-	Login(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).Login(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusUnauthorized {
 		t.Errorf("handler returned wrong status code for non-existent user: got %v want %v", status, http.StatusUnauthorized)
@@ -231,22 +235,18 @@ func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
 	clearUsersTable()
 	user := createTestUser("reset_email_user", "reset_email_user@example.com", "resetpass123", "user")
 
-	SetEnvironment("development")
-	SetPasswordResetBaseURL("https://shop.example.com")
-	t.Cleanup(func() {
-		SetEnvironment("development")
-		SetPasswordResetBaseURL("")
-		SetPasswordResetEmailSender(nil)
-	})
-
 	var sentTo string
 	var sentLink string
 	sendDone := make(chan struct{}, 1)
-	SetPasswordResetEmailSender(func(ctx context.Context, recipientEmail string, resetLink string) error {
-		sentTo = recipientEmail
-		sentLink = resetLink
-		sendDone <- struct{}{}
-		return nil
+	svc := newTestService(Config{
+		Environment:          "development",
+		PasswordResetBaseURL: "https://shop.example.com",
+		PasswordResetEmailSender: func(ctx context.Context, recipientEmail string, resetLink string) error {
+			sentTo = recipientEmail
+			sentLink = resetLink
+			sendDone <- struct{}{}
+			return nil
+		},
 	})
 
 	tmpl := template.New("password_reset_request.html")
@@ -258,7 +258,7 @@ func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	PasswordResetRequest(testStore, tmpl, []string{"user"}, "Reset Password", "helper").ServeHTTP(rr, req)
+	svc.PasswordResetRequest(tmpl, []string{"user"}, "Reset Password", "helper").ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d want=%d", rr.Code, http.StatusOK)
@@ -300,18 +300,14 @@ func TestPasswordResetRequest_ProductionDoesNotExposeLinkWhenEmailFails(t *testi
 	clearUsersTable()
 	user := createTestUser("reset_prod_user", "reset_prod_user@example.com", "resetpass123", "user")
 
-	SetEnvironment("production")
-	SetPasswordResetBaseURL("https://shop.example.com")
-	t.Cleanup(func() {
-		SetEnvironment("development")
-		SetPasswordResetBaseURL("")
-		SetPasswordResetEmailSender(nil)
-	})
-
 	sendDone := make(chan struct{}, 1)
-	SetPasswordResetEmailSender(func(ctx context.Context, recipientEmail string, resetLink string) error {
-		sendDone <- struct{}{}
-		return errors.New("smtp unavailable")
+	svc := newTestService(Config{
+		Environment:          "production",
+		PasswordResetBaseURL: "https://shop.example.com",
+		PasswordResetEmailSender: func(ctx context.Context, recipientEmail string, resetLink string) error {
+			sendDone <- struct{}{}
+			return errors.New("smtp unavailable")
+		},
 	})
 
 	tmpl := template.New("password_reset_request.html")
@@ -323,7 +319,7 @@ func TestPasswordResetRequest_ProductionDoesNotExposeLinkWhenEmailFails(t *testi
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	PasswordResetRequest(testStore, tmpl, []string{"user"}, "Reset Password", "helper").ServeHTTP(rr, req)
+	svc.PasswordResetRequest(tmpl, []string{"user"}, "Reset Password", "helper").ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d want=%d", rr.Code, http.StatusOK)
@@ -352,7 +348,7 @@ func TestStaffSignUp_InvalidEmail(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	StaffSignUp(testStore, tmpl).ServeHTTP(rr, req)
+	newTestService(Config{}).StaffSignUp(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
 		t.Fatalf("status=%d want=%d", status, http.StatusBadRequest)
@@ -363,13 +359,9 @@ func TestLogin_SetsConfiguredSessionCookieDomain(t *testing.T) {
 	clearUsersTable()
 	createTestUser("domainuser", "domain@example.com", "domainpass", "user")
 
-	SetSessionCookieDomain(".example.com")
-	t.Cleanup(func() {
-		SetSessionCookieDomain("")
-	})
-
 	tmpl := template.New("login.html")
 	template.Must(tmpl.Parse("{{define \"root_template\"}}Login Page{{end}}"))
+	svc := newTestService(Config{SessionCookieDomain: ".example.com"})
 
 	data := url.Values{}
 	data.Set("username", "domainuser")
@@ -378,7 +370,7 @@ func TestLogin_SetsConfiguredSessionCookieDomain(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 
-	Login(testStore, tmpl).ServeHTTP(rr, req)
+	svc.Login(tmpl).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Fatalf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
@@ -456,7 +448,7 @@ func TestAuthMiddleware(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
 
-	AuthMiddleware(testStore, protectedHandler).ServeHTTP(rr, req)
+	newTestService(Config{}).AuthMiddleware(protectedHandler).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code for valid session: got %v want %v", status, http.StatusOK)
@@ -469,7 +461,7 @@ func TestAuthMiddleware(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	rr = httptest.NewRecorder()
 
-	AuthMiddleware(testStore, protectedHandler).ServeHTTP(rr, req)
+	newTestService(Config{}).AuthMiddleware(protectedHandler).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code for no session: got %v want %v", status, http.StatusFound)
@@ -485,7 +477,7 @@ func TestAuthMiddleware(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
 
-	AuthMiddleware(testStore, protectedHandler).ServeHTTP(rr, req)
+	newTestService(Config{}).AuthMiddleware(protectedHandler).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code for expired session: got %v want %v", status, http.StatusFound)

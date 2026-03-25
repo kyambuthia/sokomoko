@@ -29,37 +29,41 @@ const (
 	resetEmailTimeout  = 5 * time.Second
 )
 
-var runtimeEnvironment = "development"
-var runtimeAdminSetupToken string
-var runtimeSessionCookieDomain string
-var runtimePasswordResetBaseURL string
-var runtimePasswordResetEmailSender PasswordResetEmailSender
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
 
 type PasswordResetEmailSender func(ctx context.Context, recipientEmail string, resetLink string) error
 
-func SetEnvironment(env string) {
-	clean := strings.TrimSpace(strings.ToLower(env))
-	if clean == "" {
-		clean = "development"
+type Config struct {
+	Environment              string
+	AdminSetupToken          string
+	SessionCookieDomain      string
+	PasswordResetBaseURL     string
+	PasswordResetEmailSender PasswordResetEmailSender
+}
+
+type Service struct {
+	store                    *db.Store
+	environment              string
+	adminSetupToken          string
+	sessionCookieDomain      string
+	passwordResetBaseURL     string
+	passwordResetEmailSender PasswordResetEmailSender
+}
+
+func NewService(store *db.Store, cfg Config) *Service {
+	environment := strings.TrimSpace(strings.ToLower(cfg.Environment))
+	if environment == "" {
+		environment = "development"
 	}
-	runtimeEnvironment = clean
-}
 
-func SetAdminSetupToken(token string) {
-	runtimeAdminSetupToken = strings.TrimSpace(token)
-}
-
-func SetSessionCookieDomain(domain string) {
-	runtimeSessionCookieDomain = strings.TrimSpace(strings.ToLower(domain))
-}
-
-func SetPasswordResetBaseURL(baseURL string) {
-	runtimePasswordResetBaseURL = strings.TrimSpace(baseURL)
-}
-
-func SetPasswordResetEmailSender(sender PasswordResetEmailSender) {
-	runtimePasswordResetEmailSender = sender
+	return &Service{
+		store:                    store,
+		environment:              environment,
+		adminSetupToken:          strings.TrimSpace(cfg.AdminSetupToken),
+		sessionCookieDomain:      strings.TrimSpace(strings.ToLower(cfg.SessionCookieDomain)),
+		passwordResetBaseURL:     strings.TrimSpace(cfg.PasswordResetBaseURL),
+		passwordResetEmailSender: cfg.PasswordResetEmailSender,
+	}
 }
 
 type StaffCredential struct {
@@ -124,14 +128,14 @@ type PasswordResetConfirmData struct {
 	ShowForm bool
 }
 
-func shouldUseSecureCookies(r *http.Request) bool {
+func (s *Service) shouldUseSecureCookies(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
 	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		return true
 	}
-	return runtimeEnvironment == "production"
+	return s.environment == "production"
 }
 
 func normalizeEmail(value string) string {
@@ -182,14 +186,14 @@ func createUserWithPassword(store *db.Store, username, email, password, role str
 	return store.CreateUser(user)
 }
 
-func startSession(w http.ResponseWriter, r *http.Request, store *db.Store, userID int) error {
+func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int) error {
 	sessionToken, err := generateOpaqueToken(32)
 	if err != nil {
 		return err
 	}
 	expiresAt := time.Now().Add(sessionDuration)
 
-	err = store.CreateSession(db.Session{
+	err = s.store.CreateSession(db.Session{
 		ID:        sessionToken,
 		UserID:    userID,
 		ExpiresAt: expiresAt,
@@ -203,10 +207,10 @@ func startSession(w http.ResponseWriter, r *http.Request, store *db.Store, userI
 		Value:    sessionToken,
 		Expires:  expiresAt,
 		MaxAge:   int(sessionDuration.Seconds()),
-		Domain:   runtimeSessionCookieDomain,
+		Domain:   s.sessionCookieDomain,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   shouldUseSecureCookies(r),
+		Secure:   s.shouldUseSecureCookies(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 	return nil
@@ -250,8 +254,8 @@ func isLoopbackRequest(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func validAdminSetupToken(r *http.Request) bool {
-	expected := strings.TrimSpace(runtimeAdminSetupToken)
+func (s *Service) validAdminSetupToken(r *http.Request) bool {
+	expected := strings.TrimSpace(s.adminSetupToken)
 	if expected == "" {
 		return false
 	}
@@ -266,9 +270,9 @@ func validAdminSetupToken(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
-func isAdminSetupAuthorized(r *http.Request) bool {
-	if strings.TrimSpace(runtimeAdminSetupToken) != "" {
-		return validAdminSetupToken(r)
+func (s *Service) isAdminSetupAuthorized(r *http.Request) bool {
+	if strings.TrimSpace(s.adminSetupToken) != "" {
+		return s.validAdminSetupToken(r)
 	}
 	return isLoopbackRequest(r)
 }
@@ -287,8 +291,8 @@ func recommendedStaffCount(productCount int) (int, string) {
 	return total, reason
 }
 
-func shouldExposeResetLink() bool {
-	return runtimeEnvironment != "production"
+func (s *Service) shouldExposeResetLink() bool {
+	return s.environment != "production"
 }
 
 func requestScheme(r *http.Request) string {
@@ -298,10 +302,10 @@ func requestScheme(r *http.Request) string {
 	return "http"
 }
 
-func buildPasswordResetLink(r *http.Request, token string) string {
+func (s *Service) buildPasswordResetLink(r *http.Request, token string) string {
 	relative := "/password-reset/confirm?token=" + url.QueryEscape(token)
 
-	baseURL := strings.TrimSpace(runtimePasswordResetBaseURL)
+	baseURL := strings.TrimSpace(s.passwordResetBaseURL)
 	if baseURL != "" {
 		parsed, err := url.Parse(baseURL)
 		if err == nil && parsed.Scheme != "" && parsed.Host != "" {
@@ -324,8 +328,8 @@ func buildPasswordResetLink(r *http.Request, token string) string {
 	return requestScheme(r) + "://" + host + relative
 }
 
-func dispatchPasswordResetEmail(recipientEmail string, resetLink string, userID int) {
-	sender := runtimePasswordResetEmailSender
+func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink string, userID int) {
+	sender := s.passwordResetEmailSender
 	if sender == nil {
 		return
 	}
@@ -366,12 +370,12 @@ func mapAccountCreationError(err error, conflictMessage string) (int, string) {
 	return http.StatusInternalServerError, "Unable to create account right now. Please retry."
 }
 
-func findUserByIdentifier(store *db.Store, identifier string) (*db.User, error) {
+func (s *Service) findUserByIdentifier(identifier string) (*db.User, error) {
 	trimmed := strings.TrimSpace(identifier)
 	if strings.Contains(trimmed, "@") {
-		return store.GetUserByEmail(normalizeEmail(trimmed))
+		return s.store.GetUserByEmail(normalizeEmail(trimmed))
 	}
-	return store.GetUserByUsername(trimmed)
+	return s.store.GetUserByUsername(trimmed)
 }
 
 func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode int, data any) {
@@ -390,7 +394,7 @@ func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode
 }
 
 // SignUp handles normal user registration.
-func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
+func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := SignupPageData{Title: "Create Account"}
 
@@ -431,7 +435,7 @@ func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		_, err := createUserWithPassword(store, username, email, password, "user")
+		_, err := createUserWithPassword(s.store, username, email, password, "user")
 		if err != nil {
 			log.Printf("Error creating user: %v", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create user. Username or email might already exist.")
@@ -445,7 +449,7 @@ func SignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 }
 
 // StaffSignUp handles staff account creation by admin users.
-func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
+func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := StaffSignupPageData{
 			Title:    "Staff Account Setup",
@@ -487,7 +491,7 @@ func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		_, err := createUserWithPassword(store, username, email, password, "staff")
+		_, err := createUserWithPassword(s.store, username, email, password, "staff")
 		if err != nil {
 			statusCode, message := mapAccountCreationError(err, "Failed to create staff account. Username or email may already exist.")
 			data.Error = message
@@ -501,7 +505,7 @@ func StaffSignUp(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 }
 
 // Login handles normal user authentication.
-func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
+func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := LoginPageData{Title: "Login"}
 
@@ -525,7 +529,7 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		user, err := store.GetUserByUsername(username)
+		user, err := s.store.GetUserByUsername(username)
 		if err != nil || user == nil || user.Role != "user" {
 			log.Printf("Login failed for user %s: %v", username, err)
 			data.Error = "Invalid credentials"
@@ -540,7 +544,7 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		if err := startSession(w, r, store, user.ID); err != nil {
+		if err := s.startSession(w, r, user.ID); err != nil {
 			log.Printf("Error creating session in DB: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -551,11 +555,11 @@ func Login(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 }
 
 // AdminLogin handles admin/staff authentication.
-func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
+func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := AdminLoginPageData{Title: "Admin Login"}
 
-		hasAdmin, err := store.HasAdminUser()
+		hasAdmin, err := s.store.HasAdminUser()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -584,7 +588,7 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		user, err := store.GetUserByUsername(username)
+		user, err := s.store.GetUserByUsername(username)
 		if err != nil || user == nil || !containsRole([]string{"admin", "staff"}, user.Role) {
 			log.Printf("Admin/staff login failed for user %s: %v", username, err)
 			data.Error = "Invalid credentials"
@@ -598,7 +602,7 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		if err := startSession(w, r, store, user.ID); err != nil {
+		if err := s.startSession(w, r, user.ID); err != nil {
 			log.Printf("Error creating admin session in DB: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -609,9 +613,9 @@ func AdminLogin(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 }
 
 // AdminSetup is the first-run bootstrap flow that creates the root admin and optional staff accounts.
-func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
+func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		hasAdmin, err := store.HasAdminUser()
+		hasAdmin, err := s.store.HasAdminUser()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -620,12 +624,12 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
-		if !isAdminSetupAuthorized(r) {
+		if !s.isAdminSetupAuthorized(r) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 
-		products, err := store.GetAllProducts()
+		products, err := s.store.GetAllProducts()
 		if err != nil {
 			products = []db.Product{}
 		}
@@ -691,7 +695,7 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 			staffCount = parsed
 		}
 
-		if _, err := createUserWithPassword(store, adminUsername, adminEmail, adminPassword, "admin"); err != nil {
+		if _, err := createUserWithPassword(s.store, adminUsername, adminEmail, adminPassword, "admin"); err != nil {
 			statusCode, message := mapAccountCreationError(err, "Failed to create admin account. Username or email may already exist.")
 			data.Error = message
 			renderWithStatus(w, tmpl, statusCode, data)
@@ -716,7 +720,7 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 				}
 				tempPassword += "Aa1!"
 
-				if _, err := createUserWithPassword(store, username, email, tempPassword, "staff"); err != nil {
+				if _, err := createUserWithPassword(s.store, username, email, tempPassword, "staff"); err != nil {
 					if !isUniqueConstraintErr(err) {
 						data.Error = "Failed to provision staff accounts."
 						renderWithStatus(w, tmpl, 0, data)
@@ -746,7 +750,7 @@ func AdminSetup(store *db.Store, tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc {
+func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := PasswordResetRequestData{
 			Title:   title,
@@ -771,7 +775,7 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 			return
 		}
 
-		user, err := findUserByIdentifier(store, identifier)
+		user, err := s.findUserByIdentifier(identifier)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -784,14 +788,14 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-			if err := store.CreatePasswordResetToken(user.ID, resetToken, time.Now().Add(resetTokenDuration)); err != nil {
+			if err := s.store.CreatePasswordResetToken(user.ID, resetToken, time.Now().Add(resetTokenDuration)); err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
 
-			resetLink := buildPasswordResetLink(r, resetToken)
-			dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
-			if shouldExposeResetLink() {
+			resetLink := s.buildPasswordResetLink(r, resetToken)
+			s.dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
+			if s.shouldExposeResetLink() {
 				data.ResetLink = resetLink
 			}
 		}
@@ -800,7 +804,7 @@ func PasswordResetRequest(store *db.Store, tmpl *template.Template, allowedRoles
 	}
 }
 
-func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc {
+func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := PasswordResetConfirmData{
 			Title:    title,
@@ -818,7 +822,7 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 				return
 			}
 
-			resetToken, err := store.GetValidPasswordResetToken(token)
+			resetToken, err := s.store.GetValidPasswordResetToken(token)
 			if err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
@@ -829,7 +833,7 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 				return
 			}
 
-			user, err := store.GetUserByID(resetToken.UserID)
+			user, err := s.store.GetUserByID(resetToken.UserID)
 			if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
 				data.Error = "Reset token is invalid for this account type"
 				renderWithStatus(w, tmpl, 0, data)
@@ -866,7 +870,7 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 			return
 		}
 
-		resetToken, err := store.GetValidPasswordResetToken(token)
+		resetToken, err := s.store.GetValidPasswordResetToken(token)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -877,7 +881,7 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 			return
 		}
 
-		user, err := store.GetUserByID(resetToken.UserID)
+		user, err := s.store.GetUserByID(resetToken.UserID)
 		if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
 			data.Error = "Reset token is invalid for this account type"
 			renderWithStatus(w, tmpl, 0, data)
@@ -890,7 +894,7 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 			return
 		}
 
-		used, err := store.UsePasswordResetToken(token, passwordHash, salt)
+		used, err := s.store.UsePasswordResetToken(token, passwordHash, salt)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -908,7 +912,7 @@ func PasswordResetConfirm(store *db.Store, tmpl *template.Template, allowedRoles
 }
 
 // Logout handles user logout
-func Logout(store *db.Store) http.HandlerFunc {
+func (s *Service) Logout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -917,7 +921,7 @@ func Logout(store *db.Store) http.HandlerFunc {
 
 		cookie, err := r.Cookie(sessionCookieName)
 		if err == nil {
-			_ = store.DeleteSession(cookie.Value)
+			_ = s.store.DeleteSession(cookie.Value)
 		}
 
 		http.SetCookie(w, &http.Cookie{
@@ -925,10 +929,10 @@ func Logout(store *db.Store) http.HandlerFunc {
 			Value:    "",
 			Expires:  time.Unix(0, 0),
 			MaxAge:   -1,
-			Domain:   runtimeSessionCookieDomain,
+			Domain:   s.sessionCookieDomain,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   shouldUseSecureCookies(r),
+			Secure:   s.shouldUseSecureCookies(r),
 			SameSite: http.SameSiteLaxMode,
 		})
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -941,7 +945,7 @@ type contextKey string
 const userContextKey contextKey = "user"
 
 // AuthMiddleware provides authentication middleware for protected routes
-func AuthMiddleware(store *db.Store, next http.Handler) http.Handler {
+func (s *Service) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
 		if err != nil {
@@ -953,19 +957,19 @@ func AuthMiddleware(store *db.Store, next http.Handler) http.Handler {
 			return
 		}
 
-		sess, err := store.GetSession(cookie.Value)
+		sess, err := s.store.GetSession(cookie.Value)
 		if err != nil || sess == nil || sess.ExpiresAt.Before(time.Now()) {
 			if sess != nil {
-				_ = store.DeleteSession(cookie.Value)
+				_ = s.store.DeleteSession(cookie.Value)
 			}
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
-		user, err := store.GetUserByID(sess.UserID)
+		user, err := s.store.GetUserByID(sess.UserID)
 		if err != nil || user == nil {
 			log.Printf("Error retrieving user from DB for session %d: %v", sess.UserID, err)
-			_ = store.DeleteSession(cookie.Value)
+			_ = s.store.DeleteSession(cookie.Value)
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}

@@ -13,7 +13,7 @@ var (
 )
 
 func withAuth(a *app.App, h http.Handler) http.Handler {
-	return auth.AuthMiddleware(a.Store, h)
+	return a.Auth.AuthMiddleware(h)
 }
 
 func withAnyRole(a *app.App, roles []string, h http.Handler) http.Handler {
@@ -30,8 +30,8 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/products/", ProductDetail(a))
 	mux.HandleFunc("/", Root(a))
 	mux.HandleFunc("/search", Search(a))
-	mux.HandleFunc("/login", auth.Login(a.Store, a.Templates.Login))
-	mux.HandleFunc("/signup", auth.SignUp(a.Store, a.Templates.Signup))
+	mux.HandleFunc("/login", a.Auth.Login(a.Templates.Login))
+	mux.HandleFunc("/signup", a.Auth.SignUp(a.Templates.Signup))
 	mux.Handle("/cart", withAuth(a, http.HandlerFunc(CartPage(a))))
 	mux.Handle("/cart/add", withAuth(a, http.HandlerFunc(CartAdd(a))))
 	mux.Handle("/cart/update", withAuth(a, http.HandlerFunc(CartUpdate(a))))
@@ -39,8 +39,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/checkout", withAuth(a, http.HandlerFunc(Checkout(a))))
 	mux.HandleFunc(
 		"/password-reset/request",
-		auth.PasswordResetRequest(
-			a.Store,
+		a.Auth.PasswordResetRequest(
 			a.Templates.PasswordResetRequest,
 			roleUser,
 			"Reset Your Password",
@@ -49,8 +48,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	)
 	mux.HandleFunc(
 		"/password-reset/confirm",
-		auth.PasswordResetConfirm(
-			a.Store,
+		a.Auth.PasswordResetConfirm(
 			a.Templates.PasswordResetConfirm,
 			roleUser,
 			"Set New Password",
@@ -58,7 +56,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 			"/login",
 		),
 	)
-	mux.HandleFunc("/logout", auth.Logout(a.Store))
+	mux.HandleFunc("/logout", a.Auth.Logout())
 	mux.Handle("/account", withAuth(a, http.HandlerFunc(Auth(a))))
 	mux.Handle("/static/", Static(a.StaticFS))
 }
@@ -66,12 +64,11 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
-	mux.HandleFunc("/setup", auth.AdminSetup(a.Store, a.Templates.AdminSetup))
-	mux.HandleFunc("/login", auth.AdminLogin(a.Store, a.Templates.AdminLogin))
+	mux.HandleFunc("/setup", a.Auth.AdminSetup(a.Templates.AdminSetup))
+	mux.HandleFunc("/login", a.Auth.AdminLogin(a.Templates.AdminLogin))
 	mux.HandleFunc(
 		"/password-reset/request",
-		auth.PasswordResetRequest(
-			a.Store,
+		a.Auth.PasswordResetRequest(
 			a.Templates.PasswordResetRequest,
 			roleAdminStaff,
 			"Reset Admin or Staff Password",
@@ -80,8 +77,7 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 	)
 	mux.HandleFunc(
 		"/password-reset/confirm",
-		auth.PasswordResetConfirm(
-			a.Store,
+		a.Auth.PasswordResetConfirm(
 			a.Templates.PasswordResetConfirm,
 			roleAdminStaff,
 			"Set New Admin or Staff Password",
@@ -89,7 +85,7 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 			"/login",
 		),
 	)
-	mux.Handle("/staff/signup", withRole(a, "admin", auth.StaffSignUp(a.Store, a.Templates.StaffSignup)))
+	mux.Handle("/staff/signup", withRole(a, "admin", a.Auth.StaffSignUp(a.Templates.StaffSignup)))
 
 	adminHandlers := http.NewServeMux()
 	adminHandlers.HandleFunc("/", AdminDashboard(a))
@@ -109,15 +105,14 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
 	mux.HandleFunc("/", PartnerRoot(a))
-	mux.HandleFunc("/login", auth.AdminLogin(a.Store, a.Templates.AdminLogin))
+	mux.HandleFunc("/login", a.Auth.AdminLogin(a.Templates.AdminLogin))
 	mux.Handle(
 		"/signup",
-		auth.AuthMiddleware(a.Store, auth.RequireRole("admin", auth.StaffSignUp(a.Store, a.Templates.StaffSignup))),
+		a.Auth.AuthMiddleware(auth.RequireRole("admin", a.Auth.StaffSignUp(a.Templates.StaffSignup))),
 	)
 	mux.HandleFunc(
 		"/password-reset/request",
-		auth.PasswordResetRequest(
-			a.Store,
+		a.Auth.PasswordResetRequest(
 			a.Templates.PasswordResetRequest,
 			roleAdminStaff,
 			"Reset Partner Password",
@@ -126,8 +121,7 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	)
 	mux.HandleFunc(
 		"/password-reset/confirm",
-		auth.PasswordResetConfirm(
-			a.Store,
+		a.Auth.PasswordResetConfirm(
 			a.Templates.PasswordResetConfirm,
 			roleAdminStaff,
 			"Set New Partner Password",
