@@ -345,19 +345,11 @@ func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink st
 }
 
 func isUniqueConstraintErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(strings.TrimSpace(err.Error()))
-	return strings.Contains(msg, "unique constraint failed")
+	return db.IsUniqueConstraintError(err)
 }
 
 func isTransientDBErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(strings.TrimSpace(err.Error()))
-	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "database is busy")
+	return db.IsTransientError(err)
 }
 
 func mapAccountCreationError(err error, conflictMessage string) (int, string) {

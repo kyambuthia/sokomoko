@@ -759,7 +759,7 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 
 	res, err := stmt.Exec(product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID)
 	if err != nil {
-		return 0, err
+		return 0, wrapProductCreateError(err)
 	}
 
 	id, err := res.LastInsertId()
@@ -1443,10 +1443,10 @@ func (s *Store) PlaceOrderFromCartWithPricing(userID int, deliveryAddress string
 func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, useCustomPricing bool) (int64, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
-		return 0, fmt.Errorf("delivery address is required")
+		return 0, ErrDeliveryAddressRequired
 	}
 	if useCustomPricing && totalAmount < 0 {
-		return 0, fmt.Errorf("total amount must be non-negative")
+		return 0, ErrNegativeTotalAmount
 	}
 
 	tx, err := s.DB.Begin()
@@ -1462,7 +1462,7 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 	var cartID int64
 	err = tx.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
 	if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("cart is empty")
+		return 0, ErrCartEmpty
 	}
 	if err != nil {
 		return 0, err
@@ -1496,7 +1496,7 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 			return 0, scanErr
 		}
 		if line.Quantity > line.StockQuantity {
-			return 0, fmt.Errorf("insufficient stock for %s", line.ProductName)
+			return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
 		}
 		lines = append(lines, line)
 		subtotal += line.UnitPrice * float64(line.Quantity)
@@ -1505,7 +1505,7 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 		return 0, err
 	}
 	if len(lines) == 0 {
-		return 0, fmt.Errorf("cart is empty")
+		return 0, ErrCartEmpty
 	}
 
 	orderTotal := subtotal
@@ -1553,7 +1553,7 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 			return 0, rowsErr
 		}
 		if affected == 0 {
-			return 0, fmt.Errorf("insufficient stock for %s", line.ProductName)
+			return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
 		}
 	}
 

@@ -187,7 +187,7 @@ func (s *Service) CreateProduct(input CreateProductInput) error {
 			product.Slug = slugBase + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + strconv.Itoa(attempt)
 		}
 		if _, err := s.store.CreateProduct(product); err != nil {
-			if isProductSlugConflict(err) {
+			if errors.Is(err, db.ErrProductSlugConflict) {
 				continue
 			}
 			return ErrUnableToCreateProduct
@@ -288,5 +288,5 @@ func isProductSlugConflict(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(strings.ToLower(err.Error()), "products.slug")
+	return errors.Is(err, db.ErrProductSlugConflict)
 }

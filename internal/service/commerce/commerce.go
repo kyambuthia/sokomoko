@@ -172,13 +172,12 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		return orderID, summary, nil
 	}
 
-	errMsg := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch {
-	case strings.Contains(errMsg, "cart is empty"):
+	case errors.Is(err, db.ErrCartEmpty):
 		return 0, CheckoutSummary{}, ErrCartEmpty
-	case strings.Contains(errMsg, "delivery address is required"):
+	case errors.Is(err, db.ErrDeliveryAddressRequired):
 		return 0, CheckoutSummary{}, ErrDeliveryAddress
-	case strings.Contains(errMsg, "insufficient stock"):
+	case errors.Is(err, db.ErrInsufficientStock):
 		return 0, CheckoutSummary{}, ErrInsufficientStock
 	default:
 		return 0, CheckoutSummary{}, err
