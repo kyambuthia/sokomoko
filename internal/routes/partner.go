@@ -1,16 +1,14 @@
 package routes
 
 import (
-	"database/sql"
+	"errors"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
-	"unicode"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 )
 
 type PartnerSetupData struct {
@@ -54,36 +52,16 @@ type PartnerProductNewData struct {
 	DefaultName string
 }
 
-func partnerSlugify(value string) string {
-	value = strings.TrimSpace(strings.ToLower(value))
-	if value == "" {
-		return ""
-	}
-	var b strings.Builder
-	prevDash := false
-	for _, r := range value {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-			prevDash = false
-			continue
-		}
-		if !prevDash {
-			b.WriteByte('-')
-			prevDash = true
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	return slug
-}
-
 func PartnerRoot(a *app.App) http.HandlerFunc {
+	svc := partnersvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		settings, err := a.Store.GetStoreSettings()
+		settings, err := svc.StoreSettings()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -97,8 +75,10 @@ func PartnerRoot(a *app.App) http.HandlerFunc {
 }
 
 func PartnerSetup(a *app.App) http.HandlerFunc {
+	svc := partnersvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		existing, err := a.Store.GetStoreSettings()
+		existing, err := svc.StoreSettings()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -121,70 +101,41 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		storeName := strings.TrimSpace(r.FormValue("store_name"))
-		storeSlug := strings.ToLower(strings.TrimSpace(r.FormValue("store_slug")))
-		description := strings.TrimSpace(r.FormValue("description"))
-		contactEmail := strings.ToLower(strings.TrimSpace(r.FormValue("contact_email")))
-		if storeName == "" || storeSlug == "" || contactEmail == "" {
+		settings, err := svc.SaveStoreSettings(partnersvc.StoreSettingsInput{
+			StoreName:    r.FormValue("store_name"),
+			StoreSlug:    r.FormValue("store_slug"),
+			Description:  r.FormValue("description"),
+			ContactEmail: r.FormValue("contact_email"),
+		})
+		switch {
+		case errors.Is(err, partnersvc.ErrMissingStoreFields):
 			data.Error = "Store name, slug, and contact email are required."
-			data.Settings = db.StoreSettings{
-				StoreName:    storeName,
-				StoreSlug:    storeSlug,
-				Description:  description,
-				ContactEmail: contactEmail,
-			}
+			data.Settings = settings
 			a.Render(w, a.Templates.PartnerSetup, data)
 			return
-		}
-
-		err = a.Store.UpsertStoreSettings(db.StoreSettings{
-			StoreName:    storeName,
-			StoreSlug:    storeSlug,
-			Description:  description,
-			ContactEmail: contactEmail,
-		})
-		if err != nil {
+		case err != nil:
 			data.Error = "Unable to save store setup. Ensure slug is unique."
-			data.Settings = db.StoreSettings{
-				StoreName:    storeName,
-				StoreSlug:    storeSlug,
-				Description:  description,
-				ContactEmail: contactEmail,
-			}
+			data.Settings = settings
 			a.Render(w, a.Templates.PartnerSetup, data)
 			return
 		}
 
 		data.Message = "Store setup saved successfully."
-		data.Settings = db.StoreSettings{
-			StoreName:    storeName,
-			StoreSlug:    storeSlug,
-			Description:  description,
-			ContactEmail: contactEmail,
-		}
+		data.Settings = settings
 		a.Render(w, a.Templates.PartnerSetup, data)
 	}
 }
 
 func PartnerDashboard(a *app.App) http.HandlerFunc {
+	svc := partnersvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		settings, err := a.Store.GetStoreSettings()
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		if settings == nil {
+		view, err := svc.Dashboard()
+		switch {
+		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
 			return
-		}
-
-		products, err := a.Store.GetAllProducts()
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		orderSummary, err := a.Store.GetPartnerOrderSummary()
-		if err != nil {
+		case err != nil:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -199,16 +150,16 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 
 		a.Render(w, a.Templates.PartnerDashboard, PartnerDashboardData{
 			Title:            "Partner Dashboard",
-			StoreName:        settings.StoreName,
-			StoreSlug:        settings.StoreSlug,
-			Description:      settings.Description,
-			ContactEmail:     settings.ContactEmail,
-			ProductCount:     len(products),
-			NewOrders:        orderSummary.NewCount,
-			InProgressOrders: orderSummary.InProgressCount,
-			DispatchedOrders: orderSummary.DispatchedCount,
-			CompletedOrders:  orderSummary.CompletedCount,
-			OverdueOrders:    orderSummary.OverdueCount,
+			StoreName:        view.Settings.StoreName,
+			StoreSlug:        view.Settings.StoreSlug,
+			Description:      view.Settings.Description,
+			ContactEmail:     view.Settings.ContactEmail,
+			ProductCount:     view.ProductCount,
+			NewOrders:        view.OrderSummary.NewCount,
+			InProgressOrders: view.OrderSummary.InProgressCount,
+			DispatchedOrders: view.OrderSummary.DispatchedCount,
+			CompletedOrders:  view.OrderSummary.CompletedCount,
+			OverdueOrders:    view.OrderSummary.OverdueCount,
 			Role:             role,
 			Username:         username,
 		})
@@ -216,50 +167,46 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 }
 
 func PartnerProducts(a *app.App) http.HandlerFunc {
+	svc := partnersvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		settings, err := a.Store.GetStoreSettings()
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		if settings == nil {
+		view, err := svc.Products()
+		switch {
+		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
 			return
-		}
-
-		products, err := a.Store.GetAllProducts()
-		if err != nil {
+		case err != nil:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		categories, _ := a.Store.GetAllCategories()
 
 		data := PartnerProductsData{
 			Title:      "Partner Products",
-			StoreName:  settings.StoreName,
-			Products:   products,
-			Categories: categories,
+			StoreName:  view.Settings.StoreName,
+			Products:   view.Products,
+			Categories: view.Categories,
 		}
 		a.Render(w, a.Templates.PartnerProducts, data)
 	}
 }
 
 func PartnerProductNew(a *app.App) http.HandlerFunc {
+	svc := partnersvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		settings, err := a.Store.GetStoreSettings()
-		if err != nil {
+		view, err := svc.Products()
+		switch {
+		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
+			http.Redirect(w, r, "/setup", http.StatusFound)
+			return
+		case err != nil:
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		if settings == nil {
-			http.Redirect(w, r, "/setup", http.StatusFound)
-			return
-		}
 
-		categories, _ := a.Store.GetAllCategories()
 		data := PartnerProductNewData{
 			Title:      "Add Product",
-			Categories: categories,
+			Categories: view.Categories,
 		}
 
 		if r.Method == http.MethodGet {
@@ -271,70 +218,38 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		name := strings.TrimSpace(r.FormValue("name"))
-		description := strings.TrimSpace(r.FormValue("description"))
-		priceRaw := strings.TrimSpace(r.FormValue("price"))
-		stockRaw := strings.TrimSpace(r.FormValue("stock_quantity"))
-		categoryIDRaw := strings.TrimSpace(r.FormValue("category_id"))
+		input := partnersvc.CreateProductInput{
+			Name:        r.FormValue("name"),
+			Description: r.FormValue("description"),
+			Price:       r.FormValue("price"),
+			Stock:       r.FormValue("stock_quantity"),
+			CategoryID:  r.FormValue("category_id"),
+		}
+		data.DefaultName = strings.TrimSpace(input.Name)
 
-		data.DefaultName = name
-		if name == "" || priceRaw == "" || stockRaw == "" {
+		err = svc.CreateProduct(input)
+		switch {
+		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
+			http.Redirect(w, r, "/setup", http.StatusFound)
+			return
+		case errors.Is(err, partnersvc.ErrMissingProductFields):
 			data.Error = "Name, price and stock are required"
 			a.Render(w, a.Templates.PartnerProductNew, data)
 			return
-		}
-
-		price, err := strconv.ParseFloat(priceRaw, 64)
-		if err != nil || price < 0 {
+		case errors.Is(err, partnersvc.ErrInvalidProductPrice):
 			data.Error = "Price must be a non-negative number"
 			a.Render(w, a.Templates.PartnerProductNew, data)
 			return
-		}
-		stock, err := strconv.Atoi(stockRaw)
-		if err != nil || stock < 0 {
+		case errors.Is(err, partnersvc.ErrInvalidProductStock):
 			data.Error = "Stock must be a non-negative integer"
 			a.Render(w, a.Templates.PartnerProductNew, data)
 			return
-		}
-
-		slugBase := partnerSlugify(name)
-		if slugBase == "" {
-			slugBase = "product"
-		}
-
-		product := db.Product{
-			Name:          name,
-			Slug:          slugBase,
-			Description:   description,
-			Price:         price,
-			StockQuantity: stock,
-		}
-
-		if categoryIDRaw != "" {
-			categoryID, parseErr := strconv.Atoi(categoryIDRaw)
-			if parseErr == nil && categoryID > 0 {
-				product.CategoryID = sql.NullInt64{Int64: int64(categoryID), Valid: true}
-			}
-		}
-
-		created := false
-		for attempt := 0; attempt < 10; attempt++ {
-			if attempt > 0 {
-				product.Slug = slugBase + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + strconv.Itoa(attempt)
-			}
-			if _, err := a.Store.CreateProduct(product); err != nil {
-				if strings.Contains(strings.ToLower(err.Error()), "products.slug") {
-					continue
-				}
-				data.Error = "Unable to create product"
-				a.Render(w, a.Templates.PartnerProductNew, data)
-				return
-			}
-			created = true
-			break
-		}
-		if !created {
+		case errors.Is(err, partnersvc.ErrUnableToCreateProductSlug):
 			data.Error = "Unable to create product slug"
+			a.Render(w, a.Templates.PartnerProductNew, data)
+			return
+		case err != nil:
+			data.Error = "Unable to create product"
 			a.Render(w, a.Templates.PartnerProductNew, data)
 			return
 		}

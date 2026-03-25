@@ -1,13 +1,13 @@
 package routes
 
 import (
+	"errors"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 )
 
 type AdminPageData struct {
@@ -47,46 +47,32 @@ func renderAdminPage(a *app.App, w http.ResponseWriter, data AdminPageData) {
 	a.Render(w, a.Templates.Admin, data)
 }
 
-func buildAdminMetrics(a *app.App) (AdminPageData, error) {
-	productCount, err := a.Store.CountProducts()
-	if err != nil {
-		return AdminPageData{}, err
-	}
-	sessionCount, err := a.Store.CountActiveSessions()
-	if err != nil {
-		return AdminPageData{}, err
-	}
-	adminCount, err := a.Store.CountUsersByRole("admin")
-	if err != nil {
-		return AdminPageData{}, err
-	}
-	staffCount, err := a.Store.CountUsersByRole("staff")
-	if err != nil {
-		return AdminPageData{}, err
-	}
-	userCount, err := a.Store.CountUsersByRole("user")
+func buildAdminMetrics(svc *adminsvc.Service) (AdminPageData, error) {
+	metrics, err := svc.Metrics()
 	if err != nil {
 		return AdminPageData{}, err
 	}
 
 	return AdminPageData{
-		ProductCount: productCount,
-		SessionCount: sessionCount,
-		AdminCount:   adminCount,
-		StaffCount:   staffCount,
-		UserCount:    userCount,
+		ProductCount: metrics.ProductCount,
+		SessionCount: metrics.SessionCount,
+		AdminCount:   metrics.AdminCount,
+		StaffCount:   metrics.StaffCount,
+		UserCount:    metrics.UserCount,
 	}, nil
 }
 
 // AdminDashboard serves the main admin dashboard.
 func AdminDashboard(a *app.App) http.HandlerFunc {
+	svc := adminsvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		metrics, err := buildAdminMetrics(a)
+		metrics, err := buildAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -101,19 +87,21 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 
 // AdminProducts handles product management.
 func AdminProducts(a *app.App) http.HandlerFunc {
+	svc := adminsvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		metrics, err := buildAdminMetrics(a)
+		metrics, err := buildAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		products, err := a.Store.GetAllProducts()
+		products, err := svc.Products()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -129,13 +117,15 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 
 // AdminOrders handles order management.
 func AdminOrders(a *app.App) http.HandlerFunc {
+	svc := adminsvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		metrics, err := buildAdminMetrics(a)
+		metrics, err := buildAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -144,35 +134,29 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 		responseStatus := http.StatusOK
 		if r.Method == http.MethodPost {
 			user := auth.GetUserFromContext(r.Context())
-			if user == nil || user.Role != "admin" {
+			err := svc.UpdateOrder(user, adminsvc.UpdateOrderInput{
+				OrderID:        r.FormValue("order_id"),
+				Status:         r.FormValue("status"),
+				PartnerStatus:  r.FormValue("partner_status"),
+				DeliveryStatus: r.FormValue("delivery_status"),
+				DeliveryNotice: r.FormValue("delivery_notice"),
+			})
+			switch {
+			case errors.Is(err, adminsvc.ErrForbiddenOrderUpdate):
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
-			}
-
-			orderID, parseErr := strconv.Atoi(r.FormValue("order_id"))
-			if parseErr != nil || orderID <= 0 {
+			case errors.Is(err, adminsvc.ErrInvalidOrderID):
 				metrics.OrderError = "Invalid order id"
 				responseStatus = http.StatusBadRequest
-			} else {
-				status := strings.TrimSpace(r.FormValue("status"))
-				partnerStatus := strings.TrimSpace(r.FormValue("partner_status"))
-				deliveryStatus := strings.TrimSpace(r.FormValue("delivery_status"))
-				notice := strings.TrimSpace(r.FormValue("delivery_notice"))
-				if updateErr := a.Store.UpdateOrderByAdmin(orderID, status, partnerStatus, deliveryStatus, notice); updateErr != nil {
-					metrics.OrderError = "Unable to update order state"
-					responseStatus = http.StatusBadRequest
-				} else {
-					metrics.OrderMessage = "Order updated"
-					actorID := 0
-					if user != nil {
-						actorID = user.ID
-					}
-					_ = a.Store.CreateAuditLog(actorID, "order.update", "order", orderID, "status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
-				}
+			case err != nil:
+				metrics.OrderError = "Unable to update order state"
+				responseStatus = http.StatusBadRequest
+			default:
+				metrics.OrderMessage = "Order updated"
 			}
 		}
 
-		orders, err := a.Store.ListAllOrders()
+		orders, err := svc.Orders()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -191,24 +175,21 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 
 // AdminReports handles sales reports.
 func AdminReports(a *app.App) http.HandlerFunc {
+	svc := adminsvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		metrics, err := buildAdminMetrics(a)
+		metrics, err := buildAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		revenueTotal, err := a.Store.SumOrderRevenue()
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		statusCounts, err := a.Store.GetOrderStatusCounts()
+		report, err := svc.Reports()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -217,24 +198,26 @@ func AdminReports(a *app.App) http.HandlerFunc {
 		metrics.Title = "Sales Reports"
 		metrics.Message = "Live operational metrics from orders and fulfillment"
 		metrics.Role = adminRoleFromContext(r)
-		metrics.RevenueTotal = revenueTotal
-		metrics.PendingCount = statusCounts["pending"] + statusCounts["processing"]
-		metrics.ShippedCount = statusCounts["shipped"]
-		metrics.DeliveredCount = statusCounts["delivered"]
-		metrics.OrderCount = metrics.PendingCount + metrics.ShippedCount + metrics.DeliveredCount + statusCounts["cancelled"]
+		metrics.RevenueTotal = report.RevenueTotal
+		metrics.PendingCount = report.PendingCount
+		metrics.ShippedCount = report.ShippedCount
+		metrics.DeliveredCount = report.DeliveredCount
+		metrics.OrderCount = report.OrderCount
 		renderAdminPage(a, w, metrics)
 	}
 }
 
 // AdminDeliveries handles delivery management.
 func AdminDeliveries(a *app.App) http.HandlerFunc {
+	svc := adminsvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		metrics, err := buildAdminMetrics(a)
+		metrics, err := buildAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -249,13 +232,15 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 
 // AdminTeam lists users and allows admin-only staff/user deactivation.
 func AdminTeam(a *app.App) http.HandlerFunc {
+	svc := adminsvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		metrics, err := buildAdminMetrics(a)
+		metrics, err := buildAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -266,35 +251,25 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 		metrics.Role = adminRoleFromContext(r)
 
 		if r.Method == http.MethodPost {
-			userIDRaw := r.FormValue("user_id")
-			userID, parseErr := strconv.Atoi(userIDRaw)
-			if parseErr != nil || userID <= 0 {
+			err := svc.DeactivateUser(auth.GetUserFromContext(r.Context()), r.FormValue("user_id"))
+			switch {
+			case errors.Is(err, adminsvc.ErrForbiddenUserAction):
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			case errors.Is(err, adminsvc.ErrInvalidUserID):
 				metrics.TeamError = "Invalid user ID"
-			} else {
-				targetUser, getErr := a.Store.GetUserByID(userID)
-				if getErr != nil {
-					metrics.TeamError = "Unable to load user"
-				} else if targetUser == nil {
-					metrics.TeamError = "User does not exist"
-				} else if targetUser.Role == "admin" {
-					metrics.TeamError = "Admin accounts cannot be deactivated from this view"
-				} else {
-					if err := a.Store.DeleteUser(userID); err != nil {
-						metrics.TeamError = "Unable to deactivate user"
-					} else {
-						metrics.TeamMessage = "User account deactivated"
-						user := auth.GetUserFromContext(r.Context())
-						actorID := 0
-						if user != nil {
-							actorID = user.ID
-						}
-						_ = a.Store.CreateAuditLog(actorID, "user.deactivate", "user", userID, "deactivated via admin team")
-					}
-				}
+			case errors.Is(err, adminsvc.ErrUserNotFound):
+				metrics.TeamError = "User does not exist"
+			case errors.Is(err, adminsvc.ErrProtectedUser):
+				metrics.TeamError = "Admin accounts cannot be deactivated from this view"
+			case err != nil:
+				metrics.TeamError = "Unable to deactivate user"
+			default:
+				metrics.TeamMessage = "User account deactivated"
 			}
 		}
 
-		teamMembers, err := a.Store.ListUsersByRoles([]string{"admin", "staff", "user"})
+		teamMembers, err := svc.TeamMembers()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -305,19 +280,21 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 }
 
 func AdminAudit(a *app.App) http.HandlerFunc {
+	svc := adminsvc.New(a.Store)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		metrics, err := buildAdminMetrics(a)
+		metrics, err := buildAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		logs, err := a.Store.ListAuditLogs(100)
+		logs, err := svc.AuditLogs(100)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
