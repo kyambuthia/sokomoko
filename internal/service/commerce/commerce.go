@@ -35,7 +35,16 @@ const (
 )
 
 type Service struct {
-	store *db.Store
+	store store
+}
+
+type store interface {
+	AddToCart(userID, productID, quantity int) error
+	GetCartItems(userID int) ([]db.CartItem, float64, error)
+	GetProductByID(id int) (*db.Product, error)
+	PlaceOrderFromCartWithPricing(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string) (int64, error)
+	RemoveFromCart(userID, productID int) error
+	UpdateCartQuantity(userID, productID, quantity int) error
 }
 
 type CheckoutSummary struct {
@@ -45,7 +54,7 @@ type CheckoutSummary struct {
 	Total       float64
 }
 
-func New(store *db.Store) *Service {
+func New(store store) *Service {
 	return &Service{store: store}
 }
 

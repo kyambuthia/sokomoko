@@ -18,7 +18,23 @@ var (
 )
 
 type Service struct {
-	store *db.Store
+	store store
+}
+
+type store interface {
+	CountActiveSessions() (int, error)
+	CountProducts() (int, error)
+	CountUsersByRole(role string) (int, error)
+	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
+	DeleteUser(id int) error
+	GetAllProducts() ([]db.Product, error)
+	GetOrderStatusCounts() (map[string]int, error)
+	GetUserByID(id int) (*db.User, error)
+	ListAllOrders() ([]db.FulfillmentOrder, error)
+	ListAuditLogs(limit int) ([]db.AuditLog, error)
+	ListUsersByRoles(roles []string) ([]db.User, error)
+	SumOrderRevenue() (float64, error)
+	UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
 }
 
 type Metrics struct {
@@ -45,7 +61,7 @@ type UpdateOrderInput struct {
 	DeliveryNotice string
 }
 
-func New(store *db.Store) *Service {
+func New(store store) *Service {
 	return &Service{store: store}
 }
 

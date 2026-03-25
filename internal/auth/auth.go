@@ -33,6 +33,21 @@ var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
 
 type PasswordResetEmailSender func(ctx context.Context, recipientEmail string, resetLink string) error
 
+type store interface {
+	CreatePasswordResetToken(userID int, token string, expiresAt time.Time) error
+	CreateSession(sess db.Session) error
+	CreateUser(user db.User) (int64, error)
+	DeleteSession(id string) error
+	GetAllProducts() ([]db.Product, error)
+	GetSession(id string) (*db.Session, error)
+	GetUserByEmail(email string) (*db.User, error)
+	GetUserByID(id int) (*db.User, error)
+	GetUserByUsername(username string) (*db.User, error)
+	GetValidPasswordResetToken(token string) (*db.PasswordResetToken, error)
+	HasAdminUser() (bool, error)
+	UsePasswordResetToken(token, passwordHash, salt string) (bool, error)
+}
+
 type Config struct {
 	Environment              string
 	AdminSetupToken          string
@@ -42,7 +57,7 @@ type Config struct {
 }
 
 type Service struct {
-	store                    *db.Store
+	store                    store
 	environment              string
 	adminSetupToken          string
 	sessionCookieDomain      string
@@ -50,7 +65,7 @@ type Service struct {
 	passwordResetEmailSender PasswordResetEmailSender
 }
 
-func NewService(store *db.Store, cfg Config) *Service {
+func NewService(store store, cfg Config) *Service {
 	environment := strings.TrimSpace(strings.ToLower(cfg.Environment))
 	if environment == "" {
 		environment = "development"
@@ -170,7 +185,7 @@ func dbGenerateSalt() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(saltBytes), nil
 }
 
-func createUserWithPassword(store *db.Store, username, email, password, role string) (int64, error) {
+func createUserWithPassword(store store, username, email, password, role string) (int64, error) {
 	passwordHash, salt, err := hashPassword(password)
 	if err != nil {
 		return 0, err

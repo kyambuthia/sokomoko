@@ -28,10 +28,22 @@ func newTestService(t *testing.T) (*Service, func()) {
 	return New(store), cleanup
 }
 
+func concreteStore(t *testing.T, svc *Service) *db.Store {
+	t.Helper()
+
+	store, ok := svc.store.(*db.Store)
+	if !ok {
+		t.Fatal("expected concrete *db.Store in tests")
+	}
+	return store
+}
+
 func createUserAndProduct(t *testing.T, svc *Service, stock int) (int, int) {
 	t.Helper()
 
-	userID64, err := svc.store.CreateUser(db.User{
+	store := concreteStore(t, svc)
+
+	userID64, err := store.CreateUser(db.User{
 		Username:     "u_test",
 		Email:        "u_test@example.com",
 		PasswordHash: "hash",
@@ -43,7 +55,7 @@ func createUserAndProduct(t *testing.T, svc *Service, stock int) (int, int) {
 		t.Fatalf("create user: %v", err)
 	}
 
-	catID, err := svc.store.CreateCategory(db.Category{
+	catID, err := store.CreateCategory(db.Category{
 		Name: "Cat A",
 		Slug: "cat-a",
 	})
@@ -51,7 +63,7 @@ func createUserAndProduct(t *testing.T, svc *Service, stock int) (int, int) {
 		t.Fatalf("create category: %v", err)
 	}
 
-	productID64, err := svc.store.CreateProduct(db.Product{
+	productID64, err := store.CreateProduct(db.Product{
 		Name:          "Product A",
 		Slug:          "product-a",
 		Description:   "desc",
@@ -180,7 +192,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatal("expected non-zero order id")
 	}
 
-	orders, err := svc.store.ListOrdersByUser(userID)
+	orders, err := concreteStore(t, svc).ListOrdersByUser(userID)
 	if err != nil {
 		t.Fatalf("list orders error = %v", err)
 	}

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
 	"log"
@@ -75,4 +76,11 @@ func (s *Store) Close() error {
 		return nil
 	}
 	return s.DB.Close()
+}
+
+func (s *Store) PingContext(ctx context.Context) error {
+	if s == nil || s.DB == nil {
+		return sql.ErrConnDone
+	}
+	return s.DB.PingContext(ctx)
 }

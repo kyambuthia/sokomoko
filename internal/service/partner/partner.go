@@ -24,7 +24,20 @@ var (
 )
 
 type Service struct {
-	store *db.Store
+	store store
+}
+
+type store interface {
+	CountProducts() (int, error)
+	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
+	CreateProduct(product db.Product) (int64, error)
+	GetAllCategories() ([]db.Category, error)
+	GetAllProducts() ([]db.Product, error)
+	GetPartnerOrderSummary() (db.PartnerOrderSummary, error)
+	GetStoreSettings() (*db.StoreSettings, error)
+	ListOrdersForFulfillment() ([]db.FulfillmentOrder, error)
+	UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
+	UpsertStoreSettings(settings db.StoreSettings) error
 }
 
 type StoreSettingsInput struct {
@@ -67,7 +80,7 @@ type UpdateOrderInput struct {
 	DeliveryNotice string
 }
 
-func New(store *db.Store) *Service {
+func New(store store) *Service {
 	return &Service{store: store}
 }
 
