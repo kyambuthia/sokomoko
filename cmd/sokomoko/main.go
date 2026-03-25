@@ -57,7 +57,12 @@ func main() {
 		log.Fatal(err)
 	}
 	defer store.Close()
-	bootstrap.Initialize(store)
+	if err := store.ApplySchema(); err != nil {
+		log.Fatal(err)
+	}
+	if err := bootstrap.Initialize(store); err != nil {
+		log.Fatal(err)
+	}
 
 	authService := auth.NewService(store, auth.Config{
 		Environment:              cfg.Environment,

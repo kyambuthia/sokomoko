@@ -19,8 +19,13 @@ type Store struct {
 var schemaSQL string
 
 func InitDB() {
-	_, err := OpenStoreFromEnv()
+	store, err := OpenStoreFromEnv()
 	if err != nil {
+		log.Fatal(err)
+	}
+	defer store.Close()
+
+	if err := store.ApplySchema(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -34,14 +39,14 @@ func OpenStoreFromEnv() (*Store, error) {
 }
 
 func OpenStore(dbPath string) (*Store, error) {
-	return openStoreWithSchema(dbPath)
+	return openStore(dbPath)
 }
 
 func OpenStoreNoSeed(dbPath string) (*Store, error) {
-	return openStoreWithSchema(dbPath)
+	return OpenStore(dbPath)
 }
 
-func openStoreWithSchema(dbPath string) (*Store, error) {
+func openStore(dbPath string) (*Store, error) {
 	dbConn, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
@@ -62,13 +67,16 @@ func openStoreWithSchema(dbPath string) (*Store, error) {
 	dbConn.SetMaxIdleConns(10)
 	dbConn.SetConnMaxLifetime(0)
 
-	_, err = dbConn.Exec(schemaSQL)
-	if err != nil {
-		_ = dbConn.Close()
-		return nil, err
+	return &Store{DB: dbConn}, nil
+}
+
+func (s *Store) ApplySchema() error {
+	if s == nil || s.DB == nil {
+		return sql.ErrConnDone
 	}
 
-	return &Store{DB: dbConn}, nil
+	_, err := s.DB.Exec(schemaSQL)
+	return err
 }
 
 func (s *Store) Close() error {

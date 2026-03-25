@@ -32,8 +32,11 @@ func TestMain(m *testing.M) {
 func setupTestDB() {
 	var err error
 	_ = os.Remove(testDBPath)
-	testStore, err = OpenStoreNoSeed(testDBPath)
+	testStore, err = OpenStore(testDBPath)
 	if err != nil {
+		panic(err)
+	}
+	if err := testStore.ApplySchema(); err != nil {
 		panic(err)
 	}
 }
@@ -554,9 +557,12 @@ func TestConcurrentCheckoutStockContention(t *testing.T) {
 func TestUsePasswordResetToken_InvalidatesUserSessions(t *testing.T) {
 	suffix := time.Now().UnixNano()
 	localDBPath := fmt.Sprintf("./test_reset_%d.db", suffix)
-	localStore, err := OpenStoreNoSeed(localDBPath)
+	localStore, err := OpenStore(localDBPath)
 	if err != nil {
 		t.Fatalf("open local store: %v", err)
+	}
+	if err := localStore.ApplySchema(); err != nil {
+		t.Fatalf("apply schema: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = localStore.Close()

@@ -69,9 +69,12 @@ func openIsolatedStore(t *testing.T) (*Store, func()) {
 	t.Helper()
 
 	path := fmt.Sprintf("./test_typed_errors_%d.db", time.Now().UnixNano())
-	store, err := OpenStoreNoSeed(path)
+	store, err := OpenStore(path)
 	if err != nil {
 		t.Fatalf("open isolated store failed: %v", err)
+	}
+	if err := store.ApplySchema(); err != nil {
+		t.Fatalf("apply schema failed: %v", err)
 	}
 
 	cleanup := func() {

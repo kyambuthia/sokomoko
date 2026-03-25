@@ -36,8 +36,11 @@ func TestMain(m *testing.M) {
 
 func setupTestDB() {
 	var err error
-	testStore, err = db.OpenStoreNoSeed(testDBPath)
+	testStore, err = db.OpenStore(testDBPath)
 	if err != nil {
+		panic(err)
+	}
+	if err := testStore.ApplySchema(); err != nil {
 		panic(err)
 	}
 }

@@ -15,9 +15,12 @@ func newTestService(t *testing.T) (*Service, func()) {
 	path := "./test_commerce_service.db"
 	_ = os.Remove(path)
 
-	store, err := db.OpenStoreNoSeed(path)
+	store, err := db.OpenStore(path)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
+	}
+	if err := store.ApplySchema(); err != nil {
+		t.Fatalf("apply schema: %v", err)
 	}
 
 	cleanup := func() {
