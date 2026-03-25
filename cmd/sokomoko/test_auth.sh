@@ -45,7 +45,7 @@ cleanup
 log_info "Checking if server is running at $BASE_URL..."
 if ! curl -s --max-time 5 "$BASE_URL/" > /dev/null 2>&1; then
     echo "Error: Server is not running at $BASE_URL"
-    echo "Please start the server with: go run cmd/sokomoko/main.go"
+    echo "Please start the server with: go run ./cmd/sokomoko serve --seed"
     exit 1
 fi
 log_success "Server is running"

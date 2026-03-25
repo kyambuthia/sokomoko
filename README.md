@@ -24,10 +24,17 @@ db/t.db              Local SQLite database (created/used at runtime)
 git clone https://github.com/kyambuthia/sokomoko.git
 cd sokomoko
 go mod tidy
-go run ./cmd/sokomoko
+go run ./cmd/sokomoko migrate
+go run ./cmd/sokomoko seed
+go run ./cmd/sokomoko serve
 ```
 
 Server default: `http://localhost:6969`
+
+For a one-step local boot with seed data:
+```bash
+go run ./cmd/sokomoko serve --seed
+```
 
 ## Configuration
 - `PORT` (default: `6969`)
@@ -57,7 +64,7 @@ SMTP_USERNAME=mailer \
 SMTP_PASSWORD=change-me \
 SMTP_FROM=no-reply@example.com \
 ENV=production \
-go run ./cmd/sokomoko
+go run ./cmd/sokomoko serve
 ```
 
 ## Domain Architecture
@@ -97,7 +104,9 @@ Partner (`partner.localhost`):
 - Password reset confirm: `/password-reset/confirm`
 
 ## Runtime Notes
-- DB schema is applied automatically on startup.
+- `serve` applies schema, then starts the server.
+- `seed` applies schema and runs bootstrap seed workflows.
+- `migrate` applies schema changes without starting the server.
 - First-run admin setup is done on `admin.localhost/setup` if no admin exists.
 - Staff role is supported alongside admin and user.
 - Password reset uses one-time, expiring reset tokens.
@@ -111,8 +120,17 @@ Partner (`partner.localhost`):
 
 ## Development Commands
 ```bash
-# Run
-go run ./cmd/sokomoko
+# Migrate schema
+go run ./cmd/sokomoko migrate
+
+# Seed bootstrap data
+go run ./cmd/sokomoko seed
+
+# Run server
+go run ./cmd/sokomoko serve
+
+# Run server with bootstrap seed
+go run ./cmd/sokomoko serve --seed
 
 # Build
 go build -o bin/sokomoko ./cmd/sokomoko

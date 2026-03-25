@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -26,8 +29,77 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
+const (
+	commandServe   = "serve"
+	commandMigrate = "migrate"
+	commandSeed    = "seed"
+)
+
+var ErrUsage = errors.New("invalid command usage")
+
+type commandConfig struct {
+	Name         string
+	SeedOnServe  bool
+	ShowHelpOnly bool
+}
+
 func main() {
+	if err := run(os.Args[1:], os.Stdout); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run(args []string, stdout io.Writer) error {
+	cmd, err := parseCommand(args)
+	if err != nil {
+		printUsage(stdout)
+		return err
+	}
+	if cmd.ShowHelpOnly {
+		printUsage(stdout)
+		return nil
+	}
+
 	cfg := config.LoadFromEnv()
+	switch cmd.Name {
+	case commandMigrate:
+		return runMigrate(cfg)
+	case commandSeed:
+		return runSeed(cfg)
+	default:
+		return runServe(cfg, cmd.SeedOnServe)
+	}
+}
+
+func parseCommand(args []string) (commandConfig, error) {
+	if len(args) == 0 {
+		return commandConfig{Name: commandServe}, nil
+	}
+
+	switch args[0] {
+	case "-h", "--help", "help":
+		return commandConfig{ShowHelpOnly: true}, nil
+	case commandServe:
+		cmd := commandConfig{Name: commandServe}
+		for _, arg := range args[1:] {
+			if arg == "--seed" {
+				cmd.SeedOnServe = true
+				continue
+			}
+			return commandConfig{}, fmt.Errorf("%w: unsupported serve option %q", ErrUsage, arg)
+		}
+		return cmd, nil
+	case commandMigrate, commandSeed:
+		if len(args) > 1 {
+			return commandConfig{}, fmt.Errorf("%w: %s does not accept extra arguments", ErrUsage, args[0])
+		}
+		return commandConfig{Name: args[0]}, nil
+	default:
+		return commandConfig{}, fmt.Errorf("%w: unknown command %q", ErrUsage, args[0])
+	}
+}
+
+func runServe(cfg config.Config, seedOnServe bool) error {
 	var resetEmailSender auth.PasswordResetEmailSender
 
 	if cfg.SMTPHost != "" || cfg.SMTPFrom != "" {
@@ -49,19 +121,21 @@ func main() {
 
 	templates, err := ui.ParseTemplates()
 	if err != nil {
-		log.Fatalf("Error parsing templates: %v", err)
+		return fmt.Errorf("parse templates: %w", err)
 	}
 
 	store, err := db.OpenStore(cfg.DBPath)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer store.Close()
 	if err := store.ApplySchema(); err != nil {
-		log.Fatal(err)
+		return err
 	}
-	if err := bootstrap.Initialize(store); err != nil {
-		log.Fatal(err)
+	if seedOnServe {
+		if err := bootstrap.Initialize(store); err != nil {
+			return err
+		}
 	}
 
 	authService := auth.NewService(store, auth.Config{
@@ -135,7 +209,7 @@ func main() {
 		WriteTimeout:      15 * time.Second,
 	}
 
-	printStartupSummary(cfg, srvr, allowedHosts)
+	printStartupSummary(cfg, srvr, allowedHosts, seedOnServe)
 
 	idleConnsClosed := make(chan struct{})
 	cleanupDone := make(chan struct{})
@@ -159,11 +233,57 @@ func main() {
 	}()
 
 	if err := srvr.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+		return err
 	}
 
 	<-idleConnsClosed
 	log.Println("[shutdown] server stopped gracefully")
+	return nil
+}
+
+func runMigrate(cfg config.Config) error {
+	store, err := db.OpenStore(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	if err := store.ApplySchema(); err != nil {
+		return err
+	}
+
+	log.Printf("[startup] schema applied db=%s", cfg.DBPath)
+	return nil
+}
+
+func runSeed(cfg config.Config) error {
+	store, err := db.OpenStore(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	if err := store.ApplySchema(); err != nil {
+		return err
+	}
+	if err := bootstrap.Initialize(store); err != nil {
+		return err
+	}
+
+	log.Printf("[startup] seed completed db=%s", cfg.DBPath)
+	return nil
+}
+
+func printUsage(w io.Writer) {
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  sokomoko serve [--seed]")
+	_, _ = fmt.Fprintln(w, "  sokomoko migrate")
+	_, _ = fmt.Fprintln(w, "  sokomoko seed")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Commands:")
+	_, _ = fmt.Fprintln(w, "  serve      Apply schema and start the HTTP server.")
+	_, _ = fmt.Fprintln(w, "  migrate    Apply schema changes and exit.")
+	_, _ = fmt.Fprintln(w, "  seed       Apply schema, run bootstrap seed workflows, and exit.")
 }
 
 func parseAllowedHosts(raw string) map[string]struct{} {
@@ -229,11 +349,12 @@ func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
 	}
 }
 
-func printStartupSummary(cfg config.Config, server *http.Server, allowedHosts map[string]struct{}) {
+func printStartupSummary(cfg config.Config, server *http.Server, allowedHosts map[string]struct{}, seedOnServe bool) {
 	hosts := sortedHostList(allowedHosts)
 
 	log.Printf("[startup] sokomoko booting")
 	log.Printf("[startup] env=%s port=%s db=%s", cfg.Environment, cfg.Port, cfg.DBPath)
+	log.Printf("[startup] seed_on_startup=%t", seedOnServe)
 	if cfg.SessionCookieDomain != "" {
 		log.Printf("[startup] session_cookie_domain=%s", cfg.SessionCookieDomain)
 	}
