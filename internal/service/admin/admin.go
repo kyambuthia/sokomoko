@@ -25,22 +25,6 @@ type Service struct {
 	store store
 }
 
-type store interface {
-	CountActiveSessions() (int, error)
-	CountProducts() (int, error)
-	CountUsersByRole(role string) (int, error)
-	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
-	DeleteUser(id int) error
-	GetAllProducts() ([]db.Product, error)
-	GetOrderStatusCounts() (map[string]int, error)
-	GetUserByID(id int) (*db.User, error)
-	ListAllOrders() ([]db.FulfillmentOrder, error)
-	ListAuditLogs(limit int) ([]db.AuditLog, error)
-	ListUsersByRoles(roles []string) ([]db.User, error)
-	SumOrderRevenue() (float64, error)
-	UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
-}
-
 type Metrics struct {
 	ProductCount int
 	SessionCount int
@@ -111,7 +95,11 @@ type UpdateOrderInput struct {
 	DeliveryNotice string
 }
 
-func New(store store) *Service {
+func New(store *db.Store) *Service {
+	return &Service{store: newDBStore(store)}
+}
+
+func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
@@ -147,52 +135,11 @@ func (s *Service) Metrics() (Metrics, error) {
 }
 
 func (s *Service) Products() ([]Product, error) {
-	products, err := s.store.GetAllProducts()
-	if err != nil {
-		return nil, err
-	}
-
-	mapped := make([]Product, 0, len(products))
-	for _, product := range products {
-		mapped = append(mapped, Product{
-			Name:          product.Name,
-			Category:      product.Category,
-			Price:         product.Price,
-			StockQuantity: product.StockQuantity,
-		})
-	}
-	return mapped, nil
+	return s.store.ListProducts()
 }
 
 func (s *Service) Orders() ([]Order, error) {
-	orders, err := s.store.ListAllOrders()
-	if err != nil {
-		return nil, err
-	}
-
-	mapped := make([]Order, 0, len(orders))
-	for _, order := range orders {
-		items := make([]OrderItem, 0, len(order.Items))
-		for _, item := range order.Items {
-			items = append(items, OrderItem{
-				ProductName: item.ProductName,
-				Quantity:    item.Quantity,
-				LineTotal:   item.LineTotal,
-			})
-		}
-		mapped = append(mapped, Order{
-			ID:              order.ID,
-			CustomerName:    order.CustomerName,
-			Status:          order.Status,
-			PartnerStatus:   order.PartnerStatus,
-			DeliveryStatus:  order.DeliveryStatus,
-			DeliveryNotice:  order.DeliveryNotice,
-			DeliveryAddress: order.DeliveryAddress,
-			TotalAmount:     order.TotalAmount,
-			Items:           items,
-		})
-	}
-	return mapped, nil
+	return s.store.ListOrders()
 }
 
 func (s *Service) Reports() (SalesReport, error) {
@@ -249,21 +196,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 }
 
 func (s *Service) TeamMembers() ([]TeamMember, error) {
-	users, err := s.store.ListUsersByRoles([]string{"admin", "staff", "user"})
-	if err != nil {
-		return nil, err
-	}
-
-	mapped := make([]TeamMember, 0, len(users))
-	for _, user := range users {
-		mapped = append(mapped, TeamMember{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
-			Role:     user.Role,
-		})
-	}
-	return mapped, nil
+	return s.store.ListTeamMembers()
 }
 
 func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
@@ -276,7 +209,7 @@ func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 		return ErrInvalidUserID
 	}
 
-	targetUser, err := s.store.GetUserByID(userID)
+	targetUser, err := s.store.GetTeamMember(userID)
 	if err != nil {
 		return err
 	}
@@ -296,23 +229,7 @@ func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 }
 
 func (s *Service) AuditLogs(limit int) ([]AuditLog, error) {
-	logs, err := s.store.ListAuditLogs(limit)
-	if err != nil {
-		return nil, err
-	}
-
-	mapped := make([]AuditLog, 0, len(logs))
-	for _, entry := range logs {
-		mapped = append(mapped, AuditLog{
-			CreatedAt:   entry.CreatedAt,
-			ActorUserID: entry.ActorUserID,
-			Action:      entry.Action,
-			TargetType:  entry.TargetType,
-			TargetID:    entry.TargetID,
-			Details:     entry.Details,
-		})
-	}
-	return mapped, nil
+	return s.store.ListAuditEntries(limit)
 }
 
 func parsePositiveInt(raw string) (int, error) {

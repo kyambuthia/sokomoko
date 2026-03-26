@@ -1,7 +1,6 @@
 package partner
 
 import (
-	"database/sql"
 	"errors"
 	"strconv"
 	"strings"
@@ -27,19 +26,6 @@ var (
 
 type Service struct {
 	store store
-}
-
-type store interface {
-	CountProducts() (int, error)
-	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
-	CreateProduct(product db.Product) (int64, error)
-	GetAllCategories() ([]db.Category, error)
-	GetAllProducts() ([]db.Product, error)
-	GetPartnerOrderSummary() (db.PartnerOrderSummary, error)
-	GetStoreSettings() (*db.StoreSettings, error)
-	ListOrdersForFulfillment() ([]db.FulfillmentOrder, error)
-	UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
-	UpsertStoreSettings(settings db.StoreSettings) error
 }
 
 type StoreSettingsInput struct {
@@ -133,24 +119,20 @@ type UpdateOrderInput struct {
 	DeliveryNotice string
 }
 
-func New(store store) *Service {
+func New(store *db.Store) *Service {
+	return &Service{store: newDBStore(store)}
+}
+
+func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
 func (s *Service) StoreSettings() (*StoreSettings, error) {
-	settings, err := s.store.GetStoreSettings()
-	if err != nil {
-		return nil, err
-	}
-	if settings == nil {
-		return nil, nil
-	}
-	mapped := mapStoreSettings(*settings)
-	return &mapped, nil
+	return s.store.GetStoreSettings()
 }
 
 func (s *Service) SaveStoreSettings(input StoreSettingsInput) (StoreSettings, error) {
-	settings := db.StoreSettings{
+	settings := StoreSettings{
 		StoreName:    strings.TrimSpace(input.StoreName),
 		StoreSlug:    strings.ToLower(strings.TrimSpace(input.StoreSlug)),
 		Description:  strings.TrimSpace(input.Description),
@@ -158,14 +140,14 @@ func (s *Service) SaveStoreSettings(input StoreSettingsInput) (StoreSettings, er
 	}
 
 	if settings.StoreName == "" || settings.StoreSlug == "" || settings.ContactEmail == "" {
-		return mapStoreSettings(settings), ErrMissingStoreFields
+		return settings, ErrMissingStoreFields
 	}
 
-	if err := s.store.UpsertStoreSettings(settings); err != nil {
-		return mapStoreSettings(settings), err
+	if err := s.store.SaveStoreSettings(settings); err != nil {
+		return settings, err
 	}
 
-	return mapStoreSettings(settings), nil
+	return settings, nil
 }
 
 func (s *Service) Dashboard() (DashboardData, error) {
@@ -178,15 +160,15 @@ func (s *Service) Dashboard() (DashboardData, error) {
 	if err != nil {
 		return DashboardData{}, err
 	}
-	orderSummary, err := s.store.GetPartnerOrderSummary()
+	orderSummary, err := s.store.GetOrderSummary()
 	if err != nil {
 		return DashboardData{}, err
 	}
 
 	return DashboardData{
-		Settings:     mapStoreSettings(*settings),
+		Settings:     *settings,
 		ProductCount: productCount,
-		OrderSummary: mapSummary(orderSummary),
+		OrderSummary: orderSummary,
 	}, nil
 }
 
@@ -196,19 +178,19 @@ func (s *Service) Products() (ProductsData, error) {
 		return ProductsData{}, err
 	}
 
-	products, err := s.store.GetAllProducts()
+	products, err := s.store.GetProducts()
 	if err != nil {
 		return ProductsData{}, err
 	}
-	categories, err := s.store.GetAllCategories()
+	categories, err := s.store.GetCategories()
 	if err != nil {
 		categories = nil
 	}
 
 	return ProductsData{
-		Settings:   mapStoreSettings(*settings),
-		Products:   mapProducts(products),
-		Categories: mapCategories(categories),
+		Settings:   *settings,
+		Products:   products,
+		Categories: categories,
 	}, nil
 }
 
@@ -241,7 +223,7 @@ func (s *Service) CreateProduct(input CreateProductInput) error {
 		slugBase = "product"
 	}
 
-	product := db.Product{
+	product := productDraft{
 		Name:          name,
 		Slug:          slugBase,
 		Description:   description,
@@ -252,7 +234,8 @@ func (s *Service) CreateProduct(input CreateProductInput) error {
 	if categoryIDRaw != "" {
 		categoryID, parseErr := strconv.Atoi(categoryIDRaw)
 		if parseErr == nil && categoryID > 0 {
-			product.CategoryID = sql.NullInt64{Int64: int64(categoryID), Valid: true}
+			product.CategoryID.Int64 = int64(categoryID)
+			product.CategoryID.Valid = true
 		}
 	}
 
@@ -260,7 +243,7 @@ func (s *Service) CreateProduct(input CreateProductInput) error {
 		if attempt > 0 {
 			product.Slug = slugBase + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + strconv.Itoa(attempt)
 		}
-		if _, err := s.store.CreateProduct(product); err != nil {
+		if err := s.store.CreateProduct(product); err != nil {
 			if errors.Is(err, db.ErrProductSlugConflict) {
 				continue
 			}
@@ -286,11 +269,11 @@ func (s *Service) Orders(filter string) (OrdersData, error) {
 	filtered := make([]Order, 0, len(orders))
 	for _, order := range orders {
 		if cleanFilter == "all" || order.PartnerStatus == cleanFilter {
-			filtered = append(filtered, mapOrder(order))
+			filtered = append(filtered, order)
 		}
 	}
 
-	summary, err := s.store.GetPartnerOrderSummary()
+	summary, err := s.store.GetOrderSummary()
 	if err != nil {
 		return OrdersData{}, err
 	}
@@ -298,7 +281,7 @@ func (s *Service) Orders(filter string) (OrdersData, error) {
 	return OrdersData{
 		Filter:  cleanFilter,
 		Orders:  filtered,
-		Summary: mapSummary(summary),
+		Summary: summary,
 	}, nil
 }
 
@@ -334,7 +317,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 	return nil
 }
 
-func (s *Service) requireStoreSettings() (*db.StoreSettings, error) {
+func (s *Service) requireStoreSettings() (*StoreSettings, error) {
 	settings, err := s.store.GetStoreSettings()
 	if err != nil {
 		return nil, err
@@ -354,6 +337,23 @@ func mapStoreSettings(settings db.StoreSettings) StoreSettings {
 	}
 }
 
+func mapProduct(product db.Product) Product {
+	return Product{
+		ID:            product.ID,
+		Name:          product.Name,
+		Category:      product.Category,
+		Price:         product.Price,
+		StockQuantity: product.StockQuantity,
+	}
+}
+
+func mapCategory(category db.Category) Category {
+	return Category{
+		ID:   int(category.ID),
+		Name: category.Name,
+	}
+}
+
 func mapSummary(summary db.PartnerOrderSummary) Summary {
 	return Summary{
 		NewCount:        summary.NewCount,
@@ -362,31 +362,6 @@ func mapSummary(summary db.PartnerOrderSummary) Summary {
 		CompletedCount:  summary.CompletedCount,
 		OverdueCount:    summary.OverdueCount,
 	}
-}
-
-func mapProducts(products []db.Product) []Product {
-	mapped := make([]Product, 0, len(products))
-	for _, product := range products {
-		mapped = append(mapped, Product{
-			ID:            product.ID,
-			Name:          product.Name,
-			Category:      product.Category,
-			Price:         product.Price,
-			StockQuantity: product.StockQuantity,
-		})
-	}
-	return mapped
-}
-
-func mapCategories(categories []db.Category) []Category {
-	mapped := make([]Category, 0, len(categories))
-	for _, category := range categories {
-		mapped = append(mapped, Category{
-			ID:   int(category.ID),
-			Name: category.Name,
-		})
-	}
-	return mapped
 }
 
 func mapOrder(order db.FulfillmentOrder) Order {

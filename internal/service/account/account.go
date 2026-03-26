@@ -15,29 +15,14 @@ type Service struct {
 	store store
 }
 
-type store interface {
-	ListOrdersByUser(userID int) ([]db.CustomerOrder, error)
+func New(store *db.Store) *Service {
+	return &Service{store: newDBStore(store)}
 }
 
-func New(store store) *Service {
+func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
 func (s *Service) OrdersForUser(userID int) ([]Order, error) {
-	orders, err := s.store.ListOrdersByUser(userID)
-	if err != nil {
-		return nil, err
-	}
-	mapped := make([]Order, 0, len(orders))
-	for _, order := range orders {
-		mapped = append(mapped, Order{
-			ID:             order.ID,
-			Status:         order.Status,
-			PartnerStatus:  order.PartnerStatus,
-			DeliveryStatus: order.DeliveryStatus,
-			DeliveryNotice: order.DeliveryNotice,
-			TotalAmount:    order.TotalAmount,
-		})
-	}
-	return mapped, nil
+	return s.store.ListOrdersByUser(userID)
 }

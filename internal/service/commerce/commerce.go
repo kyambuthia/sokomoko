@@ -38,15 +38,6 @@ type Service struct {
 	store store
 }
 
-type store interface {
-	AddToCart(userID, productID, quantity int) error
-	GetCartItems(userID int) ([]db.CartItem, float64, error)
-	GetProductByID(id int) (*db.Product, error)
-	PlaceOrderFromCartWithPricing(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string) (int64, error)
-	RemoveFromCart(userID, productID int) error
-	UpdateCartQuantity(userID, productID, quantity int) error
-}
-
 type CheckoutSummary struct {
 	Subtotal    float64
 	ShippingFee float64
@@ -63,16 +54,16 @@ type CartItem struct {
 	LineTotal     float64
 }
 
-func New(store store) *Service {
+func New(store *db.Store) *Service {
+	return &Service{store: newDBStore(store)}
+}
+
+func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
 func (s *Service) GetCart(userID int) ([]CartItem, float64, error) {
-	items, subtotal, err := s.store.GetCartItems(userID)
-	if err != nil {
-		return nil, 0, err
-	}
-	return mapCartItems(items), subtotal, nil
+	return s.store.GetCartItems(userID)
 }
 
 func (s *Service) AddToCart(userID, productID, quantity int) error {

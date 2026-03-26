@@ -13,11 +13,6 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/notify"
 	"github.com/kyambuthia/sokomoko/internal/routes"
-	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
-	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
-	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
-	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
-	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
@@ -43,7 +38,18 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 		return wrapCommandError(commandServe, "prepare store", err)
 	}
 
-	application := buildApplication(cfg, store, templates, resetEmailSender)
+	application := app.Compose(app.ComposeOptions{
+		Store:     store,
+		Templates: templates,
+		StaticFS:  ui.StaticFS,
+		Auth: auth.Config{
+			Environment:              cfg.Environment,
+			AdminSetupToken:          cfg.AdminSetupToken,
+			SessionCookieDomain:      cfg.SessionCookieDomain,
+			PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
+			PasswordResetEmailSender: resetEmailSender,
+		},
+	})
 	server, allowedHosts := buildServer(cfg, application)
 	printStartupSummary(cfg, server, allowedHosts, seedOnServe)
 
@@ -102,28 +108,6 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 	resetEmailSender = emailSender.SendPasswordResetEmail
 	log.Printf("[startup] password_reset_email=enabled host=%s port=%s from=%s", cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom)
 	return resetEmailSender, nil
-}
-
-func buildApplication(cfg config.Config, store *db.Store, templates *ui.Templates, resetEmailSender auth.PasswordResetEmailSender) *app.App {
-	authService := auth.NewService(store, auth.Config{
-		Environment:              cfg.Environment,
-		AdminSetupToken:          cfg.AdminSetupToken,
-		SessionCookieDomain:      cfg.SessionCookieDomain,
-		PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
-		PasswordResetEmailSender: resetEmailSender,
-	})
-
-	return app.New(app.Dependencies{
-		Readiness: store,
-		Catalog:   catalogsvc.New(store),
-		Account:   accountsvc.New(store),
-		Commerce:  commerceSvc.New(store),
-		Admin:     adminsvc.New(store),
-		Partner:   partnersvc.New(store),
-		Auth:      authService,
-		Templates: templates,
-		StaticFS:  ui.StaticFS,
-	})
 }
 
 func buildServer(cfg config.Config, application *app.App) (*httpServer, map[string]struct{}) {

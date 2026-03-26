@@ -24,22 +24,16 @@ type Service struct {
 	store store
 }
 
-type store interface {
-	GetAllProducts() ([]db.Product, error)
-	GetProductBySlug(slug string) (*db.Product, error)
-	SearchProducts(query string) ([]db.Product, error)
+func New(store *db.Store) *Service {
+	return &Service{store: newDBStore(store)}
 }
 
-func New(store store) *Service {
+func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
 func (s *Service) AllProducts() ([]Product, error) {
-	products, err := s.store.GetAllProducts()
-	if err != nil {
-		return nil, err
-	}
-	return mapProducts(products), nil
+	return s.store.GetAllProducts()
 }
 
 func (s *Service) ProductBySlug(slug string) (*Product, error) {
@@ -48,14 +42,7 @@ func (s *Service) ProductBySlug(slug string) (*Product, error) {
 		return nil, ErrInvalidProductSlug
 	}
 	product, err := s.store.GetProductBySlug(cleanSlug)
-	if err != nil {
-		return nil, err
-	}
-	if product == nil {
-		return nil, nil
-	}
-	mapped := mapProduct(*product)
-	return &mapped, nil
+	return product, err
 }
 
 func (s *Service) Search(query string) ([]Product, error) {
@@ -63,11 +50,7 @@ func (s *Service) Search(query string) ([]Product, error) {
 	if cleanQuery == "" {
 		return []Product{}, nil
 	}
-	products, err := s.store.SearchProducts(cleanQuery)
-	if err != nil {
-		return nil, err
-	}
-	return mapProducts(products), nil
+	return s.store.SearchProducts(cleanQuery)
 }
 
 func (p Product) GetPrimaryImageURL() string {

@@ -9,7 +9,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
-func newTestService(t *testing.T) (*Service, func()) {
+func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 	t.Helper()
 
 	path := "./test_commerce_service.db"
@@ -28,23 +28,11 @@ func newTestService(t *testing.T) (*Service, func()) {
 		_ = os.Remove(path)
 	}
 
-	return New(store), cleanup
+	return New(store), store, cleanup
 }
 
-func concreteStore(t *testing.T, svc *Service) *db.Store {
+func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 	t.Helper()
-
-	store, ok := svc.store.(*db.Store)
-	if !ok {
-		t.Fatal("expected concrete *db.Store in tests")
-	}
-	return store
-}
-
-func createUserAndProduct(t *testing.T, svc *Service, stock int) (int, int) {
-	t.Helper()
-
-	store := concreteStore(t, svc)
 
 	userID64, err := store.CreateUser(db.User{
 		Username:     "u_test",
@@ -82,10 +70,10 @@ func createUserAndProduct(t *testing.T, svc *Service, stock int) (int, int) {
 }
 
 func TestAddToCart_InvalidProduct(t *testing.T) {
-	svc, cleanup := newTestService(t)
+	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
-	userID, _ := createUserAndProduct(t, svc, 3)
+	userID, _ := createUserAndProduct(t, store, 3)
 	err := svc.AddToCart(userID, 0, 1)
 	if err != ErrInvalidProduct {
 		t.Fatalf("error = %v, want %v", err, ErrInvalidProduct)
@@ -93,10 +81,10 @@ func TestAddToCart_InvalidProduct(t *testing.T) {
 }
 
 func TestAddToCart_OutOfStock(t *testing.T) {
-	svc, cleanup := newTestService(t)
+	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
-	userID, productID := createUserAndProduct(t, svc, 0)
+	userID, productID := createUserAndProduct(t, store, 0)
 	err := svc.AddToCart(userID, productID, 1)
 	if err != ErrOutOfStock {
 		t.Fatalf("error = %v, want %v", err, ErrOutOfStock)
@@ -104,10 +92,10 @@ func TestAddToCart_OutOfStock(t *testing.T) {
 }
 
 func TestAddToCart_InsufficientStock(t *testing.T) {
-	svc, cleanup := newTestService(t)
+	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
-	userID, productID := createUserAndProduct(t, svc, 2)
+	userID, productID := createUserAndProduct(t, store, 2)
 	if err := svc.AddToCart(userID, productID, 2); err != nil {
 		t.Fatalf("initial add error = %v", err)
 	}
@@ -119,10 +107,10 @@ func TestAddToCart_InsufficientStock(t *testing.T) {
 }
 
 func TestUpdateCartItem_InsufficientStock(t *testing.T) {
-	svc, cleanup := newTestService(t)
+	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
-	userID, productID := createUserAndProduct(t, svc, 3)
+	userID, productID := createUserAndProduct(t, store, 3)
 	if err := svc.AddToCart(userID, productID, 1); err != nil {
 		t.Fatalf("initial add error = %v", err)
 	}
@@ -134,10 +122,10 @@ func TestUpdateCartItem_InsufficientStock(t *testing.T) {
 }
 
 func TestCheckout_ValidationErrors(t *testing.T) {
-	svc, cleanup := newTestService(t)
+	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
-	userID, _ := createUserAndProduct(t, svc, 3)
+	userID, _ := createUserAndProduct(t, store, 3)
 
 	if _, err := svc.Checkout(userID, " "); err != ErrDeliveryAddress {
 		t.Fatalf("delivery error = %v, want %v", err, ErrDeliveryAddress)
@@ -165,10 +153,10 @@ func TestCalculateCheckoutSummary(t *testing.T) {
 }
 
 func TestCheckoutWithPayment_InvalidMethod(t *testing.T) {
-	svc, cleanup := newTestService(t)
+	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
-	userID, productID := createUserAndProduct(t, svc, 3)
+	userID, productID := createUserAndProduct(t, store, 3)
 	if err := svc.AddToCart(userID, productID, 1); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
@@ -179,10 +167,10 @@ func TestCheckoutWithPayment_InvalidMethod(t *testing.T) {
 }
 
 func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
-	svc, cleanup := newTestService(t)
+	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
-	userID, productID := createUserAndProduct(t, svc, 5)
+	userID, productID := createUserAndProduct(t, store, 5)
 	if err := svc.AddToCart(userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
@@ -195,7 +183,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatal("expected non-zero order id")
 	}
 
-	orders, err := concreteStore(t, svc).ListOrdersByUser(userID)
+	orders, err := store.ListOrdersByUser(userID)
 	if err != nil {
 		t.Fatalf("list orders error = %v", err)
 	}

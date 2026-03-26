@@ -18,11 +18,6 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/routes"
-	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
-	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
-	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
-	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
-	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -55,17 +50,11 @@ func setupTestServer() {
 		panic(err)
 	}
 
-	authService := auth.NewService(testStore, auth.Config{})
-	a := app.New(app.Dependencies{
-		Readiness: testStore,
-		Catalog:   catalogsvc.New(testStore),
-		Account:   accountsvc.New(testStore),
-		Commerce:  commerceSvc.New(testStore),
-		Admin:     adminsvc.New(testStore),
-		Partner:   partnersvc.New(testStore),
-		Auth:      authService,
+	a := app.Compose(app.ComposeOptions{
+		Store:     testStore,
 		Templates: testTemplates,
 		StaticFS:  ui.StaticFS,
+		Auth:      auth.Config{},
 	})
 
 	mainMux := http.NewServeMux()

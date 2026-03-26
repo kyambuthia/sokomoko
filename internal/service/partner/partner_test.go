@@ -6,7 +6,7 @@ import (
 )
 
 func TestSaveStoreSettings_MissingFields_ReturnsError(t *testing.T) {
-	svc := New(nil)
+	svc := newWithStore(nil)
 
 	_, err := svc.SaveStoreSettings(StoreSettingsInput{})
 	if !errors.Is(err, ErrMissingStoreFields) {
