@@ -3,8 +3,6 @@ package admin
 import (
 	"errors"
 	"testing"
-
-	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
 func TestUpdateOrder_NonAdmin_ReturnsForbidden(t *testing.T) {
@@ -19,7 +17,7 @@ func TestUpdateOrder_NonAdmin_ReturnsForbidden(t *testing.T) {
 func TestDeactivateUser_InvalidID_ReturnsError(t *testing.T) {
 	svc := New(nil)
 
-	err := svc.DeactivateUser(&db.User{ID: 1, Role: "admin"}, "abc")
+	err := svc.DeactivateUser(&Actor{ID: 1, Role: "admin"}, "abc")
 	if !errors.Is(err, ErrInvalidUserID) {
 		t.Fatalf("expected ErrInvalidUserID, got %v", err)
 	}

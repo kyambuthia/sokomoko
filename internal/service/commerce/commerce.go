@@ -54,12 +54,25 @@ type CheckoutSummary struct {
 	Total       float64
 }
 
+type CartItem struct {
+	ProductID     int
+	ProductName   string
+	UnitPrice     float64
+	Quantity      int
+	StockQuantity int
+	LineTotal     float64
+}
+
 func New(store store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) GetCart(userID int) ([]db.CartItem, float64, error) {
-	return s.store.GetCartItems(userID)
+func (s *Service) GetCart(userID int) ([]CartItem, float64, error) {
+	items, subtotal, err := s.store.GetCartItems(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return mapCartItems(items), subtotal, nil
 }
 
 func (s *Service) AddToCart(userID, productID, quantity int) error {
@@ -97,6 +110,21 @@ func (s *Service) AddToCart(userID, productID, quantity int) error {
 	}
 
 	return s.store.AddToCart(userID, productID, quantity)
+}
+
+func mapCartItems(items []db.CartItem) []CartItem {
+	mapped := make([]CartItem, 0, len(items))
+	for _, item := range items {
+		mapped = append(mapped, CartItem{
+			ProductID:     item.ProductID,
+			ProductName:   item.ProductName,
+			UnitPrice:     item.UnitPrice,
+			Quantity:      item.Quantity,
+			StockQuantity: item.StockQuantity,
+			LineTotal:     item.LineTotal,
+		})
+	}
+	return mapped
 }
 
 func (s *Service) UpdateCartItem(userID, productID, quantity int) error {

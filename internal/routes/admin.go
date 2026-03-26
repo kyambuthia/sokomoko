@@ -5,8 +5,6 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 )
 
@@ -19,10 +17,10 @@ type AdminPageData struct {
 	AdminCount     int
 	StaffCount     int
 	UserCount      int
-	Products       []db.Product
-	TeamMembers    []db.User
-	Orders         []db.FulfillmentOrder
-	AuditLogs      []db.AuditLog
+	Products       []adminsvc.Product
+	TeamMembers    []adminsvc.TeamMember
+	Orders         []adminsvc.Order
+	AuditLogs      []adminsvc.AuditLog
 	OrderCount     int
 	RevenueTotal   float64
 	PendingCount   int
@@ -34,32 +32,12 @@ type AdminPageData struct {
 	OrderMessage   string
 }
 
-func adminRoleFromContext(r *http.Request) string {
-	role := "staff"
-	user := auth.GetUserFromContext(r.Context())
-	if user != nil {
-		role = user.Role
-	}
-	return role
-}
-
 func renderAdminPage(a *app.App, w http.ResponseWriter, data AdminPageData) {
 	a.Render(w, a.Templates.Admin, data)
 }
 
-func buildAdminMetrics(svc app.AdminService) (AdminPageData, error) {
-	metrics, err := svc.Metrics()
-	if err != nil {
-		return AdminPageData{}, err
-	}
-
-	return AdminPageData{
-		ProductCount: metrics.ProductCount,
-		SessionCount: metrics.SessionCount,
-		AdminCount:   metrics.AdminCount,
-		StaffCount:   metrics.StaffCount,
-		UserCount:    metrics.UserCount,
-	}, nil
+func loadAdminMetrics(svc app.AdminService) (adminsvc.Metrics, error) {
+	return svc.Metrics()
 }
 
 // AdminDashboard serves the main admin dashboard.
@@ -72,16 +50,12 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := buildAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		metrics.Title = "Admin Dashboard"
-		metrics.Message = "Platform operations and health overview"
-		metrics.Role = adminRoleFromContext(r)
-		renderAdminPage(a, w, metrics)
+		renderAdminPage(a, w, adminDashboardPage(metrics, adminRoleFromContext(r)))
 	}
 }
 
@@ -95,7 +69,7 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := buildAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -107,11 +81,7 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics.Title = "Product Management"
-		metrics.Message = "Review catalog quality and inventory"
-		metrics.Role = adminRoleFromContext(r)
-		metrics.Products = products
-		renderAdminPage(a, w, metrics)
+		renderAdminPage(a, w, adminProductsPage(metrics, adminRoleFromContext(r), products))
 	}
 }
 
@@ -125,16 +95,16 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := buildAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		page := adminOrdersPage(metrics, adminRoleFromContext(r), nil)
 
 		responseStatus := http.StatusOK
 		if r.Method == http.MethodPost {
-			user := auth.GetUserFromContext(r.Context())
-			err := svc.UpdateOrder(user, adminsvc.UpdateOrderInput{
+			err := svc.UpdateOrder(adminActorFromContext(r), adminsvc.UpdateOrderInput{
 				OrderID:        r.FormValue("order_id"),
 				Status:         r.FormValue("status"),
 				PartnerStatus:  r.FormValue("partner_status"),
@@ -146,19 +116,19 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			case errors.Is(err, adminsvc.ErrInvalidOrderID):
-				metrics.OrderError = "Invalid order id"
+				page.OrderError = "Invalid order id"
 				responseStatus = http.StatusBadRequest
 			case errors.Is(err, adminsvc.ErrOrderNotFound):
-				metrics.OrderError = "Order does not exist"
+				page.OrderError = "Order does not exist"
 				responseStatus = http.StatusBadRequest
 			case errors.Is(err, adminsvc.ErrInvalidOrderState):
-				metrics.OrderError = "Order state is invalid"
+				page.OrderError = "Order state is invalid"
 				responseStatus = http.StatusBadRequest
 			case err != nil:
-				metrics.OrderError = "Unable to update order state"
+				page.OrderError = "Unable to update order state"
 				responseStatus = http.StatusBadRequest
 			default:
-				metrics.OrderMessage = "Order updated"
+				page.OrderMessage = "Order updated"
 			}
 		}
 
@@ -168,14 +138,11 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics.Title = "Order Management"
-		metrics.Message = "Review and control order lifecycle state"
-		metrics.Role = adminRoleFromContext(r)
-		metrics.Orders = orders
+		page.Orders = orders
 		if responseStatus != http.StatusOK {
 			w.WriteHeader(responseStatus)
 		}
-		renderAdminPage(a, w, metrics)
+		renderAdminPage(a, w, page)
 	}
 }
 
@@ -189,7 +156,7 @@ func AdminReports(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := buildAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -201,15 +168,7 @@ func AdminReports(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics.Title = "Sales Reports"
-		metrics.Message = "Live operational metrics from orders and fulfillment"
-		metrics.Role = adminRoleFromContext(r)
-		metrics.RevenueTotal = report.RevenueTotal
-		metrics.PendingCount = report.PendingCount
-		metrics.ShippedCount = report.ShippedCount
-		metrics.DeliveredCount = report.DeliveredCount
-		metrics.OrderCount = report.OrderCount
-		renderAdminPage(a, w, metrics)
+		renderAdminPage(a, w, adminReportsPage(metrics, adminRoleFromContext(r), report))
 	}
 }
 
@@ -223,16 +182,12 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := buildAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		metrics.Title = "Delivery Management"
-		metrics.Message = "Delivery pipeline placeholders are ready for integration"
-		metrics.Role = adminRoleFromContext(r)
-		renderAdminPage(a, w, metrics)
+		renderAdminPage(a, w, adminDeliveriesPage(metrics, adminRoleFromContext(r)))
 	}
 }
 
@@ -246,32 +201,29 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := buildAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		metrics.Title = "Team Management"
-		metrics.Message = "Manage admin, staff, and customer accounts"
-		metrics.Role = adminRoleFromContext(r)
+		page := adminTeamPage(metrics, adminRoleFromContext(r), nil)
 
 		if r.Method == http.MethodPost {
-			err := svc.DeactivateUser(auth.GetUserFromContext(r.Context()), r.FormValue("user_id"))
+			err := svc.DeactivateUser(adminActorFromContext(r), r.FormValue("user_id"))
 			switch {
 			case errors.Is(err, adminsvc.ErrForbiddenUserAction):
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			case errors.Is(err, adminsvc.ErrInvalidUserID):
-				metrics.TeamError = "Invalid user ID"
+				page.TeamError = "Invalid user ID"
 			case errors.Is(err, adminsvc.ErrUserNotFound):
-				metrics.TeamError = "User does not exist"
+				page.TeamError = "User does not exist"
 			case errors.Is(err, adminsvc.ErrProtectedUser):
-				metrics.TeamError = "Admin accounts cannot be deactivated from this view"
+				page.TeamError = "Admin accounts cannot be deactivated from this view"
 			case err != nil:
-				metrics.TeamError = "Unable to deactivate user"
+				page.TeamError = "Unable to deactivate user"
 			default:
-				metrics.TeamMessage = "User account deactivated"
+				page.TeamMessage = "User account deactivated"
 			}
 		}
 
@@ -280,8 +232,8 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		metrics.TeamMembers = teamMembers
-		renderAdminPage(a, w, metrics)
+		page.TeamMembers = teamMembers
+		renderAdminPage(a, w, page)
 	}
 }
 
@@ -294,7 +246,7 @@ func AdminAudit(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := buildAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -306,10 +258,6 @@ func AdminAudit(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics.Title = "Audit Log"
-		metrics.Message = "Recent privileged actions"
-		metrics.Role = adminRoleFromContext(r)
-		metrics.AuditLogs = logs
-		renderAdminPage(a, w, metrics)
+		renderAdminPage(a, w, adminAuditPage(metrics, adminRoleFromContext(r), logs))
 	}
 }

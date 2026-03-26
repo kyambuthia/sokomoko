@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
 type SearchFormValues struct {
@@ -21,7 +20,6 @@ func Search(a *app.App) http.HandlerFunc {
 		case "GET":
 			query := req.URL.Query().Get("q")
 			if query != "" {
-				// Perform search
 				products, err := a.Catalog.Search(query)
 				if err != nil {
 					log.Printf("Error searching products: %v", err)
@@ -29,20 +27,9 @@ func Search(a *app.App) http.HandlerFunc {
 					return
 				}
 
-				// Build template data
-				data := map[string]interface{}{
-					"Query":     query,
-					"Products":  products,
-					"NoResults": len(products) == 0,
-				}
-				a.Render(w, a.Templates.Search, data)
+				a.Render(w, a.Templates.Search, searchPage(query, products))
 			} else {
-				data := map[string]interface{}{
-					"Query":     "",
-					"Products":  []db.Product{},
-					"NoResults": false,
-				}
-				a.Render(w, a.Templates.Search, data)
+				a.Render(w, a.Templates.Search, searchPage("", nil))
 			}
 
 		// HANDLE POST REQUESTS - /search ROUTE
@@ -54,7 +41,6 @@ func Search(a *app.App) http.HandlerFunc {
 				return
 			}
 
-			// read form data
 			var formData SearchFormValues
 			err = json.Unmarshal(reqBody, &formData)
 			if err != nil {
@@ -62,7 +48,6 @@ func Search(a *app.App) http.HandlerFunc {
 				return
 			}
 
-			// Perform search
 			products, err := a.Catalog.Search(formData.QueryString)
 			if err != nil {
 				log.Printf("Error searching products: %v", err)
@@ -70,7 +55,6 @@ func Search(a *app.App) http.HandlerFunc {
 				return
 			}
 
-			// Return JSON
 			w.Header().Set("Content-Type", "application/json")
 			err = json.NewEncoder(w).Encode(products)
 			if err != nil {

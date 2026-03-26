@@ -24,41 +24,41 @@ import (
 func runServe(cfg config.Config, seedOnServe bool) error {
 	resetEmailSender, err := buildPasswordResetEmailSender(cfg)
 	if err != nil {
-		return err
+		return wrapCommandError(commandServe, "configure password reset email", err)
 	}
 
 	templates, err := ui.ParseTemplates()
 	if err != nil {
-		return fmt.Errorf("parse templates: %w", err)
+		return wrapCommandError(commandServe, "parse templates", fmt.Errorf("parse templates: %w", err))
 	}
 
 	store, err := db.OpenStore(cfg.DBPath)
 	if err != nil {
-		return err
+		return wrapCommandError(commandServe, "open store", err)
 	}
 	defer store.Close()
 
 	bootstrapService := bootstrap.New(store)
 	if err := bootstrapService.Prepare(seedOnServe); err != nil {
-		return err
+		return wrapCommandError(commandServe, "prepare store", err)
 	}
 
 	application := buildApplication(cfg, store, templates, resetEmailSender)
 	server, allowedHosts := buildServer(cfg, application)
 	printStartupSummary(cfg, server, allowedHosts, seedOnServe)
 
-	return runHTTPServer(server, store)
+	return wrapCommandError(commandServe, "serve http", runHTTPServer(server, store))
 }
 
 func runMigrate(cfg config.Config) error {
 	store, err := db.OpenStore(cfg.DBPath)
 	if err != nil {
-		return err
+		return wrapCommandError(commandMigrate, "open store", err)
 	}
 	defer store.Close()
 
 	if err := bootstrap.New(store).Migrate(); err != nil {
-		return err
+		return wrapCommandError(commandMigrate, "apply schema", err)
 	}
 
 	log.Printf("[startup] schema applied db=%s", cfg.DBPath)
@@ -68,12 +68,12 @@ func runMigrate(cfg config.Config) error {
 func runSeed(cfg config.Config) error {
 	store, err := db.OpenStore(cfg.DBPath)
 	if err != nil {
-		return err
+		return wrapCommandError(commandSeed, "open store", err)
 	}
 	defer store.Close()
 
 	if err := bootstrap.New(store).Prepare(true); err != nil {
-		return err
+		return wrapCommandError(commandSeed, "prepare store", err)
 	}
 
 	log.Printf("[startup] seed completed db=%s", cfg.DBPath)

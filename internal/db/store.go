@@ -42,10 +42,6 @@ func OpenStore(dbPath string) (*Store, error) {
 	return openStore(dbPath)
 }
 
-func OpenStoreNoSeed(dbPath string) (*Store, error) {
-	return OpenStore(dbPath)
-}
-
 func openStore(dbPath string) (*Store, error) {
 	dbConn, err := sql.Open("sqlite3", dbPath)
 	if err != nil {

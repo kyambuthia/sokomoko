@@ -6,14 +6,12 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 )
 
 type PartnerOrdersPageData struct {
 	Title           string
-	Orders          []db.FulfillmentOrder
+	Orders          []partnersvc.Order
 	Message         string
 	Error           string
 	Filter          string
@@ -28,14 +26,11 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := auth.GetUserFromContext(r.Context())
-		data := PartnerOrdersPageData{
-			Title: "Partner Orders",
-		}
+		data := PartnerOrdersPageData{Title: "Partner Orders"}
 		responseStatus := http.StatusOK
 
 		if r.Method == http.MethodPost {
-			err := svc.UpdateOrder(user, partnersvc.UpdateOrderInput{
+			err := svc.UpdateOrder(partnerActorFromContext(r), partnersvc.UpdateOrderInput{
 				OrderID:        r.FormValue("order_id"),
 				PartnerStatus:  r.FormValue("partner_status"),
 				DeliveryStatus: r.FormValue("delivery_status"),
@@ -70,17 +65,13 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		data.Filter = view.Filter
-		data.Orders = view.Orders
-		data.NewCount = view.Summary.NewCount
-		data.InProgressCount = view.Summary.InProgressCount
-		data.DispatchedCount = view.Summary.DispatchedCount
-		data.CompletedCount = view.Summary.CompletedCount
-		data.OverdueCount = view.Summary.OverdueCount
+		page := partnerOrdersPage(view)
+		page.Message = data.Message
+		page.Error = data.Error
 
 		if responseStatus != http.StatusOK {
 			w.WriteHeader(responseStatus)
 		}
-		a.Render(w, a.Templates.PartnerOrders, data)
+		a.Render(w, a.Templates.PartnerOrders, page)
 	}
 }

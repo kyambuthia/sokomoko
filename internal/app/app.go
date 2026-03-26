@@ -7,8 +7,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/kyambuthia/sokomoko/internal/db"
+	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
+	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	"github.com/kyambuthia/sokomoko/internal/ui"
@@ -19,32 +20,32 @@ type ReadinessChecker interface {
 }
 
 type CatalogService interface {
-	AllProducts() ([]db.Product, error)
-	ProductBySlug(slug string) (*db.Product, error)
-	Search(query string) ([]db.Product, error)
+	AllProducts() ([]catalogsvc.Product, error)
+	ProductBySlug(slug string) (*catalogsvc.Product, error)
+	Search(query string) ([]catalogsvc.Product, error)
 }
 
 type AccountService interface {
-	OrdersForUser(userID int) ([]db.CustomerOrder, error)
+	OrdersForUser(userID int) ([]accountsvc.Order, error)
 }
 
 type CommerceService interface {
 	AddToCart(userID, productID, quantity int) error
 	CheckoutWithPayment(userID int, deliveryAddress, paymentMethod string) (int64, commerceSvc.CheckoutSummary, error)
-	GetCart(userID int) ([]db.CartItem, float64, error)
+	GetCart(userID int) ([]commerceSvc.CartItem, float64, error)
 	RemoveFromCart(userID, productID int) error
 	UpdateCartItem(userID, productID, quantity int) error
 }
 
 type AdminService interface {
-	AuditLogs(limit int) ([]db.AuditLog, error)
-	DeactivateUser(actor *db.User, userIDRaw string) error
+	AuditLogs(limit int) ([]adminsvc.AuditLog, error)
+	DeactivateUser(actor *adminsvc.Actor, userIDRaw string) error
 	Metrics() (adminsvc.Metrics, error)
-	Orders() ([]db.FulfillmentOrder, error)
-	Products() ([]db.Product, error)
+	Orders() ([]adminsvc.Order, error)
+	Products() ([]adminsvc.Product, error)
 	Reports() (adminsvc.SalesReport, error)
-	TeamMembers() ([]db.User, error)
-	UpdateOrder(actor *db.User, input adminsvc.UpdateOrderInput) error
+	TeamMembers() ([]adminsvc.TeamMember, error)
+	UpdateOrder(actor *adminsvc.Actor, input adminsvc.UpdateOrderInput) error
 }
 
 type PartnerService interface {
@@ -52,9 +53,9 @@ type PartnerService interface {
 	Dashboard() (partnersvc.DashboardData, error)
 	Orders(filter string) (partnersvc.OrdersData, error)
 	Products() (partnersvc.ProductsData, error)
-	SaveStoreSettings(input partnersvc.StoreSettingsInput) (db.StoreSettings, error)
-	StoreSettings() (*db.StoreSettings, error)
-	UpdateOrder(actor *db.User, input partnersvc.UpdateOrderInput) error
+	SaveStoreSettings(input partnersvc.StoreSettingsInput) (partnersvc.StoreSettings, error)
+	StoreSettings() (*partnersvc.StoreSettings, error)
+	UpdateOrder(actor *partnersvc.Actor, input partnersvc.UpdateOrderInput) error
 }
 
 type AuthService interface {

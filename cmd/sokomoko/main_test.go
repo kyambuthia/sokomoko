@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/config"
@@ -105,6 +106,20 @@ func TestRunSeed_BootstrapsCatalog(t *testing.T) {
 	}
 	if productCount == 0 {
 		t.Fatal("expected seed command to create catalog products")
+	}
+}
+
+func TestRunMigrate_ErrorIncludesCommandContext(t *testing.T) {
+	cfg := config.Config{
+		DBPath: filepath.Join(t.TempDir(), "missing", "test.db"),
+	}
+
+	err := runMigrate(cfg)
+	if err == nil {
+		t.Fatal("expected migrate to fail for missing directory")
+	}
+	if !strings.Contains(err.Error(), "migrate: open store:") {
+		t.Fatalf("expected command-scoped error, got %v", err)
 	}
 }
 

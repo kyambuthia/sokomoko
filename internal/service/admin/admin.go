@@ -1,9 +1,11 @@
 package admin
 
 import (
+	"database/sql"
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 )
@@ -55,6 +57,52 @@ type SalesReport struct {
 	DeliveredCount int
 }
 
+type Product struct {
+	Name          string
+	Category      string
+	Price         float64
+	StockQuantity int
+}
+
+type OrderItem struct {
+	ProductName string
+	Quantity    int
+	LineTotal   float64
+}
+
+type Order struct {
+	ID              int
+	CustomerName    string
+	Status          string
+	PartnerStatus   string
+	DeliveryStatus  string
+	DeliveryNotice  string
+	DeliveryAddress string
+	TotalAmount     float64
+	Items           []OrderItem
+}
+
+type TeamMember struct {
+	ID       int
+	Username string
+	Email    string
+	Role     string
+}
+
+type AuditLog struct {
+	CreatedAt   time.Time
+	ActorUserID sql.NullInt64
+	Action      string
+	TargetType  string
+	TargetID    sql.NullInt64
+	Details     string
+}
+
+type Actor struct {
+	ID   int
+	Role string
+}
+
 type UpdateOrderInput struct {
 	OrderID        string
 	Status         string
@@ -98,12 +146,53 @@ func (s *Service) Metrics() (Metrics, error) {
 	}, nil
 }
 
-func (s *Service) Products() ([]db.Product, error) {
-	return s.store.GetAllProducts()
+func (s *Service) Products() ([]Product, error) {
+	products, err := s.store.GetAllProducts()
+	if err != nil {
+		return nil, err
+	}
+
+	mapped := make([]Product, 0, len(products))
+	for _, product := range products {
+		mapped = append(mapped, Product{
+			Name:          product.Name,
+			Category:      product.Category,
+			Price:         product.Price,
+			StockQuantity: product.StockQuantity,
+		})
+	}
+	return mapped, nil
 }
 
-func (s *Service) Orders() ([]db.FulfillmentOrder, error) {
-	return s.store.ListAllOrders()
+func (s *Service) Orders() ([]Order, error) {
+	orders, err := s.store.ListAllOrders()
+	if err != nil {
+		return nil, err
+	}
+
+	mapped := make([]Order, 0, len(orders))
+	for _, order := range orders {
+		items := make([]OrderItem, 0, len(order.Items))
+		for _, item := range order.Items {
+			items = append(items, OrderItem{
+				ProductName: item.ProductName,
+				Quantity:    item.Quantity,
+				LineTotal:   item.LineTotal,
+			})
+		}
+		mapped = append(mapped, Order{
+			ID:              order.ID,
+			CustomerName:    order.CustomerName,
+			Status:          order.Status,
+			PartnerStatus:   order.PartnerStatus,
+			DeliveryStatus:  order.DeliveryStatus,
+			DeliveryNotice:  order.DeliveryNotice,
+			DeliveryAddress: order.DeliveryAddress,
+			TotalAmount:     order.TotalAmount,
+			Items:           items,
+		})
+	}
+	return mapped, nil
 }
 
 func (s *Service) Reports() (SalesReport, error) {
@@ -129,7 +218,7 @@ func (s *Service) Reports() (SalesReport, error) {
 	}, nil
 }
 
-func (s *Service) UpdateOrder(actor *db.User, input UpdateOrderInput) error {
+func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 	if actor == nil || actor.Role != "admin" {
 		return ErrForbiddenOrderUpdate
 	}
@@ -159,11 +248,25 @@ func (s *Service) UpdateOrder(actor *db.User, input UpdateOrderInput) error {
 	return nil
 }
 
-func (s *Service) TeamMembers() ([]db.User, error) {
-	return s.store.ListUsersByRoles([]string{"admin", "staff", "user"})
+func (s *Service) TeamMembers() ([]TeamMember, error) {
+	users, err := s.store.ListUsersByRoles([]string{"admin", "staff", "user"})
+	if err != nil {
+		return nil, err
+	}
+
+	mapped := make([]TeamMember, 0, len(users))
+	for _, user := range users {
+		mapped = append(mapped, TeamMember{
+			ID:       user.ID,
+			Username: user.Username,
+			Email:    user.Email,
+			Role:     user.Role,
+		})
+	}
+	return mapped, nil
 }
 
-func (s *Service) DeactivateUser(actor *db.User, userIDRaw string) error {
+func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 	if actor == nil || actor.Role != "admin" {
 		return ErrForbiddenUserAction
 	}
@@ -192,8 +295,24 @@ func (s *Service) DeactivateUser(actor *db.User, userIDRaw string) error {
 	return nil
 }
 
-func (s *Service) AuditLogs(limit int) ([]db.AuditLog, error) {
-	return s.store.ListAuditLogs(limit)
+func (s *Service) AuditLogs(limit int) ([]AuditLog, error) {
+	logs, err := s.store.ListAuditLogs(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	mapped := make([]AuditLog, 0, len(logs))
+	for _, entry := range logs {
+		mapped = append(mapped, AuditLog{
+			CreatedAt:   entry.CreatedAt,
+			ActorUserID: entry.ActorUserID,
+			Action:      entry.Action,
+			TargetType:  entry.TargetType,
+			TargetID:    entry.TargetID,
+			Details:     entry.Details,
+		})
+	}
+	return mapped, nil
 }
 
 func parsePositiveInt(raw string) (int, error) {

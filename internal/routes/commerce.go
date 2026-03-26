@@ -9,14 +9,12 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 )
 
 type CartPageData struct {
 	Title    string
-	Items    []db.CartItem
+	Items    []commerceSvc.CartItem
 	Subtotal float64
 	Error    string
 	Message  string
@@ -24,7 +22,7 @@ type CartPageData struct {
 
 type CheckoutPageData struct {
 	Title           string
-	Items           []db.CartItem
+	Items           []commerceSvc.CartItem
 	Subtotal        float64
 	ShippingFee     float64
 	TaxAmount       float64
@@ -59,26 +57,19 @@ func CartPage(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		user := auth.GetUserFromContext(r.Context())
-		if user == nil {
+		userID, ok := requestUserID(r)
+		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		items, subtotal, err := svc.GetCart(user.ID)
+		items, subtotal, err := svc.GetCart(userID)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		data := CartPageData{
-			Title:    "Cart",
-			Items:    items,
-			Subtotal: subtotal,
-			Message:  strings.TrimSpace(r.URL.Query().Get("message")),
-			Error:    strings.TrimSpace(r.URL.Query().Get("error")),
-		}
-		a.Render(w, a.Templates.Cart, data)
+		a.Render(w, a.Templates.Cart, cartPage(r, items, subtotal))
 	}
 }
 
@@ -91,8 +82,8 @@ func CartAdd(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		user := auth.GetUserFromContext(r.Context())
-		if user == nil {
+		userID, ok := requestUserID(r)
+		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -109,7 +100,7 @@ func CartAdd(a *app.App) http.HandlerFunc {
 			}
 		}
 
-		if err := svc.AddToCart(user.ID, productID, qty); err != nil {
+		if err := svc.AddToCart(userID, productID, qty); err != nil {
 			switch {
 			case errors.Is(err, commerceSvc.ErrInvalidProduct):
 				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
@@ -140,8 +131,8 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		user := auth.GetUserFromContext(r.Context())
-		if user == nil {
+		userID, ok := requestUserID(r)
+		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -157,7 +148,7 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		if err := svc.UpdateCartItem(user.ID, productID, qty); err != nil {
+		if err := svc.UpdateCartItem(userID, productID, qty); err != nil {
 			if errors.Is(err, commerceSvc.ErrInvalidProduct) {
 				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
 				return
@@ -186,8 +177,8 @@ func CartRemove(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		user := auth.GetUserFromContext(r.Context())
-		if user == nil {
+		userID, ok := requestUserID(r)
+		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -198,7 +189,7 @@ func CartRemove(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		if err := svc.RemoveFromCart(user.ID, productID); err != nil {
+		if err := svc.RemoveFromCart(userID, productID); err != nil {
 			if errors.Is(err, commerceSvc.ErrInvalidProduct) {
 				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
 				return
@@ -214,13 +205,13 @@ func Checkout(a *app.App) http.HandlerFunc {
 	svc := a.Commerce
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := auth.GetUserFromContext(r.Context())
-		if user == nil {
+		userID, ok := requestUserID(r)
+		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		items, subtotal, err := svc.GetCart(user.ID)
+		items, subtotal, err := svc.GetCart(userID)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -229,19 +220,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 		if paymentMethod == "" {
 			paymentMethod = commerceSvc.PaymentMethodCashOnDelivery
 		}
-		summary := commerceSvc.CalculateCheckoutSummary(subtotal)
-
-		data := CheckoutPageData{
-			Title:          "Checkout",
-			Items:          items,
-			Subtotal:       summary.Subtotal,
-			ShippingFee:    summary.ShippingFee,
-			TaxAmount:      summary.TaxAmount,
-			TotalAmount:    summary.Total,
-			PaymentMethod:  paymentMethod,
-			PaymentMethods: checkoutPaymentOptions(),
-			CanCheckout:    len(items) > 0,
-		}
+		data := checkoutPage(items, subtotal, paymentMethod)
 
 		if r.Method == http.MethodGet {
 			a.Render(w, a.Templates.Checkout, data)
@@ -260,7 +239,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		orderID, finalSummary, err := svc.CheckoutWithPayment(user.ID, address, paymentMethod)
+		orderID, finalSummary, err := svc.CheckoutWithPayment(userID, address, paymentMethod)
 		if err != nil {
 			switch {
 			case errors.Is(err, commerceSvc.ErrDeliveryAddress):

@@ -4,13 +4,12 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 )
 
 type ProductPageData struct {
 	Title   string
-	Product *db.Product
+	Product *catalogsvc.Product
 }
 
 func ProductDetail(a *app.App) http.HandlerFunc {
@@ -35,9 +34,6 @@ func ProductDetail(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		a.Render(w, a.Templates.Product, ProductPageData{
-			Title:   product.Name,
-			Product: product,
-		})
+		a.Render(w, a.Templates.Product, productPage(product))
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
 func Root(a *app.App) http.HandlerFunc {
@@ -24,13 +23,6 @@ func Root(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		data := struct {
-			HasProducts bool
-			Products    []db.Product
-		}{
-			HasProducts: len(products) > 0,
-			Products:    products,
-		}
-		a.Render(w, a.Templates.Index, data)
+		a.Render(w, a.Templates.Index, indexPage(products))
 	}
 }

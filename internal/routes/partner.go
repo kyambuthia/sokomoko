@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 )
 
@@ -16,7 +14,7 @@ type PartnerSetupData struct {
 	Heading  string
 	Message  string
 	Error    string
-	Settings db.StoreSettings
+	Settings partnersvc.StoreSettings
 }
 
 type PartnerDashboardData struct {
@@ -38,17 +36,17 @@ type PartnerDashboardData struct {
 type PartnerProductsData struct {
 	Title      string
 	StoreName  string
-	Products   []db.Product
+	Products   []partnersvc.Product
 	Message    string
 	Error      string
-	Categories []db.Category
+	Categories []partnersvc.Category
 }
 
 type PartnerProductNewData struct {
 	Title       string
 	Message     string
 	Error       string
-	Categories  []db.Category
+	Categories  []partnersvc.Category
 	DefaultName string
 }
 
@@ -140,29 +138,8 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		role := "staff"
-		username := ""
-		user := auth.GetUserFromContext(r.Context())
-		if user != nil {
-			role = user.Role
-			username = user.Username
-		}
-
-		a.Render(w, a.Templates.PartnerDashboard, PartnerDashboardData{
-			Title:            "Partner Dashboard",
-			StoreName:        view.Settings.StoreName,
-			StoreSlug:        view.Settings.StoreSlug,
-			Description:      view.Settings.Description,
-			ContactEmail:     view.Settings.ContactEmail,
-			ProductCount:     view.ProductCount,
-			NewOrders:        view.OrderSummary.NewCount,
-			InProgressOrders: view.OrderSummary.InProgressCount,
-			DispatchedOrders: view.OrderSummary.DispatchedCount,
-			CompletedOrders:  view.OrderSummary.CompletedCount,
-			OverdueOrders:    view.OrderSummary.OverdueCount,
-			Role:             role,
-			Username:         username,
-		})
+		role, username := partnerIdentity(r)
+		a.Render(w, a.Templates.PartnerDashboard, partnerDashboardPage(view, role, username))
 	}
 }
 
@@ -180,13 +157,7 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		data := PartnerProductsData{
-			Title:      "Partner Products",
-			StoreName:  view.Settings.StoreName,
-			Products:   view.Products,
-			Categories: view.Categories,
-		}
-		a.Render(w, a.Templates.PartnerProducts, data)
+		a.Render(w, a.Templates.PartnerProducts, partnerProductsPage(view))
 	}
 }
 
@@ -204,10 +175,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		data := PartnerProductNewData{
-			Title:      "Add Product",
-			Categories: view.Categories,
-		}
+		data := partnerProductNewPage(view.Categories)
 
 		if r.Method == http.MethodGet {
 			a.Render(w, a.Templates.PartnerProductNew, data)
