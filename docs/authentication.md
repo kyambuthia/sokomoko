@@ -108,14 +108,14 @@ Checks authenticated user has required role:
 - Returns 403 Forbidden if role doesn't match
 - Used with AuthMiddleware for protected routes
 
-## Default Admin User
+## First-Run Admin Setup
 
-The system seeds a default admin user on first run:
-- **Username**: `admin`
-- **Password**: `adminpass`
-- **Email**: `admin@sokomoko.com`
+The system does not ship with a fixed default admin username/password.
 
-**Important**: Change the default admin password in production!
+First-run admin bootstrap happens on `admin.localhost/setup` when no admin user exists:
+- On local loopback requests, setup is allowed automatically.
+- In other environments, provide `ADMIN_SETUP_TOKEN` and send it as `X-Admin-Setup-Token` or `setup_token`.
+- The setup flow creates the root admin account and can generate recommended staff accounts.
 
 ## Testing Authentication
 
@@ -150,7 +150,7 @@ go test -v ./internal/auth/...
 
 Start the server:
 ```bash
-go run cmd/sokomoko/main.go
+go run ./cmd/sokomoko serve
 ```
 
 Test user signup:
@@ -177,9 +177,10 @@ curl -b cookies.txt http://localhost:6969/account
 
 Test admin login (requires admin subdomain):
 ```bash
+# Replace with the credentials created during /setup
 curl -c admin_cookies.txt -X POST \
-  -d "username=admin" \
-  -d "password=adminpass" \
+  -d "username=<admin-username>" \
+  -d "password=<admin-password>" \
   -H "Host: admin.localhost" \
   http://localhost:6969/login
 ```
@@ -225,21 +226,24 @@ go func() {
 
 ```
 internal/
+├── app/
+│   └── compose.go       # App composition root
 ├── auth/
 │   ├── auth.go          # Auth handlers and middleware
 │   └── auth_test.go     # Unit tests
 ├── routes/
 │   ├── register.go      # Route registration
 │   └── admin.go         # Admin routes
-├── db/
-│   └── db.go           # Database layer
+├── db/                  # Database layer and schema application
+├── service/             # Feature services and adapters
 └── ui/
     └── templates.go     # Template parsing
 
 cmd/sokomoko/
-├── main.go             # Server entry point with graceful shutdown
+├── main.go              # CLI entrypoint
+├── serve.go             # Serve/migrate/seed command handlers
 ├── test_auth.sh        # Bash script for manual testing
-└── integration_test.go  # Integration tests
+└── integration_test.go # Integration tests
 ```
 
 ## Security Considerations
@@ -254,7 +258,6 @@ cmd/sokomoko/
 
 ## Future Enhancements
 
-- [ ] Password reset functionality
 - [ ] Email verification for new accounts
 - [ ] Two-factor authentication
 - [ ] CSRF token protection

@@ -474,7 +474,7 @@ When creating a new page:
 
 ## Next Steps
 
-1. Run application: `go run src/main.go`
+1. Run application: `go run ./cmd/sokomoko serve`
 2. Visit `/design` to view component showcase
 3. Reference documentation guides as needed
 4. Implement new pages using design system

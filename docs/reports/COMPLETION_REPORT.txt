@@ -215,7 +215,7 @@ GETTING STARTED
 ================================================================================
 
 STEP 1: View Component Showcase
-  $ go run src/main.go
+  $ go run ./cmd/sokomoko serve
   Visit: http://localhost:6969/design
 
 STEP 2: Read Getting Started (5 min)
@@ -447,7 +447,7 @@ QUALITY METRICS:
   External Dependencies:   Zero
 
 NEXT ACTIONS:
-  1. Run: go run src/main.go
+  1. Run: go run ./cmd/sokomoko serve
   2. Visit: http://localhost:6969/design
   3. Read: GETTING_STARTED.md
   4. Start building!

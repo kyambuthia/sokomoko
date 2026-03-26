@@ -9,7 +9,7 @@ A **5-minute quick start guide** to the design system.
 **Start the app:**
 ```bash
 cd /home/mbuthi/Projects/sokomoko
-go run src/main.go
+go run ./cmd/sokomoko serve
 ```
 
 **Open browser:**

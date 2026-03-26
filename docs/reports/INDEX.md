@@ -10,7 +10,7 @@ Welcome! Here's your complete roadmap to the design system.
 → Read `GETTING_STARTED.md`
 
 **I want to see it first:**
-→ Run `go run src/main.go` and visit `/design`
+→ Run `go run ./cmd/sokomoko serve` and visit `/design`
 
 **I want context:**
 → Read `DESIGN_README.md`
@@ -132,7 +132,7 @@ Welcome! Here's your complete roadmap to the design system.
 
 ### View Components
 ```bash
-go run src/main.go
+go run ./cmd/sokomoko serve
 # Visit http://localhost:6969/design
 ```
 

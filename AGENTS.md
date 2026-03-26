@@ -6,11 +6,17 @@ This document provides essential information for AI agents working on the Sokomo
 
 ### Running the Application
 ```bash
-# Main application (new architecture) - default port 6969
-go run src/main.go
+# Apply schema only
+go run ./cmd/sokomoko migrate
 
-# Legacy server - default port 8000
-go run src/srvr.go
+# Apply schema and seed bootstrap data
+go run ./cmd/sokomoko seed
+
+# Main application - default port 6969
+go run ./cmd/sokomoko serve
+
+# One-step local boot with bootstrap data
+go run ./cmd/sokomoko serve --seed
 ```
 
 ### Testing
@@ -19,12 +25,13 @@ go run src/srvr.go
 go test ./...
 
 # Run tests in specific package
-go test ./src/db
-go test ./src/auth
+go test ./internal/db
+go test ./internal/auth
+go test ./cmd/sokomoko
 
 # Run single test
-go test ./src/db -run TestCreateUser
-go test ./src/auth -run TestSignUp
+go test ./internal/db -run TestCreateUser
+go test ./internal/auth -run TestSignUp
 
 # Verbose output and coverage
 go test -v ./...
@@ -41,14 +48,17 @@ go mod download  # Update dependencies
 
 ```
 sokomoko/
-├── src/
-│   ├── main.go              # Main application entry point
-│   ├── srvr.go              # Legacy server
-│   ├── db/                  # Database layer
+├── cmd/
+│   └── sokomoko/            # CLI entrypoint and startup commands
+├── internal/
+│   ├── app/                 # App composition and rendering
 │   ├── auth/                # Authentication
+│   ├── bootstrap/           # Schema/seed orchestration
+│   ├── config/              # Environment config loading
+│   ├── db/                  # Database layer
 │   ├── routes/              # HTTP handlers
-│   ├── templates/           # HTML templates
-│   └── static/              # Static assets
+│   ├── service/             # Feature services and adapters
+│   └── ui/                  # HTML templates and static assets
 ├── db/schema.sql            # Database schema
 └── go.mod                   # Go module
 ```
@@ -86,7 +96,7 @@ import (
     "github.com/google/uuid"
     "golang.org/x/crypto/bcrypt"
     
-    "github.com/kyambuthia/sokomoko/src/db"
+    "github.com/kyambuthia/sokomoko/internal/db"
 )
 ```
 
@@ -158,12 +168,12 @@ func TestCreateUser_ValidUser_ReturnsID(t *testing.T) {
 
 ## Database Schema
 
-The project has two conflicting schemas in db/schema.sql:
+The active application uses the schema applied by the current `internal/db` store layer and `db/schema.sql`.
 
-**Working Schema (db.go)**: `users`, `categories`, `products` tables
-**Alternative Schema (srvr.go)**: `Users`, `Products` with additional tables
-
-**Always check which schema your code is using before making database changes.**
+When making database changes:
+- Update `db/schema.sql`
+- Keep the `internal/db` query layer in sync
+- Run `go run ./cmd/sokomoko migrate` or `go test ./...` to verify behavior
 
 ## Security Guidelines
 
@@ -195,13 +205,18 @@ Use consistent template data structure across all handlers.
 
 ## Environment Variables
 
-- `PORT`: Server port (default: 6969 for main.go, 8000 for srvr.go)
+- `PORT`: Server port (default: 6969)
 - `DB_PATH`: Database file path (default: ./db/t.db)
+- `ALLOWED_HOSTS`: Comma-separated trusted hosts
+- `ADMIN_SETUP_TOKEN`: Optional token for admin bootstrap outside loopback
+- `SESSION_COOKIE_DOMAIN`: Optional shared cookie domain
+- `PASSWORD_RESET_BASE_URL`: Optional absolute base URL for reset links
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`: Optional SMTP settings for password reset delivery
 
 ## Development Notes
 
-- Two server implementations: main.go (new) and srvr.go (legacy)
-- Database schema conflicts in db/schema.sql - resolve before changes
+- Use `serve`, `migrate`, and `seed` commands via `./cmd/sokomoko`
+- Admin bootstrap lives at `admin.localhost/setup`
 - Static files embedded using Go's embed directive
 - No external frameworks beyond database drivers
-- Testing uses SQLite in-memory databases for isolation
+- Tests use temporary SQLite databases for isolation

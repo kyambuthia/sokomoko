@@ -163,7 +163,7 @@ sokomoko/
 ## 🚀 Quick Start for Developers
 
 ### View Component Showcase
-1. Start the application: `go run src/main.go`
+1. Start the application: `go run ./cmd/sokomoko serve`
 2. Navigate to `/design` to see all components
 3. Refer to `DESIGN_QUICK_REFERENCE.md` for quick lookups
 

@@ -25,7 +25,7 @@ A **utilitarian, content-first design system** inspired by early web design (McM
 
 Start the application:
 ```bash
-go run src/main.go
+go run ./cmd/sokomoko serve
 ```
 
 Visit: `http://localhost:6969/design`

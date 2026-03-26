@@ -295,7 +295,7 @@ sokomoko/
 ### Immediate Use
 ```bash
 # View component showcase
-go run src/main.go
+go run ./cmd/sokomoko serve
 # Visit: http://localhost:6969/design
 ```
 

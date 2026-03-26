@@ -12,6 +12,7 @@ Lightweight e-commerce app built with Go + SQLite + server-rendered HTML.
 cmd/sokomoko/        Main server entrypoint (host-based routing)
 internal/app/        App wiring and template renderer
 internal/routes/     Public/admin/partner route registration
+internal/service/    Feature services and DB adapters
 internal/auth/       Login/signup/session/auth middleware
 internal/db/         Store, schema bootstrap, queries, seed data
 internal/ui/         Embedded templates/static files
@@ -155,3 +156,4 @@ go fmt ./...
 - `GETTING_STARTED.md`
 - `docs/design/`
 - `docs/reports/`
+- `docs/authentication.md`
