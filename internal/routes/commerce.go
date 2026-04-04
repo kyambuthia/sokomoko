@@ -10,6 +10,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
 type CartPageData struct {
@@ -41,12 +42,15 @@ type PaymentMethodOption struct {
 	Label string
 }
 
-func checkoutPaymentOptions() []PaymentMethodOption {
-	return []PaymentMethodOption{
-		{Value: commerceSvc.PaymentMethodCashOnDelivery, Label: "Cash on Delivery"},
-		{Value: commerceSvc.PaymentMethodCardPlaceholder, Label: "Card (placeholder)"},
-		{Value: commerceSvc.PaymentMethodMobilePlaceholder, Label: "Mobile Money (placeholder)"},
+func checkoutPaymentOptions(paymentOptions []paymentsvc.MethodOption) []PaymentMethodOption {
+	options := make([]PaymentMethodOption, 0, len(paymentOptions))
+	for _, option := range paymentOptions {
+		options = append(options, PaymentMethodOption{
+			Value: option.Value,
+			Label: option.Label,
+		})
 	}
+	return options
 }
 
 func CartPage(a *app.App) http.HandlerFunc {
@@ -219,12 +223,12 @@ func Checkout(a *app.App) http.HandlerFunc {
 		}
 		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
 		if paymentMethod == "" {
-			paymentMethod = commerceSvc.PaymentMethodCashOnDelivery
+			paymentMethod = paymentsvc.MethodCashOnDelivery
 		}
-		data := checkoutPage(items, subtotal, paymentMethod)
+		data := checkoutPage(items, subtotal, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
 
 		if r.Method == http.MethodGet {
-			idempotencyKey, err := commerceSvc.GenerateIdempotencyKey()
+			idempotencyKey, err := a.Payment.GenerateIdempotencyKey()
 			if err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
@@ -241,7 +245,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 		address := strings.TrimSpace(r.FormValue("delivery_address"))
 		idempotencyKey := strings.TrimSpace(r.FormValue("idempotency_key"))
 		if idempotencyKey == "" {
-			idempotencyKey, err = commerceSvc.GenerateIdempotencyKey()
+			idempotencyKey, err = a.Payment.GenerateIdempotencyKey()
 			if err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
@@ -272,7 +276,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 			"Order %d placed successfully. Total $%.2f using %s. Delivery notice will update as partner fulfills.",
 			orderID,
 			finalSummary.Total,
-			commerceSvc.PaymentMethodLabel(paymentMethod),
+			a.Payment.MethodLabel(paymentMethod),
 		)
 		http.Redirect(w, r, "/account?message="+url.QueryEscape(msg), http.StatusFound)
 	}

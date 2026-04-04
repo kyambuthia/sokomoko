@@ -80,6 +80,7 @@ Keep transport concerns in routes, domain rules in services, and SQL-only concer
 - `admin`: metrics, team management, audit logs, order state updates
 - `catalog`: storefront product browsing and search
 - `commerce`: cart and checkout rules
+- `payment`: supported payment methods, idempotency keys, and payment-record construction
 - `partner`: store setup, partner catalog actions, fulfillment updates
 
 ### `internal/db`
@@ -108,6 +109,9 @@ Core tables:
 - `carts`
 - `cart_items`
 - `orders`
+- `payments`
+- `payment_attempts`
+- `idempotency_keys`
 - `order_items`
 - `store_settings`
 - `audit_logs`

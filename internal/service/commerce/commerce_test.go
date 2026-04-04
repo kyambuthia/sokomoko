@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
 func newTestService(t *testing.T) (*Service, *db.Store, func()) {
@@ -28,7 +29,7 @@ func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 		_ = os.Remove(path)
 	}
 
-	return New(store), store, cleanup
+	return New(store, paymentsvc.New()), store, cleanup
 }
 
 func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
@@ -175,7 +176,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder, "")
+	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, "")
 	if err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}
@@ -218,16 +219,16 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	key, err := GenerateIdempotencyKey()
+	key, err := paymentsvc.New().GenerateIdempotencyKey()
 	if err != nil {
 		t.Fatalf("generate key error = %v", err)
 	}
 
-	orderID, _, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder, key)
+	orderID, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key)
 	if err != nil {
 		t.Fatalf("first checkout error = %v", err)
 	}
-	replayedOrderID, replaySummary, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder, key)
+	replayedOrderID, replaySummary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key)
 	if err != nil {
 		t.Fatalf("replay checkout error = %v", err)
 	}

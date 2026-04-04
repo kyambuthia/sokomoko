@@ -12,6 +12,7 @@ import (
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
@@ -35,6 +36,12 @@ type CommerceService interface {
 	GetCart(userID int) ([]commerceSvc.CartItem, float64, error)
 	RemoveFromCart(userID, productID int) error
 	UpdateCartItem(userID, productID, quantity int) error
+}
+
+type PaymentService interface {
+	GenerateIdempotencyKey() (string, error)
+	MethodLabel(method string) string
+	SupportedMethodOptions() []paymentsvc.MethodOption
 }
 
 type AdminService interface {
@@ -75,6 +82,7 @@ type Dependencies struct {
 	Catalog   CatalogService
 	Account   AccountService
 	Commerce  CommerceService
+	Payment   PaymentService
 	Admin     AdminService
 	Partner   PartnerService
 	Auth      AuthService
@@ -87,6 +95,7 @@ type App struct {
 	Catalog   CatalogService
 	Account   AccountService
 	Commerce  CommerceService
+	Payment   PaymentService
 	Admin     AdminService
 	Partner   PartnerService
 	Auth      AuthService
@@ -100,6 +109,7 @@ func New(deps Dependencies) *App {
 		Catalog:   deps.Catalog,
 		Account:   deps.Account,
 		Commerce:  deps.Commerce,
+		Payment:   deps.Payment,
 		Admin:     deps.Admin,
 		Partner:   deps.Partner,
 		Auth:      deps.Auth,

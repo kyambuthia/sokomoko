@@ -1,14 +1,13 @@
 package commerce
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
 var (
@@ -19,25 +18,26 @@ var (
 	ErrInsufficientStock    = errors.New("insufficient stock")
 	ErrCartEmpty            = errors.New("cart is empty")
 	ErrDeliveryAddress      = errors.New("delivery address is required")
-	ErrInvalidPaymentMethod = errors.New("invalid payment method")
-)
-
-const (
-	PaymentMethodCashOnDelivery    = "cash_on_delivery"
-	PaymentMethodCardPlaceholder   = "card_placeholder"
-	PaymentMethodMobilePlaceholder = "mobile_money_placeholder"
+	ErrInvalidPaymentMethod = paymentsvc.ErrInvalidMethod
 )
 
 const (
 	shippingFeeFlat             = 6.50
 	freeShippingThreshold       = 80.00
 	defaultEstimatedTaxRate     = 0.08
-	defaultPaymentMethod        = PaymentMethodCashOnDelivery
+	defaultPaymentMethod        = paymentsvc.MethodCashOnDelivery
 	deliveryNoticeDefaultPrefix = "Order received. Awaiting partner acceptance."
 )
 
 type Service struct {
-	store store
+	store    store
+	payments paymentService
+}
+
+type paymentService interface {
+	BuildRecord(method string, totalAmount float64) (db.PaymentRecordInput, error)
+	IsSupportedMethod(method string) bool
+	MethodLabel(method string) string
 }
 
 type CheckoutSummary struct {
@@ -56,12 +56,18 @@ type CartItem struct {
 	LineTotal     float64
 }
 
-func New(store *db.Store) *Service {
-	return &Service{store: newDBStore(store)}
+func New(store *db.Store, payments paymentService) *Service {
+	if payments == nil {
+		payments = paymentsvc.New()
+	}
+	return &Service{store: newDBStore(store), payments: payments}
 }
 
-func newWithStore(store store) *Service {
-	return &Service{store: store}
+func newWithStore(store store, payments paymentService) *Service {
+	if payments == nil {
+		payments = paymentsvc.New()
+	}
+	return &Service{store: store, payments: payments}
 }
 
 func (s *Service) GetCart(userID int) ([]CartItem, float64, error) {
@@ -170,7 +176,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	if method == "" {
 		method = defaultPaymentMethod
 	}
-	if !isSupportedPaymentMethod(method) {
+	if !s.payments.IsSupportedMethod(method) {
 		return 0, CheckoutSummary{}, ErrInvalidPaymentMethod
 	}
 
@@ -194,14 +200,14 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	}
 
 	summary := CalculateCheckoutSummary(subtotal)
-	paymentRecord, err := buildPaymentRecord(method, summary.Total)
+	paymentRecord, err := s.payments.BuildRecord(method, summary.Total)
 	if err != nil {
 		return 0, CheckoutSummary{}, err
 	}
 	notice := fmt.Sprintf(
 		"%s Payment method selected: %s (processing placeholder). Subtotal $%.2f, shipping $%.2f, estimated tax $%.2f.",
 		deliveryNoticeDefaultPrefix,
-		paymentMethodLabel(method),
+		s.payments.MethodLabel(method),
 		summary.Subtotal,
 		summary.ShippingFee,
 		summary.TaxAmount,
@@ -224,44 +230,6 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	}
 }
 
-func GenerateIdempotencyKey() (string, error) {
-	buf := make([]byte, 18)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
-}
-
-func buildPaymentRecord(method string, totalAmount float64) (db.PaymentRecordInput, error) {
-	record := db.PaymentRecordInput{
-		Method:   method,
-		Currency: "USD",
-		Amount:   totalAmount,
-	}
-
-	switch method {
-	case PaymentMethodCashOnDelivery:
-		record.Provider = "manual_cash_on_delivery"
-		record.Status = db.PaymentStatusPending
-		return record, nil
-	case PaymentMethodCardPlaceholder:
-		record.Provider = "placeholder_card"
-		record.Status = db.PaymentStatusCaptured
-	case PaymentMethodMobilePlaceholder:
-		record.Provider = "placeholder_mobile_money"
-		record.Status = db.PaymentStatusCaptured
-	default:
-		return db.PaymentRecordInput{}, ErrInvalidPaymentMethod
-	}
-
-	externalReference, err := GenerateIdempotencyKey()
-	if err != nil {
-		return db.PaymentRecordInput{}, err
-	}
-	record.ExternalReference = "pay_" + externalReference
-	return record, nil
-}
-
 func CalculateCheckoutSummary(subtotal float64) CheckoutSummary {
 	subtotal = roundMoney(subtotal)
 	shipping := shippingFeeFlat
@@ -279,35 +247,11 @@ func CalculateCheckoutSummary(subtotal float64) CheckoutSummary {
 }
 
 func SupportedPaymentMethods() []string {
-	return []string{
-		PaymentMethodCashOnDelivery,
-		PaymentMethodCardPlaceholder,
-		PaymentMethodMobilePlaceholder,
-	}
+	return paymentsvc.New().SupportedMethods()
 }
 
 func PaymentMethodLabel(method string) string {
-	return paymentMethodLabel(strings.TrimSpace(strings.ToLower(method)))
-}
-
-func paymentMethodLabel(method string) string {
-	switch method {
-	case PaymentMethodCardPlaceholder:
-		return "Card (placeholder)"
-	case PaymentMethodMobilePlaceholder:
-		return "Mobile Money (placeholder)"
-	default:
-		return "Cash on Delivery"
-	}
-}
-
-func isSupportedPaymentMethod(method string) bool {
-	for _, candidate := range SupportedPaymentMethods() {
-		if method == candidate {
-			return true
-		}
-	}
-	return false
+	return paymentsvc.New().MethodLabel(method)
 }
 
 func roundMoney(value float64) float64 {
