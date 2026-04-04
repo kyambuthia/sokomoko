@@ -5,8 +5,10 @@ import "github.com/kyambuthia/sokomoko/internal/db"
 type store interface {
 	AddToCart(userID, productID, quantity int) error
 	GetCartItems(userID int) ([]CartItem, float64, error)
+	GetCheckoutPlacementByIdempotency(userID int, idempotencyKey string) (*db.CheckoutPlacement, error)
 	GetProductByID(id int) (*productRecord, error)
-	PlaceOrderFromCartWithPricing(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string) (int64, error)
+	ListPaymentsByOrderID(orderID int) ([]db.Payment, error)
+	PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, payment db.PaymentRecordInput, idempotencyKey string) (db.CheckoutPlacement, error)
 	RemoveFromCart(userID, productID int) error
 	UpdateCartQuantity(userID, productID, quantity int) error
 }
@@ -36,6 +38,10 @@ func (s *dbStore) GetCartItems(userID int) ([]CartItem, float64, error) {
 	return mapCartItems(items), subtotal, nil
 }
 
+func (s *dbStore) GetCheckoutPlacementByIdempotency(userID int, idempotencyKey string) (*db.CheckoutPlacement, error) {
+	return s.store.GetCheckoutPlacementByIdempotency(userID, idempotencyKey)
+}
+
 func (s *dbStore) GetProductByID(id int) (*productRecord, error) {
 	product, err := s.store.GetProductByID(id)
 	if err != nil || product == nil {
@@ -47,8 +53,12 @@ func (s *dbStore) GetProductByID(id int) (*productRecord, error) {
 	}, nil
 }
 
-func (s *dbStore) PlaceOrderFromCartWithPricing(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string) (int64, error) {
-	return s.store.PlaceOrderFromCartWithPricing(userID, deliveryAddress, totalAmount, deliveryNotice)
+func (s *dbStore) ListPaymentsByOrderID(orderID int) ([]db.Payment, error) {
+	return s.store.ListPaymentsByOrderID(orderID)
+}
+
+func (s *dbStore) PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, payment db.PaymentRecordInput, idempotencyKey string) (db.CheckoutPlacement, error) {
+	return s.store.PlaceOrderFromCartWithPricingAndPayment(userID, deliveryAddress, totalAmount, deliveryNotice, payment, idempotencyKey)
 }
 
 func (s *dbStore) RemoveFromCart(userID, productID int) error {

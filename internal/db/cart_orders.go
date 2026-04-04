@@ -162,8 +162,28 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 		}
 	}()
 
+	orderID, err := placeOrderFromCartTx(tx, userID, address, totalAmount, deliveryNotice, useCustomPricing)
+	if err != nil {
+		return 0, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	return orderID, nil
+}
+
+func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, useCustomPricing bool) (int64, error) {
+	address := strings.TrimSpace(deliveryAddress)
+	if address == "" {
+		return 0, ErrDeliveryAddressRequired
+	}
+	if useCustomPricing && totalAmount < 0 {
+		return 0, ErrNegativeTotalAmount
+	}
+
 	var cartID int64
-	err = tx.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
+	err := tx.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
 	if err == sql.ErrNoRows {
 		return 0, ErrCartEmpty
 	}
@@ -264,9 +284,6 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 		return 0, err
 	}
 
-	if err = tx.Commit(); err != nil {
-		return 0, err
-	}
 	return orderID, nil
 }
 

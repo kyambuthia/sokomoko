@@ -31,6 +31,7 @@
   <form action="/checkout" method="POST" class="auth-panel__form form">
     <fieldset class="form__fieldset">
       <legend class="form__legend">Delivery</legend>
+      <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
       <div class="form__group form-group">
         <label class="form__label" for="delivery_address">Delivery address</label>
         <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="4" required>{{.DeliveryAddress}}</textarea>

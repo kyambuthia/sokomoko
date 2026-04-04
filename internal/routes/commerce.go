@@ -30,6 +30,7 @@ type CheckoutPageData struct {
 	DeliveryAddress string
 	PaymentMethod   string
 	PaymentMethods  []PaymentMethodOption
+	IdempotencyKey  string
 	Error           string
 	Message         string
 	CanCheckout     bool
@@ -223,6 +224,12 @@ func Checkout(a *app.App) http.HandlerFunc {
 		data := checkoutPage(items, subtotal, paymentMethod)
 
 		if r.Method == http.MethodGet {
+			idempotencyKey, err := commerceSvc.GenerateIdempotencyKey()
+			if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			data.IdempotencyKey = idempotencyKey
 			a.Render(w, a.Templates.Checkout, data)
 			return
 		}
@@ -232,14 +239,18 @@ func Checkout(a *app.App) http.HandlerFunc {
 		}
 
 		address := strings.TrimSpace(r.FormValue("delivery_address"))
-		data.DeliveryAddress = address
-		if len(items) == 0 {
-			data.Error = "Cart is empty"
-			a.Render(w, a.Templates.Checkout, data)
-			return
+		idempotencyKey := strings.TrimSpace(r.FormValue("idempotency_key"))
+		if idempotencyKey == "" {
+			idempotencyKey, err = commerceSvc.GenerateIdempotencyKey()
+			if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
 		}
+		data.DeliveryAddress = address
+		data.IdempotencyKey = idempotencyKey
 
-		orderID, finalSummary, err := svc.CheckoutWithPayment(userID, address, paymentMethod)
+		orderID, finalSummary, err := svc.CheckoutWithPayment(userID, address, paymentMethod, idempotencyKey)
 		if err != nil {
 			switch {
 			case errors.Is(err, commerceSvc.ErrDeliveryAddress):

@@ -31,7 +31,7 @@ type AccountService interface {
 
 type CommerceService interface {
 	AddToCart(userID, productID, quantity int) error
-	CheckoutWithPayment(userID int, deliveryAddress, paymentMethod string) (int64, commerceSvc.CheckoutSummary, error)
+	CheckoutWithPayment(userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, commerceSvc.CheckoutSummary, error)
 	GetCart(userID int) ([]commerceSvc.CartItem, float64, error)
 	RemoveFromCart(userID, productID int) error
 	UpdateCartItem(userID, productID, quantity int) error

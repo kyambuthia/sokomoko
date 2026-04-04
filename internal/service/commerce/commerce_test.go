@@ -161,7 +161,7 @@ func TestCheckoutWithPayment_InvalidMethod(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "wire_transfer"); err != ErrInvalidPaymentMethod {
+	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "wire_transfer", ""); err != ErrInvalidPaymentMethod {
 		t.Fatalf("error = %v, want %v", err, ErrInvalidPaymentMethod)
 	}
 }
@@ -175,7 +175,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder)
+	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder, "")
 	if err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}
@@ -195,5 +195,62 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 	}
 	if orders[0].DeliveryNotice == "" {
 		t.Fatal("expected delivery notice to include payment/price context")
+	}
+
+	payments, err := store.ListPaymentsByOrderID(int(orderID))
+	if err != nil {
+		t.Fatalf("list payments error = %v", err)
+	}
+	if len(payments) != 1 {
+		t.Fatalf("payments length = %d, want 1", len(payments))
+	}
+	if payments[0].Status != db.PaymentStatusCaptured {
+		t.Fatalf("payment status = %q, want %q", payments[0].Status, db.PaymentStatusCaptured)
+	}
+}
+
+func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 5)
+	if err := svc.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	key, err := GenerateIdempotencyKey()
+	if err != nil {
+		t.Fatalf("generate key error = %v", err)
+	}
+
+	orderID, _, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder, key)
+	if err != nil {
+		t.Fatalf("first checkout error = %v", err)
+	}
+	replayedOrderID, replaySummary, err := svc.CheckoutWithPayment(userID, "Nairobi", PaymentMethodCardPlaceholder, key)
+	if err != nil {
+		t.Fatalf("replay checkout error = %v", err)
+	}
+	if replayedOrderID != orderID {
+		t.Fatalf("replayed order id = %d, want %d", replayedOrderID, orderID)
+	}
+	if math.Abs(replaySummary.Total-28.10) > 0.001 {
+		t.Fatalf("replayed total = %.2f, want 28.10", replaySummary.Total)
+	}
+
+	orders, err := store.ListOrdersByUser(userID)
+	if err != nil {
+		t.Fatalf("list orders error = %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("orders length = %d, want 1", len(orders))
+	}
+
+	payments, err := store.ListPaymentsByOrderID(int(orderID))
+	if err != nil {
+		t.Fatalf("list payments error = %v", err)
+	}
+	if len(payments) != 1 {
+		t.Fatalf("payments length = %d, want 1", len(payments))
 	}
 }

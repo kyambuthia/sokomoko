@@ -1,267 +1,164 @@
 # Authentication System
 
+Last updated: April 4, 2026
+
 ## Overview
 
-The Sokomoko e-commerce platform implements a comprehensive authentication system that supports both user and admin authentication. The system uses session-based authentication with secure cookie storage.
+Sokomoko uses cookie-backed sessions with host-specific login surfaces:
 
-## Design
+- `localhost`: customer signup, login, logout, password reset, and account access
+- `admin.localhost`: initial admin bootstrap, admin or staff login, staff signup, password reset, and admin tools
+- `partner.localhost`: admin or staff login, password reset, store setup, and partner operations
 
-### Authentication Flow
+Authentication lives in [`internal/auth/auth.go`](/home/mbuthi/Projects/sokomoko/internal/auth/auth.go) and is registered through [`internal/routes/register.go`](/home/mbuthi/Projects/sokomoko/internal/routes/register.go).
 
-1. **User Registration** (`POST /signup`)
-   - User provides username, email, and password
-   - Server generates a random salt
-   - Password is hashed using bcrypt with the salt
-   - User is stored in the database with default role "user"
-   - User is redirected to login page
+## Current auth flows
 
-2. **User Login** (`POST /login`)
-   - User provides username and password
-   - Server retrieves user by username
-   - Password is verified by comparing hashed password with `password + salt`
-   - On success, a secure session token is generated
-   - Session is stored in database with expiration time (24 hours)
-   - Session cookie is set with HttpOnly flag
+### Customer signup
 
-3. **Admin Login** (`POST /login` on admin.localhost)
-   - Same flow as user login
-   - Additional check verifies user has "admin" role
-   - Non-admin users receive 401 Unauthorized
+`POST /signup` on `localhost`
 
-4. **Logout** (`POST /logout`)
-   - Session is deleted from database
-   - Cookie is cleared (expired)
-   - User is redirected to home page
+- validates username, email, and password
+- hashes `password + salt` with bcrypt
+- creates a `user` role account
+- redirects to `/login`
 
-### Security Features
+### Customer login
 
-- **Password Hashing**: bcrypt with random salt per user
-- **Session Management**: Secure random session tokens
-- **Cookie Security**: HttpOnly flag to prevent XSS
-- **Role-Based Access Control**: Separate access for admins and users
-- **Session Expiration**: 24-hour session validity
-- **Input Validation**: All fields are required and validated
+`POST /login` on `localhost`
 
-### Database Schema
+- looks up the user by username
+- only allows role `user`
+- creates a 24-hour session on success
+- sets the `session_token` cookie
 
-#### Users Table
-```sql
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    salt TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',
-    slug TEXT UNIQUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    deleted_at DATETIME
-);
-```
+### Admin and staff login
 
-#### Sessions Table
-```sql
-CREATE TABLE sessions (
-    id TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    expires_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-```
+`POST /login` on `admin.localhost` and `partner.localhost`
 
-## API Endpoints
+- checks that at least one admin account exists first
+- looks up the user by username
+- allows roles `admin` and `staff`
+- creates a 24-hour session on success
 
-### Public Routes
+### First-run admin bootstrap
 
-| Method | Path | Description | Auth Required |
-|--------|------|-------------|---------------|
-| GET | `/login` | Display login form | No |
-| POST | `/login` | Authenticate user | No |
-| GET | `/signup` | Display registration form | No |
-| POST | `/signup` | Register new user | No |
-| POST | `/logout` | Logout user | Yes |
+`GET` or `POST /setup` on `admin.localhost`
 
-### Admin Routes
+- only available while no admin user exists
+- allowed automatically from loopback requests
+- otherwise requires `ADMIN_SETUP_TOKEN` via `X-Admin-Setup-Token` or `setup_token`
+- creates the root admin account
+- can also provision recommended staff accounts with generated temporary passwords
 
-| Method | Path | Description | Auth Required |
-|--------|------|-------------|---------------|
-| GET | `/login` | Display admin login form | No |
-| POST | `/login` | Authenticate admin | No |
-| GET | `/` | Admin dashboard | Admin role |
-| GET | `/products` | Product management | Admin role |
-| GET | `/orders` | Order management | Admin role |
-| GET | `/reports` | Sales reports | Admin role |
-| GET | `/deliveries` | Delivery management | Admin role |
+### Password reset
 
-## Middleware
+`/password-reset/request` and `/password-reset/confirm` exist on all three hosts.
 
-### AuthMiddleware
-Verifies session cookie and adds user to request context:
-- Redirects to `/login` if no valid session
-- Checks session expiration
-- Loads user from database
+- reset tokens are random, one-time, and expire after 45 minutes
+- tokens are stored hashed in `password_reset_tokens`
+- successful password reset invalidates existing sessions for that user
+- in non-production environments the reset link can be rendered directly in the response
+- in production the flow depends on SMTP-based email delivery
 
-### RequireRole
-Checks authenticated user has required role:
-- Returns 403 Forbidden if role doesn't match
-- Used with AuthMiddleware for protected routes
+### Logout
 
-## First-Run Admin Setup
+`POST /logout`
 
-The system does not ship with a fixed default admin username/password.
+- deletes the session from the database
+- expires the cookie in the browser
+- redirects back to `/`
 
-First-run admin bootstrap happens on `admin.localhost/setup` when no admin user exists:
-- On local loopback requests, setup is allowed automatically.
-- In other environments, provide `ADMIN_SETUP_TOKEN` and send it as `X-Admin-Setup-Token` or `setup_token`.
-- The setup flow creates the root admin account and can generate recommended staff accounts.
+## Session model
 
-## Testing Authentication
+Sessions live in the `sessions` table.
 
-### Using the Test Script
+- Cookie name: `session_token`
+- Duration: 24 hours
+- Cookie flags: `HttpOnly`, `SameSite=Lax`, `Secure` when HTTPS or production mode is detected
+- Stored value: the cookie contains the opaque token, while the DB stores a SHA-256 hash of that token
 
-A bash script is provided for manual testing with curl:
+## Middleware and authorization
+
+### `AuthMiddleware`
+
+- loads `session_token` from the cookie
+- resolves the session from the DB
+- loads the user record
+- injects the user into request context
+- redirects unauthenticated requests to `/login`
+
+### `RequireRole`
+
+- allows exactly one role
+- used for admin-only routes such as staff signup, audit, and team actions
+
+### `RequireAnyRole`
+
+- allows either `admin` or `staff`
+- used for the general admin and partner protected surfaces
+
+## Current security posture
+
+Implemented today:
+
+- bcrypt password hashing with per-user salts
+- hashed session IDs in storage
+- hashed password-reset tokens in storage
+- session invalidation on password reset
+- host allowlist enforcement
+- security headers
+- request body limits
+- same-origin checking for many unsafe requests
+- optional IP-based POST rate limiting
+
+Still missing and should be treated as active hardening work:
+
+- token-based CSRF protection for auth and form posts
+- auth-specific throttling and lockout behavior
+- verified-email flow
+- optional MFA for admin users
+- stronger startup validation for production SMTP and cookie configuration
+
+## Route summary
+
+### Customer host: `localhost`
+
+- `GET|POST /signup`
+- `GET|POST /login`
+- `POST /logout`
+- `GET|POST /password-reset/request`
+- `GET|POST /password-reset/confirm`
+- `GET /account`
+
+### Admin host: `admin.localhost`
+
+- `GET|POST /setup`
+- `GET|POST /login`
+- `GET|POST /password-reset/request`
+- `GET|POST /password-reset/confirm`
+- `GET|POST /staff/signup`
+- protected admin pages under `/`
+
+### Partner host: `partner.localhost`
+
+- `GET|POST /login`
+- `GET|POST /password-reset/request`
+- `GET|POST /password-reset/confirm`
+- protected partner pages under `/setup`, `/dashboard`, `/products`, and `/orders`
+
+## Relevant files
+
+- [`internal/auth/auth.go`](/home/mbuthi/Projects/sokomoko/internal/auth/auth.go)
+- [`internal/app/middleware.go`](/home/mbuthi/Projects/sokomoko/internal/app/middleware.go)
+- [`internal/routes/register.go`](/home/mbuthi/Projects/sokomoko/internal/routes/register.go)
+- [`internal/db/sessions.go`](/home/mbuthi/Projects/sokomoko/internal/db/sessions.go)
+- [`db/schema.sql`](/home/mbuthi/Projects/sokomoko/db/schema.sql)
+
+## Test commands
 
 ```bash
-cd cmd/sokomoko
-./test_auth.sh
+go test ./internal/auth
+go test ./cmd/sokomoko
+go test ./...
 ```
-
-The script requires the server to be running and tests:
-1. GET login/signup pages
-2. User registration
-3. User login
-4. Session verification
-5. Logout
-6. Invalid login attempts
-7. Admin login and dashboard access
-
-### Using Go Tests
-
-Run the integration tests:
-
-```bash
-go test -v ./cmd/sokomoko/...
-go test -v ./internal/auth/...
-```
-
-### Manual Testing with curl
-
-Start the server:
-```bash
-go run ./cmd/sokomoko serve
-```
-
-Test user signup:
-```bash
-curl -c cookies.txt -X POST \
-  -d "username=testuser" \
-  -d "email=test@example.com" \
-  -d "password=testpass123" \
-  http://localhost:6969/signup
-```
-
-Test user login:
-```bash
-curl -c cookies.txt -X POST \
-  -d "username=testuser" \
-  -d "password=testpass123" \
-  http://localhost:6969/login
-```
-
-Access protected route:
-```bash
-curl -b cookies.txt http://localhost:6969/account
-```
-
-Test admin login (requires admin subdomain):
-```bash
-# Replace with the credentials created during /setup
-curl -c admin_cookies.txt -X POST \
-  -d "username=<admin-username>" \
-  -d "password=<admin-password>" \
-  -H "Host: admin.localhost" \
-  http://localhost:6969/login
-```
-
-Access admin dashboard:
-```bash
-curl -b admin_cookies.txt -H "Host: admin.localhost" \
-  http://localhost:6969/
-```
-
-Logout:
-```bash
-curl -b cookies.txt -c cookies.txt -X POST \
-  http://localhost:6969/logout
-```
-
-## Server Graceful Shutdown
-
-The server supports graceful shutdown via SIGINT (Ctrl+C) or SIGTERM:
-
-1. Signal is received
-2. Server stops accepting new connections
-3. Active connections are handled with 30-second timeout
-4. Database connection is closed
-5. Port is released
-
-Implementation uses Go's `context`, `os/signal`, and `http.Server.Shutdown`:
-
-```go
-go func() {
-    sigint := make(chan os.Signal, 1)
-    signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
-    <-sigint
-
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    srv.Shutdown(ctx)
-}()
-```
-
-## File Structure
-
-```
-internal/
-├── app/
-│   └── compose.go       # App composition root
-├── auth/
-│   ├── auth.go          # Auth handlers and middleware
-│   └── auth_test.go     # Unit tests
-├── routes/
-│   ├── register.go      # Route registration
-│   └── admin.go         # Admin routes
-├── db/                  # Database layer and schema application
-├── service/             # Feature services and adapters
-└── ui/
-    └── templates.go     # Template parsing
-
-cmd/sokomoko/
-├── main.go              # CLI entrypoint
-├── serve.go             # Serve/migrate/seed command handlers
-├── test_auth.sh        # Bash script for manual testing
-└── integration_test.go # Integration tests
-```
-
-## Security Considerations
-
-1. **Password Storage**: Never store plain text passwords
-2. **Session Tokens**: Use cryptographically secure random generation
-3. **Cookie Flags**: Always use HttpOnly for session cookies
-4. **HTTPS**: Use Secure cookie flag in production (HTTPS required)
-5. **Rate Limiting**: Consider implementing rate limiting for login attempts
-6. **CSRF Protection**: Add CSRF tokens for forms (future enhancement)
-7. **Password Complexity**: Enforce password policies (future enhancement)
-
-## Future Enhancements
-
-- [ ] Email verification for new accounts
-- [ ] Two-factor authentication
-- [ ] CSRF token protection
-- [ ] Rate limiting on login attempts
-- [ ] Password complexity requirements
-- [ ] OAuth 2.0 integration (Google, GitHub, etc.)
-- [ ] Remember me functionality with extended sessions

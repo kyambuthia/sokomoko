@@ -123,6 +123,43 @@ type CustomerOrder struct {
 	Items           []OrderItem
 }
 
+const (
+	PaymentStatusPending  = "pending"
+	PaymentStatusCaptured = "captured"
+	PaymentStatusFailed   = "failed"
+	PaymentStatusRefunded = "refunded"
+)
+
+const (
+	PaymentAttemptStatusPending   = "pending"
+	PaymentAttemptStatusCompleted = "completed"
+	PaymentAttemptStatusFailed    = "failed"
+)
+
+type Payment struct {
+	ID                int
+	OrderID           int
+	UserID            int
+	Method            string
+	Provider          string
+	Status            string
+	Currency          string
+	Amount            float64
+	ExternalReference sql.NullString
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type PaymentAttempt struct {
+	ID                int
+	PaymentID         int
+	Status            string
+	RequestReference  sql.NullString
+	ExternalReference sql.NullString
+	ErrorMessage      sql.NullString
+	CreatedAt         time.Time
+}
+
 type FulfillmentOrder struct {
 	ID              int
 	CustomerUserID  int
@@ -153,4 +190,11 @@ type AuditLog struct {
 	TargetID    sql.NullInt64
 	Details     string
 	CreatedAt   time.Time
+}
+
+type CheckoutPlacement struct {
+	OrderID     int64
+	PaymentID   int64
+	TotalAmount float64
+	Reused      bool
 }

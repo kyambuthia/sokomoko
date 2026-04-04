@@ -154,6 +154,8 @@ go fmt ./...
 ## Docs
 - `AGENTS.md`
 - `GETTING_STARTED.md`
+- `docs/ARCHITECTURE_OVERVIEW.md`
+- `docs/roadmap/GO_COMMERCE_EVOLUTION_PLAN.md`
 - `docs/design/`
 - `docs/reports/`
 - `docs/authentication.md`

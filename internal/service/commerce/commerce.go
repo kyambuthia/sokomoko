@@ -1,6 +1,8 @@
 package commerce
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -154,11 +156,11 @@ func (s *Service) RemoveFromCart(userID, productID int) error {
 }
 
 func (s *Service) Checkout(userID int, deliveryAddress string) (int64, error) {
-	orderID, _, err := s.CheckoutWithPayment(userID, deliveryAddress, defaultPaymentMethod)
+	orderID, _, err := s.CheckoutWithPayment(userID, deliveryAddress, defaultPaymentMethod, "")
 	return orderID, err
 }
 
-func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod string) (int64, CheckoutSummary, error) {
+func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, CheckoutSummary, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
 		return 0, CheckoutSummary{}, ErrDeliveryAddress
@@ -170,6 +172,12 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	}
 	if !isSupportedPaymentMethod(method) {
 		return 0, CheckoutSummary{}, ErrInvalidPaymentMethod
+	}
+
+	if existing, err := s.store.GetCheckoutPlacementByIdempotency(userID, idempotencyKey); err != nil {
+		return 0, CheckoutSummary{}, err
+	} else if existing != nil {
+		return existing.OrderID, CheckoutSummary{Total: existing.TotalAmount}, nil
 	}
 
 	items, subtotal, err := s.store.GetCartItems(userID)
@@ -186,6 +194,10 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	}
 
 	summary := CalculateCheckoutSummary(subtotal)
+	paymentRecord, err := buildPaymentRecord(method, summary.Total)
+	if err != nil {
+		return 0, CheckoutSummary{}, err
+	}
 	notice := fmt.Sprintf(
 		"%s Payment method selected: %s (processing placeholder). Subtotal $%.2f, shipping $%.2f, estimated tax $%.2f.",
 		deliveryNoticeDefaultPrefix,
@@ -195,9 +207,9 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		summary.TaxAmount,
 	)
 
-	orderID, err := s.store.PlaceOrderFromCartWithPricing(userID, address, summary.Total, notice)
+	placement, err := s.store.PlaceOrderFromCartWithPricingAndPayment(userID, address, summary.Total, notice, paymentRecord, strings.TrimSpace(idempotencyKey))
 	if err == nil {
-		return orderID, summary, nil
+		return placement.OrderID, summary, nil
 	}
 
 	switch {
@@ -210,6 +222,44 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	default:
 		return 0, CheckoutSummary{}, err
 	}
+}
+
+func GenerateIdempotencyKey() (string, error) {
+	buf := make([]byte, 18)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func buildPaymentRecord(method string, totalAmount float64) (db.PaymentRecordInput, error) {
+	record := db.PaymentRecordInput{
+		Method:   method,
+		Currency: "USD",
+		Amount:   totalAmount,
+	}
+
+	switch method {
+	case PaymentMethodCashOnDelivery:
+		record.Provider = "manual_cash_on_delivery"
+		record.Status = db.PaymentStatusPending
+		return record, nil
+	case PaymentMethodCardPlaceholder:
+		record.Provider = "placeholder_card"
+		record.Status = db.PaymentStatusCaptured
+	case PaymentMethodMobilePlaceholder:
+		record.Provider = "placeholder_mobile_money"
+		record.Status = db.PaymentStatusCaptured
+	default:
+		return db.PaymentRecordInput{}, ErrInvalidPaymentMethod
+	}
+
+	externalReference, err := GenerateIdempotencyKey()
+	if err != nil {
+		return db.PaymentRecordInput{}, err
+	}
+	record.ExternalReference = "pay_" + externalReference
+	return record, nil
 }
 
 func CalculateCheckoutSummary(subtotal float64) CheckoutSummary {

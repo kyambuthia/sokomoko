@@ -101,6 +101,9 @@ func clearAllTables() {
 	if testStore == nil || testStore.DB == nil {
 		return
 	}
+	testStore.DB.Exec("DELETE FROM payment_attempts")
+	testStore.DB.Exec("DELETE FROM idempotency_keys")
+	testStore.DB.Exec("DELETE FROM payments")
 	testStore.DB.Exec("DELETE FROM order_items")
 	testStore.DB.Exec("DELETE FROM orders")
 	testStore.DB.Exec("DELETE FROM cart_items")
@@ -113,6 +116,30 @@ func clearAllTables() {
 	testStore.DB.Exec("DELETE FROM sessions")
 	testStore.DB.Exec("DELETE FROM users")
 	testStore.DB.Exec("DELETE FROM store_settings")
+}
+
+func checkoutIdempotencyKey(t *testing.T, cookies []*http.Cookie) string {
+	t.Helper()
+
+	resp, body := makeRequest(http.MethodGet, "/checkout", nil, cookies, "")
+	if resp == nil {
+		t.Fatal("checkout request failed")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /checkout status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+
+	const marker = `name="idempotency_key" value="`
+	start := strings.Index(body, marker)
+	if start < 0 {
+		t.Fatal("idempotency key input not found in checkout page")
+	}
+	start += len(marker)
+	end := strings.Index(body[start:], `"`)
+	if end < 0 {
+		t.Fatal("idempotency key input malformed")
+	}
+	return body[start : start+end]
 }
 
 func makeRequest(method, path string, data url.Values, cookies []*http.Cookie, host string) (*http.Response, string) {
@@ -707,6 +734,7 @@ func TestIntegration_CartCheckoutFlow(t *testing.T) {
 
 	checkoutData := url.Values{}
 	checkoutData.Set("delivery_address", "123 Integration Street")
+	checkoutData.Set("idempotency_key", checkoutIdempotencyKey(t, []*http.Cookie{cookie}))
 	resp, _ = makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusFound)
