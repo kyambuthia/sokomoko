@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 )
 
@@ -18,7 +19,7 @@ func cartPage(r *http.Request, items []commerceSvc.CartItem, subtotal float64) C
 }
 
 func checkoutPage(items []commerceSvc.CartItem, subtotal float64, paymentMethod string, paymentMethods []PaymentMethodOption) CheckoutPageData {
-	summary := commerceSvc.CalculateCheckoutSummary(subtotal)
+	summary := checkoutsvc.CalculateSummary(subtotal)
 	return CheckoutPageData{
 		Title:          "Checkout",
 		Items:          items,

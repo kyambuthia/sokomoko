@@ -8,6 +8,7 @@ import (
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
+	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
@@ -24,12 +25,14 @@ type ComposeOptions struct {
 func Compose(opts ComposeOptions) *App {
 	authService := auth.NewService(opts.Store, opts.Auth)
 	paymentService := paymentsvc.New()
+	checkoutService := checkoutsvc.New(opts.Store, paymentService)
 
 	return New(Dependencies{
 		Readiness: opts.Store,
 		Catalog:   catalogsvc.New(opts.Store),
 		Account:   accountsvc.New(opts.Store),
-		Commerce:  commerceSvc.New(opts.Store, paymentService),
+		Commerce:  commerceSvc.New(opts.Store),
+		Checkout:  checkoutService,
 		Payment:   paymentService,
 		Admin:     adminsvc.New(opts.Store),
 		Partner:   partnersvc.New(opts.Store),

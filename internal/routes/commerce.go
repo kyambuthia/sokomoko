@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
@@ -207,7 +208,8 @@ func CartRemove(a *app.App) http.HandlerFunc {
 }
 
 func Checkout(a *app.App) http.HandlerFunc {
-	svc := a.Commerce
+	cartSvc := a.Commerce
+	checkoutSvc := a.Checkout
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := requestUserID(r)
@@ -216,7 +218,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		items, subtotal, err := svc.GetCart(userID)
+		items, subtotal, err := cartSvc.GetCart(userID)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -254,16 +256,16 @@ func Checkout(a *app.App) http.HandlerFunc {
 		data.DeliveryAddress = address
 		data.IdempotencyKey = idempotencyKey
 
-		orderID, finalSummary, err := svc.CheckoutWithPayment(userID, address, paymentMethod, idempotencyKey)
+		orderID, finalSummary, err := checkoutSvc.CheckoutWithPayment(userID, address, paymentMethod, idempotencyKey)
 		if err != nil {
 			switch {
-			case errors.Is(err, commerceSvc.ErrDeliveryAddress):
+			case errors.Is(err, checkoutsvc.ErrDeliveryAddress):
 				data.Error = "Delivery address is required"
-			case errors.Is(err, commerceSvc.ErrCartEmpty):
+			case errors.Is(err, checkoutsvc.ErrCartEmpty):
 				data.Error = "Cart is empty"
-			case errors.Is(err, commerceSvc.ErrInvalidPaymentMethod):
+			case errors.Is(err, checkoutsvc.ErrInvalidPaymentMethod):
 				data.Error = "Choose a supported payment method"
-			case errors.Is(err, commerceSvc.ErrInsufficientStock):
+			case errors.Is(err, checkoutsvc.ErrInsufficientStock):
 				data.Error = "One or more cart items exceed available stock. Review your cart quantities."
 			default:
 				data.Error = fmt.Sprintf("Checkout failed: %s", err.Error())

@@ -28,6 +28,8 @@ The composition root is [`internal/app/compose.go`](/home/mbuthi/Projects/sokomo
 - catalog
 - account
 - commerce
+- checkout
+- payment
 - admin
 - partner
 - auth
@@ -79,7 +81,8 @@ Keep transport concerns in routes, domain rules in services, and SQL-only concer
 - `account`: customer order history
 - `admin`: metrics, team management, audit logs, order state updates
 - `catalog`: storefront product browsing and search
-- `commerce`: cart and checkout rules
+- `checkout`: checkout pricing, idempotent order placement, and payment-backed submission rules
+- `commerce`: cart mutation and cart retrieval rules
 - `payment`: supported payment methods, idempotency keys, and payment-record construction
 - `partner`: store setup, partner catalog actions, fulfillment updates
 
