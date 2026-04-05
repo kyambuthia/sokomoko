@@ -205,6 +205,49 @@ func TestPreparedCheckout_ReturnsPersistedSnapshotState(t *testing.T) {
 	}
 }
 
+func TestSaveDraft_PersistsDeliveryAddressAndReusesOpenCheckout(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 4)
+	if err := store.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	initialState, err := svc.PreparedCheckout(userID, "")
+	if err != nil {
+		t.Fatalf("prepared checkout error = %v", err)
+	}
+
+	draftState, err := svc.SaveDraft(userID, initialState.Token, "Saved Nairobi Lane", paymentsvc.MethodCardPlaceholder)
+	if err != nil {
+		t.Fatalf("save draft error = %v", err)
+	}
+	if draftState.Token != initialState.Token {
+		t.Fatalf("draft token = %q, want %q", draftState.Token, initialState.Token)
+	}
+	if draftState.DeliveryAddress != "Saved Nairobi Lane" {
+		t.Fatalf("draft address = %q, want %q", draftState.DeliveryAddress, "Saved Nairobi Lane")
+	}
+	if draftState.PaymentMethod != paymentsvc.MethodCardPlaceholder {
+		t.Fatalf("draft payment method = %q, want %q", draftState.PaymentMethod, paymentsvc.MethodCardPlaceholder)
+	}
+
+	refreshedState, err := svc.PreparedCheckout(userID, "")
+	if err != nil {
+		t.Fatalf("refreshed checkout error = %v", err)
+	}
+	if refreshedState.Token != initialState.Token {
+		t.Fatalf("refreshed token = %q, want %q", refreshedState.Token, initialState.Token)
+	}
+	if refreshedState.DeliveryAddress != "Saved Nairobi Lane" {
+		t.Fatalf("refreshed address = %q, want %q", refreshedState.DeliveryAddress, "Saved Nairobi Lane")
+	}
+	if refreshedState.PaymentMethod != paymentsvc.MethodCardPlaceholder {
+		t.Fatalf("refreshed payment method = %q, want %q", refreshedState.PaymentMethod, paymentsvc.MethodCardPlaceholder)
+	}
+}
+
 func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 	svc, store, cleanup := newTestService(t)
 	defer cleanup()

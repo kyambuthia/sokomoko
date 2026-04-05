@@ -41,6 +41,7 @@ type CommerceService interface {
 type CheckoutService interface {
 	CheckoutWithPayment(userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, checkoutsvc.Summary, error)
 	PreparedCheckout(userID int, checkoutToken string) (checkoutsvc.PageState, error)
+	SaveDraft(userID int, checkoutToken string, deliveryAddress string, paymentMethod string) (checkoutsvc.PageState, error)
 	Prepare(userID int, reservationKey string) error
 }
 

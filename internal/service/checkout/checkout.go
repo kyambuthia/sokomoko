@@ -85,6 +85,16 @@ func (s *Service) Checkout(userID int, deliveryAddress string) (int64, error) {
 func (s *Service) PreparedCheckout(userID int, checkoutToken string) (PageState, error) {
 	key := strings.TrimSpace(checkoutToken)
 	if key == "" {
+		record, err := s.store.GetLatestOpenCheckout(userID)
+		if err != nil {
+			return PageState{}, err
+		}
+		if checkoutIsOpen(record) {
+			state := mapPageState(record)
+			state.Token = record.Token
+			return state, nil
+		}
+
 		generatedKey, err := s.payments.GenerateIdempotencyKey()
 		if err != nil {
 			return PageState{}, err
@@ -107,6 +117,34 @@ func (s *Service) PreparedCheckout(userID int, checkoutToken string) (PageState,
 	}
 	if record == nil || len(record.Lines) == 0 {
 		return PageState{Token: key}, ErrCartEmpty
+	}
+
+	state := mapPageState(record)
+	state.Token = key
+	return state, nil
+}
+
+func (s *Service) SaveDraft(userID int, checkoutToken string, deliveryAddress string, paymentMethod string) (PageState, error) {
+	key := strings.TrimSpace(checkoutToken)
+	if key == "" {
+		state, err := s.PreparedCheckout(userID, "")
+		if err != nil {
+			return PageState{}, err
+		}
+		key = state.Token
+	}
+
+	record, err := s.store.UpdateCheckoutDraft(userID, key, deliveryAddress, paymentMethod)
+	if err != nil {
+		if errors.Is(err, db.ErrCheckoutNotFound) {
+			if err := s.Prepare(userID, key); err != nil {
+				return PageState{Token: key}, err
+			}
+			record, err = s.store.UpdateCheckoutDraft(userID, key, deliveryAddress, paymentMethod)
+		}
+		if err != nil {
+			return PageState{Token: key}, err
+		}
 	}
 
 	state := mapPageState(record)

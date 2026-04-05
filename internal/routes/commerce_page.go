@@ -23,6 +23,9 @@ func checkoutPage(state checkoutsvc.PageState, paymentMethod string, paymentMeth
 	if selectedPaymentMethod == "" {
 		selectedPaymentMethod = state.PaymentMethod
 	}
+	if selectedPaymentMethod == "" {
+		selectedPaymentMethod = "cash_on_delivery"
+	}
 	return CheckoutPageData{
 		Title:           "Checkout",
 		Items:           state.Items,

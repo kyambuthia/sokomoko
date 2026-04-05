@@ -29,6 +29,23 @@ func (s *Store) GetCheckoutByToken(userID int, token string) (*Checkout, error) 
 	return checkout, nil
 }
 
+func (s *Store) GetLatestOpenCheckout(userID int) (*Checkout, error) {
+	checkout, err := getLatestOpenCheckoutQuerier(s.DB, userID, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	if checkout == nil {
+		return nil, nil
+	}
+
+	lines, err := listCheckoutLinesByCheckoutIDQuerier(s.DB, checkout.ID)
+	if err != nil {
+		return nil, err
+	}
+	checkout.Lines = lines
+	return checkout, nil
+}
+
 func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, error) {
 	token := strings.TrimSpace(input.Token)
 	if token == "" {
@@ -145,6 +162,72 @@ func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, erro
 	return checkout, nil
 }
 
+func (s *Store) UpdateCheckoutDraft(userID int, token string, deliveryAddress string, paymentMethod string) (*Checkout, error) {
+	key := strings.TrimSpace(token)
+	if key == "" {
+		return nil, ErrCheckoutNotFound
+	}
+	method := strings.TrimSpace(paymentMethod)
+
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if err := expireOpenCheckoutsTx(tx, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+
+	result, err := tx.Exec(
+		`UPDATE checkouts
+		 SET delivery_address = ?,
+		     payment_method = CASE
+		         WHEN ? = '' THEN payment_method
+		         ELSE ?
+		     END,
+		     updated_at = CURRENT_TIMESTAMP
+		 WHERE user_id = ? AND token = ? AND status = ?`,
+		nullIfEmpty(deliveryAddress),
+		method,
+		method,
+		userID,
+		key,
+		CheckoutStatusOpen,
+	)
+	if err != nil {
+		return nil, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if affected == 0 {
+		return nil, ErrCheckoutNotFound
+	}
+
+	checkout, err := getCheckoutByTokenQuerier(tx, userID, key)
+	if err != nil {
+		return nil, err
+	}
+	if checkout == nil {
+		return nil, ErrCheckoutNotFound
+	}
+	lines, err := listCheckoutLinesByCheckoutIDQuerier(tx, checkout.ID)
+	if err != nil {
+		return nil, err
+	}
+	checkout.Lines = lines
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return checkout, nil
+}
+
 type checkoutQuerier interface {
 	QueryRow(query string, args ...any) *sql.Row
 	Query(query string, args ...any) (*sql.Rows, error)
@@ -160,6 +243,46 @@ func getCheckoutByTokenQuerier(q checkoutQuerier, userID int, token string) (*Ch
 		 WHERE user_id = ? AND token = ?`,
 		userID,
 		token,
+	).Scan(
+		&checkout.ID,
+		&checkout.UserID,
+		&checkout.Token,
+		&checkout.Status,
+		&checkout.Currency,
+		&checkout.PaymentMethod,
+		&checkout.SubtotalAmount,
+		&checkout.ShippingFee,
+		&checkout.TaxAmount,
+		&checkout.TotalAmount,
+		&checkout.DeliveryAddress,
+		&checkout.ExpiresAt,
+		&checkout.CompletedAt,
+		&checkout.OrderID,
+		&checkout.CreatedAt,
+		&checkout.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return checkout, nil
+}
+
+func getLatestOpenCheckoutQuerier(q checkoutQuerier, userID int, now time.Time) (*Checkout, error) {
+	checkout := &Checkout{}
+	err := q.QueryRow(
+		`SELECT id, user_id, token, status, currency, payment_method,
+		        subtotal_amount, shipping_fee, tax_amount, total_amount,
+		        delivery_address, expires_at, completed_at, order_id, created_at, updated_at
+		 FROM checkouts
+		 WHERE user_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)
+		 ORDER BY updated_at DESC, id DESC
+		 LIMIT 1`,
+		userID,
+		CheckoutStatusOpen,
+		now.UTC(),
 	).Scan(
 		&checkout.ID,
 		&checkout.UserID,

@@ -269,3 +269,54 @@ func TestIntegration_CheckoutValidationRendersPersistedSnapshot(t *testing.T) {
 		t.Fatalf("expected persisted checkout line in body, got %q", body)
 	}
 }
+
+func TestIntegration_CheckoutDraftSurvivesRefresh(t *testing.T) {
+	clearAllTables()
+
+	suffix := time.Now().UnixNano()
+	username := fmt.Sprintf("buyer_draft_%d", suffix)
+	email := fmt.Sprintf("buyer_draft_%d@example.com", suffix)
+	password := "strongpass123"
+	createTestUser(t, username, email, password, "user")
+	cookie := loginAndGetSessionCookie(t, "", username, password)
+
+	productID := createTestProduct(t, "Draft Product", fmt.Sprintf("draft-product-%d", suffix), 10.0, 5)
+
+	addData := url.Values{}
+	addData.Set("product_id", fmt.Sprintf("%d", productID))
+	addData.Set("quantity", "2")
+	resp, _ := makeRequest(http.MethodPost, "/cart/add", addData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /cart/add status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	idempotencyKey := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
+
+	checkoutData := url.Values{}
+	checkoutData.Set("delivery_address", "Saved Lane 42")
+	checkoutData.Set("payment_method", "wire_transfer")
+	checkoutData.Set("idempotency_key", idempotencyKey)
+	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, "Choose a supported payment method") {
+		t.Fatalf("expected invalid payment error in body, got %q", body)
+	}
+	if !strings.Contains(body, "Saved Lane 42") {
+		t.Fatalf("expected persisted address in validation body, got %q", body)
+	}
+
+	refreshedKey := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
+	if refreshedKey != idempotencyKey {
+		t.Fatalf("refreshed checkout key=%q expected=%q", refreshedKey, idempotencyKey)
+	}
+
+	resp, body = makeRequest(http.MethodGet, "/checkout", nil, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /checkout status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, "Saved Lane 42") {
+		t.Fatalf("expected saved address on refresh, got %q", body)
+	}
+}

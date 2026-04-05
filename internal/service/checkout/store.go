@@ -10,10 +10,12 @@ type store interface {
 	GetCartItems(userID int) ([]cartItem, float64, error)
 	GetCartItemsForCheckout(userID int, reservationKey string) ([]cartItem, float64, error)
 	GetCheckoutByToken(userID int, token string) (*db.Checkout, error)
+	GetLatestOpenCheckout(userID int) (*db.Checkout, error)
 	GetCheckoutPlacementByIdempotency(userID int, idempotencyKey string) (*db.CheckoutPlacement, error)
 	PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken string, deliveryAddress string, deliveryNotice string, payment db.PaymentRecordInput) (db.CheckoutPlacement, error)
 	PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, payment db.PaymentRecordInput, idempotencyKey string) (db.CheckoutPlacement, error)
 	ReserveCartForCheckout(userID int, reservationKey string, expiresAt time.Time) error
+	UpdateCheckoutDraft(userID int, token string, deliveryAddress string, paymentMethod string) (*db.Checkout, error)
 	UpsertCheckout(userID int, input db.CheckoutInput) (*db.Checkout, error)
 }
 
@@ -62,6 +64,10 @@ func (s *dbStore) GetCheckoutByToken(userID int, token string) (*db.Checkout, er
 	return s.store.GetCheckoutByToken(userID, token)
 }
 
+func (s *dbStore) GetLatestOpenCheckout(userID int) (*db.Checkout, error) {
+	return s.store.GetLatestOpenCheckout(userID)
+}
+
 func (s *dbStore) GetCartItemsForCheckout(userID int, reservationKey string) ([]cartItem, float64, error) {
 	items, subtotal, err := s.store.GetCartItemsForCheckout(userID, reservationKey)
 	if err != nil {
@@ -91,6 +97,10 @@ func (s *dbStore) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken st
 
 func (s *dbStore) ReserveCartForCheckout(userID int, reservationKey string, expiresAt time.Time) error {
 	return s.store.ReserveCartForCheckout(userID, reservationKey, expiresAt)
+}
+
+func (s *dbStore) UpdateCheckoutDraft(userID int, token string, deliveryAddress string, paymentMethod string) (*db.Checkout, error) {
+	return s.store.UpdateCheckoutDraft(userID, token, deliveryAddress, paymentMethod)
 }
 
 func (s *dbStore) UpsertCheckout(userID int, input db.CheckoutInput) (*db.Checkout, error) {

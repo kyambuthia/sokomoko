@@ -218,9 +218,6 @@ func Checkout(a *app.App) http.HandlerFunc {
 		}
 
 		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
-		if paymentMethod == "" {
-			paymentMethod = paymentsvc.MethodCashOnDelivery
-		}
 		if r.Method == http.MethodGet {
 			state, err := checkoutSvc.PreparedCheckout(userID, "")
 			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
@@ -245,27 +242,38 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		address := strings.TrimSpace(r.FormValue("delivery_address"))
 		idempotencyKey := strings.TrimSpace(r.FormValue("idempotency_key"))
-		state, err := checkoutSvc.PreparedCheckout(userID, idempotencyKey)
-		if err != nil && !errors.Is(err, checkoutsvc.ErrCartEmpty) && !errors.Is(err, checkoutsvc.ErrInsufficientStock) {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
 		if idempotencyKey == "" {
-			idempotencyKey = state.Token
-		}
-		if idempotencyKey == "" {
-			idempotencyKey, err = a.Payment.GenerateIdempotencyKey()
-			if err != nil {
+			state, prepErr := checkoutSvc.PreparedCheckout(userID, "")
+			if prepErr != nil {
+				data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
+				if errors.Is(prepErr, checkoutsvc.ErrCartEmpty) {
+					data.Error = "Cart is empty"
+					a.Render(w, a.Templates.Checkout, data)
+					return
+				}
+				if errors.Is(prepErr, checkoutsvc.ErrInsufficientStock) {
+					data.Error = "One or more cart items exceed available stock. Review your cart quantities."
+					a.Render(w, a.Templates.Checkout, data)
+					return
+				}
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
+			idempotencyKey = state.Token
 		}
-		data.DeliveryAddress = address
-		data.IdempotencyKey = idempotencyKey
 
 		orderID, finalSummary, err := checkoutSvc.CheckoutWithPayment(userID, address, paymentMethod, idempotencyKey)
 		if err != nil {
+			state, stateErr := checkoutSvc.SaveDraft(userID, idempotencyKey, address, paymentMethod)
+			if stateErr != nil && !errors.Is(stateErr, checkoutsvc.ErrCartEmpty) && !errors.Is(stateErr, checkoutsvc.ErrInsufficientStock) {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
+			if strings.TrimSpace(state.Token) != "" {
+				idempotencyKey = state.Token
+			}
+			data.IdempotencyKey = idempotencyKey
 			switch {
 			case errors.Is(err, checkoutsvc.ErrDeliveryAddress):
 				data.Error = "Delivery address is required"
@@ -282,11 +290,16 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		successMethod := strings.TrimSpace(paymentMethod)
+		if successMethod == "" {
+			successMethod = paymentsvc.MethodCashOnDelivery
+		}
+
 		msg := fmt.Sprintf(
 			"Order %d placed successfully. Total $%.2f using %s. Delivery notice will update as partner fulfills.",
 			orderID,
 			finalSummary.Total,
-			a.Payment.MethodLabel(paymentMethod),
+			a.Payment.MethodLabel(successMethod),
 		)
 		http.Redirect(w, r, "/account?message="+url.QueryEscape(msg), http.StatusFound)
 	}
