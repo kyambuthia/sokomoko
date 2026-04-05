@@ -18,17 +18,22 @@ func cartPage(r *http.Request, items []commerceSvc.CartItem, subtotal float64) C
 	}
 }
 
-func checkoutPage(items []commerceSvc.CartItem, subtotal float64, paymentMethod string, paymentMethods []PaymentMethodOption) CheckoutPageData {
-	summary := checkoutsvc.CalculateSummary(subtotal)
+func checkoutPage(state checkoutsvc.PageState, paymentMethod string, paymentMethods []PaymentMethodOption) CheckoutPageData {
+	selectedPaymentMethod := strings.TrimSpace(paymentMethod)
+	if selectedPaymentMethod == "" {
+		selectedPaymentMethod = state.PaymentMethod
+	}
 	return CheckoutPageData{
-		Title:          "Checkout",
-		Items:          items,
-		Subtotal:       summary.Subtotal,
-		ShippingFee:    summary.ShippingFee,
-		TaxAmount:      summary.TaxAmount,
-		TotalAmount:    summary.Total,
-		PaymentMethod:  paymentMethod,
-		PaymentMethods: paymentMethods,
-		CanCheckout:    len(items) > 0,
+		Title:           "Checkout",
+		Items:           state.Items,
+		Subtotal:        state.Summary.Subtotal,
+		ShippingFee:     state.Summary.ShippingFee,
+		TaxAmount:       state.Summary.TaxAmount,
+		TotalAmount:     state.Summary.Total,
+		DeliveryAddress: state.DeliveryAddress,
+		PaymentMethod:   selectedPaymentMethod,
+		PaymentMethods:  paymentMethods,
+		IdempotencyKey:  state.Token,
+		CanCheckout:     state.CanCheckout,
 	}
 }

@@ -224,3 +224,48 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 		t.Fatalf("expected 0 orders for blocked user, got %d", len(orders))
 	}
 }
+
+func TestIntegration_CheckoutValidationRendersPersistedSnapshot(t *testing.T) {
+	clearAllTables()
+
+	suffix := time.Now().UnixNano()
+	username := fmt.Sprintf("buyer_snapshot_%d", suffix)
+	email := fmt.Sprintf("buyer_snapshot_%d@example.com", suffix)
+	password := "strongpass123"
+	createTestUser(t, username, email, password, "user")
+	cookie := loginAndGetSessionCookie(t, "", username, password)
+
+	productID := createTestProduct(t, "Snapshot Product", fmt.Sprintf("snapshot-product-%d", suffix), 10.0, 5)
+
+	addData := url.Values{}
+	addData.Set("product_id", fmt.Sprintf("%d", productID))
+	addData.Set("quantity", "2")
+	resp, _ := makeRequest(http.MethodPost, "/cart/add", addData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /cart/add status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	idempotencyKey := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
+
+	updateData := url.Values{}
+	updateData.Set("product_id", fmt.Sprintf("%d", productID))
+	updateData.Set("quantity", "1")
+	resp, _ = makeRequest(http.MethodPost, "/cart/update", updateData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /cart/update status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	checkoutData := url.Values{}
+	checkoutData.Set("payment_method", "card_placeholder")
+	checkoutData.Set("idempotency_key", idempotencyKey)
+	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, "Delivery address is required") {
+		t.Fatalf("expected validation error in body, got %q", body)
+	}
+	if !strings.Contains(body, "Snapshot Product × 2 - $20.00") {
+		t.Fatalf("expected persisted checkout line in body, got %q", body)
+	}
+}

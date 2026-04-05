@@ -24,7 +24,7 @@ type CartPageData struct {
 
 type CheckoutPageData struct {
 	Title           string
-	Items           []commerceSvc.CartItem
+	Items           []checkoutsvc.Item
 	Subtotal        float64
 	ShippingFee     float64
 	TaxAmount       float64
@@ -208,7 +208,6 @@ func CartRemove(a *app.App) http.HandlerFunc {
 }
 
 func Checkout(a *app.App) http.HandlerFunc {
-	cartSvc := a.Commerce
 	checkoutSvc := a.Checkout
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -218,25 +217,14 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		items, subtotal, err := cartSvc.GetCart(userID)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
 		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
 		if paymentMethod == "" {
 			paymentMethod = paymentsvc.MethodCashOnDelivery
 		}
-		data := checkoutPage(items, subtotal, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
-
 		if r.Method == http.MethodGet {
-			idempotencyKey, err := a.Payment.GenerateIdempotencyKey()
+			state, err := checkoutSvc.PreparedCheckout(userID, "")
+			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
 			if err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-			data.IdempotencyKey = idempotencyKey
-			if err := checkoutSvc.Prepare(userID, idempotencyKey); err != nil {
 				switch {
 				case errors.Is(err, checkoutsvc.ErrCartEmpty):
 					data.Error = "Cart is empty"
@@ -257,6 +245,15 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		address := strings.TrimSpace(r.FormValue("delivery_address"))
 		idempotencyKey := strings.TrimSpace(r.FormValue("idempotency_key"))
+		state, err := checkoutSvc.PreparedCheckout(userID, idempotencyKey)
+		if err != nil && !errors.Is(err, checkoutsvc.ErrCartEmpty) && !errors.Is(err, checkoutsvc.ErrInsufficientStock) {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
+		if idempotencyKey == "" {
+			idempotencyKey = state.Token
+		}
 		if idempotencyKey == "" {
 			idempotencyKey, err = a.Payment.GenerateIdempotencyKey()
 			if err != nil {

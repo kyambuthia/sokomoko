@@ -41,6 +41,23 @@ type Summary struct {
 	Total       float64
 }
 
+type Item struct {
+	ProductID   int
+	ProductName string
+	Quantity    int
+	UnitPrice   float64
+	LineTotal   float64
+}
+
+type PageState struct {
+	Token           string
+	Items           []Item
+	Summary         Summary
+	PaymentMethod   string
+	DeliveryAddress string
+	CanCheckout     bool
+}
+
 type Service struct {
 	store    store
 	payments paymentService
@@ -63,6 +80,38 @@ func newWithStore(store store, payments paymentService) *Service {
 func (s *Service) Checkout(userID int, deliveryAddress string) (int64, error) {
 	orderID, _, err := s.CheckoutWithPayment(userID, deliveryAddress, defaultPaymentMethod, "")
 	return orderID, err
+}
+
+func (s *Service) PreparedCheckout(userID int, checkoutToken string) (PageState, error) {
+	key := strings.TrimSpace(checkoutToken)
+	if key == "" {
+		generatedKey, err := s.payments.GenerateIdempotencyKey()
+		if err != nil {
+			return PageState{}, err
+		}
+		key = generatedKey
+	}
+
+	record, err := s.store.GetCheckoutByToken(userID, key)
+	if err != nil {
+		return PageState{}, err
+	}
+	if !checkoutIsOpen(record) {
+		if err := s.Prepare(userID, key); err != nil {
+			return PageState{Token: key}, err
+		}
+		record, err = s.store.GetCheckoutByToken(userID, key)
+		if err != nil {
+			return PageState{}, err
+		}
+	}
+	if record == nil || len(record.Lines) == 0 {
+		return PageState{Token: key}, ErrCartEmpty
+	}
+
+	state := mapPageState(record)
+	state.Token = key
+	return state, nil
 }
 
 func (s *Service) Prepare(userID int, reservationKey string) error {
@@ -233,6 +282,37 @@ func summaryFromCheckout(checkout *db.Checkout) Summary {
 		ShippingFee: checkout.ShippingFee,
 		TaxAmount:   checkout.TaxAmount,
 		Total:       checkout.TotalAmount,
+	}
+}
+
+func mapPageState(checkout *db.Checkout) PageState {
+	if checkout == nil {
+		return PageState{}
+	}
+
+	items := make([]Item, 0, len(checkout.Lines))
+	for _, line := range checkout.Lines {
+		items = append(items, Item{
+			ProductID:   line.ProductID,
+			ProductName: line.ProductName,
+			Quantity:    line.Quantity,
+			UnitPrice:   line.UnitPrice,
+			LineTotal:   line.LineTotal,
+		})
+	}
+
+	deliveryAddress := ""
+	if checkout.DeliveryAddress.Valid {
+		deliveryAddress = strings.TrimSpace(checkout.DeliveryAddress.String)
+	}
+
+	return PageState{
+		Token:           checkout.Token,
+		Items:           items,
+		Summary:         summaryFromCheckout(checkout),
+		PaymentMethod:   checkout.PaymentMethod,
+		DeliveryAddress: deliveryAddress,
+		CanCheckout:     len(items) > 0,
 	}
 }
 

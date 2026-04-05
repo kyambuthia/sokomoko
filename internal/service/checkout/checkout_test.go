@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"math"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -163,6 +164,44 @@ func TestPrepare_CreatesCheckoutReservations(t *testing.T) {
 	}
 	if checkout.TotalAmount != 28.10 {
 		t.Fatalf("checkout total = %.2f, want 28.10", checkout.TotalAmount)
+	}
+}
+
+func TestPreparedCheckout_ReturnsPersistedSnapshotState(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 4)
+	if err := store.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	state, err := svc.PreparedCheckout(userID, "")
+	if err != nil {
+		t.Fatalf("prepared checkout error = %v", err)
+	}
+	if strings.TrimSpace(state.Token) == "" {
+		t.Fatal("expected checkout token")
+	}
+	if !state.CanCheckout {
+		t.Fatal("expected checkout to be allowed")
+	}
+	if len(state.Items) != 1 {
+		t.Fatalf("items length = %d, want 1", len(state.Items))
+	}
+	if state.Items[0].Quantity != 2 {
+		t.Fatalf("item quantity = %d, want 2", state.Items[0].Quantity)
+	}
+	if math.Abs(state.Summary.Total-28.10) > 0.001 {
+		t.Fatalf("summary total = %.2f, want 28.10", state.Summary.Total)
+	}
+
+	checkout, err := store.GetCheckoutByToken(userID, state.Token)
+	if err != nil {
+		t.Fatalf("get checkout error = %v", err)
+	}
+	if checkout == nil {
+		t.Fatal("expected persisted checkout")
 	}
 }
 
