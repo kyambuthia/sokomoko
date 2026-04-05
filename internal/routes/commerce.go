@@ -33,6 +33,7 @@ type CheckoutPageData struct {
 	PaymentMethod   string
 	PaymentMethods  []PaymentMethodOption
 	IdempotencyKey  string
+	FormAction      string
 	Error           string
 	Message         string
 	CanCheckout     bool
@@ -219,7 +220,8 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
 		if r.Method == http.MethodGet {
-			state, err := checkoutSvc.PreparedCheckout(userID, "")
+			resumeToken := strings.TrimSpace(r.URL.Query().Get("checkout"))
+			state, err := checkoutSvc.PreparedCheckout(userID, resumeToken)
 			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
 			if err != nil {
 				switch {
@@ -242,6 +244,9 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		address := strings.TrimSpace(r.FormValue("delivery_address"))
 		idempotencyKey := strings.TrimSpace(r.FormValue("idempotency_key"))
+		if idempotencyKey == "" {
+			idempotencyKey = strings.TrimSpace(r.URL.Query().Get("checkout"))
+		}
 		if idempotencyKey == "" {
 			state, prepErr := checkoutSvc.PreparedCheckout(userID, "")
 			if prepErr != nil {

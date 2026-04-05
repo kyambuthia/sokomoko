@@ -320,3 +320,53 @@ func TestIntegration_CheckoutDraftSurvivesRefresh(t *testing.T) {
 		t.Fatalf("expected saved address on refresh, got %q", body)
 	}
 }
+
+func TestIntegration_CheckoutCanResumeFromQueryToken(t *testing.T) {
+	clearAllTables()
+
+	suffix := time.Now().UnixNano()
+	username := fmt.Sprintf("buyer_resume_%d", suffix)
+	email := fmt.Sprintf("buyer_resume_%d@example.com", suffix)
+	password := "strongpass123"
+	userID := createTestUser(t, username, email, password, "user")
+	cookie := loginAndGetSessionCookie(t, "", username, password)
+
+	productID := createTestProduct(t, "Resume Product", fmt.Sprintf("resume-product-%d", suffix), 10.0, 5)
+
+	addData := url.Values{}
+	addData.Set("product_id", fmt.Sprintf("%d", productID))
+	addData.Set("quantity", "2")
+	resp, _ := makeRequest(http.MethodPost, "/cart/add", addData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /cart/add status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	idempotencyKey := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
+
+	resp, body := makeRequest(http.MethodGet, "/checkout?checkout="+url.QueryEscape(idempotencyKey), nil, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /checkout?checkout=token status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, `form action="/checkout?checkout=`) {
+		t.Fatalf("expected checkout form action to preserve resume token, got %q", body)
+	}
+
+	checkoutData := url.Values{}
+	checkoutData.Set("delivery_address", "Resume Lane")
+	checkoutData.Set("payment_method", "card_placeholder")
+	resp, _ = makeRequest(http.MethodPost, "/checkout?checkout="+url.QueryEscape(idempotencyKey), checkoutData, []*http.Cookie{cookie}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /checkout?checkout=token status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	orders, err := testStore.ListOrdersByUser(int(userID))
+	if err != nil {
+		t.Fatalf("list orders failed: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("expected 1 resumed order, got %d", len(orders))
+	}
+	if math.Abs(orders[0].TotalAmount-28.10) > 0.001 {
+		t.Fatalf("order total amount=%.2f expected=28.10", orders[0].TotalAmount)
+	}
+}

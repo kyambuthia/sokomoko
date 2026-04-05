@@ -28,7 +28,7 @@
     </div>
   </section>
 
-  <form action="/checkout" method="POST" class="auth-panel__form form">
+  <form action="{{.FormAction}}" method="POST" class="auth-panel__form form">
     <fieldset class="form__fieldset">
       <legend class="form__legend">Delivery</legend>
       <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">

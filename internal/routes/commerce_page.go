@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
@@ -37,6 +38,15 @@ func checkoutPage(state checkoutsvc.PageState, paymentMethod string, paymentMeth
 		PaymentMethod:   selectedPaymentMethod,
 		PaymentMethods:  paymentMethods,
 		IdempotencyKey:  state.Token,
+		FormAction:      checkoutFormAction(state.Token),
 		CanCheckout:     state.CanCheckout,
 	}
+}
+
+func checkoutFormAction(token string) string {
+	key := strings.TrimSpace(token)
+	if key == "" {
+		return "/checkout"
+	}
+	return "/checkout?checkout=" + url.QueryEscape(key)
 }
