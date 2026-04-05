@@ -29,6 +29,7 @@ const (
 
 type paymentService interface {
 	BuildRecord(method string, totalAmount float64) (db.PaymentRecordInput, error)
+	GenerateIdempotencyKey() (string, error)
 	IsSupportedMethod(method string) bool
 	MethodLabel(method string) string
 }
@@ -80,6 +81,44 @@ func (s *Service) Prepare(userID int, reservationKey string) error {
 			return err
 		}
 	}
+
+	items, subtotal, err := s.store.GetCartItemsForCheckout(userID, key)
+	if err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		return ErrCartEmpty
+	}
+
+	lines := make([]db.CheckoutLineInput, 0, len(items))
+	for _, item := range items {
+		if item.Quantity > item.StockQuantity {
+			return ErrInsufficientStock
+		}
+		lines = append(lines, db.CheckoutLineInput{
+			ProductID:      item.ProductID,
+			ProductName:    item.ProductName,
+			Quantity:       item.Quantity,
+			UnitPrice:      item.UnitPrice,
+			LineTotal:      item.LineTotal,
+			ReservationKey: key,
+		})
+	}
+
+	summary := CalculateSummary(subtotal)
+	if _, err := s.store.UpsertCheckout(userID, db.CheckoutInput{
+		Token:          key,
+		Currency:       "USD",
+		PaymentMethod:  defaultPaymentMethod,
+		SubtotalAmount: summary.Subtotal,
+		ShippingFee:    summary.ShippingFee,
+		TaxAmount:      summary.TaxAmount,
+		TotalAmount:    summary.Total,
+		ExpiresAt:      time.Now().UTC().Add(reservationHoldTTL),
+		Lines:          lines,
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -104,24 +143,32 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	}
 
 	key := strings.TrimSpace(idempotencyKey)
-	if err := s.Prepare(userID, key); err != nil {
-		return 0, Summary{}, err
+	if key == "" {
+		generatedKey, err := s.payments.GenerateIdempotencyKey()
+		if err != nil {
+			return 0, Summary{}, err
+		}
+		key = generatedKey
 	}
 
-	items, subtotal, err := s.store.GetCartItemsForCheckout(userID, key)
+	checkoutRecord, err := s.store.GetCheckoutByToken(userID, key)
 	if err != nil {
 		return 0, Summary{}, err
 	}
-	if len(items) == 0 {
-		return 0, Summary{}, ErrCartEmpty
-	}
-	for _, item := range items {
-		if item.Quantity > item.StockQuantity {
-			return 0, Summary{}, ErrInsufficientStock
+	if !checkoutIsOpen(checkoutRecord) {
+		if err := s.Prepare(userID, key); err != nil {
+			return 0, Summary{}, err
+		}
+		checkoutRecord, err = s.store.GetCheckoutByToken(userID, key)
+		if err != nil {
+			return 0, Summary{}, err
 		}
 	}
+	if checkoutRecord == nil || len(checkoutRecord.Lines) == 0 {
+		return 0, Summary{}, ErrCartEmpty
+	}
 
-	summary := CalculateSummary(subtotal)
+	summary := summaryFromCheckout(checkoutRecord)
 	paymentRecord, err := s.payments.BuildRecord(method, summary.Total)
 	if err != nil {
 		return 0, Summary{}, err
@@ -135,7 +182,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		summary.TaxAmount,
 	)
 
-	placement, err := s.store.PlaceOrderFromCartWithPricingAndPayment(userID, address, summary.Total, notice, paymentRecord, key)
+	placement, err := s.store.PlaceOrderFromCheckoutWithPayment(userID, key, address, notice, paymentRecord)
 	if err == nil {
 		return placement.OrderID, summary, nil
 	}
@@ -145,6 +192,8 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		return 0, Summary{}, ErrCartEmpty
 	case errors.Is(err, db.ErrDeliveryAddressRequired):
 		return 0, Summary{}, ErrDeliveryAddress
+	case errors.Is(err, db.ErrCheckoutExpired):
+		return 0, Summary{}, ErrCartEmpty
 	case errors.Is(err, db.ErrInsufficientStock):
 		return 0, Summary{}, ErrInsufficientStock
 	default:
@@ -165,6 +214,25 @@ func CalculateSummary(subtotal float64) Summary {
 		ShippingFee: shipping,
 		TaxAmount:   tax,
 		Total:       total,
+	}
+}
+
+func checkoutIsOpen(checkout *db.Checkout) bool {
+	if checkout == nil || checkout.Status != db.CheckoutStatusOpen {
+		return false
+	}
+	return !checkout.ExpiresAt.Valid || checkout.ExpiresAt.Time.After(time.Now().UTC())
+}
+
+func summaryFromCheckout(checkout *db.Checkout) Summary {
+	if checkout == nil {
+		return Summary{}
+	}
+	return Summary{
+		Subtotal:    checkout.SubtotalAmount,
+		ShippingFee: checkout.ShippingFee,
+		TaxAmount:   checkout.TaxAmount,
+		Total:       checkout.TotalAmount,
 	}
 }
 

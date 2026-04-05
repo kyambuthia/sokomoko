@@ -6,6 +6,7 @@ import (
 	"fmt"
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
+	"math"
 	"os"
 	"sync"
 	"testing"
@@ -77,6 +78,8 @@ func TestInitDB(t *testing.T) {
 		"inventory_stocks":   true,
 		"stock_reservations": true,
 		"stock_movements":    true,
+		"checkouts":          true,
+		"checkout_lines":     true,
 	}
 
 	for _, table := range tables {
@@ -732,6 +735,134 @@ func TestReserveCartForCheckout_ExpiresStaleReservations(t *testing.T) {
 	}
 	if len(reservations) != 1 {
 		t.Fatalf("expected 1 active reservation for fresh key, got %d", len(reservations))
+	}
+}
+
+func TestUpsertCheckoutAndPlaceOrderFromCheckout(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	userID, err := testStore.CreateUser(User{
+		Username:     fmt.Sprintf("checkout_user_%d", suffix),
+		Email:        fmt.Sprintf("checkout_user_%d@example.com", suffix),
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("checkout-user-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Checkout Category %d", suffix),
+		Slug:        fmt.Sprintf("checkout-category-%d", suffix),
+		Description: "checkout",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Checkout Product",
+		Slug:          fmt.Sprintf("checkout-product-%d", suffix),
+		Description:   "checkout product",
+		Price:         10,
+		StockQuantity: 4,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	if err := testStore.AddToCart(int(userID), int(productID), 2); err != nil {
+		t.Fatalf("add to cart: %v", err)
+	}
+
+	expiresAt := time.Now().Add(15 * time.Minute)
+	if err := testStore.ReserveCartForCheckout(int(userID), "checkout-key", expiresAt); err != nil {
+		t.Fatalf("reserve cart: %v", err)
+	}
+
+	checkout, err := testStore.UpsertCheckout(int(userID), CheckoutInput{
+		Token:          "checkout-key",
+		Currency:       "USD",
+		PaymentMethod:  "cash_on_delivery",
+		SubtotalAmount: 20,
+		ShippingFee:    6.50,
+		TaxAmount:      1.60,
+		TotalAmount:    28.10,
+		ExpiresAt:      expiresAt,
+		Lines: []CheckoutLineInput{
+			{
+				ProductID:      int(productID),
+				ProductName:    "Checkout Product",
+				Quantity:       2,
+				UnitPrice:      10,
+				LineTotal:      20,
+				ReservationKey: "checkout-key",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("upsert checkout: %v", err)
+	}
+	if checkout == nil {
+		t.Fatal("expected checkout")
+	}
+	if checkout.Status != CheckoutStatusOpen {
+		t.Fatalf("checkout status = %q, want %q", checkout.Status, CheckoutStatusOpen)
+	}
+	if len(checkout.Lines) != 1 {
+		t.Fatalf("checkout lines length = %d, want 1", len(checkout.Lines))
+	}
+
+	if err := testStore.UpdateCartQuantity(int(userID), int(productID), 1); err != nil {
+		t.Fatalf("update cart quantity: %v", err)
+	}
+
+	placement, err := testStore.PlaceOrderFromCheckoutWithPayment(int(userID), "checkout-key", "Snapshot Lane", "Checkout snapshot test", PaymentRecordInput{
+		Method:            "card_placeholder",
+		Provider:          "placeholder_card",
+		Status:            PaymentStatusCaptured,
+		Currency:          "USD",
+		Amount:            0,
+		ExternalReference: "pay_snapshot",
+	})
+	if err != nil {
+		t.Fatalf("place order from checkout: %v", err)
+	}
+	if placement.OrderID == 0 {
+		t.Fatal("expected non-zero order id")
+	}
+	if math.Abs(placement.TotalAmount-28.10) > 0.001 {
+		t.Fatalf("placement total = %.2f, want 28.10", placement.TotalAmount)
+	}
+
+	orders, err := testStore.ListOrdersByUser(int(userID))
+	if err != nil {
+		t.Fatalf("list orders: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("expected 1 order, got %d", len(orders))
+	}
+	if len(orders[0].Items) != 1 {
+		t.Fatalf("expected 1 order item, got %d", len(orders[0].Items))
+	}
+	if orders[0].Items[0].Quantity != 2 {
+		t.Fatalf("order item quantity = %d, want 2", orders[0].Items[0].Quantity)
+	}
+
+	checkout, err = testStore.GetCheckoutByToken(int(userID), "checkout-key")
+	if err != nil {
+		t.Fatalf("get checkout after placement: %v", err)
+	}
+	if checkout == nil {
+		t.Fatal("expected checkout after placement")
+	}
+	if checkout.Status != CheckoutStatusCompleted {
+		t.Fatalf("checkout status = %q, want %q", checkout.Status, CheckoutStatusCompleted)
+	}
+	if !checkout.OrderID.Valid || checkout.OrderID.Int64 != placement.OrderID {
+		t.Fatalf("checkout order id = %v, want %d", checkout.OrderID, placement.OrderID)
 	}
 }
 

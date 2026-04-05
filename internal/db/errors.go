@@ -13,6 +13,8 @@ var (
 	ErrDeliveryAddressRequired   = errors.New("delivery address required")
 	ErrNegativeTotalAmount       = errors.New("negative total amount")
 	ErrCartEmpty                 = errors.New("cart is empty")
+	ErrCheckoutNotFound          = errors.New("checkout not found")
+	ErrCheckoutExpired           = errors.New("checkout expired")
 	ErrInsufficientStock         = errors.New("insufficient stock")
 	ErrOrderNotFound             = errors.New("order not found")
 	ErrInvalidOrderState         = errors.New("invalid order state")

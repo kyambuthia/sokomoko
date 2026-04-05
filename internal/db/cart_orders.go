@@ -6,6 +6,14 @@ import (
 	"strings"
 )
 
+type orderPlacementLine struct {
+	ProductID     int
+	ProductName   string
+	Quantity      int
+	UnitPrice     float64
+	StockQuantity int
+}
+
 func (s *Store) ensureCart(userID int) (int64, error) {
 	var cartID int64
 	err := s.DB.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
@@ -270,14 +278,7 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 		return 0, err
 	}
 
-	type cartLine struct {
-		ProductID     int
-		ProductName   string
-		Quantity      int
-		UnitPrice     float64
-		StockQuantity int
-	}
-	lines := []cartLine{}
+	lines := []orderPlacementLine{}
 	rows, err := tx.Query(
 		`SELECT p.id, p.name, ci.quantity, p.price,
 		        COALESCE(inv.available_quantity, p.stock_quantity) AS available_quantity
@@ -299,7 +300,7 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 
 	subtotal := 0.0
 	for rows.Next() {
-		line := cartLine{}
+		line := orderPlacementLine{}
 		if scanErr := rows.Scan(&line.ProductID, &line.ProductName, &line.Quantity, &line.UnitPrice, &line.StockQuantity); scanErr != nil {
 			return 0, scanErr
 		}
@@ -329,10 +330,23 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 		notice = "Order received. Awaiting partner acceptance."
 	}
 
+	orderID, err := createOrderWithLinesTx(tx, userID, address, orderTotal, notice, reservationKey, lines)
+	if err != nil {
+		return 0, err
+	}
+
+	if _, err = tx.Exec("DELETE FROM cart_items WHERE cart_id = ?", cartID); err != nil {
+		return 0, err
+	}
+
+	return orderID, nil
+}
+
+func createOrderWithLinesTx(tx *sql.Tx, userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, reservationKey string, lines []orderPlacementLine) (int64, error) {
 	res, err := tx.Exec(
 		`INSERT INTO orders (user_id, status, partner_status, delivery_status, total_amount, delivery_address, delivery_notice)
 		 VALUES (?, 'pending', 'new', 'queued', ?, ?, ?)`,
-		userID, orderTotal, address, notice,
+		userID, totalAmount, deliveryAddress, deliveryNotice,
 	)
 	if err != nil {
 		return 0, err
@@ -436,10 +450,6 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 		if err := syncProductStockQuantityTx(tx, line.ProductID); err != nil {
 			return 0, err
 		}
-	}
-
-	if _, err = tx.Exec("DELETE FROM cart_items WHERE cart_id = ?", cartID); err != nil {
-		return 0, err
 	}
 
 	return orderID, nil

@@ -81,7 +81,7 @@ Keep transport concerns in routes, domain rules in services, and SQL-only concer
 - `account`: customer order history
 - `admin`: metrics, team management, audit logs, order state updates
 - `catalog`: storefront product browsing and search
-- `checkout`: checkout pricing, idempotent order placement, and payment-backed submission rules
+- `checkout`: persisted checkout snapshots, reservation-backed pricing, and idempotent order placement rules
 - `commerce`: cart mutation and cart retrieval rules
 - `payment`: supported payment methods, idempotency keys, and payment-record construction
 - `partner`: store setup, partner catalog actions, fulfillment updates
@@ -115,6 +115,8 @@ Core tables:
 - `product_images`
 - `carts`
 - `cart_items`
+- `checkouts`
+- `checkout_lines`
 - `orders`
 - `payments`
 - `payment_attempts`

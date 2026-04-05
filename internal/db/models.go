@@ -169,6 +169,67 @@ type CustomerOrder struct {
 }
 
 const (
+	CheckoutStatusOpen      = "open"
+	CheckoutStatusCompleted = "completed"
+	CheckoutStatusExpired   = "expired"
+	CheckoutStatusCancelled = "cancelled"
+)
+
+type Checkout struct {
+	ID              int
+	UserID          int
+	Token           string
+	Status          string
+	Currency        string
+	PaymentMethod   string
+	SubtotalAmount  float64
+	ShippingFee     float64
+	TaxAmount       float64
+	TotalAmount     float64
+	DeliveryAddress sql.NullString
+	ExpiresAt       sql.NullTime
+	CompletedAt     sql.NullTime
+	OrderID         sql.NullInt64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Lines           []CheckoutLine
+}
+
+type CheckoutLine struct {
+	ID             int
+	CheckoutID     int
+	ProductID      int
+	ProductName    string
+	Quantity       int
+	UnitPrice      float64
+	LineTotal      float64
+	ReservationKey sql.NullString
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type CheckoutInput struct {
+	Token          string
+	Currency       string
+	PaymentMethod  string
+	SubtotalAmount float64
+	ShippingFee    float64
+	TaxAmount      float64
+	TotalAmount    float64
+	ExpiresAt      time.Time
+	Lines          []CheckoutLineInput
+}
+
+type CheckoutLineInput struct {
+	ProductID      int
+	ProductName    string
+	Quantity       int
+	UnitPrice      float64
+	LineTotal      float64
+	ReservationKey string
+}
+
+const (
 	PaymentStatusPending  = "pending"
 	PaymentStatusCaptured = "captured"
 	PaymentStatusFailed   = "failed"

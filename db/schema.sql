@@ -161,6 +161,42 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS checkouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'expired', 'cancelled')),
+    currency TEXT NOT NULL DEFAULT 'USD',
+    payment_method TEXT NOT NULL DEFAULT 'cash_on_delivery',
+    subtotal_amount REAL NOT NULL DEFAULT 0 CHECK (subtotal_amount >= 0),
+    shipping_fee REAL NOT NULL DEFAULT 0 CHECK (shipping_fee >= 0),
+    tax_amount REAL NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
+    total_amount REAL NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    delivery_address TEXT,
+    expires_at DATETIME,
+    completed_at DATETIME,
+    order_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS checkout_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    checkout_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price REAL NOT NULL CHECK (unit_price >= 0),
+    line_total REAL NOT NULL CHECK (line_total >= 0),
+    reservation_key TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (checkout_id) REFERENCES checkouts(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER NOT NULL,
@@ -252,6 +288,11 @@ CREATE INDEX IF NOT EXISTS idx_carts_user_id ON carts(user_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_cart_id ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_partner_status ON orders(partner_status);
+CREATE INDEX IF NOT EXISTS idx_checkouts_user_id ON checkouts(user_id);
+CREATE INDEX IF NOT EXISTS idx_checkouts_token ON checkouts(token);
+CREATE INDEX IF NOT EXISTS idx_checkouts_status ON checkouts(status);
+CREATE INDEX IF NOT EXISTS idx_checkouts_expires_at ON checkouts(expires_at);
+CREATE INDEX IF NOT EXISTS idx_checkout_lines_checkout_id ON checkout_lines(checkout_id);
 CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_attempts_payment_id ON payment_attempts(payment_id);

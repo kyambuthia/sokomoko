@@ -147,6 +147,23 @@ func TestPrepare_CreatesCheckoutReservations(t *testing.T) {
 	if product.StockQuantity != 1 {
 		t.Fatalf("projected stock = %d, want 1", product.StockQuantity)
 	}
+
+	checkout, err := store.GetCheckoutByToken(userID, key)
+	if err != nil {
+		t.Fatalf("get checkout error = %v", err)
+	}
+	if checkout == nil {
+		t.Fatal("expected persisted checkout")
+	}
+	if checkout.Status != db.CheckoutStatusOpen {
+		t.Fatalf("checkout status = %q, want %q", checkout.Status, db.CheckoutStatusOpen)
+	}
+	if len(checkout.Lines) != 1 {
+		t.Fatalf("checkout lines length = %d, want 1", len(checkout.Lines))
+	}
+	if checkout.TotalAmount != 28.10 {
+		t.Fatalf("checkout total = %.2f, want 28.10", checkout.TotalAmount)
+	}
 }
 
 func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
@@ -290,5 +307,63 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 	}
 	if len(payments) != 1 {
 		t.Fatalf("payments length = %d, want 1", len(payments))
+	}
+}
+
+func TestCheckoutWithPayment_UsesPersistedCheckoutSnapshot(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 5)
+	if err := store.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	key := "snapshot-key"
+	if err := svc.Prepare(userID, key); err != nil {
+		t.Fatalf("prepare error = %v", err)
+	}
+
+	if err := store.UpdateCartQuantity(userID, productID, 1); err != nil {
+		t.Fatalf("update cart quantity error = %v", err)
+	}
+
+	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key)
+	if err != nil {
+		t.Fatalf("checkout error = %v", err)
+	}
+	if orderID == 0 {
+		t.Fatal("expected non-zero order id")
+	}
+	if math.Abs(summary.Total-28.10) > 0.001 {
+		t.Fatalf("summary total = %.2f, want 28.10", summary.Total)
+	}
+
+	orders, err := store.ListOrdersByUser(userID)
+	if err != nil {
+		t.Fatalf("list orders error = %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("orders length = %d, want 1", len(orders))
+	}
+	if len(orders[0].Items) != 1 {
+		t.Fatalf("order items length = %d, want 1", len(orders[0].Items))
+	}
+	if orders[0].Items[0].Quantity != 2 {
+		t.Fatalf("order quantity = %d, want 2", orders[0].Items[0].Quantity)
+	}
+
+	checkout, err := store.GetCheckoutByToken(userID, key)
+	if err != nil {
+		t.Fatalf("get checkout error = %v", err)
+	}
+	if checkout == nil {
+		t.Fatal("expected checkout after completion")
+	}
+	if checkout.Status != db.CheckoutStatusCompleted {
+		t.Fatalf("checkout status = %q, want %q", checkout.Status, db.CheckoutStatusCompleted)
+	}
+	if !checkout.OrderID.Valid || int(checkout.OrderID.Int64) != int(orderID) {
+		t.Fatalf("checkout order id = %v, want %d", checkout.OrderID, orderID)
 	}
 }
