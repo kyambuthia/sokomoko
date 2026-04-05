@@ -142,6 +142,80 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 	return items, subtotal, nil
 }
 
+func (s *Store) GetCartItemsForCheckout(userID int, reservationKey string) ([]CartItem, float64, error) {
+	key := strings.TrimSpace(reservationKey)
+	if key == "" {
+		return s.GetCartItems(userID)
+	}
+
+	cartID, err := s.ensureCart(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.DB.Query(
+		`SELECT p.id, p.name, p.slug, p.price,
+		        COALESCE(inv.available_quantity, p.stock_quantity) + COALESCE(own.reserved_quantity, 0) AS available_quantity,
+		        ci.quantity
+		 FROM cart_items ci
+		 JOIN products p ON p.id = ci.product_id
+		 LEFT JOIN (
+		     SELECT product_id, SUM(on_hand_quantity - reserved_quantity - allocated_quantity) AS available_quantity
+		     FROM inventory_stocks
+		     GROUP BY product_id
+		 ) inv ON inv.product_id = p.id
+		 LEFT JOIN (
+		     SELECT product_id, SUM(quantity) AS reserved_quantity
+		     FROM stock_reservations
+		     WHERE user_id = ? AND reservation_key = ? AND status = ?
+		     GROUP BY product_id
+		 ) own ON own.product_id = p.id
+		 WHERE ci.cart_id = ? AND p.deleted_at IS NULL
+		 ORDER BY p.name`,
+		userID,
+		key,
+		StockReservationStatusActive,
+		cartID,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	items := []CartItem{}
+	subtotal := 0.0
+	productIDs := []int{}
+	for rows.Next() {
+		item := CartItem{}
+		if err := rows.Scan(
+			&item.ProductID,
+			&item.ProductName,
+			&item.ProductSlug,
+			&item.UnitPrice,
+			&item.StockQuantity,
+			&item.Quantity,
+		); err != nil {
+			return nil, 0, err
+		}
+		item.ProductImageURL = "/static/images/placeholder.png"
+		item.LineTotal = item.UnitPrice * float64(item.Quantity)
+		subtotal += item.LineTotal
+		items = append(items, item)
+		productIDs = append(productIDs, item.ProductID)
+	}
+
+	imagesByProduct, err := s.GetProductImagesByProductIDs(productIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range items {
+		if imgs := imagesByProduct[items[i].ProductID]; len(imgs) > 0 {
+			items[i].ProductImageURL = imgs[0].URL
+		}
+	}
+	return items, subtotal, rows.Err()
+}
+
 func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, error) {
 	return s.placeOrderFromCart(userID, deliveryAddress, 0, "", false)
 }
@@ -164,12 +238,10 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 		return 0, err
 	}
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
+		_ = tx.Rollback()
 	}()
 
-	orderID, err := placeOrderFromCartTx(tx, userID, address, totalAmount, deliveryNotice, useCustomPricing)
+	orderID, err := placeOrderFromCartTx(tx, userID, address, totalAmount, deliveryNotice, useCustomPricing, "")
 	if err != nil {
 		return 0, err
 	}
@@ -180,7 +252,7 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 	return orderID, nil
 }
 
-func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, useCustomPricing bool) (int64, error) {
+func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, useCustomPricing bool, reservationKey string) (int64, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
 		return 0, ErrDeliveryAddressRequired
@@ -238,6 +310,10 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 		subtotal += line.UnitPrice * float64(line.Quantity)
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return 0, err
+	}
+	if err := rows.Close(); err != nil {
 		return 0, err
 	}
 	if len(lines) == 0 {
@@ -280,22 +356,79 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 			return 0, err
 		}
 
-		result, updateErr := tx.Exec(
-			`UPDATE inventory_stocks
-			 SET allocated_quantity = allocated_quantity + ?, updated_at = CURRENT_TIMESTAMP
-			 WHERE product_id = ? AND warehouse_id = ?
-			   AND (on_hand_quantity - reserved_quantity - allocated_quantity) >= ?`,
-			line.Quantity, line.ProductID, warehouseID, line.Quantity,
-		)
-		if updateErr != nil {
-			return 0, updateErr
-		}
-		affected, rowsErr := result.RowsAffected()
-		if rowsErr != nil {
-			return 0, rowsErr
-		}
-		if affected == 0 {
-			return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
+		key := strings.TrimSpace(reservationKey)
+		if key != "" {
+			var reservedQuantity int
+			if err := tx.QueryRow(
+				`SELECT COALESCE(SUM(quantity), 0)
+				 FROM stock_reservations
+				 WHERE user_id = ? AND reservation_key = ? AND product_id = ? AND warehouse_id = ? AND status = ?`,
+				userID,
+				key,
+				line.ProductID,
+				warehouseID,
+				StockReservationStatusActive,
+			).Scan(&reservedQuantity); err != nil {
+				return 0, err
+			}
+			if reservedQuantity < line.Quantity {
+				return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
+			}
+
+			result, updateErr := tx.Exec(
+				`UPDATE inventory_stocks
+				 SET reserved_quantity = reserved_quantity - ?,
+				     allocated_quantity = allocated_quantity + ?,
+				     updated_at = CURRENT_TIMESTAMP
+				 WHERE product_id = ? AND warehouse_id = ? AND reserved_quantity >= ?`,
+				line.Quantity,
+				line.Quantity,
+				line.ProductID,
+				warehouseID,
+				line.Quantity,
+			)
+			if updateErr != nil {
+				return 0, updateErr
+			}
+			affected, rowsErr := result.RowsAffected()
+			if rowsErr != nil {
+				return 0, rowsErr
+			}
+			if affected == 0 {
+				return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
+			}
+
+			if _, err := tx.Exec(
+				`UPDATE stock_reservations
+				 SET status = ?, released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+				 WHERE user_id = ? AND reservation_key = ? AND product_id = ? AND warehouse_id = ? AND status = ?`,
+				StockReservationStatusConverted,
+				userID,
+				key,
+				line.ProductID,
+				warehouseID,
+				StockReservationStatusActive,
+			); err != nil {
+				return 0, err
+			}
+		} else {
+			result, updateErr := tx.Exec(
+				`UPDATE inventory_stocks
+				 SET allocated_quantity = allocated_quantity + ?, updated_at = CURRENT_TIMESTAMP
+				 WHERE product_id = ? AND warehouse_id = ?
+				   AND (on_hand_quantity - reserved_quantity - allocated_quantity) >= ?`,
+				line.Quantity, line.ProductID, warehouseID, line.Quantity,
+			)
+			if updateErr != nil {
+				return 0, updateErr
+			}
+			affected, rowsErr := result.RowsAffected()
+			if rowsErr != nil {
+				return 0, rowsErr
+			}
+			if affected == 0 {
+				return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
+			}
 		}
 		if err := recordStockMovementTx(tx, line.ProductID, warehouseID, stockMovementAllocation, -line.Quantity, fmt.Sprintf("order:%d", orderID)); err != nil {
 			return 0, err

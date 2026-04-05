@@ -236,6 +236,17 @@ func Checkout(a *app.App) http.HandlerFunc {
 				return
 			}
 			data.IdempotencyKey = idempotencyKey
+			if err := checkoutSvc.Prepare(userID, idempotencyKey); err != nil {
+				switch {
+				case errors.Is(err, checkoutsvc.ErrCartEmpty):
+					data.Error = "Cart is empty"
+				case errors.Is(err, checkoutsvc.ErrInsufficientStock):
+					data.Error = "One or more cart items exceed available stock. Review your cart quantities."
+				default:
+					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					return
+				}
+			}
 			a.Render(w, a.Templates.Checkout, data)
 			return
 		}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
@@ -23,6 +24,7 @@ const (
 	defaultEstimatedTaxRate     = 0.08
 	defaultPaymentMethod        = paymentsvc.MethodCashOnDelivery
 	deliveryNoticeDefaultPrefix = "Order received. Awaiting partner acceptance."
+	reservationHoldTTL          = 15 * time.Minute
 )
 
 type paymentService interface {
@@ -62,6 +64,25 @@ func (s *Service) Checkout(userID int, deliveryAddress string) (int64, error) {
 	return orderID, err
 }
 
+func (s *Service) Prepare(userID int, reservationKey string) error {
+	key := strings.TrimSpace(reservationKey)
+	if key == "" {
+		return nil
+	}
+
+	if err := s.store.ReserveCartForCheckout(userID, key, time.Now().UTC().Add(reservationHoldTTL)); err != nil {
+		switch {
+		case errors.Is(err, db.ErrCartEmpty):
+			return ErrCartEmpty
+		case errors.Is(err, db.ErrInsufficientStock):
+			return ErrInsufficientStock
+		default:
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, Summary, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
@@ -82,7 +103,12 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		return existing.OrderID, Summary{Total: existing.TotalAmount}, nil
 	}
 
-	items, subtotal, err := s.store.GetCartItems(userID)
+	key := strings.TrimSpace(idempotencyKey)
+	if err := s.Prepare(userID, key); err != nil {
+		return 0, Summary{}, err
+	}
+
+	items, subtotal, err := s.store.GetCartItemsForCheckout(userID, key)
 	if err != nil {
 		return 0, Summary{}, err
 	}
@@ -109,7 +135,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		summary.TaxAmount,
 	)
 
-	placement, err := s.store.PlaceOrderFromCartWithPricingAndPayment(userID, address, summary.Total, notice, paymentRecord, strings.TrimSpace(idempotencyKey))
+	placement, err := s.store.PlaceOrderFromCartWithPricingAndPayment(userID, address, summary.Total, notice, paymentRecord, key)
 	if err == nil {
 		return placement.OrderID, summary, nil
 	}

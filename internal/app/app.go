@@ -40,6 +40,7 @@ type CommerceService interface {
 
 type CheckoutService interface {
 	CheckoutWithPayment(userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, checkoutsvc.Summary, error)
+	Prepare(userID int, reservationKey string) error
 }
 
 type PaymentService interface {

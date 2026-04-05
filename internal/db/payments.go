@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
 const checkoutCompleteOperation = "checkout.complete"
@@ -96,6 +97,10 @@ func (s *Store) PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddr
 		_ = tx.Rollback()
 	}()
 
+	if err = expireActiveStockReservationsTx(tx, time.Now().UTC()); err != nil {
+		return CheckoutPlacement{}, err
+	}
+
 	key := strings.TrimSpace(idempotencyKey)
 	if key != "" {
 		placement, placementErr := getCheckoutPlacementTx(tx, userID, key)
@@ -122,7 +127,7 @@ func (s *Store) PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddr
 		}
 	}
 
-	orderID, orderErr := placeOrderFromCartTx(tx, userID, address, totalAmount, strings.TrimSpace(deliveryNotice), true)
+	orderID, orderErr := placeOrderFromCartTx(tx, userID, address, totalAmount, strings.TrimSpace(deliveryNotice), true, key)
 	if orderErr != nil {
 		return CheckoutPlacement{}, orderErr
 	}

@@ -159,3 +159,68 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 		t.Fatalf("expected 1 payment after replay, got %d", len(payments))
 	}
 }
+
+func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
+	clearAllTables()
+
+	suffix := time.Now().UnixNano()
+	password := "strongpass123"
+
+	userA := fmt.Sprintf("reserve_a_%d", suffix)
+	userB := fmt.Sprintf("reserve_b_%d", suffix)
+	emailA := fmt.Sprintf("reserve_a_%d@example.com", suffix)
+	emailB := fmt.Sprintf("reserve_b_%d@example.com", suffix)
+
+	createTestUser(t, userA, emailA, password, "user")
+	userBID := createTestUser(t, userB, emailB, password, "user")
+
+	cookieA := loginAndGetSessionCookie(t, "", userA, password)
+	cookieB := loginAndGetSessionCookie(t, "", userB, password)
+
+	productID := createTestProduct(t, "Reserved Product", fmt.Sprintf("reserved-product-%d", suffix), 18.0, 1)
+
+	addData := url.Values{}
+	addData.Set("product_id", fmt.Sprintf("%d", productID))
+	addData.Set("quantity", "1")
+
+	resp, _ := makeRequest(http.MethodPost, "/cart/add", addData, []*http.Cookie{cookieA}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /cart/add A status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+	resp, _ = makeRequest(http.MethodPost, "/cart/add", addData, []*http.Cookie{cookieB}, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("POST /cart/add B status=%d expected=%d", resp.StatusCode, http.StatusFound)
+	}
+
+	resp, _ = makeRequest(http.MethodGet, "/checkout", nil, []*http.Cookie{cookieA}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /checkout A status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+
+	product, err := testStore.GetProductByID(int(productID))
+	if err != nil {
+		t.Fatalf("get product failed: %v", err)
+	}
+	if product.StockQuantity != 0 {
+		t.Fatalf("projected stock quantity=%d expected=0 after reservation", product.StockQuantity)
+	}
+
+	checkoutData := url.Values{}
+	checkoutData.Set("delivery_address", "Blocked Lane")
+	checkoutData.Set("payment_method", "card_placeholder")
+	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookieB}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /checkout B status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, "One or more cart items exceed available stock") {
+		t.Fatalf("expected stock reservation error in body, got %q", body)
+	}
+
+	orders, err := testStore.ListOrdersByUser(int(userBID))
+	if err != nil {
+		t.Fatalf("list orders failed: %v", err)
+	}
+	if len(orders) != 0 {
+		t.Fatalf("expected 0 orders for blocked user, got %d", len(orders))
+	}
+}

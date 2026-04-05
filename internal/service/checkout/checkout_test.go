@@ -115,6 +115,40 @@ func TestCheckoutWithPayment_InvalidMethod(t *testing.T) {
 	}
 }
 
+func TestPrepare_CreatesCheckoutReservations(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 3)
+	if err := store.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	key := "reservation-key"
+	if err := svc.Prepare(userID, key); err != nil {
+		t.Fatalf("prepare error = %v", err)
+	}
+
+	reservations, err := store.ListActiveStockReservationsByKey(userID, key)
+	if err != nil {
+		t.Fatalf("list reservations error = %v", err)
+	}
+	if len(reservations) != 1 {
+		t.Fatalf("reservations length = %d, want 1", len(reservations))
+	}
+	if reservations[0].Quantity != 2 {
+		t.Fatalf("reservation quantity = %d, want 2", reservations[0].Quantity)
+	}
+
+	product, err := store.GetProductByID(productID)
+	if err != nil {
+		t.Fatalf("get product error = %v", err)
+	}
+	if product.StockQuantity != 1 {
+		t.Fatalf("projected stock = %d, want 1", product.StockQuantity)
+	}
+}
+
 func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 	svc, store, cleanup := newTestService(t)
 	defer cleanup()
@@ -155,6 +189,61 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 	}
 	if payments[0].Status != db.PaymentStatusCaptured {
 		t.Fatalf("payment status = %q, want %q", payments[0].Status, db.PaymentStatusCaptured)
+	}
+
+	stocks, err := store.ListInventoryStocksByProductID(productID)
+	if err != nil {
+		t.Fatalf("list stocks error = %v", err)
+	}
+	if len(stocks) != 1 {
+		t.Fatalf("stocks length = %d, want 1", len(stocks))
+	}
+	if stocks[0].ReservedQuantity != 0 {
+		t.Fatalf("reserved quantity = %d, want 0", stocks[0].ReservedQuantity)
+	}
+	if stocks[0].AllocatedQuantity != 2 {
+		t.Fatalf("allocated quantity = %d, want 2", stocks[0].AllocatedQuantity)
+	}
+}
+
+func TestCheckoutWithPayment_ConvertsActiveReservations(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 5)
+	if err := store.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add to cart error = %v", err)
+	}
+
+	key := "convert-key"
+	if err := svc.Prepare(userID, key); err != nil {
+		t.Fatalf("prepare error = %v", err)
+	}
+
+	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key); err != nil {
+		t.Fatalf("checkout error = %v", err)
+	}
+
+	reservations, err := store.ListActiveStockReservationsByKey(userID, key)
+	if err != nil {
+		t.Fatalf("list reservations error = %v", err)
+	}
+	if len(reservations) != 0 {
+		t.Fatalf("active reservations length = %d, want 0", len(reservations))
+	}
+
+	stocks, err := store.ListInventoryStocksByProductID(productID)
+	if err != nil {
+		t.Fatalf("list stocks error = %v", err)
+	}
+	if len(stocks) != 1 {
+		t.Fatalf("stocks length = %d, want 1", len(stocks))
+	}
+	if stocks[0].ReservedQuantity != 0 {
+		t.Fatalf("reserved quantity = %d, want 0", stocks[0].ReservedQuantity)
+	}
+	if stocks[0].AllocatedQuantity != 2 {
+		t.Fatalf("allocated quantity = %d, want 2", stocks[0].AllocatedQuantity)
 	}
 }
 

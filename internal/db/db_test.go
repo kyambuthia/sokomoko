@@ -567,6 +567,174 @@ func TestUpdateProduct_SynchronizesInventoryProjection(t *testing.T) {
 	}
 }
 
+func TestReserveCartForCheckout_RefreshesReservationsAndProjection(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	userID, err := testStore.CreateUser(User{
+		Username:     fmt.Sprintf("reserve_user_%d", suffix),
+		Email:        fmt.Sprintf("reserve_user_%d@example.com", suffix),
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("reserve-user-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Reserve Category %d", suffix),
+		Slug:        fmt.Sprintf("reserve-category-%d", suffix),
+		Description: "reservation",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Reserve Product",
+		Slug:          fmt.Sprintf("reserve-product-%d", suffix),
+		Description:   "reserve product",
+		Price:         18,
+		StockQuantity: 4,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	if err := testStore.AddToCart(int(userID), int(productID), 2); err != nil {
+		t.Fatalf("add to cart: %v", err)
+	}
+
+	if err := testStore.ReserveCartForCheckout(int(userID), "reserve-a", time.Now().Add(15*time.Minute)); err != nil {
+		t.Fatalf("reserve cart A: %v", err)
+	}
+
+	reservations, err := testStore.ListActiveStockReservationsByKey(int(userID), "reserve-a")
+	if err != nil {
+		t.Fatalf("list reservations A: %v", err)
+	}
+	if len(reservations) != 1 {
+		t.Fatalf("expected 1 active reservation for key A, got %d", len(reservations))
+	}
+
+	product, err := testStore.GetProductByID(int(productID))
+	if err != nil {
+		t.Fatalf("get product: %v", err)
+	}
+	if product.StockQuantity != 2 {
+		t.Fatalf("expected projected available stock 2, got %d", product.StockQuantity)
+	}
+
+	if err := testStore.ReserveCartForCheckout(int(userID), "reserve-b", time.Now().Add(15*time.Minute)); err != nil {
+		t.Fatalf("reserve cart B: %v", err)
+	}
+
+	reservations, err = testStore.ListActiveStockReservationsByKey(int(userID), "reserve-a")
+	if err != nil {
+		t.Fatalf("list reservations A after refresh: %v", err)
+	}
+	if len(reservations) != 0 {
+		t.Fatalf("expected 0 active reservations for key A after refresh, got %d", len(reservations))
+	}
+
+	reservations, err = testStore.ListActiveStockReservationsByKey(int(userID), "reserve-b")
+	if err != nil {
+		t.Fatalf("list reservations B: %v", err)
+	}
+	if len(reservations) != 1 {
+		t.Fatalf("expected 1 active reservation for key B, got %d", len(reservations))
+	}
+
+	stocks, err := testStore.ListInventoryStocksByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list inventory stocks: %v", err)
+	}
+	if len(stocks) != 1 {
+		t.Fatalf("expected 1 inventory stock row, got %d", len(stocks))
+	}
+	if stocks[0].ReservedQuantity != 2 {
+		t.Fatalf("expected reserved quantity 2, got %d", stocks[0].ReservedQuantity)
+	}
+}
+
+func TestReserveCartForCheckout_ExpiresStaleReservations(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	userA, err := testStore.CreateUser(User{
+		Username:     fmt.Sprintf("expire_a_%d", suffix),
+		Email:        fmt.Sprintf("expire_a_%d@example.com", suffix),
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("expire-a-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create user A: %v", err)
+	}
+	userB, err := testStore.CreateUser(User{
+		Username:     fmt.Sprintf("expire_b_%d", suffix),
+		Email:        fmt.Sprintf("expire_b_%d@example.com", suffix),
+		PasswordHash: "hash",
+		Salt:         "salt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("expire-b-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create user B: %v", err)
+	}
+
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Expire Category %d", suffix),
+		Slug:        fmt.Sprintf("expire-category-%d", suffix),
+		Description: "expire reservation",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Expire Product",
+		Slug:          fmt.Sprintf("expire-product-%d", suffix),
+		Description:   "expire product",
+		Price:         20,
+		StockQuantity: 1,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	if err := testStore.AddToCart(int(userA), int(productID), 1); err != nil {
+		t.Fatalf("add to cart A: %v", err)
+	}
+	if err := testStore.AddToCart(int(userB), int(productID), 1); err != nil {
+		t.Fatalf("add to cart B: %v", err)
+	}
+
+	if err := testStore.ReserveCartForCheckout(int(userA), "expired-key", time.Now().Add(-1*time.Minute)); err != nil {
+		t.Fatalf("reserve expired cart: %v", err)
+	}
+	if err := testStore.ReserveCartForCheckout(int(userB), "fresh-key", time.Now().Add(15*time.Minute)); err != nil {
+		t.Fatalf("reserve fresh cart: %v", err)
+	}
+
+	reservations, err := testStore.ListActiveStockReservationsByKey(int(userA), "expired-key")
+	if err != nil {
+		t.Fatalf("list expired reservations: %v", err)
+	}
+	if len(reservations) != 0 {
+		t.Fatalf("expected 0 active reservations for expired key, got %d", len(reservations))
+	}
+
+	reservations, err = testStore.ListActiveStockReservationsByKey(int(userB), "fresh-key")
+	if err != nil {
+		t.Fatalf("list fresh reservations: %v", err)
+	}
+	if len(reservations) != 1 {
+		t.Fatalf("expected 1 active reservation for fresh key, got %d", len(reservations))
+	}
+}
+
 func TestOrderFulfillmentTransitionValidation(t *testing.T) {
 	suffix := time.Now().UnixNano()
 	username := fmt.Sprintf("buyer_transition_%d", suffix)

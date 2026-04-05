@@ -99,9 +99,7 @@ func (s *Store) UsePasswordResetToken(token, passwordHash, salt string) (bool, e
 		return false, err
 	}
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
+		_ = tx.Rollback()
 	}()
 
 	var userID int

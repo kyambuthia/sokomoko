@@ -119,9 +119,7 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 		return 0, err
 	}
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
+		_ = tx.Rollback()
 	}()
 
 	res, err := tx.Exec(
@@ -213,9 +211,7 @@ func (s *Store) UpdateProduct(product Product) error {
 		return err
 	}
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
+		_ = tx.Rollback()
 	}()
 
 	var currentAvailable int
