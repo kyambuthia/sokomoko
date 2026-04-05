@@ -37,6 +37,58 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS warehouses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS inventory_stocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    warehouse_id INTEGER NOT NULL,
+    on_hand_quantity INTEGER NOT NULL DEFAULT 0 CHECK (on_hand_quantity >= 0),
+    reserved_quantity INTEGER NOT NULL DEFAULT 0 CHECK (reserved_quantity >= 0),
+    allocated_quantity INTEGER NOT NULL DEFAULT 0 CHECK (allocated_quantity >= 0),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (product_id, warehouse_id),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS stock_reservations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    warehouse_id INTEGER NOT NULL,
+    user_id INTEGER,
+    reservation_key TEXT,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'released', 'expired', 'converted')),
+    expires_at DATETIME,
+    released_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS stock_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    warehouse_id INTEGER NOT NULL,
+    movement_type TEXT NOT NULL CHECK (movement_type IN ('initial', 'adjustment', 'reservation', 'release', 'allocation', 'return')),
+    quantity_delta INTEGER NOT NULL,
+    note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS product_images (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
@@ -174,8 +226,23 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
+INSERT OR IGNORE INTO warehouses (id, name, slug, is_default)
+VALUES (1, 'Default Warehouse', 'default', 1);
+
+INSERT OR IGNORE INTO inventory_stocks (product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity)
+SELECT p.id, 1, p.stock_quantity, 0, 0
+FROM products p;
+
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_warehouses_slug ON warehouses(slug);
+CREATE INDEX IF NOT EXISTS idx_inventory_stocks_product_id ON inventory_stocks(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_stocks_warehouse_id ON inventory_stocks(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_stock_reservations_product_id ON stock_reservations(product_id);
+CREATE INDEX IF NOT EXISTS idx_stock_reservations_status ON stock_reservations(status);
+CREATE INDEX IF NOT EXISTS idx_stock_reservations_expires_at ON stock_reservations(expires_at);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_product_id ON stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_created_at ON stock_movements(created_at);
 CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens(user_id);

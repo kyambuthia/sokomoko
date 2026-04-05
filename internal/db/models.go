@@ -65,6 +65,51 @@ type ProductImage struct {
 	CreatedAt    time.Time
 }
 
+type Warehouse struct {
+	ID        int
+	Name      string
+	Slug      string
+	IsDefault bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type InventoryStock struct {
+	ID                int
+	ProductID         int
+	WarehouseID       int
+	OnHandQuantity    int
+	ReservedQuantity  int
+	AllocatedQuantity int
+	AvailableQuantity int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type StockReservation struct {
+	ID             int
+	ProductID      int
+	WarehouseID    int
+	UserID         sql.NullInt64
+	ReservationKey sql.NullString
+	Quantity       int
+	Status         string
+	ExpiresAt      sql.NullTime
+	ReleasedAt     sql.NullTime
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type StockMovement struct {
+	ID            int
+	ProductID     int
+	WarehouseID   int
+	MovementType  string
+	QuantityDelta int
+	Note          sql.NullString
+	CreatedAt     time.Time
+}
+
 // Session represents a persistent user session
 type Session struct {
 	ID        string

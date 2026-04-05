@@ -108,6 +108,10 @@ Core tables:
 - `password_reset_tokens`
 - `categories`
 - `products`
+- `warehouses`
+- `inventory_stocks`
+- `stock_reservations`
+- `stock_movements`
 - `product_images`
 - `carts`
 - `cart_items`

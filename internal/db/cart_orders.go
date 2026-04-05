@@ -89,9 +89,16 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 	}
 
 	rows, err := s.DB.Query(
-		`SELECT p.id, p.name, p.slug, p.price, p.stock_quantity, ci.quantity
+		`SELECT p.id, p.name, p.slug, p.price,
+		        COALESCE(inv.available_quantity, p.stock_quantity) AS available_quantity,
+		        ci.quantity
 		 FROM cart_items ci
 		 JOIN products p ON p.id = ci.product_id
+		 LEFT JOIN (
+		     SELECT product_id, SUM(on_hand_quantity - reserved_quantity - allocated_quantity) AS available_quantity
+		     FROM inventory_stocks
+		     GROUP BY product_id
+		 ) inv ON inv.product_id = p.id
 		 WHERE ci.cart_id = ? AND p.deleted_at IS NULL
 		 ORDER BY p.name`,
 		cartID,
@@ -200,9 +207,15 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 	}
 	lines := []cartLine{}
 	rows, err := tx.Query(
-		`SELECT p.id, p.name, ci.quantity, p.price, p.stock_quantity
+		`SELECT p.id, p.name, ci.quantity, p.price,
+		        COALESCE(inv.available_quantity, p.stock_quantity) AS available_quantity
 		 FROM cart_items ci
 		 JOIN products p ON p.id = ci.product_id
+		 LEFT JOIN (
+		     SELECT product_id, SUM(on_hand_quantity - reserved_quantity - allocated_quantity) AS available_quantity
+		     FROM inventory_stocks
+		     GROUP BY product_id
+		 ) inv ON inv.product_id = p.id
 		 WHERE ci.cart_id = ? AND p.deleted_at IS NULL
 		 ORDER BY p.name`,
 		cartID,
@@ -262,11 +275,17 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 			return 0, err
 		}
 
+		warehouseID, err := ensureInventoryStockTx(tx, line.ProductID, line.StockQuantity)
+		if err != nil {
+			return 0, err
+		}
+
 		result, updateErr := tx.Exec(
-			`UPDATE products
-			 SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP
-			 WHERE id = ? AND stock_quantity >= ?`,
-			line.Quantity, line.ProductID, line.Quantity,
+			`UPDATE inventory_stocks
+			 SET allocated_quantity = allocated_quantity + ?, updated_at = CURRENT_TIMESTAMP
+			 WHERE product_id = ? AND warehouse_id = ?
+			   AND (on_hand_quantity - reserved_quantity - allocated_quantity) >= ?`,
+			line.Quantity, line.ProductID, warehouseID, line.Quantity,
 		)
 		if updateErr != nil {
 			return 0, updateErr
@@ -277,6 +296,12 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 		}
 		if affected == 0 {
 			return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
+		}
+		if err := recordStockMovementTx(tx, line.ProductID, warehouseID, stockMovementAllocation, -line.Quantity, fmt.Sprintf("order:%d", orderID)); err != nil {
+			return 0, err
+		}
+		if err := syncProductStockQuantityTx(tx, line.ProductID); err != nil {
+			return 0, err
 		}
 	}
 

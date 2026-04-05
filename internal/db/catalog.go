@@ -114,14 +114,20 @@ func (s *Store) GetAllCategories() ([]Category, error) {
 
 // CreateProduct inserts a new product into the database
 func (s *Store) CreateProduct(product Product) (int64, error) {
-	stmt, err := s.DB.Prepare(
-		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id) VALUES (?, ?, ?, ?, ?, ?)")
+	tx, err := s.DB.Begin()
 	if err != nil {
 		return 0, err
 	}
-	defer stmt.Close()
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-	res, err := stmt.Exec(product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID)
+	res, err := tx.Exec(
+		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id) VALUES (?, ?, ?, ?, ?, ?)",
+		product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID,
+	)
 	if err != nil {
 		return 0, wrapProductCreateError(err)
 	}
@@ -131,11 +137,28 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 		return 0, err
 	}
 
-	for _, img := range product.Images {
-		img.ProductID = int(id)
-		_, _ = s.CreateProductImage(img)
+	warehouseID, err := ensureInventoryStockTx(tx, int(id), product.StockQuantity)
+	if err != nil {
+		return 0, err
+	}
+	if product.StockQuantity > 0 {
+		if err := recordStockMovementTx(tx, int(id), warehouseID, stockMovementInitial, product.StockQuantity, "product creation"); err != nil {
+			return 0, err
+		}
 	}
 
+	for _, img := range product.Images {
+		if _, err := tx.Exec(
+			"INSERT INTO product_images (product_id, url, alt_text, display_order) VALUES (?, ?, ?, ?)",
+			id, img.URL, img.AltText, img.DisplayOrder,
+		); err != nil {
+			return 0, err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
 	return id, nil
 }
 
@@ -185,15 +208,66 @@ func (s *Store) GetProductByID(id int) (*Product, error) {
 
 // UpdateProduct updates an existing product's information
 func (s *Store) UpdateProduct(product Product) error {
-	stmt, err := s.DB.Prepare(
-		"UPDATE products SET name = ?, slug = ?, description = ?, price = ?, stock_quantity = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-	_, err = stmt.Exec(product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID, product.ID)
+	var currentAvailable int
+	if err = tx.QueryRow("SELECT stock_quantity FROM products WHERE id = ?", product.ID).Scan(&currentAvailable); err != nil {
+		return err
+	}
+
+	warehouseID, err := ensureInventoryStockTx(tx, product.ID, currentAvailable)
 	if err != nil {
+		return err
+	}
+
+	stock, err := getInventoryStockTx(tx, product.ID, warehouseID)
+	if err != nil {
+		return err
+	}
+	if stock == nil {
+		return sql.ErrNoRows
+	}
+
+	targetOnHand := product.StockQuantity + stock.ReservedQuantity + stock.AllocatedQuantity
+	if targetOnHand < 0 {
+		targetOnHand = 0
+	}
+	delta := targetOnHand - stock.OnHandQuantity
+
+	if _, err = tx.Exec(
+		`UPDATE inventory_stocks
+		 SET on_hand_quantity = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE product_id = ? AND warehouse_id = ?`,
+		targetOnHand, product.ID, warehouseID,
+	); err != nil {
+		return err
+	}
+	if delta != 0 {
+		if err := recordStockMovementTx(tx, product.ID, warehouseID, stockMovementAdjustment, delta, "product update"); err != nil {
+			return err
+		}
+	}
+
+	if _, err = tx.Exec(
+		"UPDATE products SET name = ?, slug = ?, description = ?, price = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		product.Name, product.Slug, product.Description, product.Price, product.CategoryID, product.ID,
+	); err != nil {
+		return err
+	}
+
+	if err = syncProductStockQuantityTx(tx, product.ID); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
 		return err
 	}
 	return nil

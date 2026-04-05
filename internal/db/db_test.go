@@ -70,9 +70,13 @@ func TestInitDB(t *testing.T) {
 	}
 
 	expectedTables := map[string]bool{
-		"users":      true,
-		"categories": true,
-		"products":   true,
+		"users":              true,
+		"categories":         true,
+		"products":           true,
+		"warehouses":         true,
+		"inventory_stocks":   true,
+		"stock_reservations": true,
+		"stock_movements":    true,
 	}
 
 	for _, table := range tables {
@@ -368,6 +372,41 @@ func TestCartCheckoutAndFulfillmentFlow(t *testing.T) {
 		t.Fatalf("expected stock 8, got %d", product.StockQuantity)
 	}
 
+	stocks, err := testStore.ListInventoryStocksByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list inventory stocks: %v", err)
+	}
+	if len(stocks) != 1 {
+		t.Fatalf("expected 1 inventory stock row, got %d", len(stocks))
+	}
+	if stocks[0].OnHandQuantity != 10 {
+		t.Fatalf("expected on-hand 10, got %d", stocks[0].OnHandQuantity)
+	}
+	if stocks[0].AllocatedQuantity != 2 {
+		t.Fatalf("expected allocated 2, got %d", stocks[0].AllocatedQuantity)
+	}
+	if stocks[0].AvailableQuantity != 8 {
+		t.Fatalf("expected available 8, got %d", stocks[0].AvailableQuantity)
+	}
+
+	movements, err := testStore.ListStockMovementsByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list stock movements: %v", err)
+	}
+	if len(movements) < 2 {
+		t.Fatalf("expected at least 2 stock movements, got %d", len(movements))
+	}
+	if movements[0].MovementType != stockMovementInitial {
+		t.Fatalf("expected first movement %q, got %q", stockMovementInitial, movements[0].MovementType)
+	}
+	lastMovement := movements[len(movements)-1]
+	if lastMovement.MovementType != stockMovementAllocation {
+		t.Fatalf("expected last movement %q, got %q", stockMovementAllocation, lastMovement.MovementType)
+	}
+	if lastMovement.QuantityDelta != -2 {
+		t.Fatalf("expected last movement delta -2, got %d", lastMovement.QuantityDelta)
+	}
+
 	orders, err := testStore.ListOrdersByUser(int(userID))
 	if err != nil {
 		t.Fatalf("list customer orders: %v", err)
@@ -400,6 +439,131 @@ func TestCartCheckoutAndFulfillmentFlow(t *testing.T) {
 	}
 	if summary.DispatchedCount < 1 {
 		t.Fatalf("expected at least 1 dispatched order, got %d", summary.DispatchedCount)
+	}
+}
+
+func TestCreateProduct_InitializesInventoryStock(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Inventory Category %d", suffix),
+		Slug:        fmt.Sprintf("inventory-category-%d", suffix),
+		Description: "inventory",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Inventory Product",
+		Slug:          fmt.Sprintf("inventory-product-%d", suffix),
+		Description:   "inventory product",
+		Price:         9.5,
+		StockQuantity: 7,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	stocks, err := testStore.ListInventoryStocksByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list inventory stocks: %v", err)
+	}
+	if len(stocks) != 1 {
+		t.Fatalf("expected 1 inventory stock row, got %d", len(stocks))
+	}
+	if stocks[0].WarehouseID != defaultWarehouseID {
+		t.Fatalf("expected default warehouse %d, got %d", defaultWarehouseID, stocks[0].WarehouseID)
+	}
+	if stocks[0].OnHandQuantity != 7 {
+		t.Fatalf("expected on-hand 7, got %d", stocks[0].OnHandQuantity)
+	}
+	if stocks[0].AvailableQuantity != 7 {
+		t.Fatalf("expected available 7, got %d", stocks[0].AvailableQuantity)
+	}
+
+	movements, err := testStore.ListStockMovementsByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list stock movements: %v", err)
+	}
+	if len(movements) != 1 {
+		t.Fatalf("expected 1 stock movement, got %d", len(movements))
+	}
+	if movements[0].MovementType != stockMovementInitial {
+		t.Fatalf("expected movement type %q, got %q", stockMovementInitial, movements[0].MovementType)
+	}
+	if movements[0].QuantityDelta != 7 {
+		t.Fatalf("expected movement delta 7, got %d", movements[0].QuantityDelta)
+	}
+}
+
+func TestUpdateProduct_SynchronizesInventoryProjection(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	categoryID, err := testStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Update Inventory Category %d", suffix),
+		Slug:        fmt.Sprintf("update-inventory-category-%d", suffix),
+		Description: "inventory update",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := testStore.CreateProduct(Product{
+		Name:          "Adjustable Product",
+		Slug:          fmt.Sprintf("adjustable-product-%d", suffix),
+		Description:   "adjustable",
+		Price:         15,
+		StockQuantity: 4,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	err = testStore.UpdateProduct(Product{
+		ID:            int(productID),
+		Name:          "Adjustable Product",
+		Slug:          fmt.Sprintf("adjustable-product-%d", suffix),
+		Description:   "adjusted",
+		Price:         16,
+		StockQuantity: 9,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("update product: %v", err)
+	}
+
+	product, err := testStore.GetProductByID(int(productID))
+	if err != nil {
+		t.Fatalf("get product: %v", err)
+	}
+	if product.StockQuantity != 9 {
+		t.Fatalf("expected projected stock 9, got %d", product.StockQuantity)
+	}
+
+	stocks, err := testStore.ListInventoryStocksByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list inventory stocks: %v", err)
+	}
+	if len(stocks) != 1 {
+		t.Fatalf("expected 1 inventory stock row, got %d", len(stocks))
+	}
+	if stocks[0].OnHandQuantity != 9 {
+		t.Fatalf("expected on-hand 9, got %d", stocks[0].OnHandQuantity)
+	}
+
+	movements, err := testStore.ListStockMovementsByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list stock movements: %v", err)
+	}
+	if len(movements) != 2 {
+		t.Fatalf("expected 2 stock movements, got %d", len(movements))
+	}
+	if movements[1].MovementType != stockMovementAdjustment {
+		t.Fatalf("expected second movement %q, got %q", stockMovementAdjustment, movements[1].MovementType)
+	}
+	if movements[1].QuantityDelta != 5 {
+		t.Fatalf("expected second movement delta 5, got %d", movements[1].QuantityDelta)
 	}
 }
 
