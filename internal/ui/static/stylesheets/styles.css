@@ -619,11 +619,291 @@ select:focus {
   outline-offset: var(--space-1);
 }
 
+/* ==========================================================================
+   Form System Components
+   ========================================================================== */
+
+.form__group {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.form__input,
+.form__textarea,
+.form__select {
+  min-height: 2.75rem;
+  transition:
+    border-color var(--transition-fast) var(--ease-standard),
+    box-shadow var(--transition-fast) var(--ease-standard),
+    background var(--transition-fast) var(--ease-standard);
+}
+
+.form__input:focus-visible,
+.form__textarea:focus-visible,
+.form__select:focus-visible {
+  box-shadow: var(--shadow-focus);
+  outline: 0;
+}
+
+.form__input[aria-invalid="true"],
+.form__textarea[aria-invalid="true"],
+.form__select[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.form__input:disabled,
+.form__textarea:disabled,
+.form__select:disabled {
+  background: var(--color-bg-surface-muted);
+  color: var(--color-fg-muted);
+  cursor: not-allowed;
+}
+
+.form__input[readonly],
+.form__textarea[readonly] {
+  background: var(--color-bg-surface-subtle);
+  color: var(--color-fg-secondary);
+}
+
+.form__hint,
+.form__message {
+  margin: 0;
+}
+
+.form__message {
+  font-size: var(--font-size-xs);
+  color: var(--color-fg-secondary);
+}
+
+.form__message--error {
+  color: var(--color-danger);
+}
+
+.form__check {
+  color: var(--color-fg-primary);
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
+.form__check-input {
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: 0.125rem 0 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.form__check-input:disabled {
+  accent-color: var(--color-border-strong);
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Search Form Component
+   ========================================================================== */
+
+.search-form {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+.search-form__field {
+  position: relative;
+}
+
+.search-form__icon {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: var(--space-2);
+  transform: translateY(-50%);
+  color: var(--color-fg-secondary);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.search-form__input {
+  padding-inline-start: calc(var(--space-2) + 1.25rem + var(--space-2));
+  padding-inline-end: calc(var(--space-2) + 2rem);
+}
+
+.search-form__clear {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: var(--space-2);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: auto;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-fg-secondary);
+  cursor: pointer;
+}
+
+.search-form__clear:hover {
+  background: var(--color-bg-surface-muted);
+  color: var(--color-fg-primary);
+}
+
+.search-form__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.search-results--empty {
+  padding: var(--space-4);
+  text-align: center;
+  border: var(--border-thin) dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-fg-secondary);
+}
+
+/* ==========================================================================
+   Auth Form Component
+   ========================================================================== */
+
+.auth-form {
+  display: grid;
+  gap: var(--space-4);
+  max-width: var(--container-sm);
+  margin-inline: auto;
+  padding: var(--space-4);
+  border: var(--border-thin) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+.auth-form__header,
+.auth-form__messages,
+.auth-form__body,
+.auth-form__footer {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.auth-form__title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.auth-form__lead {
+  margin: 0;
+  color: var(--color-fg-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.auth-form__password-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.auth-form__remember {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Switches and Toggles
+   ========================================================================== */
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.switch__control {
+  position: relative;
+  inline-size: 2.75rem;
+  block-size: 1.5rem;
+  border: var(--border-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface-muted);
+  transition:
+    background var(--transition-base) var(--ease-standard),
+    border-color var(--transition-base) var(--ease-standard);
+}
+
+.switch__control::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.1875rem;
+  inline-size: 1rem;
+  block-size: 1rem;
+  border-radius: 50%;
+  background: var(--color-bg-elevated);
+  transform: translateY(-50%);
+  transition: transform var(--transition-base) var(--ease-emphasized);
+  box-shadow: var(--shadow-sm);
+}
+
+.switch__input:checked + .switch__control {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+.switch__input:checked + .switch__control::after {
+  transform: translate(1.2rem, -50%);
+}
+
+.switch__input:disabled + .switch__control {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.switch__label {
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-primary);
+}
+
+.switch--sm .switch__control {
+  inline-size: 2.25rem;
+  block-size: 1.25rem;
+}
+
+.switch--sm .switch__control::after {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+
+.switch--sm .switch__input:checked + .switch__control::after {
+  transform: translate(0.9rem, -50%);
+}
+
+.switch--lg .switch__control {
+  inline-size: 3.25rem;
+  block-size: 1.75rem;
+}
+
+.switch--lg .switch__control::after {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.switch--lg .switch__input:checked + .switch__control::after {
+  transform: translate(1.35rem, -50%);
+}
+
 .btn {
   --btn-bg: var(--color-bg-surface);
   --btn-fg: var(--color-fg-primary);
   --btn-border: var(--color-border-strong);
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
