@@ -275,6 +275,14 @@ INSERT OR IGNORE INTO inventory_stocks (product_id, warehouse_id, on_hand_quanti
 SELECT p.id, 1, p.stock_quantity, 0, 0
 FROM products p;
 
+CREATE TRIGGER IF NOT EXISTS create_inventory_stock_after_product
+AFTER INSERT ON products
+FOR EACH ROW
+BEGIN
+    INSERT INTO inventory_stocks (product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity)
+    VALUES (NEW.id, 1, NEW.stock_quantity, 0, 0);
+END;
+
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_products_deleted_at ON products(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_warehouses_slug ON warehouses(slug);
