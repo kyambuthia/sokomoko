@@ -112,7 +112,7 @@ func sortedHostList(hosts map[string]struct{}) string {
 }
 
 func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
-	ticker := time.NewTicker(15 * time.Minute)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
 	run := func() {
