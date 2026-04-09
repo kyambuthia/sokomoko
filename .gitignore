@@ -12,6 +12,8 @@ t.db
 /build/
 /bin/
 /out/
+/sokomoko
+/sokomoko.local-backup
 
 # Go workspace file
 go.work

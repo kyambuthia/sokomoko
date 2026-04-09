@@ -124,6 +124,12 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 
 	product.Price = RoundMoney(product.Price)
 
+	// Product inserts trigger inventory row creation against the default
+	// warehouse, so ensure that warehouse exists before the insert fires.
+	if _, err := ensureDefaultWarehouseTx(tx); err != nil {
+		return 0, err
+	}
+
 	res, err := tx.Exec(
 		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id) VALUES (?, ?, ?, ?, ?, ?)",
 		product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID,

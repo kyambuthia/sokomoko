@@ -21,13 +21,15 @@ class UIAlert extends HTMLElement {
     const title = this.getAttribute("title") || "";
 
     const palettes = {
-      info: { border: "#b8c8d8", bg: "#f5f8fb", text: "#1f1e1a" },
-      success: { border: "#9fc7ad", bg: "#f2f9f5", text: "#2c6a44" },
-      danger: { border: "#d7abab", bg: "#fcf3f3", text: "#8b2e2e" },
-      warning: { border: "#d8c49a", bg: "#faf6eb", text: "#6b561d" },
+      info: { border: "#b7cada", bg: "#eef5fa", text: "#32516a" },
+      success: { border: "#9ebda8", bg: "#edf7f0", text: "#24563a" },
+      warning: { border: "#d3be8d", bg: "#faf4e6", text: "#6d571b" },
+      danger: { border: "#d7aaaa", bg: "#fbefef", text: "#7b2929" },
     };
 
     const palette = palettes[variant] || palettes.info;
+    const role = variant === "danger" ? "alert" : "status";
+    const ariaLive = variant === "danger" ? "assertive" : "polite";
 
     this.root.innerHTML = `
       <style>
@@ -37,19 +39,19 @@ class UIAlert extends HTMLElement {
         }
 
         .alert {
-          border: 1px solid ${palette.border};
-          background: ${palette.bg};
-          color: ${palette.text};
-          border-radius: 10px;
-          padding: 0.85rem 1rem;
+          border: 1px solid var(--alert-border, ${palette.border});
+          background: var(--alert-bg, ${palette.bg});
+          color: var(--alert-text, ${palette.text});
+          border-radius: var(--radius-md, 0.625rem);
+          padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
           line-height: 1.45;
           font: inherit;
         }
 
         .title {
           display: block;
-          margin: 0 0 0.35rem;
-          font-weight: 700;
+          margin: 0 0 var(--space-1, 0.25rem);
+          font-weight: var(--font-weight-bold, 700);
           color: inherit;
         }
 
@@ -57,7 +59,7 @@ class UIAlert extends HTMLElement {
           margin: 0;
         }
       </style>
-      <section class="alert" role="status" aria-live="polite">
+      <section class="alert" role="${role}" aria-live="${ariaLive}">
         ${title ? `<span class="title">${title}</span>` : ""}
         <slot></slot>
       </section>
@@ -95,34 +97,34 @@ class UIMetricCard extends HTMLElement {
         }
 
         .metric {
-          border: 1px solid #beb7a8;
-          background: #fff;
-          border-radius: 10px;
-          padding: 1rem;
+          border: var(--border-thin, 1px) solid var(--color-border-strong, #beb7a8);
+          background: var(--color-bg-elevated, #fff);
+          border-radius: var(--radius-md, 0.625rem);
+          padding: var(--space-4, 1rem);
         }
 
         .label {
-          margin: 0 0 0.4rem;
-          font-size: 0.9rem;
-          letter-spacing: 0.04em;
+          margin: 0 0 var(--space-2, 0.5rem);
+          font-size: var(--font-size-sm, 0.875rem);
+          letter-spacing: var(--letter-spacing-wide, 0.04em);
           text-transform: uppercase;
-          color: #666258;
-          font-weight: 600;
+          color: var(--color-fg-secondary, #666258);
+          font-weight: var(--font-weight-semibold, 600);
         }
 
         .value {
           margin: 0;
-          font-size: 1.7rem;
-          line-height: 1.2;
-          color: #1f1e1a;
-          font-weight: 700;
+          font-size: var(--font-size-2xl, 1.625rem);
+          line-height: var(--line-height-tight, 1.2);
+          color: var(--color-fg-primary, #1f1e1a);
+          font-weight: var(--font-weight-bold, 700);
           word-break: break-word;
         }
 
         .note {
-          margin: 0.35rem 0 0;
-          color: #666258;
-          font-size: 0.92rem;
+          margin: var(--space-2, 0.5rem) 0 0;
+          color: var(--color-fg-secondary, #666258);
+          font-size: var(--font-size-sm, 0.875rem);
         }
       </style>
       <article class="metric">
@@ -153,28 +155,176 @@ class UISearchForm extends HTMLElement {
     const clearURL = this.getAttribute("clear-url") || action;
     const inputID = `ui-search-input-${UISearchForm.nextID++}`;
 
-    this.classList.add("search-form-component");
+    this.classList.add("search-form");
     this.innerHTML = `
-      <form action="${escapeHTML(action)}" method="GET" class="search-bar">
-        <div class="search-bar__field">
-          <label class="search-bar__label" for="${inputID}">${escapeHTML(label)}</label>
-          <input
-            type="search"
-            id="${inputID}"
-            name="q"
-            placeholder="${escapeHTML(placeholder)}"
-            value="${escapeHTML(queryValue)}"
-            class="search-bar__input"
-            required
-            minlength="2"
-          />
-          ${hint ? `<p class="search-bar__hint">${escapeHTML(hint)}</p>` : ""}
+      <form action="${escapeHTML(action)}" method="GET" class="search-form__form">
+        <div class="search-form__field">
+          <label class="form__label search-form__label" for="${inputID}">${escapeHTML(label)}</label>
+          <div class="search-form__input-wrap">
+            <svg class="search-form__icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input
+              type="search"
+              id="${inputID}"
+              name="q"
+              placeholder="${escapeHTML(placeholder)}"
+              value="${escapeHTML(queryValue)}"
+              class="form__input search-form__input"
+              required
+              minlength="2"
+            />
+          </div>
+          ${hint ? `<p class="form__hint search-form__hint">${escapeHTML(hint)}</p>` : ""}
         </div>
-        <div class="search-bar__actions">
-          <button type="submit" class="btn search-bar__button">${escapeHTML(submitLabel)}</button>
-          ${showClear ? `<a href="${escapeHTML(clearURL)}" class="btn btn--secondary search-bar__button">Clear</a>` : ""}
+        <div class="search-form__actions">
+          <button type="submit" class="btn btn--primary search-form__submit">${escapeHTML(submitLabel)}</button>
+          ${showClear ? `<a href="${escapeHTML(clearURL)}" class="btn btn--secondary search-form__clear">Clear</a>` : ""}
         </div>
       </form>
+    `;
+  }
+}
+
+class UISwitch extends HTMLElement {
+  static get observedAttributes() {
+    return ["checked", "disabled", "size"];
+  }
+
+  constructor() {
+    super();
+    this.root = this.attachShadow({ mode: "open" });
+  }
+
+  connectedCallback() {
+    this.render();
+  }
+
+  attributeChangedCallback() {
+    this.render();
+  }
+
+  render() {
+    const checked = this.hasAttribute("checked");
+    const disabled = this.hasAttribute("disabled");
+    const size = this.getAttribute("size") || "default";
+    const inputID = `ui-switch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const labelText = this.getAttribute("label") || "";
+
+    this.root.innerHTML = `
+      <style>
+        :host {
+          display: inline-flex;
+        }
+
+        .switch {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-3, 0.75rem);
+          cursor: pointer;
+        }
+
+        .switch--disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
+
+        .switch__control {
+          position: relative;
+          inline-size: var(--switch-width, 2.75rem);
+          block-size: var(--switch-height, 1.5rem);
+          border: var(--border-thin, 1px) solid var(--color-border-strong, #bcb3a2);
+          border-radius: var(--radius-pill, 999px);
+          background: var(--color-bg-surface-muted, #f7f3eb);
+          transition:
+            background var(--transition-base, 220ms) var(--ease-standard, ease-in-out),
+            border-color var(--transition-base, 220ms) var(--ease-standard, ease-in-out);
+        }
+
+        .switch--sm .switch__control {
+          --switch-width: 2.25rem;
+          --switch-height: 1.25rem;
+        }
+
+        .switch--lg .switch__control {
+          --switch-width: 3.25rem;
+          --switch-height: 1.75rem;
+        }
+
+        .switch__control::after {
+          content: "";
+          position: absolute;
+          inset-block-start: 50%;
+          inset-inline-start: 0.1875rem;
+          inline-size: calc(var(--switch-height, 1.5rem) - 0.5rem);
+          block-size: calc(var(--switch-height, 1.5rem) - 0.5rem);
+          border-radius: 50%;
+          background: var(--color-bg-elevated, #ffffff);
+          transform: translateY(-50%);
+          transition: transform var(--transition-base, 220ms) var(--ease-emphasized, cubic-bezier(0.2, 0, 0, 1));
+        }
+
+        .switch--sm .switch__control::after {
+          inline-size: calc(var(--switch-height, 1.25rem) - 0.375rem);
+          block-size: calc(var(--switch-height, 1.25rem) - 0.375rem);
+        }
+
+        .switch--lg .switch__control::after {
+          inline-size: calc(var(--switch-height, 1.75rem) - 0.625rem);
+          block-size: calc(var(--switch-height, 1.75rem) - 0.625rem);
+        }
+
+        .switch__input {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+          border: 0;
+        }
+
+        .switch__input:checked + .switch__control {
+          background: var(--color-accent-soft, #dbe5ee);
+          border-color: var(--color-accent, #2f3e4f);
+        }
+
+        .switch__input:checked + .switch__control::after {
+          transform: translate(calc(var(--switch-width, 2.75rem) - var(--switch-height, 1.5rem)), -50%);
+        }
+
+        .switch--sm .switch__input:checked + .switch__control::after {
+          transform: translate(calc(var(--switch-width, 2.25rem) - var(--switch-height, 1.25rem)), -50%);
+        }
+
+        .switch--lg .switch__input:checked + .switch__control::after {
+          transform: translate(calc(var(--switch-width, 3.25rem) - var(--switch-height, 1.75rem)), -50%);
+        }
+
+        .switch__input:focus-visible + .switch__control {
+          outline: 2px solid var(--color-focus-ring, #d9e5ef);
+          outline-offset: 2px;
+        }
+
+        .switch__label {
+          color: var(--color-fg-primary, #1f1e1a);
+          font-size: var(--font-size-base, 0.96875rem);
+        }
+      </style>
+      <label class="switch ${disabled ? "switch--disabled" : ""} ${size !== "default" ? `switch--${size}` : ""}">
+        <input
+          type="checkbox"
+          class="switch__input"
+          id="${inputID}"
+          ${checked ? "checked" : ""}
+          ${disabled ? "disabled" : ""}
+        />
+        <span class="switch__control" aria-hidden="true"></span>
+        ${labelText ? `<span class="switch__label">${escapeHTML(labelText)}</span>` : ""}
+      </label>
     `;
   }
 }
@@ -191,6 +341,10 @@ if (!customElements.get("ui-search-form")) {
   customElements.define("ui-search-form", UISearchForm);
 }
 
+if (!customElements.get("ui-switch")) {
+  customElements.define("ui-switch", UISwitch);
+}
+
 function escapeHTML(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -200,7 +354,15 @@ function escapeHTML(value) {
     .replaceAll("'", "&#39;");
 }
 
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
 document.addEventListener("DOMContentLoaded", () => {
+  initPasswordToggles();
+  initNavToggles();
+  initFormSubmitStates();
+});
+
+function initPasswordToggles() {
   const passwordToggles = document.querySelectorAll("[data-password-toggle]");
   passwordToggles.forEach((toggleButton) => {
     const targetId = toggleButton.getAttribute("data-target");
@@ -215,9 +377,53 @@ document.addEventListener("DOMContentLoaded", () => {
       const isPassword = input.getAttribute("type") === "password";
       input.setAttribute("type", isPassword ? "text" : "password");
       toggleButton.textContent = isPassword ? "Hide" : "Show";
+      toggleButton.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
     });
   });
+}
 
+function initNavToggles() {
+  const navBlocks = document.querySelectorAll("[data-nav]");
+  navBlocks.forEach((nav) => {
+    const toggle = nav.querySelector("[data-nav-toggle]");
+    const menu = nav.querySelector("[data-nav-menu]");
+    if (!toggle || !menu) {
+      return;
+    }
+
+    nav.classList.add("is-collapsed");
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", menu.id || undefined);
+
+    const collapseNav = () => {
+      const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!isExpanded));
+      nav.classList.toggle("is-collapsed", isExpanded);
+
+      if (!prefersReducedMotion.matches) {
+        menu.style.overflow = "hidden";
+        if (isExpanded) {
+          menu.style.maxHeight = "0";
+          menu.style.opacity = "0";
+        } else {
+          menu.style.maxHeight = menu.scrollHeight + "px";
+          menu.style.opacity = "1";
+        }
+      }
+    };
+
+    toggle.addEventListener("click", collapseNav);
+
+    toggle.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+        toggle.setAttribute("aria-expanded", "false");
+        nav.classList.add("is-collapsed");
+      }
+    });
+  });
+}
+
+function initFormSubmitStates() {
   const forms = document.querySelectorAll("form");
   forms.forEach((form) => {
     form.addEventListener("submit", () => {
@@ -230,7 +436,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const submitButtons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
       submitButtons.forEach((button) => {
-        button.dataset.originalLabel = button.tagName === "INPUT" ? button.value : button.textContent;
+        const originalLabel = button.tagName === "INPUT" ? button.value : button.textContent;
+        button.dataset.originalLabel = originalLabel;
         if (button.tagName === "INPUT") {
           button.value = "Submitting...";
         } else {
@@ -240,23 +447,4 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
   });
-
-  const navBlocks = document.querySelectorAll("[data-nav]");
-  navBlocks.forEach((nav) => {
-    const toggle = nav.querySelector("[data-nav-toggle]");
-    const menu = nav.querySelector("[data-nav-menu]");
-    if (!toggle || !menu) {
-      return;
-    }
-
-    nav.classList.add("is-collapsed");
-    toggle.setAttribute("aria-expanded", "false");
-
-    toggle.addEventListener("click", () => {
-      const isExpanded = toggle.getAttribute("aria-expanded") === "true";
-      toggle.setAttribute("aria-expanded", String(!isExpanded));
-      nav.classList.toggle("is-collapsed", isExpanded);
-    });
-  });
-
-});
+}

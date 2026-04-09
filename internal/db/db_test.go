@@ -1278,6 +1278,62 @@ func TestUpdateUserPassword_InvalidatesUserSessions(t *testing.T) {
 	}
 }
 
+func TestCreateProduct_RecreatesDefaultWarehouseBeforeInventoryTrigger(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	localDBPath := fmt.Sprintf("./test_create_product_warehouse_%d.db", suffix)
+	localStore, err := OpenStore(localDBPath)
+	if err != nil {
+		t.Fatalf("open local store: %v", err)
+	}
+	if err := localStore.ApplySchema(); err != nil {
+		t.Fatalf("apply schema: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = localStore.Close()
+		_ = os.Remove(localDBPath)
+	})
+
+	// The schema trigger writes inventory rows against warehouse 1 on product insert.
+	if _, err := localStore.DB.Exec("DELETE FROM inventory_stocks"); err != nil {
+		t.Fatalf("delete inventory stocks: %v", err)
+	}
+	if _, err := localStore.DB.Exec("DELETE FROM warehouses"); err != nil {
+		t.Fatalf("delete warehouses: %v", err)
+	}
+
+	categoryID, err := localStore.CreateCategory(Category{
+		Name:        fmt.Sprintf("Trigger Category %d", suffix),
+		Slug:        fmt.Sprintf("trigger-category-%d", suffix),
+		Description: "trigger category",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	productID, err := localStore.CreateProduct(Product{
+		Name:          "Trigger Product",
+		Slug:          fmt.Sprintf("trigger-product-%d", suffix),
+		Description:   "trigger product",
+		Price:         12.5,
+		StockQuantity: 3,
+		CategoryID:    sqlNullInt64(categoryID),
+	})
+	if err != nil {
+		t.Fatalf("create product after deleting warehouses: %v", err)
+	}
+
+	stocks, err := localStore.ListInventoryStocksByProductID(int(productID))
+	if err != nil {
+		t.Fatalf("list inventory stocks: %v", err)
+	}
+	if len(stocks) != 1 {
+		t.Fatalf("expected 1 inventory stock row, got %d", len(stocks))
+	}
+	if stocks[0].WarehouseID != defaultWarehouseID {
+		t.Fatalf("expected default warehouse %d, got %d", defaultWarehouseID, stocks[0].WarehouseID)
+	}
+}
+
 func sqlNullInt64(v int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: v, Valid: true}
 }
