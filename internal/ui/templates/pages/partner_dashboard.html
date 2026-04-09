@@ -1,5 +1,15 @@
 {{ define "title" }}Partner Dashboard{{ end }}
 
+{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
+
+{{ define "header-area" }}
+{{ template "partner-header-area" . }}
+{{ end }}
+
+{{ define "nav-area" }}
+{{ template "partner-nav-area" . }}
+{{ end }}
+
 {{ define "main-area" }}
 <section class="partner-page">
   <header class="partner-page__header">
