@@ -1,10 +1,26 @@
+{{ define "storefront-header-area" }}
+{{ end }}
+
+{{ define "admin-header-area" }}
+<header class="site-header site-header--workspace header">
+    <div class="site-header__copy">
+        <p class="site-header__eyebrow">Operations</p>
+        <p class="site-header__title site-title">SOKOMOKO ADMIN</p>
+        <p class="site-header__tagline site-tagline">Platform management and order oversight.</p>
+    </div>
+</header>
+{{ end }}
+
+{{ define "partner-header-area" }}
+<header class="site-header site-header--workspace header">
+    <div class="site-header__copy">
+        <p class="site-header__eyebrow">Partner Workspace</p>
+        <p class="site-header__title site-title">SOKOMOKO PARTNER</p>
+        <p class="site-header__tagline site-tagline">Catalog updates, fulfillment flow, and store setup.</p>
+    </div>
+</header>
+{{ end }}
+
 {{ define "header-area" }}
-    <header class="site-header header">
-        <div class="site-header__brand">
-            <p class="site-header__title site-title">SOKOMOKO</p>
-            <p class="site-header__tagline site-tagline">Free delivery for purchases above 300 USD</p>
-        </div>
-    </header>
-    <!-- nav-area -->
-    {{ template "nav-area" }}
+    {{ template "storefront-header-area" . }}
 {{ end }}
