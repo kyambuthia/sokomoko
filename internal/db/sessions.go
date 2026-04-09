@@ -21,11 +21,7 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	sess := &Session{}
 	err := row.Scan(&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt)
 	if err == sql.ErrNoRows {
-		row = s.DB.QueryRow("SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", id)
-		err = row.Scan(&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt)
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
+		return nil, nil
 	}
 	if err != nil {
 		return nil, err

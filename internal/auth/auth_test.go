@@ -234,6 +234,16 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+func TestValidAdminSetupToken_LengthMismatchReturnsFalse(t *testing.T) {
+	svc := newTestService(Config{AdminSetupToken: "expected-token"})
+	req := httptest.NewRequest(http.MethodGet, "/admin/setup", nil)
+	req.Header.Set("X-Admin-Setup-Token", "short")
+
+	if svc.validAdminSetupToken(req) {
+		t.Fatal("expected length-mismatched token to be rejected")
+	}
+}
+
 func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
 	clearUsersTable()
 	user := createTestUser("reset_email_user", "reset_email_user@example.com", "resetpass123", "user")

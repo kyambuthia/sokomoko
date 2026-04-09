@@ -199,6 +199,41 @@ func TestGetUserByID(t *testing.T) {
 	}
 }
 
+func TestGetSession_DoesNotFallbackToRawSessionID(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	user := User{
+		Username:     fmt.Sprintf("session_user_%d", suffix),
+		Email:        fmt.Sprintf("session_user_%d@example.com", suffix),
+		PasswordHash: "hashed",
+		Salt:         "salt",
+		Role:         "user",
+	}
+
+	userID, err := testStore.CreateUser(user)
+	if err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+
+	rawSessionID := fmt.Sprintf("raw_session_%d", suffix)
+	_, err = testStore.DB.Exec(
+		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
+		rawSessionID,
+		userID,
+		time.Now().Add(time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("insert raw session failed: %v", err)
+	}
+
+	sess, err := testStore.GetSession(rawSessionID)
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+	if sess != nil {
+		t.Fatal("expected raw session ID lookup to fail when only unhashed storage exists")
+	}
+}
+
 func TestGetProductBySlug(t *testing.T) {
 	suffix := time.Now().UnixNano()
 	categoryID, err := testStore.CreateCategory(Category{

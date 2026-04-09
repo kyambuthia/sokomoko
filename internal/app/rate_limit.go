@@ -16,17 +16,20 @@ type rateLimitEntry struct {
 }
 
 type ipRateLimiter struct {
-	mu      sync.Mutex
-	window  time.Duration
-	max     int
-	entries map[string]rateLimitEntry
+	mu              sync.Mutex
+	window          time.Duration
+	max             int
+	entries         map[string]rateLimitEntry
+	lastCleanup     time.Time
+	cleanupInterval time.Duration
 }
 
 func newIPRateLimiter(max int, window time.Duration) *ipRateLimiter {
 	return &ipRateLimiter{
-		window:  window,
-		max:     max,
-		entries: make(map[string]rateLimitEntry),
+		window:          window,
+		max:             max,
+		entries:         make(map[string]rateLimitEntry),
+		cleanupInterval: window,
 	}
 }
 
@@ -34,10 +37,11 @@ func (l *ipRateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	l.cleanupLocked(now)
+
 	entry, ok := l.entries[key]
 	if !ok || now.Sub(entry.windowStart) >= l.window {
 		l.entries[key] = rateLimitEntry{windowStart: now, count: 1}
-		l.cleanupLocked(now)
 		return true, 0
 	}
 
@@ -55,7 +59,7 @@ func (l *ipRateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 }
 
 func (l *ipRateLimiter) cleanupLocked(now time.Time) {
-	if len(l.entries) < 4096 {
+	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < l.cleanupInterval {
 		return
 	}
 	for key, entry := range l.entries {
@@ -63,6 +67,7 @@ func (l *ipRateLimiter) cleanupLocked(now time.Time) {
 			delete(l.entries, key)
 		}
 	}
+	l.lastCleanup = now
 }
 
 func RateLimitByIP(max int, window time.Duration, methods ...string) Middleware {
@@ -70,24 +75,9 @@ func RateLimitByIP(max int, window time.Duration, methods ...string) Middleware 
 		return func(next http.Handler) http.Handler { return next }
 	}
 
-	methodSet := make(map[string]struct{}, len(methods))
-	for _, method := range methods {
-		clean := strings.ToUpper(strings.TrimSpace(method))
-		if clean != "" {
-			methodSet[clean] = struct{}{}
-		}
-	}
-
 	limiter := newIPRateLimiter(max, window)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if len(methodSet) > 0 {
-				if _, ok := methodSet[r.Method]; !ok {
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
-
 			ip := clientIPFromRemoteAddr(r.RemoteAddr)
 			allowed, retryAfter := limiter.allow(ip, time.Now())
 			if !allowed {

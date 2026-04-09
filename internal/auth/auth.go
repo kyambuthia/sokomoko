@@ -279,9 +279,6 @@ func (s *Service) validAdminSetupToken(r *http.Request) bool {
 	if provided == "" {
 		provided = strings.TrimSpace(r.FormValue("setup_token"))
 	}
-	if len(provided) != len(expected) {
-		return false
-	}
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 

@@ -51,21 +51,50 @@ func TestRateLimitByIP_BlocksWhenExceeded(t *testing.T) {
 	}
 }
 
-func TestRateLimitByIP_IgnoresNonConfiguredMethod(t *testing.T) {
+func TestRateLimitByIP_LimitsNonConfiguredMethod(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}), RateLimitByIP(1, time.Minute, http.MethodPost))
 
-	for i := 0; i < 3; i++ {
-		req := httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
-		req.RemoteAddr = "203.0.113.12:12345"
-		rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
+	req.RemoteAddr = "203.0.113.12:12345"
+	rec := httptest.NewRecorder()
 
-		h.ServeHTTP(rec, req)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("first request status=%d want=%d", rec.Code, http.StatusNoContent)
+	}
 
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("request %d status=%d want=%d", i+1, rec.Code, http.StatusNoContent)
-		}
+	req = httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
+	req.RemoteAddr = "203.0.113.12:12345"
+	rec = httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request status=%d want=%d", rec.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestIPRateLimiter_CleansUpExpiredEntriesPeriodically(t *testing.T) {
+	limiter := newIPRateLimiter(2, time.Minute)
+	start := time.Unix(1_700_000_000, 0)
+
+	limiter.entries["stale"] = rateLimitEntry{
+		windowStart: start.Add(-2 * time.Minute),
+		count:       1,
+	}
+	limiter.lastCleanup = start.Add(-time.Minute)
+
+	allowed, retryAfter := limiter.allow("fresh", start)
+	if !allowed {
+		t.Fatalf("allow returned false with retryAfter=%s", retryAfter)
+	}
+
+	if _, ok := limiter.entries["stale"]; ok {
+		t.Fatal("expected expired entry to be removed during periodic cleanup")
+	}
+	if _, ok := limiter.entries["fresh"]; !ok {
+		t.Fatal("expected fresh entry to remain after cleanup")
 	}
 }
 
