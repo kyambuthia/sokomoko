@@ -153,13 +153,15 @@ class UISearchForm extends HTMLElement {
     const submitLabel = this.getAttribute("submit-label") || "Search";
     const showClear = this.getAttribute("show-clear") === "true";
     const clearURL = this.getAttribute("clear-url") || action;
+    const variant = (this.getAttribute("variant") || "default").toLowerCase();
+    const hideLabel = this.getAttribute("hide-label") === "true";
     const inputID = `ui-search-input-${UISearchForm.nextID++}`;
 
-    this.classList.add("search-form");
+    this.classList.add("search-form", "search-form-component", `search-form--${variant}`);
     this.innerHTML = `
-      <form action="${escapeHTML(action)}" method="GET" class="search-form__form">
+      <form action="${escapeHTML(action)}" method="GET" class="search-form__form search-form__form--${escapeHTML(variant)}">
         <div class="search-form__field">
-          <label class="form__label search-form__label" for="${inputID}">${escapeHTML(label)}</label>
+          <label class="form__label search-form__label${hideLabel ? " search-form__label--hidden" : ""}" for="${inputID}">${escapeHTML(label)}</label>
           <div class="search-form__input-wrap">
             <svg class="search-form__icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/>
@@ -179,7 +181,7 @@ class UISearchForm extends HTMLElement {
           ${hint ? `<p class="form__hint search-form__hint">${escapeHTML(hint)}</p>` : ""}
         </div>
         <div class="search-form__actions">
-          <button type="submit" class="btn btn--primary search-form__submit">${escapeHTML(submitLabel)}</button>
+          <button type="submit" class="btn btn--primary search-form__submit search-form__submit--${escapeHTML(variant)}">${escapeHTML(submitLabel)}</button>
           ${showClear ? `<a href="${escapeHTML(clearURL)}" class="btn btn--secondary search-form__clear">Clear</a>` : ""}
         </div>
       </form>
@@ -384,6 +386,8 @@ function initPasswordToggles() {
 
 function initNavToggles() {
   const navBlocks = document.querySelectorAll("[data-nav]");
+  const desktopNav = window.matchMedia("(min-width: 40rem)");
+
   navBlocks.forEach((nav) => {
     const toggle = nav.querySelector("[data-nav-toggle]");
     const menu = nav.querySelector("[data-nav-menu]");
@@ -391,35 +395,68 @@ function initNavToggles() {
       return;
     }
 
-    nav.classList.add("is-collapsed");
-    toggle.setAttribute("aria-expanded", "false");
+    const collapsible = nav.dataset.navCollapsible || "mobile";
+    let expanded = false;
+
     toggle.setAttribute("aria-controls", menu.id || undefined);
 
-    const collapseNav = () => {
-      const isExpanded = toggle.getAttribute("aria-expanded") === "true";
-      toggle.setAttribute("aria-expanded", String(!isExpanded));
-      nav.classList.toggle("is-collapsed", isExpanded);
+    const shouldCollapse = () => {
+      if (collapsible === "always") {
+        return true;
+      }
+      if (collapsible === "never") {
+        return false;
+      }
+      return !desktopNav.matches;
+    };
 
-      if (!prefersReducedMotion.matches) {
-        menu.style.overflow = "hidden";
-        if (isExpanded) {
-          menu.style.maxHeight = "0";
-          menu.style.opacity = "0";
-        } else {
-          menu.style.maxHeight = menu.scrollHeight + "px";
-          menu.style.opacity = "1";
-        }
+    const syncNavState = () => {
+      const collapsed = shouldCollapse() && !expanded;
+      nav.classList.toggle("is-collapsed", collapsed);
+      toggle.hidden = !shouldCollapse();
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+
+      if (prefersReducedMotion.matches) {
+        menu.style.removeProperty("max-height");
+        menu.style.removeProperty("opacity");
+        menu.style.removeProperty("overflow");
+        return;
+      }
+
+      menu.style.overflow = "hidden";
+      if (collapsed) {
+        menu.style.maxHeight = "0";
+        menu.style.opacity = "0";
+      } else {
+        menu.style.maxHeight = menu.scrollHeight + "px";
+        menu.style.opacity = "1";
       }
     };
 
-    toggle.addEventListener("click", collapseNav);
+    toggle.addEventListener("click", () => {
+      expanded = !expanded;
+      syncNavState();
+    });
 
     toggle.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
-        toggle.setAttribute("aria-expanded", "false");
-        nav.classList.add("is-collapsed");
+      if (e.key === "Escape" && shouldCollapse() && expanded) {
+        expanded = false;
+        syncNavState();
       }
     });
+
+    const handleViewportChange = () => {
+      expanded = desktopNav.matches;
+      syncNavState();
+    };
+
+    if (desktopNav.addEventListener) {
+      desktopNav.addEventListener("change", handleViewportChange);
+    } else {
+      desktopNav.addListener(handleViewportChange);
+    }
+
+    handleViewportChange();
   });
 }
 
