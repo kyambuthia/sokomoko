@@ -71,8 +71,11 @@ func (s *Store) ApplySchema() error {
 		return sql.ErrConnDone
 	}
 
-	_, err := s.DB.Exec(schemaSQL)
-	return err
+	if _, err := s.DB.Exec(schemaSQL); err != nil {
+		return err
+	}
+
+	return s.recordSchemaVersion()
 }
 
 func (s *Store) Close() error {

@@ -22,6 +22,9 @@ type MethodOption struct {
 	Label string
 }
 
+// Service is stateless for now. Unlike the other service packages that expose a
+// local store adapter in store.go, payment works directly with db value types
+// until it needs database-backed behavior of its own.
 type Service struct{}
 
 func New() *Service {

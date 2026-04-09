@@ -125,14 +125,35 @@ func (s *Store) HasAdminUser() (bool, error) {
 }
 
 func (s *Store) UpdateUserPassword(userID int, passwordHash, salt string) error {
-	stmt, err := s.DB.Prepare("UPDATE users SET password_hash = ?, salt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL")
+	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
-	_, err = stmt.Exec(passwordHash, salt, userID)
-	return err
+	result, err := tx.Exec(
+		"UPDATE users SET password_hash = ?, salt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
+		passwordHash, salt, userID,
+	)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return tx.Commit()
+	}
+
+	if _, err = tx.Exec("DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // UpdateUser updates an existing user's information

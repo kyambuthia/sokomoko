@@ -1142,6 +1142,142 @@ func TestUsePasswordResetToken_InvalidatesUserSessions(t *testing.T) {
 	}
 }
 
+func TestCreatePasswordResetToken_InvalidatesPreviousTokensForUser(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	localDBPath := fmt.Sprintf("./test_reset_replace_%d.db", suffix)
+	localStore, err := OpenStore(localDBPath)
+	if err != nil {
+		t.Fatalf("open local store: %v", err)
+	}
+	if err := localStore.ApplySchema(); err != nil {
+		t.Fatalf("apply schema: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = localStore.Close()
+		_ = os.Remove(localDBPath)
+	})
+
+	userID, err := localStore.CreateUser(User{
+		Username:     fmt.Sprintf("reset_replace_%d", suffix),
+		Email:        fmt.Sprintf("reset_replace_%d@example.com", suffix),
+		PasswordHash: "oldhash",
+		Salt:         "oldsalt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("reset-replace-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	firstToken := fmt.Sprintf("reset_first_%d", suffix)
+	secondToken := fmt.Sprintf("reset_second_%d", suffix)
+
+	if err := localStore.CreatePasswordResetToken(int(userID), firstToken, time.Now().Add(30*time.Minute)); err != nil {
+		t.Fatalf("create first reset token: %v", err)
+	}
+	if err := localStore.CreatePasswordResetToken(int(userID), secondToken, time.Now().Add(30*time.Minute)); err != nil {
+		t.Fatalf("create second reset token: %v", err)
+	}
+
+	if token, err := localStore.GetValidPasswordResetToken(firstToken); err != nil {
+		t.Fatalf("lookup first token: %v", err)
+	} else if token != nil {
+		t.Fatal("expected first reset token to be invalidated")
+	}
+
+	if token, err := localStore.GetValidPasswordResetToken(secondToken); err != nil {
+		t.Fatalf("lookup second token: %v", err)
+	} else if token == nil {
+		t.Fatal("expected second reset token to remain valid")
+	}
+}
+
+func TestUpdateUserPassword_InvalidatesUserSessions(t *testing.T) {
+	suffix := time.Now().UnixNano()
+	localDBPath := fmt.Sprintf("./test_update_password_%d.db", suffix)
+	localStore, err := OpenStore(localDBPath)
+	if err != nil {
+		t.Fatalf("open local store: %v", err)
+	}
+	if err := localStore.ApplySchema(); err != nil {
+		t.Fatalf("apply schema: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = localStore.Close()
+		_ = os.Remove(localDBPath)
+	})
+
+	userID, err := localStore.CreateUser(User{
+		Username:     fmt.Sprintf("password_target_%d", suffix),
+		Email:        fmt.Sprintf("password_target_%d@example.com", suffix),
+		PasswordHash: "oldhash",
+		Salt:         "oldsalt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("password-target-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create target user: %v", err)
+	}
+
+	otherUserID, err := localStore.CreateUser(User{
+		Username:     fmt.Sprintf("password_other_%d", suffix),
+		Email:        fmt.Sprintf("password_other_%d@example.com", suffix),
+		PasswordHash: "otherhash",
+		Salt:         "othersalt",
+		Role:         "user",
+		Slug:         fmt.Sprintf("password-other-%d", suffix),
+	})
+	if err != nil {
+		t.Fatalf("create other user: %v", err)
+	}
+
+	sessionA := fmt.Sprintf("update_session_a_%d", suffix)
+	sessionB := fmt.Sprintf("update_session_b_%d", suffix)
+	otherSession := fmt.Sprintf("update_other_session_%d", suffix)
+
+	if err := localStore.CreateSession(Session{ID: sessionA, UserID: int(userID), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatalf("create session A: %v", err)
+	}
+	if err := localStore.CreateSession(Session{ID: sessionB, UserID: int(userID), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatalf("create session B: %v", err)
+	}
+	if err := localStore.CreateSession(Session{ID: otherSession, UserID: int(otherUserID), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatalf("create other session: %v", err)
+	}
+
+	if err := localStore.UpdateUserPassword(int(userID), "newhash", "newsalt"); err != nil {
+		t.Fatalf("update user password: %v", err)
+	}
+
+	updatedUser, err := localStore.GetUserByID(int(userID))
+	if err != nil {
+		t.Fatalf("lookup updated user: %v", err)
+	}
+	if updatedUser == nil {
+		t.Fatal("expected updated user to exist")
+	}
+	if updatedUser.PasswordHash != "newhash" || updatedUser.Salt != "newsalt" {
+		t.Fatal("expected password update to persist new credentials")
+	}
+
+	if sess, err := localStore.GetSession(sessionA); err != nil {
+		t.Fatalf("lookup session A: %v", err)
+	} else if sess != nil {
+		t.Fatal("expected session A to be invalidated")
+	}
+	if sess, err := localStore.GetSession(sessionB); err != nil {
+		t.Fatalf("lookup session B: %v", err)
+	} else if sess != nil {
+		t.Fatal("expected session B to be invalidated")
+	}
+
+	if sess, err := localStore.GetSession(otherSession); err != nil {
+		t.Fatalf("lookup other session: %v", err)
+	} else if sess == nil {
+		t.Fatal("expected unrelated user session to remain active")
+	}
+}
+
 func sqlNullInt64(v int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: v, Valid: true}
 }

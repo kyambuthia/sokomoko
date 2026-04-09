@@ -52,14 +52,26 @@ func (s *Store) CleanupPasswordResetTokens() error {
 }
 
 func (s *Store) CreatePasswordResetToken(userID int, token string, expiresAt time.Time) error {
-	stmt, err := s.DB.Prepare("INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
+	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
-	_, err = stmt.Exec(hashOpaqueToken(token), userID, expiresAt)
-	return err
+	if _, err = tx.Exec("DELETE FROM password_reset_tokens WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+
+	if _, err = tx.Exec(
+		"INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)",
+		hashOpaqueToken(token), userID, expiresAt,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *Store) GetValidPasswordResetToken(token string) (*PasswordResetToken, error) {
