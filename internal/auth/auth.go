@@ -89,6 +89,7 @@ type StaffCredential struct {
 
 type AdminSetupPageData struct {
 	Title            string
+	Role             string
 	Message          string
 	Error            string
 	RecommendedStaff int
@@ -99,6 +100,7 @@ type AdminSetupPageData struct {
 
 type StaffSignupPageData struct {
 	Title    string
+	Role     string
 	Message  string
 	Error    string
 	ShowForm bool
@@ -457,6 +459,7 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := StaffSignupPageData{
 			Title:    "Staff Account Setup",
+			Role:     "admin",
 			ShowForm: true,
 		}
 
@@ -641,6 +644,7 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 
 		data := AdminSetupPageData{
 			Title:            "Initial Admin Setup",
+			Role:             "admin",
 			RecommendedStaff: recommendedStaff,
 			StaffRationale:   rationale,
 			ShowForm:         true,
