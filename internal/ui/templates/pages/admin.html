@@ -1,38 +1,13 @@
 {{ define "title" }}Admin – {{.Title}}{{ end }}
 
+{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
+
 {{ define "header-area" }}
-<header class="site-header header">
-  <div class="site-header__brand">
-    <p class="site-header__title site-title">SOKOMOKO ADMIN</p>
-    <p class="site-header__tagline site-tagline">Platform management</p>
-  </div>
-  <nav class="site-nav nav" data-nav>
-    <button
-      type="button"
-      class="site-nav__toggle nav__toggle"
-      data-nav-toggle
-      aria-expanded="false"
-      aria-controls="admin-site-nav"
-    >
-      Menu
-    </button>
-    <div class="site-nav__menu nav__menu" id="admin-site-nav" data-nav-menu>
-      <ul class="site-nav__list nav__list">
-        <li class="site-nav__item nav__item"><a href="/" class="site-nav__link nav__link {{if eq .Title "Admin Dashboard"}}active{{end}}">Dashboard</a></li>
-        <li class="site-nav__item nav__item"><a href="/products" class="site-nav__link nav__link {{if eq .Title "Product Management"}}active{{end}}">Products</a></li>
-        <li class="site-nav__item nav__item"><a href="/orders" class="site-nav__link nav__link {{if eq .Title "Order Management"}}active{{end}}">Orders</a></li>
-        <li class="site-nav__item nav__item"><a href="/reports" class="site-nav__link nav__link {{if eq .Title "Sales Reports"}}active{{end}}">Reports</a></li>
-        <li class="site-nav__item nav__item"><a href="/deliveries" class="site-nav__link nav__link {{if eq .Title "Delivery Management"}}active{{end}}">Deliveries</a></li>
-        {{if eq .Role "admin"}}
-        <li class="site-nav__item nav__item"><a href="/team" class="site-nav__link nav__link {{if eq .Title "Team Management"}}active{{end}}">Team</a></li>
-        <li class="site-nav__item nav__item"><a href="/audit" class="site-nav__link nav__link {{if eq .Title "Audit Log"}}active{{end}}">Audit</a></li>
-        <li class="site-nav__item nav__item"><a href="/staff/signup" class="site-nav__link nav__link">Staff Accounts</a></li>
-        {{end}}
-        <li class="site-nav__item nav__item"><a href="/" class="site-nav__link nav__link">Storefront</a></li>
-      </ul>
-    </div>
-  </nav>
-</header>
+{{ template "admin-header-area" . }}
+{{ end }}
+
+{{ define "nav-area" }}
+{{ template "admin-nav-area" . }}
 {{ end }}
 
 {{ define "main-area" }}
