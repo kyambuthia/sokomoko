@@ -131,8 +131,8 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 	}
 
 	res, err := tx.Exec(
-		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id) VALUES (?, ?, ?, ?, ?, ?)",
-		product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID,
+		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id, partner_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID, product.PartnerID,
 	)
 	if err != nil {
 		return 0, wrapProductCreateError(err)
@@ -171,13 +171,14 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 // GetProductByID retrieves a product by its ID
 func (s *Store) GetProductByID(id int) (*Product, error) {
 	row := s.DB.QueryRow(
-		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.created_at, p.updated_at, p.deleted_at
+		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.partner_id, u.username, p.created_at, p.updated_at, p.deleted_at
 		 FROM products p
 		 LEFT JOIN categories c ON p.category_id = c.id
+		 LEFT JOIN users u ON p.partner_id = u.id
 		 WHERE p.id = ? AND p.deleted_at IS NULL`, id)
 
 	product := &Product{}
-	var categoryName sql.NullString
+	var categoryName, partnerName sql.NullString
 	err := row.Scan(
 		&product.ID,
 		&product.Name,
@@ -187,6 +188,8 @@ func (s *Store) GetProductByID(id int) (*Product, error) {
 		&product.StockQuantity,
 		&categoryName,
 		&product.CategoryID,
+		&product.PartnerID,
+		&partnerName,
 		&product.CreatedAt,
 		&product.UpdatedAt,
 		&product.DeletedAt)
@@ -202,6 +205,9 @@ func (s *Store) GetProductByID(id int) (*Product, error) {
 
 	if categoryName.Valid {
 		product.Category = categoryName.String
+	}
+	if partnerName.Valid {
+		product.PartnerName = partnerName.String
 	}
 
 	images, err := s.GetProductImages(product.ID)
@@ -302,9 +308,10 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 	}
 
 	rows, err := s.DB.Query(
-		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.created_at, p.updated_at, p.deleted_at
+		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.partner_id, u.username, p.created_at, p.updated_at, p.deleted_at
 		 FROM products p
 		 LEFT JOIN categories c ON p.category_id = c.id
+		 LEFT JOIN users u ON p.partner_id = u.id
 		 WHERE (p.name LIKE ? OR p.description LIKE ?) AND p.deleted_at IS NULL
 		 ORDER BY p.name`,
 		"%"+query+"%", "%"+query+"%")
@@ -317,7 +324,7 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 	productIDs := []int{}
 	for rows.Next() {
 		product := Product{}
-		var categoryName sql.NullString
+		var categoryName, partnerName sql.NullString
 		err := rows.Scan(
 			&product.ID,
 			&product.Name,
@@ -327,6 +334,8 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 			&product.StockQuantity,
 			&categoryName,
 			&product.CategoryID,
+			&product.PartnerID,
+			&partnerName,
 			&product.CreatedAt,
 			&product.UpdatedAt,
 			&product.DeletedAt)
@@ -338,6 +347,9 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 
 		if categoryName.Valid {
 			product.Category = categoryName.String
+		}
+		if partnerName.Valid {
+			product.PartnerName = partnerName.String
 		}
 
 		products = append(products, product)
@@ -356,9 +368,10 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 // GetAllProducts retrieves all products from the database
 func (s *Store) GetAllProducts() ([]Product, error) {
 	rows, err := s.DB.Query(
-		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.created_at, p.updated_at, p.deleted_at
+		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.partner_id, u.username, p.created_at, p.updated_at, p.deleted_at
 		 FROM products p
 		 LEFT JOIN categories c ON p.category_id = c.id
+		 LEFT JOIN users u ON p.partner_id = u.id
 		 WHERE p.deleted_at IS NULL
 		 ORDER BY p.name`)
 	if err != nil {
@@ -370,7 +383,7 @@ func (s *Store) GetAllProducts() ([]Product, error) {
 	productIDs := []int{}
 	for rows.Next() {
 		product := Product{}
-		var categoryName sql.NullString
+		var categoryName, partnerName sql.NullString
 		err := rows.Scan(
 			&product.ID,
 			&product.Name,
@@ -380,6 +393,8 @@ func (s *Store) GetAllProducts() ([]Product, error) {
 			&product.StockQuantity,
 			&categoryName,
 			&product.CategoryID,
+			&product.PartnerID,
+			&partnerName,
 			&product.CreatedAt,
 			&product.UpdatedAt,
 			&product.DeletedAt)
@@ -389,6 +404,9 @@ func (s *Store) GetAllProducts() ([]Product, error) {
 
 		if categoryName.Valid {
 			product.Category = categoryName.String
+		}
+		if partnerName.Valid {
+			product.PartnerName = partnerName.String
 		}
 
 		products = append(products, product)

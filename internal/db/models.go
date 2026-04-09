@@ -41,6 +41,8 @@ type Product struct {
 	StockQuantity int
 	Category      string
 	CategoryID    sql.NullInt64
+	PartnerID     sql.NullInt64
+	PartnerName   string
 	Images        []ProductImage
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

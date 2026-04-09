@@ -64,6 +64,60 @@ func (s *Store) SeedAdmin() {
 	}
 }
 
+func (s *Store) SeedPartners() {
+	partners := []struct {
+		Username string
+		Email    string
+		Password string
+	}{
+		{Username: "urban_goods", Email: "urban@sokomoko.com", Password: "partnerpass123"},
+		{Username: "nature_supply", Email: "nature@sokomoko.com", Password: "partnerpass123"},
+		{Username: "desk_essentials", Email: "desk@sokomoko.com", Password: "partnerpass123"},
+		{Username: "home_craft", Email: "craft@sokomoko.com", Password: "partnerpass123"},
+	}
+
+	for _, p := range partners {
+		var count int
+		err := s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", p.Username).Scan(&count)
+		if err != nil {
+			log.Printf("Error checking for partner %s: %v", p.Username, err)
+			continue
+		}
+
+		if count > 0 {
+			continue
+		}
+
+		salt, err := generateSalt()
+		if err != nil {
+			log.Printf("Error generating salt for %s: %v", p.Username, err)
+			continue
+		}
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(p.Password+salt), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("Error hashing password for %s: %v", p.Username, err)
+			continue
+		}
+
+		user := User{
+			Username:     p.Username,
+			Email:        p.Email,
+			PasswordHash: string(hashedPassword),
+			Salt:         salt,
+			Role:         "partner",
+			Slug:         p.Username,
+		}
+
+		_, err = s.CreateUser(user)
+		if err != nil {
+			log.Printf("Error seeding partner %s: %v", p.Username, err)
+		} else {
+			log.Printf("Partner created: %s", p.Username)
+		}
+	}
+}
+
 func (s *Store) SeedInitialCatalog() {
 	if s == nil || s.DB == nil {
 		return
@@ -78,56 +132,205 @@ func (s *Store) SeedInitialCatalog() {
 		Category     string
 		CategorySlug string
 		ImageURL     string
+		Partner      string
 	}{
+		// Electronics - Urban Goods
 		{
-			Name:         "Wireless Earbuds Charging Case",
-			Slug:         "wireless-earbuds-charging-case",
-			Description:  "Compact wireless earbuds with charging case and balanced audio profile.",
-			Price:        89.99,
-			Stock:        42,
+			Name:         "Wireless Earbuds Pro",
+			Slug:         "wireless-earbuds-pro",
+			Description:  "Premium wireless earbuds with active noise cancellation and 24-hour battery life.",
+			Price:        149.99,
+			Stock:        35,
 			Category:     "Electronics",
 			CategorySlug: "electronics",
-			ImageURL:     "/static/images/white_wireless_earbuds_charging_case.png",
+			ImageURL:     "https://picsum.photos/seed/earbuds/400/400",
+			Partner:      "urban_goods",
 		},
 		{
-			Name:         "Over-Ear Headphones",
-			Slug:         "over-ear-headphones",
-			Description:  "Comfortable over-ear headphones for everyday listening and calls.",
-			Price:        129.00,
-			Stock:        33,
+			Name:         "Mechanical Keyboard",
+			Slug:         "mechanical-keyboard",
+			Description:  "Compact 75% mechanical keyboard with hot-swappable switches and RGB backlighting.",
+			Price:        89.00,
+			Stock:        22,
 			Category:     "Electronics",
 			CategorySlug: "electronics",
-			ImageURL:     "/static/images/black_over_ear_headphones.png",
+			ImageURL:     "https://picsum.photos/seed/keyboard/400/400",
+			Partner:      "urban_goods",
 		},
 		{
-			Name:         "Portable Bluetooth Speaker",
-			Slug:         "portable-bluetooth-speaker",
-			Description:  "Fabric-finish wireless speaker with clear mids and portable form factor.",
-			Price:        74.50,
-			Stock:        29,
+			Name:         "USB-C Hub 7-in-1",
+			Slug:         "usb-c-hub-7in1",
+			Description:  "Multi-port adapter with HDMI, USB-A, SD card reader, and ethernet.",
+			Price:        45.50,
+			Stock:        50,
 			Category:     "Electronics",
 			CategorySlug: "electronics",
-			ImageURL:     "/static/images/gray_fabric_bluetooth_speaker.png",
+			ImageURL:     "https://picsum.photos/seed/usbhub/400/400",
+			Partner:      "desk_essentials",
 		},
+
+		// Home & Kitchen - Nature Supply
 		{
-			Name:         "Electric Kettle",
-			Slug:         "electric-kettle",
-			Description:  "Stainless steel electric kettle suitable for daily tea and coffee prep.",
+			Name:         "Stainless Steel Kettle",
+			Slug:         "stainless-steel-kettle",
+			Description:  "1.7L electric kettle with auto-shutoff and boil-dry protection.",
 			Price:        49.99,
-			Stock:        26,
+			Stock:        40,
 			Category:     "Home & Kitchen",
 			CategorySlug: "home-kitchen",
-			ImageURL:     "/static/images/stainless_steel_electric_kettle.png",
+			ImageURL:     "https://picsum.photos/seed/kettle/400/400",
+			Partner:      "nature_supply",
 		},
 		{
-			Name:         "Adjustable Desk Lamp",
-			Slug:         "adjustable-desk-lamp",
-			Description:  "Adjustable desk lamp for focused workspace lighting.",
-			Price:        39.95,
-			Stock:        37,
-			Category:     "Home & Office",
-			CategorySlug: "home-office",
-			ImageURL:     "/static/images/black_adjustable_desk_lamp.png",
+			Name:         "Bamboo Cutting Board Set",
+			Slug:         "bamboo-cutting-board-set",
+			Description:  "Set of 3 organic bamboo boards with juice grooves and hanging holes.",
+			Price:        32.00,
+			Stock:        28,
+			Category:     "Home & Kitchen",
+			CategorySlug: "home-kitchen",
+			ImageURL:     "https://picsum.photos/seed/bamboo/400/400",
+			Partner:      "nature_supply",
+		},
+		{
+			Name:         "Ceramic Coffee Mug Set",
+			Slug:         "ceramic-mug-set",
+			Description:  "Handcrafted ceramic mugs in matte finish, set of 4.",
+			Price:        38.00,
+			Stock:        45,
+			Category:     "Home & Kitchen",
+			CategorySlug: "home-kitchen",
+			ImageURL:     "https://picsum.photos/seed/mugs/400/400",
+			Partner:      "home_craft",
+		},
+
+		// Desk & Office - Desk Essentials
+		{
+			Name:         "Adjustable Monitor Stand",
+			Slug:         "adjustable-monitor-stand",
+			Description:  "Bamboo monitor riser with drawer storage and adjustable height.",
+			Price:        65.00,
+			Stock:        30,
+			Category:     "Desk & Office",
+			CategorySlug: "desk-office",
+			ImageURL:     "https://picsum.photos/seed/monitorstand/400/400",
+			Partner:      "desk_essentials",
+		},
+		{
+			Name:         "LED Desk Lamp",
+			Slug:         "led-desk-lamp",
+			Description:  "Minimalist LED lamp with touch dimmer and USB charging port.",
+			Price:        55.00,
+			Stock:        38,
+			Category:     "Desk & Office",
+			CategorySlug: "desk-office",
+			ImageURL:     "https://picsum.photos/seed/lamp/400/400",
+			Partner:      "desk_essentials",
+		},
+		{
+			Name:         "Desk Organizer Set",
+			Slug:         "desk-organizer-set",
+			Description:  "Acrylic desktop organizer with pen holder, phone stand, and tray.",
+			Price:        28.50,
+			Stock:        55,
+			Category:     "Desk & Office",
+			CategorySlug: "desk-office",
+			ImageURL:     "https://picsum.photos/seed/organizer/400/400",
+			Partner:      "home_craft",
+		},
+
+		// Bags & Accessories - Urban Goods
+		{
+			Name:         "Canvas Laptop Backpack",
+			Slug:         "canvas-laptop-backpack",
+			Description:  "Water-resistant canvas backpack with padded laptop compartment.",
+			Price:        75.00,
+			Stock:        25,
+			Category:     "Bags & Accessories",
+			CategorySlug: "bags-accessories",
+			ImageURL:     "https://picsum.photos/seed/backpack/400/400",
+			Partner:      "urban_goods",
+		},
+		{
+			Name:         "Leather Messenger Bag",
+			Slug:         "leather-messenger-bag",
+			Description:  "Full-grain leather crossbody bag with antique brass hardware.",
+			Price:        125.00,
+			Stock:        15,
+			Category:     "Bags & Accessories",
+			CategorySlug: "bags-accessories",
+			ImageURL:     "https://picsum.photos/seed/messenger/400/400",
+			Partner:      "home_craft",
+		},
+		{
+			Name:         "Minimalist Wallet",
+			Slug:         "minimalist-wallet",
+			Description:  "Slim cardholder in vegetable-tanned leather, holds 8 cards.",
+			Price:        42.00,
+			Stock:        60,
+			Category:     "Bags & Accessories",
+			CategorySlug: "bags-accessories",
+			ImageURL:     "https://picsum.photos/seed/wallet/400/400",
+			Partner:      "urban_goods",
+		},
+
+		// Personal Care - Nature Supply
+		{
+			Name:         "Bamboo Toothbrush Set",
+			Slug:         "bamboo-toothbrush-set",
+			Description:  "Pack of 4 biodegradable bamboo toothbrushes with soft bristles.",
+			Price:        12.99,
+			Stock:        100,
+			Category:     "Personal Care",
+			CategorySlug: "personal-care",
+			ImageURL:     "https://picsum.photos/seed/toothbrush/400/400",
+			Partner:      "nature_supply",
+		},
+		{
+			Name:         "Natural Lip Balm Trio",
+			Slug:         "natural-lip-balm-trio",
+			Description:  "Organic beeswax lip balms in mint, lavender, and unscented.",
+			Price:        15.00,
+			Stock:        80,
+			Category:     "Personal Care",
+			CategorySlug: "personal-care",
+			ImageURL:     "https://picsum.photos/seed/lipbalm/400/400",
+			Partner:      "nature_supply",
+		},
+
+		// Stationery - Home Craft
+		{
+			Name:         "Leather Journal",
+			Slug:         "leather-journal",
+			Description:  "Handbound dotted journal with refillable pages and leather cover.",
+			Price:        35.00,
+			Stock:        40,
+			Category:     "Stationery",
+			CategorySlug: "stationery",
+			ImageURL:     "https://picsum.photos/seed/journal/400/400",
+			Partner:      "home_craft",
+		},
+		{
+			Name:         "Brass Pen Set",
+			Slug:         "brass-pen-set",
+			Description:  "Tactical-style ballpoint pens in solid brass, set of 2.",
+			Price:        48.00,
+			Stock:        30,
+			Category:     "Stationery",
+			CategorySlug: "stationery",
+			ImageURL:     "https://picsum.photos/seed/brasspen/400/400",
+			Partner:      "desk_essentials",
+		},
+		{
+			Name:         "Washi Tape Collection",
+			Slug:         "washi-tape-collection",
+			Description:  "Set of 6 botanical-themed washi tapes on wooden dispensers.",
+			Price:        22.00,
+			Stock:        65,
+			Category:     "Stationery",
+			CategorySlug: "stationery",
+			ImageURL:     "https://picsum.photos/seed/washitape/400/400",
+			Partner:      "home_craft",
 		},
 	}
 
@@ -138,7 +341,13 @@ func (s *Store) SeedInitialCatalog() {
 			continue
 		}
 
-		productID, existed, err := s.ensureProduct(item, categoryID)
+		partnerID, err := s.ensurePartner(item.Partner)
+		if err != nil {
+			log.Printf("Skipping seed product %s: failed to ensure partner: %v", item.Slug, err)
+			continue
+		}
+
+		productID, existed, err := s.ensureProduct(item, categoryID, partnerID)
 		if err != nil {
 			log.Printf("Skipping seed product %s: %v", item.Slug, err)
 			continue
@@ -150,7 +359,7 @@ func (s *Store) SeedInitialCatalog() {
 		}
 
 		if !existed {
-			log.Printf("Seeded product: %s", item.Name)
+			log.Printf("Seeded product: %s (by %s)", item.Name, item.Partner)
 		}
 	}
 }
@@ -181,6 +390,18 @@ func (s *Store) ensureCategory(name, slug string) (int64, error) {
 	return newID, nil
 }
 
+func (s *Store) ensurePartner(username string) (int64, error) {
+	var id int64
+	err := s.DB.QueryRow("SELECT id FROM users WHERE username = ? AND role = 'partner'", username).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+	return 0, nil
+}
+
 func (s *Store) ensureProduct(item struct {
 	Name         string
 	Slug         string
@@ -190,7 +411,8 @@ func (s *Store) ensureProduct(item struct {
 	Category     string
 	CategorySlug string
 	ImageURL     string
-}, categoryID int64) (int, bool, error) {
+	Partner      string
+}, categoryID int64, partnerID int64) (int, bool, error) {
 	var id int
 	err := s.DB.QueryRow("SELECT id FROM products WHERE slug = ? AND deleted_at IS NULL", item.Slug).Scan(&id)
 	if err == nil {
@@ -200,13 +422,22 @@ func (s *Store) ensureProduct(item struct {
 		return 0, false, err
 	}
 
+	var catID, pID sql.NullInt64
+	if categoryID > 0 {
+		catID = sql.NullInt64{Int64: categoryID, Valid: true}
+	}
+	if partnerID > 0 {
+		pID = sql.NullInt64{Int64: partnerID, Valid: true}
+	}
+
 	newID, err := s.CreateProduct(Product{
 		Name:          item.Name,
 		Slug:          item.Slug,
 		Description:   item.Description,
 		Price:         item.Price,
 		StockQuantity: item.Stock,
-		CategoryID:    sql.NullInt64{Int64: categoryID, Valid: true},
+		CategoryID:    catID,
+		PartnerID:     pID,
 	})
 	if err != nil {
 		return 0, false, err
@@ -217,8 +448,8 @@ func (s *Store) ensureProduct(item struct {
 func (s *Store) ensurePrimaryImage(productID int, imageURL string) error {
 	var existingCount int
 	err := s.DB.QueryRow(
-		"SELECT COUNT(*) FROM product_images WHERE product_id = ? AND url = ?",
-		productID, imageURL,
+		"SELECT COUNT(*) FROM product_images WHERE product_id = ?",
+		productID,
 	).Scan(&existingCount)
 	if err != nil {
 		return err

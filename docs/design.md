@@ -13,6 +13,7 @@ Use this document to extend the existing UI, not to replace it. The direction is
 - Default to white or warm off-white surfaces on neutral backgrounds.
 - Keep the UI legible without JavaScript. JavaScript may enhance, never gate, core tasks.
 - Reuse established primitives before adding new variants.
+- Compose storefront pages as ordered sections with reusable internal blocks rather than one long undifferentiated sheet.
 
 ### Mandatory principles
 
@@ -32,6 +33,7 @@ Use this document to extend the existing UI, not to replace it. The direction is
 - Borders are the primary separator.
 - Shadows are minimal and low-contrast.
 - Motion is brief and functional.
+- Commerce-first, not brochure-first: layouts should move users from discovery to trust to action with minimal friction.
 
 ### Implementation rules
 
@@ -40,6 +42,21 @@ Use this document to extend the existing UI, not to replace it. The direction is
 - Do not create a new component when a modifier on an existing block is enough.
 - Avoid deeply nested wrappers unless needed for layout or accessibility.
 - If a component needs JavaScript, define its no-JS fallback in markup first.
+
+### Shopify-inspired storefront rules
+
+Sokomoko can borrow structural patterns from Shopify themes, but should translate them into its own quieter visual system. The goal is not to imitate Shopify's styling literally. The goal is to adopt its strong section logic, content hierarchy, and conversion-aware layout discipline.
+
+- Purposeful sections: each homepage section must have a job, such as orientation, featured discovery, trust building, or conversion support.
+- Antifragile blocks: cards, media, and text blocks must still hold together with uneven copy length, inconsistent images, or missing optional data.
+- Flexible composition: pages should be assembled from reusable sections and smaller blocks, with a small number of predictable variants rather than many unrelated components.
+- Expressive storytelling: editorial sections are allowed, but they must support product discovery instead of interrupting it.
+- Intuitive flow: navigation, search, featured collections, and product entry points should be prominent and easy to scan.
+- Cohesive rhythm: spacing, heading scale, card proportions, and action placement should feel consistent across the full page.
+- Efficient purchase path: primary commerce actions should remain visible and low-friction, especially on mobile.
+- Proximity over dividers: use spacing, inset surfaces, and contrast to show relationships before adding more lines.
+- Hierarchy by weight: larger or darker elements should introduce the section; supporting metadata should recede.
+- Static anchors plus flexible blocks: each page may have a few fixed structural sections, but the interior of those sections should be made of repeatable block patterns.
 
 ## 2. Design Tokens
 
@@ -285,6 +302,52 @@ body {
 ## 3. Component Library
 
 All components below are opinionated defaults. Modifiers may simplify or mute a component; they must not change its underlying tone.
+
+### Page sections and blocks
+
+Sokomoko storefront pages should be built from sections first and blocks second.
+
+#### Section rules
+
+- A section is a page-level band with a clear purpose and its own internal spacing rhythm.
+- Each section needs one dominant idea only: hero, utility, featured collection, editorial story, reassurance, or process.
+- Homepage sections should stack in a deliberate order:
+  1. hero or lead-in
+  2. utility/discovery
+  3. featured product or collection section
+  4. supporting story or reassurance
+  5. process/trust close
+- Sections may contain multiple blocks, but blocks inside a section must support the same purpose.
+- Use alternating surfaces or inset containers to help adjacent sections read as separate without relying on heavy borders everywhere.
+
+#### Supported storefront sections
+
+- `hero`: high-level store promise, short supporting copy, and one or two actions.
+- `utility-bar`: search, filters, collection entry points, or other discovery tools.
+- `featured-collection`: section heading plus a curated product grid.
+- `editorial-split`: text on one side, media or value blocks on the other.
+- `multi-column-values`: small blocks for trust signals, category highlights, or shopping reasons.
+- `process-strip`: short step-by-step explanation of how shopping works.
+- `promo-band`: restrained announcement or emphasis area; use sparingly.
+
+#### Supported blocks inside sections
+
+- `section-heading`: eyebrow, title, supporting copy, optional action link.
+- `action-group`: one primary action plus one lower-emphasis secondary action.
+- `metric-chip`: short stat or reassurance item.
+- `value-block`: compact title, short explanation, optional icon or badge.
+- `media-block`: image-led supporting block with optional caption.
+- `product-card`: image, title, description, price, stock state, and action.
+- `process-step`: numbered or labeled step with one sentence of copy.
+
+#### Block composition rules
+
+- Prefer repeating one block type within a section instead of mixing many unrelated block styles.
+- Keep block APIs predictable: heading, copy, media, metadata, action.
+- Make one block visually dominant in a section; the rest should support it.
+- Product cards should remain compact and grid-friendly, not stretch into editorial layouts.
+- A block can be static in placement but flexible in content.
+- If a block adds commerce friction, remove it.
 
 ### Buttons
 

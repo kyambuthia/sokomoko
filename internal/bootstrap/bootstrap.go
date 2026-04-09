@@ -3,6 +3,7 @@ package bootstrap
 type store interface {
 	ApplySchema() error
 	SeedAdmin()
+	SeedPartners()
 	SeedInitialCatalog()
 }
 
@@ -26,6 +27,7 @@ func (s *Service) Seed() error {
 		return nil
 	}
 	s.store.SeedAdmin()
+	s.store.SeedPartners()
 	s.store.SeedInitialCatalog()
 	return nil
 }
