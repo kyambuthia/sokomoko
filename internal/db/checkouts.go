@@ -65,6 +65,15 @@ func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, erro
 		currency = "USD"
 	}
 
+	input.SubtotalAmount = RoundMoney(input.SubtotalAmount)
+	input.ShippingFee = RoundMoney(input.ShippingFee)
+	input.TaxAmount = RoundMoney(input.TaxAmount)
+	input.TotalAmount = RoundMoney(input.TotalAmount)
+	for i := range input.Lines {
+		input.Lines[i].UnitPrice = RoundMoney(input.Lines[i].UnitPrice)
+		input.Lines[i].LineTotal = RoundMoney(input.Lines[i].LineTotal)
+	}
+
 	expiresAt := input.ExpiresAt.UTC()
 	now := time.Now().UTC()
 	if expiresAt.IsZero() {
@@ -267,6 +276,10 @@ func getCheckoutByTokenQuerier(q checkoutQuerier, userID int, token string) (*Ch
 	if err != nil {
 		return nil, err
 	}
+	checkout.SubtotalAmount = RoundMoney(checkout.SubtotalAmount)
+	checkout.ShippingFee = RoundMoney(checkout.ShippingFee)
+	checkout.TaxAmount = RoundMoney(checkout.TaxAmount)
+	checkout.TotalAmount = RoundMoney(checkout.TotalAmount)
 	return checkout, nil
 }
 
@@ -307,6 +320,10 @@ func getLatestOpenCheckoutQuerier(q checkoutQuerier, userID int, now time.Time) 
 	if err != nil {
 		return nil, err
 	}
+	checkout.SubtotalAmount = RoundMoney(checkout.SubtotalAmount)
+	checkout.ShippingFee = RoundMoney(checkout.ShippingFee)
+	checkout.TaxAmount = RoundMoney(checkout.TaxAmount)
+	checkout.TotalAmount = RoundMoney(checkout.TotalAmount)
 	return checkout, nil
 }
 
@@ -340,6 +357,8 @@ func listCheckoutLinesByCheckoutIDQuerier(q checkoutQuerier, checkoutID int) ([]
 		); err != nil {
 			return nil, err
 		}
+		line.UnitPrice = RoundMoney(line.UnitPrice)
+		line.LineTotal = RoundMoney(line.LineTotal)
 		lines = append(lines, line)
 	}
 	return lines, rows.Err()

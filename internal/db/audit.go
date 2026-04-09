@@ -198,6 +198,7 @@ func (s *Store) ListAllOrders() ([]FulfillmentOrder, error) {
 		); err != nil {
 			return nil, err
 		}
+		order.TotalAmount = RoundMoney(order.TotalAmount)
 		orders = append(orders, order)
 		orderIDs = append(orderIDs, order.ID)
 	}
@@ -288,7 +289,7 @@ func (s *Store) SumOrderRevenue() (float64, error) {
 	if err := row.Scan(&total); err != nil {
 		return 0, err
 	}
-	return total, nil
+	return RoundMoney(total), nil
 }
 
 func (s *Store) CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error {

@@ -131,9 +131,10 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 		); err != nil {
 			return nil, 0, err
 		}
+		item.UnitPrice = RoundMoney(item.UnitPrice)
 		item.ProductImageURL = "/static/images/placeholder.png"
-		item.LineTotal = item.UnitPrice * float64(item.Quantity)
-		subtotal += item.LineTotal
+		item.LineTotal = RoundMoney(item.UnitPrice * float64(item.Quantity))
+		subtotal = RoundMoney(subtotal + item.LineTotal)
 		items = append(items, item)
 		productIDs = append(productIDs, item.ProductID)
 	}
@@ -147,7 +148,7 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 			items[i].ProductImageURL = imgs[0].URL
 		}
 	}
-	return items, subtotal, nil
+	return items, RoundMoney(subtotal), nil
 }
 
 func (s *Store) GetCartItemsForCheckout(userID int, reservationKey string) ([]CartItem, float64, error) {
@@ -205,9 +206,10 @@ func (s *Store) GetCartItemsForCheckout(userID int, reservationKey string) ([]Ca
 		); err != nil {
 			return nil, 0, err
 		}
+		item.UnitPrice = RoundMoney(item.UnitPrice)
 		item.ProductImageURL = "/static/images/placeholder.png"
-		item.LineTotal = item.UnitPrice * float64(item.Quantity)
-		subtotal += item.LineTotal
+		item.LineTotal = RoundMoney(item.UnitPrice * float64(item.Quantity))
+		subtotal = RoundMoney(subtotal + item.LineTotal)
 		items = append(items, item)
 		productIDs = append(productIDs, item.ProductID)
 	}
@@ -221,7 +223,7 @@ func (s *Store) GetCartItemsForCheckout(userID int, reservationKey string) ([]Ca
 			items[i].ProductImageURL = imgs[0].URL
 		}
 	}
-	return items, subtotal, rows.Err()
+	return items, RoundMoney(subtotal), rows.Err()
 }
 
 func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, error) {
@@ -240,6 +242,7 @@ func (s *Store) placeOrderFromCart(userID int, deliveryAddress string, totalAmou
 	if useCustomPricing && totalAmount < 0 {
 		return 0, ErrNegativeTotalAmount
 	}
+	totalAmount = RoundMoney(totalAmount)
 
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -268,6 +271,7 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 	if useCustomPricing && totalAmount < 0 {
 		return 0, ErrNegativeTotalAmount
 	}
+	totalAmount = RoundMoney(totalAmount)
 
 	var cartID int64
 	err := tx.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
@@ -304,11 +308,12 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 		if scanErr := rows.Scan(&line.ProductID, &line.ProductName, &line.Quantity, &line.UnitPrice, &line.StockQuantity); scanErr != nil {
 			return 0, scanErr
 		}
+		line.UnitPrice = RoundMoney(line.UnitPrice)
 		if line.Quantity > line.StockQuantity {
 			return 0, fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
 		}
 		lines = append(lines, line)
-		subtotal += line.UnitPrice * float64(line.Quantity)
+		subtotal = RoundMoney(subtotal + RoundMoney(line.UnitPrice*float64(line.Quantity)))
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -321,7 +326,7 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 		return 0, ErrCartEmpty
 	}
 
-	orderTotal := subtotal
+	orderTotal := RoundMoney(subtotal)
 	if useCustomPricing {
 		orderTotal = totalAmount
 	}
@@ -343,6 +348,8 @@ func placeOrderFromCartTx(tx *sql.Tx, userID int, deliveryAddress string, totalA
 }
 
 func createOrderWithLinesTx(tx *sql.Tx, userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, reservationKey string, lines []orderPlacementLine) (int64, error) {
+	totalAmount = RoundMoney(totalAmount)
+
 	res, err := tx.Exec(
 		`INSERT INTO orders (user_id, status, partner_status, delivery_status, total_amount, delivery_address, delivery_notice)
 		 VALUES (?, 'pending', 'new', 'queued', ?, ?, ?)`,
@@ -357,6 +364,8 @@ func createOrderWithLinesTx(tx *sql.Tx, userID int, deliveryAddress string, tota
 	}
 
 	for _, line := range lines {
+		line.UnitPrice = RoundMoney(line.UnitPrice)
+
 		if _, err = tx.Exec(
 			`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price)
 			 VALUES (?, ?, ?, ?, ?)`,
@@ -495,7 +504,8 @@ func (s *Store) listOrderItemsByOrderIDs(orderIDs []int) (map[int][]OrderItem, e
 		if err := rows.Scan(&orderID, &item.ProductID, &item.ProductName, &item.Quantity, &item.UnitPrice); err != nil {
 			return nil, err
 		}
-		item.LineTotal = item.UnitPrice * float64(item.Quantity)
+		item.UnitPrice = RoundMoney(item.UnitPrice)
+		item.LineTotal = RoundMoney(item.UnitPrice * float64(item.Quantity))
 		itemsByOrder[orderID] = append(itemsByOrder[orderID], item)
 	}
 	return itemsByOrder, nil
@@ -530,6 +540,7 @@ func (s *Store) ListOrdersByUser(userID int) ([]CustomerOrder, error) {
 		); err != nil {
 			return nil, err
 		}
+		order.TotalAmount = RoundMoney(order.TotalAmount)
 		orders = append(orders, order)
 		orderIDs = append(orderIDs, order.ID)
 	}

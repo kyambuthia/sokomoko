@@ -38,6 +38,8 @@ func (s *Store) GetProductBySlug(slug string) (*Product, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	product.Price = RoundMoney(product.Price)
 	if categoryName.Valid {
 		product.Category = categoryName.String
 	}

@@ -40,6 +40,7 @@ func (s *Store) GetCheckoutPlacementByIdempotency(userID int, idempotencyKey str
 	if err != nil {
 		return nil, err
 	}
+	placement.TotalAmount = RoundMoney(placement.TotalAmount)
 	placement.Reused = true
 	return &placement, nil
 }
@@ -75,6 +76,7 @@ func (s *Store) ListPaymentsByOrderID(orderID int) ([]Payment, error) {
 		); err != nil {
 			return nil, err
 		}
+		payment.Amount = RoundMoney(payment.Amount)
 		payments = append(payments, payment)
 	}
 	return payments, rows.Err()
@@ -88,6 +90,8 @@ func (s *Store) PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddr
 	if totalAmount < 0 {
 		return CheckoutPlacement{}, ErrNegativeTotalAmount
 	}
+	totalAmount = RoundMoney(totalAmount)
+	payment.Amount = RoundMoney(payment.Amount)
 
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -155,7 +159,7 @@ func (s *Store) PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddr
 	return CheckoutPlacement{
 		OrderID:     orderID,
 		PaymentID:   paymentID,
-		TotalAmount: payment.Amount,
+		TotalAmount: RoundMoney(payment.Amount),
 	}, nil
 }
 
@@ -258,12 +262,12 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 	}
 
 	payment.Method = strings.TrimSpace(payment.Method)
-	payment.Amount = checkout.TotalAmount
+	payment.Amount = RoundMoney(checkout.TotalAmount)
 	if strings.TrimSpace(payment.Currency) == "" {
 		payment.Currency = checkout.Currency
 	}
 
-	orderID, orderErr := createOrderWithLinesTx(tx, userID, address, checkout.TotalAmount, notice, key, orderLines)
+	orderID, orderErr := createOrderWithLinesTx(tx, userID, address, RoundMoney(checkout.TotalAmount), notice, key, orderLines)
 	if orderErr != nil {
 		return CheckoutPlacement{}, orderErr
 	}
@@ -313,7 +317,7 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 	return CheckoutPlacement{
 		OrderID:     orderID,
 		PaymentID:   paymentID,
-		TotalAmount: payment.Amount,
+		TotalAmount: RoundMoney(payment.Amount),
 	}, nil
 }
 
@@ -334,11 +338,14 @@ func getCheckoutPlacementTx(tx *sql.Tx, userID int, idempotencyKey string) (*Che
 	if err != nil {
 		return nil, err
 	}
+	placement.TotalAmount = RoundMoney(placement.TotalAmount)
 	placement.Reused = true
 	return &placement, nil
 }
 
 func createPaymentTx(tx *sql.Tx, orderID int64, userID int, payment PaymentRecordInput) (int64, error) {
+	payment.Amount = RoundMoney(payment.Amount)
+
 	paymentStmt, err := tx.Prepare(
 		`INSERT INTO payments (order_id, user_id, method, provider, status, currency, amount, external_reference)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -122,6 +122,8 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 		_ = tx.Rollback()
 	}()
 
+	product.Price = RoundMoney(product.Price)
+
 	res, err := tx.Exec(
 		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id) VALUES (?, ?, ?, ?, ?, ?)",
 		product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID,
@@ -190,6 +192,8 @@ func (s *Store) GetProductByID(id int) (*Product, error) {
 		return nil, err
 	}
 
+	product.Price = RoundMoney(product.Price)
+
 	if categoryName.Valid {
 		product.Category = categoryName.String
 	}
@@ -237,6 +241,7 @@ func (s *Store) UpdateProduct(product Product) error {
 		targetOnHand = 0
 	}
 	delta := targetOnHand - stock.OnHandQuantity
+	product.Price = RoundMoney(product.Price)
 
 	if _, err = tx.Exec(
 		`UPDATE inventory_stocks
@@ -322,6 +327,8 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		product.Price = RoundMoney(product.Price)
 
 		if categoryName.Valid {
 			product.Category = categoryName.String
