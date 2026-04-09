@@ -1,5 +1,15 @@
 {{ define "title" }}Initial Admin Setup{{ end }}
 
+{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
+
+{{ define "header-area" }}
+{{ template "admin-header-area" . }}
+{{ end }}
+
+{{ define "nav-area" }}
+{{ template "admin-nav-area" . }}
+{{ end }}
+
 {{ define "main-area" }}
 <section class="auth-panel auth-sheet">
   <header class="auth-panel__header">
