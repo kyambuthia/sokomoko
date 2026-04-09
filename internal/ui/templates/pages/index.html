@@ -2,20 +2,6 @@
 
 {{ define "main-area" }}
 <section class="catalog-page">
-  <header class="catalog-page__intro">
-    <h1 class="catalog-page__title">Featured Products</h1>
-    <p class="catalog-page__lead">Browse our collection of quality products. Use search to find exactly what you need.</p>
-  </header>
-
-  <ui-search-form
-    action="/search"
-    label="Search products"
-    placeholder="Search products..."
-    hint="Try product names, categories, or materials."
-    submit-label="Search"
-    show-clear="false"
-  ></ui-search-form>
-
   {{if .HasProducts}}
   <div class="product-list product-grid">
     {{range .Products}}
@@ -51,19 +37,8 @@
   </div>
   {{else}}
   <ui-alert variant="info">
-    <h3>No Products Available</h3>
-    <p>Check back later for new products from our sellers!</p>
+    <p>No products available. Check back soon.</p>
   </ui-alert>
   {{end}}
-
-  <section class="info-panel box">
-    <h2>How It Works</h2>
-    <ol>
-      <li><strong>Browse</strong> our selection of products</li>
-      <li><strong>Add items</strong> to your cart</li>
-      <li><strong>Checkout</strong> securely</li>
-      <li><strong>Receive</strong> your order</li>
-    </ol>
-  </section>
 </section>
 {{ end }}
