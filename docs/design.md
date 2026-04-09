@@ -837,45 +837,60 @@ All components below are opinionated defaults. Modifiers may simplify or mute a 
 }
 ```
 
+### Header
+
+#### Rules
+
+- Header and navigation are separate layout primitives. Do not hard-wire nav markup into the brand block.
+- The header owns brand, context, and lightweight utility copy only.
+- Default storefront header stays compact and top-aligned.
+- Workspace headers may pair with a left or right rail nav, but the header itself should remain shallow.
+
 ### Navigation
 
 #### Rules
 
-- Navigation lives in the top header area only.
+- Navigation is a modular component with one semantic structure and placement modifiers.
+- Supported placements are `top`, `bottom`, `left`, and `right`.
+- Supported attachment modes are `static`, `sticky`, `fixed`, and `floating`.
+- Storefront default is `top`.
+- Admin and partner workspaces may use `left` or `right` rails when information density justifies it.
 - Mobile uses a toggle button that reveals the same link list.
 - The nav must be usable without JS. JS may collapse it on small screens after load.
 - Logged-out and logged-in states should share the same structure so orientation does not change drastically.
+- Placement changes must not require a different DOM shape.
 
 #### Required behavior
 
-- Brand at top.
+- Brand or context label near the nav.
 - Primary links.
-- Auth-aware links or actions.
+- Secondary/auth cluster when needed.
 - Active state indicator.
-- Toggle button on small screens.
+- Toggle button on small screens or constrained rails.
+- Shared element names across all placements.
 
 ```css
-.site-nav {
+.nav-shell--top .site-nav {
   display: grid;
   gap: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: var(--border-thin) solid var(--color-border-default);
 }
 
-.site-nav__toggle {
-  justify-self: start;
-}
-
-.site-nav__list {
-  display: flex;
+.nav--left .site-nav__list,
+.nav--right .site-nav__list {
   flex-direction: column;
+}
+
+.site-nav__list,
+.nav__list {
+  display: flex;
   gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.site-nav__link {
+.site-nav__link,
+.nav__link {
   display: inline-flex;
   align-items: center;
   min-height: 2.25rem;
@@ -896,7 +911,8 @@ All components below are opinionated defaults. Modifiers may simplify or mute a 
 }
 
 @media (min-width: 40rem) {
-  .site-nav__list {
+  .nav--top .site-nav__list,
+  .nav--bottom .site-nav__list {
     flex-direction: row;
     flex-wrap: wrap;
   }
