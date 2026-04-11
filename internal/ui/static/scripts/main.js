@@ -331,6 +331,574 @@ class UISwitch extends HTMLElement {
   }
 }
 
+// ---------------------------------------------------------------------------
+// UIToast — shadow DOM toast notification
+// ---------------------------------------------------------------------------
+
+class UIToast extends HTMLElement {
+  static get observedAttributes() {
+    return ["variant", "message", "duration"];
+  }
+
+  constructor() {
+    super();
+    this.root = this.attachShadow({ mode: "open" });
+  }
+
+  connectedCallback() {
+    this.render();
+    const duration = parseInt(this.getAttribute("duration") || "4000", 10);
+    if (duration > 0) {
+      setTimeout(() => this.dismiss(), duration);
+    }
+  }
+
+  attributeChangedCallback() {
+    this.render();
+  }
+
+  dismiss() {
+    this.classList.add("is-dismissing");
+    setTimeout(() => this.remove(), 300);
+  }
+
+  render() {
+    const variant = (this.getAttribute("variant") || "info").toLowerCase();
+    const message = this.getAttribute("message") || "";
+
+    const palettes = {
+      info: {
+        border: "var(--color-info-border, #b7cada)",
+        bg: "var(--color-info-soft, #eef5fa)",
+        text: "var(--color-info, #32516a)",
+      },
+      success: {
+        border: "var(--color-success-border, #9ebda8)",
+        bg: "var(--color-success-soft, #edf7f0)",
+        text: "var(--color-success, #24563a)",
+      },
+      warning: {
+        border: "var(--color-warning-border, #d3be8d)",
+        bg: "var(--color-warning-soft, #faf4e6)",
+        text: "var(--color-warning, #6d571b)",
+      },
+      danger: {
+        border: "var(--color-danger-border, #d7aaaa)",
+        bg: "var(--color-danger-soft, #fbefef)",
+        text: "var(--color-danger, #7b2929)",
+      },
+    };
+
+    const palette = palettes[variant] || palettes.info;
+    const ariaLive = variant === "danger" ? "assertive" : "polite";
+    const role = variant === "danger" ? "alert" : "status";
+
+    this.root.innerHTML = `
+      <style>
+        :host {
+          display: block;
+          animation: toast-in var(--transition-base, 220ms) var(--ease-emphasized, cubic-bezier(0.2, 0, 0, 1));
+        }
+
+        :host(.is-dismissing) {
+          animation: toast-out var(--transition-slow, 300ms) var(--ease-exit, ease-in) forwards;
+        }
+
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateX(1rem); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes toast-out {
+          from { opacity: 1; transform: translateX(0); }
+          to   { opacity: 0; transform: translateX(1rem); }
+        }
+
+        .toast {
+          display: flex;
+          align-items: flex-start;
+          gap: var(--space-3, 0.75rem);
+          padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+          border: 1px solid ${palette.border};
+          border-radius: var(--radius-md, 0.625rem);
+          background: ${palette.bg};
+          color: ${palette.text};
+          box-shadow: 0 2px 8px var(--shadow-color, rgb(31 29 25 / 0.1));
+          font: inherit;
+          width: 100%;
+        }
+
+        .toast__message {
+          flex: 1;
+          font-size: var(--font-size-sm, 0.875rem);
+          line-height: var(--line-height-base, 1.55);
+        }
+
+        .toast__close {
+          flex-shrink: 0;
+          appearance: none;
+          background: none;
+          border: none;
+          padding: 0;
+          margin: 0;
+          cursor: pointer;
+          color: inherit;
+          opacity: 0.65;
+          font-size: 0.9rem;
+          line-height: 1;
+          font-family: inherit;
+        }
+
+        .toast__close:hover {
+          opacity: 1;
+        }
+
+        .toast__close:focus-visible {
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
+          border-radius: 2px;
+        }
+      </style>
+      <div class="toast" role="${role}" aria-live="${ariaLive}">
+        <span class="toast__message">${escapeHTML(message)}</span>
+        <button class="toast__close" aria-label="Dismiss notification">✕</button>
+      </div>
+    `;
+
+    this.root.querySelector(".toast__close")?.addEventListener("click", () => this.dismiss());
+  }
+}
+
+// Global toast API: UIToast.show / .success / .danger / .warning / .info
+const UIToastManager = {
+  _container: null,
+
+  _getContainer() {
+    if (!this._container || !document.body.contains(this._container)) {
+      this._container = document.createElement("div");
+      this._container.className = "ui-toast-container";
+      this._container.setAttribute("aria-label", "Notifications");
+      document.body.appendChild(this._container);
+    }
+    return this._container;
+  },
+
+  show(message, variant = "info", duration = 4000) {
+    const toast = document.createElement("ui-toast");
+    toast.setAttribute("message", message);
+    toast.setAttribute("variant", variant);
+    toast.setAttribute("duration", String(duration));
+    this._getContainer().appendChild(toast);
+    return toast;
+  },
+
+  success(message, duration) { return this.show(message, "success", duration); },
+  danger(message, duration) { return this.show(message, "danger", duration); },
+  warning(message, duration) { return this.show(message, "warning", duration); },
+  info(message, duration) { return this.show(message, "info", duration); },
+};
+
+window.UIToast = UIToastManager;
+
+// ---------------------------------------------------------------------------
+// UIDialog — shadow DOM modal dialog with backdrop
+// ---------------------------------------------------------------------------
+
+class UIDialog extends HTMLElement {
+  static get observedAttributes() {
+    return ["open", "title"];
+  }
+
+  constructor() {
+    super();
+    this.root = this.attachShadow({ mode: "open" });
+    this._handleKeydown = this._handleKeydown.bind(this);
+  }
+
+  connectedCallback() {
+    this.render();
+  }
+
+  attributeChangedCallback(name) {
+    this.render();
+    if (name === "open") {
+      if (this.hasAttribute("open")) {
+        document.addEventListener("keydown", this._handleKeydown);
+        document.body.style.overflow = "hidden";
+        requestAnimationFrame(() => {
+          this.root.querySelector(".dialog")?.focus();
+        });
+      } else {
+        document.removeEventListener("keydown", this._handleKeydown);
+        document.body.style.removeProperty("overflow");
+      }
+    }
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener("keydown", this._handleKeydown);
+    document.body.style.removeProperty("overflow");
+  }
+
+  _handleKeydown(e) {
+    if (e.key === "Escape") this.close();
+  }
+
+  open() {
+    this.setAttribute("open", "");
+    this.dispatchEvent(new CustomEvent("ui-open", { bubbles: true }));
+  }
+
+  close() {
+    this.removeAttribute("open");
+    this.dispatchEvent(new CustomEvent("ui-close", { bubbles: true }));
+  }
+
+  render() {
+    const isOpen = this.hasAttribute("open");
+    const title = this.getAttribute("title") || "";
+
+    this.root.innerHTML = `
+      <style>
+        :host {
+          display: ${isOpen ? "block" : "none"};
+        }
+
+        .backdrop {
+          position: fixed;
+          inset: 0;
+          background: var(--color-overlay, rgb(31 29 25 / 0.5));
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: var(--space-4, 1rem);
+          animation: backdrop-in var(--transition-base, 220ms) var(--ease-standard, ease-in-out);
+        }
+
+        @keyframes backdrop-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+
+        .dialog {
+          position: relative;
+          background: var(--color-bg-elevated, #fff);
+          border: 1px solid var(--color-border-default, #d7d0c3);
+          border-radius: var(--radius-lg, 0.875rem);
+          box-shadow: 0 8px 32px var(--shadow-color, rgb(31 29 25 / 0.12));
+          width: min(36rem, 95vw);
+          max-height: 90vh;
+          overflow-y: auto;
+          animation: dialog-in var(--transition-base, 220ms) var(--ease-emphasized, cubic-bezier(0.2, 0, 0, 1));
+        }
+
+        @keyframes dialog-in {
+          from { opacity: 0; transform: scale(0.96) translateY(-0.5rem); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .dialog__header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-4, 1rem);
+          padding: var(--space-4, 1rem) var(--space-5, 1.25rem);
+          border-bottom: 1px solid var(--color-border-subtle, #e6dfd3);
+          background: var(--color-bg-surface-muted, #f7f3eb);
+          border-radius: var(--radius-lg, 0.875rem) var(--radius-lg, 0.875rem) 0 0;
+        }
+
+        .dialog__title {
+          margin: 0;
+          font-size: var(--font-size-base, 0.96875rem);
+          font-weight: var(--font-weight-semibold, 600);
+          color: var(--color-fg-primary, #1f1d19);
+        }
+
+        .dialog__close {
+          appearance: none;
+          background: none;
+          border: 1px solid transparent;
+          padding: var(--space-1, 0.25rem) var(--space-2, 0.5rem);
+          margin: 0;
+          cursor: pointer;
+          color: var(--color-fg-muted, #726b5f);
+          font-size: 1rem;
+          line-height: 1;
+          border-radius: var(--radius-sm, 0.375rem);
+          font-family: inherit;
+          transition: background var(--transition-fast, 150ms);
+        }
+
+        .dialog__close:hover {
+          background: var(--color-bg-surface, #fffdfa);
+          color: var(--color-fg-primary, #1f1d19);
+          border-color: var(--color-border-default, #d7d0c3);
+        }
+
+        .dialog__close:focus-visible {
+          outline: 2px solid var(--color-focus-ring, #d9e5ef);
+          outline-offset: 2px;
+        }
+
+        .dialog__body {
+          padding: var(--space-5, 1.25rem);
+          color: var(--color-fg-primary, #1f1d19);
+          font-size: var(--font-size-base, 0.96875rem);
+          line-height: var(--line-height-base, 1.55);
+        }
+
+        .dialog__footer {
+          padding: var(--space-4, 1rem) var(--space-5, 1.25rem);
+          border-top: 1px solid var(--color-border-subtle, #e6dfd3);
+          background: var(--color-bg-surface-muted, #f7f3eb);
+          border-radius: 0 0 var(--radius-lg, 0.875rem) var(--radius-lg, 0.875rem);
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-3, 0.75rem);
+          justify-content: flex-end;
+        }
+
+        .dialog__footer:empty {
+          display: none;
+        }
+      </style>
+      <div class="backdrop" role="presentation">
+        <div
+          class="dialog"
+          role="dialog"
+          aria-modal="true"
+          ${title ? `aria-labelledby="ui-dialog-title"` : ""}
+          tabindex="-1"
+        >
+          <div class="dialog__header">
+            ${title ? `<h2 id="ui-dialog-title" class="dialog__title">${escapeHTML(title)}</h2>` : "<span></span>"}
+            <button class="dialog__close" aria-label="Close dialog">✕</button>
+          </div>
+          <div class="dialog__body">
+            <slot></slot>
+          </div>
+          <div class="dialog__footer">
+            <slot name="footer"></slot>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.root.querySelector(".backdrop")?.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) this.close();
+    });
+
+    this.root.querySelector(".dialog__close")?.addEventListener("click", () => this.close());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UIQuantity — light DOM quantity stepper (form-participates natively)
+// ---------------------------------------------------------------------------
+
+class UIQuantity extends HTMLElement {
+  static get observedAttributes() {
+    return ["value", "min", "max", "step", "disabled", "name"];
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  attributeChangedCallback() {
+    if (this.isConnected) this._render();
+  }
+
+  _render() {
+    const value = parseInt(this.getAttribute("value") || "1", 10);
+    const min = parseInt(this.getAttribute("min") || "1", 10);
+    const max = parseInt(this.getAttribute("max") || "999", 10);
+    const step = parseInt(this.getAttribute("step") || "1", 10);
+    const disabled = this.hasAttribute("disabled");
+    const name = this.getAttribute("name") || "quantity";
+
+    this.innerHTML = `
+      <div class="quantity-stepper">
+        <button
+          class="quantity-stepper__btn"
+          type="button"
+          aria-label="Decrease quantity"
+          data-action="dec"
+          ${value <= min || disabled ? "disabled" : ""}
+        >−</button>
+        <input
+          class="quantity-stepper__input"
+          type="number"
+          name="${escapeHTML(name)}"
+          value="${value}"
+          min="${min}"
+          max="${max}"
+          step="${step}"
+          ${disabled ? "disabled" : ""}
+          aria-label="Quantity"
+        />
+        <button
+          class="quantity-stepper__btn"
+          type="button"
+          aria-label="Increase quantity"
+          data-action="inc"
+          ${value >= max || disabled ? "disabled" : ""}
+        >+</button>
+      </div>
+    `;
+
+    const input = this.querySelector(".quantity-stepper__input");
+    const decBtn = this.querySelector('[data-action="dec"]');
+    const incBtn = this.querySelector('[data-action="inc"]');
+
+    const syncButtons = (v) => {
+      if (decBtn) decBtn.disabled = v <= min || disabled;
+      if (incBtn) incBtn.disabled = v >= max || disabled;
+    };
+
+    decBtn?.addEventListener("click", () => {
+      let v = parseInt(input.value, 10) - step;
+      v = Math.max(min, v);
+      input.value = v;
+      this.setAttribute("value", String(v));
+      syncButtons(v);
+      this.dispatchEvent(new CustomEvent("change", { bubbles: true, detail: { value: v } }));
+    });
+
+    incBtn?.addEventListener("click", () => {
+      let v = parseInt(input.value, 10) + step;
+      v = Math.min(max, v);
+      input.value = v;
+      this.setAttribute("value", String(v));
+      syncButtons(v);
+      this.dispatchEvent(new CustomEvent("change", { bubbles: true, detail: { value: v } }));
+    });
+
+    input?.addEventListener("input", () => {
+      let v = parseInt(input.value, 10);
+      if (!isNaN(v)) {
+        v = Math.max(min, Math.min(max, v));
+        input.value = v;
+        this.setAttribute("value", String(v));
+        syncButtons(v);
+        this.dispatchEvent(new CustomEvent("change", { bubbles: true, detail: { value: v } }));
+      }
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UIBadge — light DOM badge; applies .badge + variant class to host element
+// ---------------------------------------------------------------------------
+
+class UIBadge extends HTMLElement {
+  static get observedAttributes() {
+    return ["variant", "label"];
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  attributeChangedCallback() {
+    if (this.isConnected) this._render();
+  }
+
+  _render() {
+    const variant = this.getAttribute("variant") || "default";
+    const label = this.getAttribute("label");
+
+    const variantClass = variant !== "default" ? `badge--${variant}` : "";
+    this.className = ["badge", variantClass].filter(Boolean).join(" ");
+
+    if (label !== null) {
+      this.textContent = label;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UIBreadcrumb — light DOM breadcrumb nav from JSON `items` attribute
+// items: [{ label: string, href?: string }]
+// ---------------------------------------------------------------------------
+
+class UIBreadcrumb extends HTMLElement {
+  static get observedAttributes() {
+    return ["items"];
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  attributeChangedCallback() {
+    if (this.isConnected) this._render();
+  }
+
+  _render() {
+    let items = [];
+    try {
+      items = JSON.parse(this.getAttribute("items") || "[]");
+    } catch {
+      return;
+    }
+
+    const listItems = items
+      .map((item, i) => {
+        const isLast = i === items.length - 1;
+        if (isLast) {
+          return `<li class="breadcrumb__item breadcrumb__item--current" aria-current="page">${escapeHTML(item.label)}</li>`;
+        }
+        return `<li class="breadcrumb__item"><a class="breadcrumb__link" href="${escapeHTML(item.href || "#")}">${escapeHTML(item.label)}</a></li>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <ol class="breadcrumb__list">${listItems}</ol>
+      </nav>
+    `;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UIPrice — light DOM price display with optional strikethrough original
+// ---------------------------------------------------------------------------
+
+class UIPrice extends HTMLElement {
+  static get observedAttributes() {
+    return ["amount", "currency", "original", "size"];
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  attributeChangedCallback() {
+    if (this.isConnected) this._render();
+  }
+
+  _render() {
+    const amount = parseFloat(this.getAttribute("amount") || "0");
+    const currency = this.getAttribute("currency") || "USD";
+    const originalAttr = this.getAttribute("original");
+    const size = this.getAttribute("size") || "base";
+
+    const fmt = (v) =>
+      new Intl.NumberFormat("en-US", { style: "currency", currency }).format(v);
+
+    const hasDiscount =
+      originalAttr !== null && parseFloat(originalAttr) > amount;
+
+    this.className = `price price--${size}`;
+    this.innerHTML = hasDiscount
+      ? `<span class="price__current">${escapeHTML(fmt(amount))}</span><del class="price__original">${escapeHTML(fmt(parseFloat(originalAttr)))}</del>`
+      : `<span class="price__current">${escapeHTML(fmt(amount))}</span>`;
+  }
+}
+
 if (!customElements.get("ui-alert")) {
   customElements.define("ui-alert", UIAlert);
 }
@@ -345,6 +913,30 @@ if (!customElements.get("ui-search-form")) {
 
 if (!customElements.get("ui-switch")) {
   customElements.define("ui-switch", UISwitch);
+}
+
+if (!customElements.get("ui-toast")) {
+  customElements.define("ui-toast", UIToast);
+}
+
+if (!customElements.get("ui-dialog")) {
+  customElements.define("ui-dialog", UIDialog);
+}
+
+if (!customElements.get("ui-quantity")) {
+  customElements.define("ui-quantity", UIQuantity);
+}
+
+if (!customElements.get("ui-badge")) {
+  customElements.define("ui-badge", UIBadge);
+}
+
+if (!customElements.get("ui-breadcrumb")) {
+  customElements.define("ui-breadcrumb", UIBreadcrumb);
+}
+
+if (!customElements.get("ui-price")) {
+  customElements.define("ui-price", UIPrice);
 }
 
 function escapeHTML(value) {
