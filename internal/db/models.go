@@ -2,8 +2,68 @@ package db
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
+
+const DefaultProductImageURL = "/static/images/gray_fabric_bluetooth_speaker.png"
+
+var bundledProductImageURLs = []string{
+	"/static/images/black_adjustable_desk_lamp.png",
+	"/static/images/black_over_ear_headphones.png",
+	"/static/images/gray_fabric_bluetooth_speaker.png",
+	"/static/images/iphone_category_card.png",
+	"/static/images/product_tv.png",
+	"/static/images/stainless_steel_electric_kettle.png",
+	"/static/images/white_wireless_earbuds_charging_case.png",
+}
+
+// ResolveProductImageURL normalizes product image URLs to bundled local assets.
+func ResolveProductImageURL(rawURL, slug, name, category string) string {
+	cleanURL := strings.TrimSpace(rawURL)
+	switch {
+	case cleanURL == "":
+		return fallbackProductImageURL(slug, name, category)
+	case strings.HasPrefix(cleanURL, "data:"):
+		return cleanURL
+	case strings.HasPrefix(cleanURL, "/"):
+		return cleanURL
+	case strings.HasPrefix(cleanURL, "static/"):
+		return "/" + cleanURL
+	case strings.HasPrefix(cleanURL, "http://"), strings.HasPrefix(cleanURL, "https://"):
+		return fallbackProductImageURL(slug, name, category)
+	default:
+		return "/" + strings.TrimLeft(cleanURL, "/")
+	}
+}
+
+func fallbackProductImageURL(slug, name, category string) string {
+	descriptor := strings.ToLower(strings.TrimSpace(strings.Join([]string{slug, name, category}, " ")))
+	switch {
+	case strings.Contains(descriptor, "earbud"):
+		return "/static/images/white_wireless_earbuds_charging_case.png"
+	case strings.Contains(descriptor, "headphone"):
+		return "/static/images/black_over_ear_headphones.png"
+	case strings.Contains(descriptor, "speaker"):
+		return "/static/images/gray_fabric_bluetooth_speaker.png"
+	case strings.Contains(descriptor, "lamp"):
+		return "/static/images/black_adjustable_desk_lamp.png"
+	case strings.Contains(descriptor, "kettle"):
+		return "/static/images/stainless_steel_electric_kettle.png"
+	case strings.Contains(descriptor, "tv"), strings.Contains(descriptor, "television"), strings.Contains(descriptor, "monitor"):
+		return "/static/images/product_tv.png"
+	}
+
+	if descriptor == "" {
+		return DefaultProductImageURL
+	}
+
+	sum := 0
+	for _, r := range descriptor {
+		sum += int(r)
+	}
+	return bundledProductImageURLs[sum%len(bundledProductImageURLs)]
+}
 
 // User represents a user in the system
 type User struct {
@@ -51,10 +111,11 @@ type Product struct {
 
 // GetPrimaryImageURL returns the first image URL or a placeholder
 func (p Product) GetPrimaryImageURL() string {
+	imageURL := ""
 	if len(p.Images) > 0 {
-		return p.Images[0].URL
+		imageURL = p.Images[0].URL
 	}
-	return "/static/images/placeholder.png"
+	return ResolveProductImageURL(imageURL, p.Slug, p.Name, p.Category)
 }
 
 // ProductImage represents an image for a product
