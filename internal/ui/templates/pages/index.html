@@ -13,11 +13,11 @@
         <h3 class="product-tile__name product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
         <p class="product-tile__description product-card__description">{{.Description}}</p>
         <div class="product-card__meta">
-          <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
+          <ui-price amount="{{printf "%.2f" .Price}}" class="product-card__price"></ui-price>
           {{if .StockQuantity}}
-          <p class="stock-state stock-state--in">{{.StockQuantity}} in stock</p>
+          <ui-badge variant="success" label="In stock"></ui-badge>
           {{else}}
-          <p class="stock-state stock-state--out">Out of stock</p>
+          <ui-badge variant="danger" label="Out of stock"></ui-badge>
           {{end}}
         </div>
         <div class="product-tile__footer product-card__footer">
