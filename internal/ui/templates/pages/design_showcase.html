@@ -4,33 +4,196 @@
 <section class="catalog-page">
   <header class="catalog-page__intro">
     <h1 class="catalog-page__title">Design Showcase</h1>
-    <p class="catalog-page__lead">Reference components for the paper-style UI system.</p>
+    <p class="catalog-page__lead">Reference components for the Sokomoko paper-style UI system.</p>
   </header>
 
+  <!-- Breadcrumb -->
+  <section class="panel card">
+    <div class="card__header"><h3>Breadcrumb <code>&lt;ui-breadcrumb&gt;</code></h3></div>
+    <div class="card__body">
+      <ui-breadcrumb items='[{"label":"Home","href":"/"},{"label":"Products","href":"/products"},{"label":"Notebook A5"}]'></ui-breadcrumb>
+      <ui-breadcrumb items='[{"label":"Home","href":"/"},{"label":"Account"}]'></ui-breadcrumb>
+    </div>
+  </section>
+
+  <!-- Badges -->
+  <section class="panel card">
+    <div class="card__header"><h3>Badges <code>&lt;ui-badge&gt;</code></h3></div>
+    <div class="card__body">
+      <div class="partner-actions" style="flex-wrap:wrap; align-items:center;">
+        <ui-badge variant="default" label="Default"></ui-badge>
+        <ui-badge variant="success" label="In stock"></ui-badge>
+        <ui-badge variant="warning" label="Low stock"></ui-badge>
+        <ui-badge variant="danger" label="Out of stock"></ui-badge>
+        <ui-badge variant="info" label="Info"></ui-badge>
+        <ui-badge variant="accent" label="Accent"></ui-badge>
+      </div>
+    </div>
+  </section>
+
+  <!-- Price -->
+  <section class="panel card">
+    <div class="card__header"><h3>Price <code>&lt;ui-price&gt;</code></h3></div>
+    <div class="card__body">
+      <div style="display:flex; flex-direction:column; gap:var(--space-3);">
+        <div>
+          <p class="form__hint mb-1">Standard price</p>
+          <ui-price amount="29.99"></ui-price>
+        </div>
+        <div>
+          <p class="form__hint mb-1">Discounted price with original</p>
+          <ui-price amount="19.99" original="29.99"></ui-price>
+        </div>
+        <div>
+          <p class="form__hint mb-1">Non-USD currency</p>
+          <ui-price amount="2499" currency="KES"></ui-price>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quantity Stepper -->
+  <section class="panel card">
+    <div class="card__header"><h3>Quantity Stepper <code>&lt;ui-quantity&gt;</code></h3></div>
+    <div class="card__body">
+      <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+        <div>
+          <p class="form__hint mb-1">Default (min 1, max 10)</p>
+          <form action="#" method="GET" data-no-submit-state>
+            <ui-quantity name="qty" value="1" min="1" max="10"></ui-quantity>
+          </form>
+        </div>
+        <div>
+          <p class="form__hint mb-1">Disabled</p>
+          <ui-quantity name="qty_disabled" value="3" min="1" max="10" disabled></ui-quantity>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Alerts (existing component) -->
+  <section class="panel card">
+    <div class="card__header"><h3>Alerts <code>&lt;ui-alert&gt;</code></h3></div>
+    <div class="card__body" style="display:flex; flex-direction:column; gap:var(--space-3);">
+      <ui-alert variant="info" title="Info"><p>Something informational to note here.</p></ui-alert>
+      <ui-alert variant="success" title="Success"><p>Your changes have been saved successfully.</p></ui-alert>
+      <ui-alert variant="warning" title="Warning"><p>Low stock — only 3 items remaining.</p></ui-alert>
+      <ui-alert variant="danger" title="Error"><p>Unable to process your request. Please try again.</p></ui-alert>
+    </div>
+  </section>
+
+  <!-- Switch (existing component) -->
+  <section class="panel card">
+    <div class="card__header"><h3>Switch <code>&lt;ui-switch&gt;</code></h3></div>
+    <div class="card__body" style="display:flex; flex-direction:column; gap:var(--space-4);">
+      <ui-switch label="Notifications"></ui-switch>
+      <ui-switch label="Dark mode" checked></ui-switch>
+      <ui-switch label="Disabled" disabled></ui-switch>
+      <div style="display:flex; gap:var(--space-4); align-items:center;">
+        <ui-switch size="sm" label="Small"></ui-switch>
+        <ui-switch label="Default"></ui-switch>
+        <ui-switch size="lg" label="Large"></ui-switch>
+      </div>
+    </div>
+  </section>
+
+  <!-- Toast (new component) -->
+  <section class="panel card">
+    <div class="card__header"><h3>Toast <code>&lt;ui-toast&gt;</code></h3></div>
+    <div class="card__body">
+      <p class="form__hint mb-2">Click to fire a toast notification. Uses the global <code>UIToast</code> API.</p>
+      <div class="partner-actions" style="flex-wrap:wrap;">
+        <button class="btn btn--secondary" type="button" onclick="UIToast.info('Item added to your cart.')">Info toast</button>
+        <button class="btn btn--secondary" type="button" onclick="UIToast.success('Order placed successfully!')">Success toast</button>
+        <button class="btn btn--secondary" type="button" onclick="UIToast.warning('Stock is running low.')">Warning toast</button>
+        <button class="btn btn--secondary" type="button" onclick="UIToast.danger('Payment failed. Please retry.')">Danger toast</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dialog (new component) -->
+  <section class="panel card">
+    <div class="card__header"><h3>Dialog <code>&lt;ui-dialog&gt;</code></h3></div>
+    <div class="card__body">
+      <p class="form__hint mb-2">Dialog with backdrop, keyboard dismissal (Esc), and slotted footer.</p>
+      <button class="btn btn--secondary" type="button" id="open-demo-dialog">Open dialog</button>
+
+      <ui-dialog id="demo-dialog" title="Confirm action">
+        <p>Are you sure you want to proceed? This action cannot be undone.</p>
+        <div slot="footer">
+          <button class="btn btn--secondary" type="button" id="cancel-demo-dialog">Cancel</button>
+          <button class="btn" type="button" onclick="document.getElementById('demo-dialog').close(); UIToast.success('Action confirmed.')">Confirm</button>
+        </div>
+      </ui-dialog>
+
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const dlg = document.getElementById('demo-dialog');
+          document.getElementById('open-demo-dialog')?.addEventListener('click', () => dlg?.open());
+          document.getElementById('cancel-demo-dialog')?.addEventListener('click', () => dlg?.close());
+        });
+      </script>
+    </div>
+  </section>
+
+  <!-- Metric Cards (existing component) -->
+  <section class="panel card">
+    <div class="card__header"><h3>Metric Cards <code>&lt;ui-metric-card&gt;</code></h3></div>
+    <div class="card__body">
+      <div class="admin-metrics">
+        <ui-metric-card label="Revenue" value="$4,820" note="This month"></ui-metric-card>
+        <ui-metric-card label="Orders" value="312" note="All time"></ui-metric-card>
+        <ui-metric-card label="Products" value="48" note="In catalog"></ui-metric-card>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search Form (existing component) -->
+  <section class="panel card">
+    <div class="card__header"><h3>Search Form <code>&lt;ui-search-form&gt;</code></h3></div>
+    <div class="card__body" style="display:flex; flex-direction:column; gap:var(--space-4);">
+      <div>
+        <p class="form__hint mb-1">Default variant</p>
+        <ui-search-form action="/search" label="Search products" placeholder="e.g. notebook, lamp…" submit-label="Search"></ui-search-form>
+      </div>
+      <div>
+        <p class="form__hint mb-1">Quick (compact) variant</p>
+        <ui-search-form action="/search" variant="quick" placeholder="Search…" hide-label="true" submit-label="Go"></ui-search-form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Typography -->
   <section class="panel card">
     <div class="card__header"><h3>Typography</h3></div>
     <div class="card__body">
       <h1>Heading 1</h1>
       <h2>Heading 2</h2>
       <h3>Heading 3</h3>
-      <p>Base paragraph text with <strong>bold</strong>, <em>italic</em>, and <code>code</code>.</p>
+      <p>Base paragraph text with <strong>bold</strong>, <em>italic</em>, and <code>inline code</code>.</p>
+      <p class="text-muted">Muted secondary text for supporting information.</p>
     </div>
   </section>
 
+  <!-- Buttons -->
   <section class="panel card">
     <div class="card__header"><h3>Buttons</h3></div>
     <div class="card__body">
-      <div class="partner-actions">
+      <div class="partner-actions" style="flex-wrap:wrap;">
         <button class="btn" type="button">Primary</button>
         <button class="btn btn--secondary" type="button">Secondary</button>
+        <button class="btn btn--destructive" type="button">Destructive</button>
+        <button class="btn btn--small" type="button">Small</button>
+        <button class="btn" type="button" disabled>Disabled</button>
       </div>
     </div>
   </section>
 
+  <!-- Form -->
   <section class="panel card">
-    <div class="card__header"><h3>Form</h3></div>
+    <div class="card__header"><h3>Form Controls</h3></div>
     <div class="card__body">
-      <form class="form" action="#" method="GET">
+      <form class="form" action="#" method="GET" data-no-submit-state>
         <fieldset class="form__fieldset">
           <legend class="form__legend">Example Form</legend>
           <div class="form__group form-group">
@@ -39,7 +202,15 @@
           </div>
           <div class="form__group form-group">
             <label class="form__label" for="showcase-message">Message</label>
-            <textarea class="form__textarea" id="showcase-message" rows="4"></textarea>
+            <textarea class="form__textarea" id="showcase-message" rows="3"></textarea>
+          </div>
+          <div class="form__group form-group">
+            <label class="form__label" for="showcase-select">Category</label>
+            <select class="form__select" id="showcase-select">
+              <option>Stationery</option>
+              <option>Home</option>
+              <option>Electronics</option>
+            </select>
           </div>
           <button class="btn" type="submit">Submit</button>
         </fieldset>
@@ -47,33 +218,44 @@
     </div>
   </section>
 
+  <!-- Table -->
   <section class="panel card">
     <div class="card__header"><h3>Table</h3></div>
     <div class="card__body">
       <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Category</th>
-            <th>Price</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Notebook</td>
-            <td>Stationery</td>
-            <td>$12.00</td>
-          </tr>
-          <tr>
-            <td>Desk Lamp</td>
-            <td>Home</td>
-            <td>$34.00</td>
-          </tr>
-        </tbody>
-      </table>
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Notebook A5</td>
+              <td>Stationery</td>
+              <td><ui-price amount="12.00"></ui-price></td>
+              <td><ui-badge variant="success" label="In stock"></ui-badge></td>
+            </tr>
+            <tr>
+              <td>Desk Lamp</td>
+              <td>Home</td>
+              <td><ui-price amount="24.99" original="34.00"></ui-price></td>
+              <td><ui-badge variant="warning" label="Low stock"></ui-badge></td>
+            </tr>
+            <tr>
+              <td>Mechanical Keyboard</td>
+              <td>Electronics</td>
+              <td><ui-price amount="89.00"></ui-price></td>
+              <td><ui-badge variant="danger" label="Out of stock"></ui-badge></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </section>
+
 </section>
 {{ end }}
