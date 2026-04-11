@@ -3,7 +3,7 @@
 {{ define "main-area" }}
 <section class="catalog-page">
   <header class="catalog-page__intro">
-    <p class="auth-panel__links"><a href="/">Back to storefront</a></p>
+    <ui-breadcrumb items='[{"label":"Home","href":"/"},{"label":"{{.Product.Name}}"}]'></ui-breadcrumb>
     <h1 class="catalog-page__title">{{.Product.Name}}</h1>
     <p class="catalog-page__lead">{{if .Product.Category}}{{.Product.Category}}{{else}}General Merchandise{{end}}</p>
   </header>
@@ -16,11 +16,11 @@
         </div>
 
         <div>
-          <p class="product-tile__price product-card__price">${{printf "%.2f" .Product.Price}}</p>
+          <ui-price amount="{{printf "%.2f" .Product.Price}}" style="font-size:var(--font-size-xl); margin-bottom:var(--space-3); display:inline-flex;"></ui-price>
           {{if gt .Product.StockQuantity 0}}
-          <p class="stock-state stock-state--in">{{.Product.StockQuantity}} available</p>
+          <p style="margin-bottom:var(--space-3);"><ui-badge variant="success" label="{{.Product.StockQuantity}} available"></ui-badge></p>
           {{else}}
-          <p class="stock-state stock-state--out">Out of stock</p>
+          <p style="margin-bottom:var(--space-3);"><ui-badge variant="danger" label="Out of stock"></ui-badge></p>
           {{end}}
 
           <p class="product-tile__description product-card__description">{{.Product.Description}}</p>
@@ -30,7 +30,7 @@
             <input type="hidden" name="product_id" value="{{.Product.ID}}">
             <div class="form__group form-group">
               <label class="form__label" for="quantity">Quantity</label>
-              <input class="form__input" id="quantity" type="number" name="quantity" min="1" max="{{.Product.StockQuantity}}" value="1" required>
+              <ui-quantity name="quantity" value="1" min="1" max="{{.Product.StockQuantity}}"></ui-quantity>
             </div>
             <button type="submit" class="btn btn--full">Add to cart</button>
           </form>
