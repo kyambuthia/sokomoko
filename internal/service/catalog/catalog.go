@@ -54,10 +54,7 @@ func (s *Service) Search(query string) ([]Product, error) {
 }
 
 func (p Product) GetPrimaryImageURL() string {
-	if p.PrimaryImage != "" {
-		return p.PrimaryImage
-	}
-	return "/static/images/placeholder.png"
+	return db.ResolveProductImageURL(p.PrimaryImage, p.Slug, p.Name, p.Category)
 }
 
 func mapProducts(products []db.Product) []Product {
