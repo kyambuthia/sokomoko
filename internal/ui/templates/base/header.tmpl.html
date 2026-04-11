@@ -1,4 +1,64 @@
 {{ define "storefront-header-area" }}
+<header class="site-header site-header--storefront storefront-header">
+    <div class="storefront-header__masthead">
+        <div class="site-header__brand">
+            <p class="site-header__eyebrow">Quiet Market</p>
+            <a href="/" class="site-header__brandmark" aria-label="Sokomoko home">SOKOMOKO</a>
+            <p class="site-header__tagline">Everyday goods for desk, kitchen, carry, and home.</p>
+        </div>
+    </div>
+    <nav
+        class="site-nav nav nav--top nav--horizontal storefront-header__nav"
+        data-nav
+        data-nav-placement="top"
+        data-nav-collapsible="mobile"
+    >
+        <div class="nav__bar">
+            <div class="nav__heading">
+                <p class="nav__label">Browse</p>
+                <p class="nav__context">{{.Title}}</p>
+            </div>
+            <button
+                type="button"
+                class="site-nav__toggle nav__toggle"
+                data-nav-toggle
+                aria-expanded="false"
+                aria-controls="primary-site-nav"
+            >
+                Menu
+            </button>
+        </div>
+        <div class="site-nav__menu nav__menu" id="primary-site-nav" data-nav-menu>
+            <div class="nav__section nav__section--primary">
+                <ul class="site-nav__list nav__list">
+                    <li class="site-nav__item nav__item">
+                        <a href="/" class="site-nav__link nav__link" {{if eq .Title "Home"}}aria-current="page"{{end}}>Shop</a>
+                    </li>
+                    <li class="site-nav__item nav__item">
+                        <a href="/search" class="site-nav__link nav__link" {{if eq .Title "Search"}}aria-current="page"{{end}}>Search</a>
+                    </li>
+                    <li class="site-nav__item nav__item">
+                        <a href="/account" class="site-nav__link nav__link" {{if eq .Title "Your Account"}}aria-current="page"{{end}}>Account</a>
+                    </li>
+                    <li class="site-nav__item nav__item">
+                        <a href="/cart" class="site-nav__link nav__link" {{if eq .Title "Cart"}}aria-current="page"{{end}}>Cart</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="nav__section nav__section--utility">
+                <ui-search-form
+                    action="/search"
+                    label="Quick search"
+                    placeholder="Quick search"
+                    submit-label="Go"
+                    show-clear="false"
+                    variant="quick"
+                    hide-label="true"
+                ></ui-search-form>
+            </div>
+        </div>
+    </nav>
+</header>
 {{ end }}
 
 {{ define "admin-header-area" }}
