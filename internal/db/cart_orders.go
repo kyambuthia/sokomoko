@@ -132,7 +132,7 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 			return nil, 0, err
 		}
 		item.UnitPrice = RoundMoney(item.UnitPrice)
-		item.ProductImageURL = "/static/images/placeholder.png"
+		item.ProductImageURL = ResolveProductImageURL("", item.ProductSlug, item.ProductName, "")
 		item.LineTotal = RoundMoney(item.UnitPrice * float64(item.Quantity))
 		subtotal = RoundMoney(subtotal + item.LineTotal)
 		items = append(items, item)
@@ -145,7 +145,7 @@ func (s *Store) GetCartItems(userID int) ([]CartItem, float64, error) {
 	}
 	for i := range items {
 		if imgs := imagesByProduct[items[i].ProductID]; len(imgs) > 0 {
-			items[i].ProductImageURL = imgs[0].URL
+			items[i].ProductImageURL = ResolveProductImageURL(imgs[0].URL, items[i].ProductSlug, items[i].ProductName, "")
 		}
 	}
 	return items, RoundMoney(subtotal), nil
@@ -207,7 +207,7 @@ func (s *Store) GetCartItemsForCheckout(userID int, reservationKey string) ([]Ca
 			return nil, 0, err
 		}
 		item.UnitPrice = RoundMoney(item.UnitPrice)
-		item.ProductImageURL = "/static/images/placeholder.png"
+		item.ProductImageURL = ResolveProductImageURL("", item.ProductSlug, item.ProductName, "")
 		item.LineTotal = RoundMoney(item.UnitPrice * float64(item.Quantity))
 		subtotal = RoundMoney(subtotal + item.LineTotal)
 		items = append(items, item)
@@ -220,7 +220,7 @@ func (s *Store) GetCartItemsForCheckout(userID int, reservationKey string) ([]Ca
 	}
 	for i := range items {
 		if imgs := imagesByProduct[items[i].ProductID]; len(imgs) > 0 {
-			items[i].ProductImageURL = imgs[0].URL
+			items[i].ProductImageURL = ResolveProductImageURL(imgs[0].URL, items[i].ProductSlug, items[i].ProductName, "")
 		}
 	}
 	return items, RoundMoney(subtotal), rows.Err()
