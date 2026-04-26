@@ -1,10 +1,10 @@
 {{ define "storefront-header-area" }}
 <header class="site-header site-header--storefront storefront-header">
+    <ui-header-banner text="Free delivery in Nairobi on orders over $75 | New arrivals added weekly | Cash on delivery available"></ui-header-banner>
     <div class="storefront-header__masthead">
         <div class="site-header__brand">
             <p class="site-header__eyebrow">Quiet Market</p>
             <a href="/" class="site-header__brandmark" aria-label="Sokomoko home">SOKOMOKO</a>
-            <p class="site-header__tagline">Everyday goods for desk, kitchen, carry, and home.</p>
         </div>
     </div>
     <nav
@@ -24,8 +24,13 @@
                 data-nav-toggle
                 aria-expanded="false"
                 aria-controls="primary-site-nav"
+                aria-label="Menu"
             >
-                Menu
+                <span class="nav__toggle-icon" aria-hidden="true">
+                    <span class="nav__toggle-line"></span>
+                    <span class="nav__toggle-line"></span>
+                    <span class="nav__toggle-line"></span>
+                </span>
             </button>
         </div>
         <div class="site-nav__menu nav__menu" id="primary-site-nav" data-nav-menu>
@@ -45,19 +50,15 @@
                     </li>
                 </ul>
             </div>
-            <div class="nav__section nav__section--utility">
-                <ui-search-form
-                    action="/search"
-                    label="Quick search"
-                    placeholder="Quick search"
-                    submit-label="Go"
-                    show-clear="false"
-                    variant="quick"
-                    hide-label="true"
-                ></ui-search-form>
-            </div>
         </div>
     </nav>
+    <ui-header-search
+        action="/search"
+        endpoint="/search"
+        label="Search products"
+        placeholder="Search products"
+        submit-label="Search"
+    ></ui-header-search>
 </header>
 {{ end }}
 

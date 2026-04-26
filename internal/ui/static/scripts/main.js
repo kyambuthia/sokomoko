@@ -189,6 +189,178 @@ class UISearchForm extends HTMLElement {
   }
 }
 
+class UIHeaderBanner extends HTMLElement {
+  connectedCallback() {
+    if (this.dataset.rendered === "true") {
+      return;
+    }
+    this.dataset.rendered = "true";
+
+    const text = this.getAttribute("text") || this.textContent.trim();
+    const message = text || "New arrivals are ready to shop.";
+
+    this.classList.add("header-banner");
+    this.innerHTML = `
+      <div class="header-banner__viewport" aria-label="${escapeHTML(message)}">
+        <div class="header-banner__track" aria-hidden="true">
+          <span class="header-banner__message">${escapeHTML(message)}</span>
+          <span class="header-banner__message">${escapeHTML(message)}</span>
+          <span class="header-banner__message">${escapeHTML(message)}</span>
+        </div>
+      </div>
+    `;
+  }
+}
+
+class UIHeaderSearch extends HTMLElement {
+  static nextID = 0;
+
+  connectedCallback() {
+    if (this.dataset.rendered === "true") {
+      return;
+    }
+    this.dataset.rendered = "true";
+
+    this.action = this.getAttribute("action") || "/search";
+    this.endpoint = this.getAttribute("endpoint") || this.action;
+    this.label = this.getAttribute("label") || "Search products";
+    this.placeholder = this.getAttribute("placeholder") || "Search products";
+    this.submitLabel = this.getAttribute("submit-label") || "Search";
+    this.inputID = `ui-header-search-${UIHeaderSearch.nextID++}`;
+    this.abortController = null;
+    this.debounceTimer = null;
+
+    this.classList.add("header-search");
+    this.innerHTML = `
+      <form action="${escapeHTML(this.action)}" method="GET" class="header-search__form" role="search">
+        <label class="header-search__label" for="${this.inputID}">${escapeHTML(this.label)}</label>
+        <div class="header-search__control">
+          <input
+            type="search"
+            id="${this.inputID}"
+            name="q"
+            class="header-search__input"
+            placeholder="${escapeHTML(this.placeholder)}"
+            autocomplete="off"
+            minlength="2"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="${this.inputID}-results"
+          />
+          <button type="submit" class="btn btn--primary header-search__submit">${escapeHTML(this.submitLabel)}</button>
+        </div>
+        <div class="header-search__results" id="${this.inputID}-results" role="listbox" hidden></div>
+      </form>
+    `;
+
+    this.input = this.querySelector(".header-search__input");
+    this.results = this.querySelector(".header-search__results");
+    this.input.addEventListener("input", () => this.scheduleSearch());
+    this.input.addEventListener("focus", () => this.scheduleSearch(0));
+    this.input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        this.hideResults();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!this.contains(event.target)) {
+        this.hideResults();
+      }
+    });
+  }
+
+  scheduleSearch(delay = 180) {
+    window.clearTimeout(this.debounceTimer);
+    this.debounceTimer = window.setTimeout(() => this.fetchResults(), delay);
+  }
+
+  async fetchResults() {
+    const query = this.input.value.trim();
+    if (query.length < 2) {
+      this.renderResults([], "");
+      return;
+    }
+
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+    this.abortController = new AbortController();
+
+    try {
+      const response = await fetch(this.endpoint, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ queryString: query }),
+        signal: this.abortController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.status}`);
+      }
+
+      const products = await response.json();
+      this.renderResults(Array.isArray(products) ? products.slice(0, 6) : [], query);
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        this.renderStatus("Quick find is unavailable.");
+      }
+    }
+  }
+
+  renderResults(products, query) {
+    if (!query) {
+      this.hideResults();
+      return;
+    }
+
+    if (products.length === 0) {
+      this.renderStatus(`No quick matches for "${query}".`);
+      return;
+    }
+
+    this.results.innerHTML = products
+      .map((product) => {
+        const name = product.Name || product.name || "Product";
+        const slug = product.Slug || product.slug || "";
+        const price = Number(product.Price || product.price || 0);
+        const stock = Number(product.StockQuantity || product.stockQuantity || 0);
+        const href = slug ? `/products/${encodeURIComponent(slug)}` : this.action;
+        const priceLabel = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(price);
+
+        return `
+          <a class="header-search__result" href="${escapeHTML(href)}" role="option">
+            <span class="header-search__result-name">${escapeHTML(name)}</span>
+            <span class="header-search__result-meta">${escapeHTML(priceLabel)} | ${stock > 0 ? "In stock" : "Out of stock"}</span>
+          </a>
+        `;
+      })
+      .join("");
+    this.showResults();
+  }
+
+  renderStatus(message) {
+    this.results.innerHTML = `<p class="header-search__status">${escapeHTML(message)}</p>`;
+    this.showResults();
+  }
+
+  showResults() {
+    this.results.hidden = false;
+    this.input.setAttribute("aria-expanded", "true");
+  }
+
+  hideResults() {
+    this.results.hidden = true;
+    this.input.setAttribute("aria-expanded", "false");
+  }
+}
+
 class UISwitch extends HTMLElement {
   static get observedAttributes() {
     return ["checked", "disabled", "size"];
@@ -909,6 +1081,14 @@ if (!customElements.get("ui-metric-card")) {
 
 if (!customElements.get("ui-search-form")) {
   customElements.define("ui-search-form", UISearchForm);
+}
+
+if (!customElements.get("ui-header-banner")) {
+  customElements.define("ui-header-banner", UIHeaderBanner);
+}
+
+if (!customElements.get("ui-header-search")) {
+  customElements.define("ui-header-search", UIHeaderSearch);
 }
 
 if (!customElements.get("ui-switch")) {
