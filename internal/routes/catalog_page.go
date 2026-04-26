@@ -3,13 +3,13 @@ package routes
 import catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 
 type IndexPageData struct {
-	Title      string
+	Title       string
 	HasProducts bool
 	Products    []catalogsvc.Product
 }
 
 type SearchPageData struct {
-	Title    string
+	Title     string
 	Query     string
 	Products  []catalogsvc.Product
 	NoResults bool
@@ -17,7 +17,7 @@ type SearchPageData struct {
 
 func indexPage(products []catalogsvc.Product) IndexPageData {
 	return IndexPageData{
-		Title:      "Home",
+		Title:       "Home",
 		HasProducts: len(products) > 0,
 		Products:    products,
 	}
@@ -32,7 +32,7 @@ func productPage(product *catalogsvc.Product) ProductPageData {
 
 func searchPage(query string, products []catalogsvc.Product) SearchPageData {
 	return SearchPageData{
-		Title:    "Search",
+		Title:     "Search",
 		Query:     query,
 		Products:  products,
 		NoResults: len(products) == 0 && query != "",
