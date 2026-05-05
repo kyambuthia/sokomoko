@@ -6,20 +6,20 @@ import (
 )
 
 func (s *Store) CreateSession(sess Session) error {
-	stmt, err := s.DB.Prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)")
+	stmt, err := s.DB.Prepare("INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(hashSessionID(sess.ID), sess.UserID, sess.ExpiresAt)
+	_, err = stmt.Exec(hashSessionID(sess.ID), sess.UserID, sess.CSRFToken, sess.ExpiresAt)
 	return err
 }
 
 func (s *Store) GetSession(id string) (*Session, error) {
-	row := s.DB.QueryRow("SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", hashSessionID(id))
+	row := s.DB.QueryRow("SELECT id, user_id, csrf_token, expires_at, created_at FROM sessions WHERE id = ?", hashSessionID(id))
 	sess := &Session{}
-	err := row.Scan(&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt)
+	err := row.Scan(&sess.ID, &sess.UserID, &sess.CSRFToken, &sess.ExpiresAt, &sess.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

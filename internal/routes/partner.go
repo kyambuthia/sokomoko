@@ -48,6 +48,7 @@ type PartnerProductNewData struct {
 	Error       string
 	Categories  []partnersvc.Category
 	DefaultName string
+	CSRFToken   string
 }
 
 func PartnerRoot(a *app.App) http.HandlerFunc {
@@ -175,7 +176,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		data := partnerProductNewPage(view.Categories)
+		data := partnerProductNewPage(view.Categories, a.Auth.CSRFToken(r))
 
 		if r.Method == http.MethodGet {
 			a.Render(w, a.Templates.PartnerProductNew, data)

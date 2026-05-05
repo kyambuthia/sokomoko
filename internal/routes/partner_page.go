@@ -54,10 +54,11 @@ func partnerProductsPage(view partnersvc.ProductsData) PartnerProductsData {
 	}
 }
 
-func partnerProductNewPage(categories []partnersvc.Category) PartnerProductNewData {
+func partnerProductNewPage(categories []partnersvc.Category, csrfToken string) PartnerProductNewData {
 	return PartnerProductNewData{
 		Title:      "Add Product",
 		Categories: categories,
+		CSRFToken:  csrfToken,
 	}
 }
 

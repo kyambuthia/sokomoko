@@ -30,6 +30,7 @@
               <td>${{printf "%.2f" .UnitPrice}}</td>
               <td>
                 <form action="/cart/update" method="POST" class="table-action-form">
+                  {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
                   <input type="hidden" name="product_id" value="{{.ProductID}}">
                   <input class="form__input" type="number" min="0" name="quantity" value="{{.Quantity}}">
                   <button type="submit" class="btn btn--secondary btn--small">Update</button>
@@ -38,6 +39,7 @@
               <td>${{printf "%.2f" .LineTotal}}</td>
               <td>
                 <form action="/cart/remove" method="POST" class="table-action-form">
+                  {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
                   <input type="hidden" name="product_id" value="{{.ProductID}}">
                   <button type="submit" class="btn btn--secondary btn--small">Remove</button>
                 </form>

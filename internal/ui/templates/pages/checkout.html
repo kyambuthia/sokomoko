@@ -31,6 +31,7 @@
   <form action="{{.FormAction}}" method="POST" class="auth-panel__form form">
     <fieldset class="form__fieldset">
       <legend class="form__legend">Delivery</legend>
+      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
       <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
       <div class="form__group form-group">
         <label class="form__label" for="delivery_address">Delivery address</label>

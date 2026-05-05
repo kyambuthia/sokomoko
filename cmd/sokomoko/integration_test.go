@@ -136,6 +136,25 @@ func makeRequest(method, path string, data url.Values, cookies []*http.Cookie, h
 		return nil, ""
 	}
 
+	var sessionCSRFToken string
+	if testStore != nil {
+		for _, cookie := range cookies {
+			if cookie != nil && cookie.Name == "session_token" && strings.TrimSpace(cookie.Value) != "" {
+				sess, err := testStore.GetSession(cookie.Value)
+				if err == nil && sess != nil {
+					sessionCSRFToken = strings.TrimSpace(sess.CSRFToken)
+				}
+				break
+			}
+		}
+	}
+
+	if data != nil && (method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete) {
+		if sessionCSRFToken != "" {
+			data.Set("csrf_token", sessionCSRFToken)
+		}
+	}
+
 	var body io.Reader
 	if data != nil {
 		body = strings.NewReader(data.Encode())
@@ -161,6 +180,9 @@ func makeRequest(method, path string, data url.Values, cookies []*http.Cookie, h
 		origin := "http://" + requestHost
 		req.Header.Set("Origin", origin)
 		req.Header.Set("Referer", origin+path)
+		if strings.TrimSpace(req.Header.Get("X-CSRF-Token")) == "" && sessionCSRFToken != "" {
+			req.Header.Set("X-CSRF-Token", sessionCSRFToken)
+		}
 	}
 
 	for _, cookie := range cookies {

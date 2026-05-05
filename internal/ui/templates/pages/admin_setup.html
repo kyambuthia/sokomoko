@@ -36,6 +36,7 @@
   <form class="auth-panel__form form" action="/setup" method="POST">
     <fieldset class="form__fieldset">
       <legend class="form__legend">Root Admin</legend>
+      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
 
       <div class="form__group form-group">
         <label class="form__label" for="admin_username">Admin username</label>
