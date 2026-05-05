@@ -25,6 +25,7 @@
 
   <form class="auth-panel__form form" action="/products/new" method="POST">
     <fieldset class="form__fieldset">
+      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
       <legend class="form__legend">Product Details</legend>
 
       <div class="form__group form-group">

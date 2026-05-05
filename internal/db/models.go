@@ -177,6 +177,7 @@ type StockMovement struct {
 type Session struct {
 	ID        string
 	UserID    int
+	CSRFToken string
 	ExpiresAt time.Time
 	CreatedAt time.Time
 }

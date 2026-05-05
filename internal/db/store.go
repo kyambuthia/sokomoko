@@ -75,7 +75,52 @@ func (s *Store) ApplySchema() error {
 		return err
 	}
 
+	if err := s.migrateLegacySessionsCSRFToken(); err != nil {
+		return err
+	}
+
 	return s.recordSchemaVersion()
+}
+
+func (s *Store) migrateLegacySessionsCSRFToken() error {
+	if s == nil || s.DB == nil {
+		return sql.ErrConnDone
+	}
+
+	rows, err := s.DB.Query("PRAGMA table_info(sessions)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	hasCSRFToken := false
+	for rows.Next() {
+		var cid int
+		var name string
+		var colType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		if name == "csrf_token" {
+			hasCSRFToken = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if hasCSRFToken {
+		return nil
+	}
+
+	// Existing databases may have a sessions table created before CSRF tokens existed.
+	// Default to empty; empty tokens will be rejected, forcing re-login.
+	_, err = s.DB.Exec("ALTER TABLE sessions ADD COLUMN csrf_token TEXT NOT NULL DEFAULT ''")
+	return err
 }
 
 func (s *Store) Close() error {

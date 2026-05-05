@@ -9,17 +9,18 @@ import (
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 )
 
-func cartPage(r *http.Request, items []commerceSvc.CartItem, subtotal float64) CartPageData {
+func cartPage(r *http.Request, items []commerceSvc.CartItem, subtotal float64, csrfToken string) CartPageData {
 	return CartPageData{
-		Title:    "Cart",
-		Items:    items,
-		Subtotal: subtotal,
-		Message:  strings.TrimSpace(r.URL.Query().Get("message")),
-		Error:    strings.TrimSpace(r.URL.Query().Get("error")),
+		Title:     "Cart",
+		Items:     items,
+		Subtotal:  subtotal,
+		Message:   strings.TrimSpace(r.URL.Query().Get("message")),
+		Error:     strings.TrimSpace(r.URL.Query().Get("error")),
+		CSRFToken: csrfToken,
 	}
 }
 
-func checkoutPage(state checkoutsvc.PageState, paymentMethod string, paymentMethods []PaymentMethodOption) CheckoutPageData {
+func checkoutPage(state checkoutsvc.PageState, paymentMethod string, paymentMethods []PaymentMethodOption, csrfToken string) CheckoutPageData {
 	selectedPaymentMethod := strings.TrimSpace(paymentMethod)
 	if selectedPaymentMethod == "" {
 		selectedPaymentMethod = state.PaymentMethod
@@ -40,6 +41,7 @@ func checkoutPage(state checkoutsvc.PageState, paymentMethod string, paymentMeth
 		IdempotencyKey:  state.Token,
 		FormAction:      checkoutFormAction(state.Token),
 		CanCheckout:     state.CanCheckout,
+		CSRFToken:       csrfToken,
 	}
 }
 

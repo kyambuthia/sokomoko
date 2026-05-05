@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const CurrentSchemaVersion = 1
+const CurrentSchemaVersion = 2
 
 // CurrentSchemaVersionNote documents the current state of schema management.
 // The application now records the latest applied schema version, but

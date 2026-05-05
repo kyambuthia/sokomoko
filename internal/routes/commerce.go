@@ -15,11 +15,12 @@ import (
 )
 
 type CartPageData struct {
-	Title    string
-	Items    []commerceSvc.CartItem
-	Subtotal float64
-	Error    string
-	Message  string
+	Title     string
+	Items     []commerceSvc.CartItem
+	Subtotal  float64
+	Error     string
+	Message   string
+	CSRFToken string
 }
 
 type CheckoutPageData struct {
@@ -37,6 +38,7 @@ type CheckoutPageData struct {
 	Error           string
 	Message         string
 	CanCheckout     bool
+	CSRFToken       string
 }
 
 type PaymentMethodOption struct {
@@ -76,7 +78,7 @@ func CartPage(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		a.Render(w, a.Templates.Cart, cartPage(r, items, subtotal))
+		a.Render(w, a.Templates.Cart, cartPage(r, items, subtotal, a.Auth.CSRFToken(r)))
 	}
 }
 
@@ -218,11 +220,12 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		csrfToken := a.Auth.CSRFToken(r)
 		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
 		if r.Method == http.MethodGet {
 			resumeToken := strings.TrimSpace(r.URL.Query().Get("checkout"))
 			state, err := checkoutSvc.PreparedCheckout(userID, resumeToken)
-			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
+			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()), csrfToken)
 			if err != nil {
 				switch {
 				case errors.Is(err, checkoutsvc.ErrCartEmpty):
@@ -250,7 +253,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 		if idempotencyKey == "" {
 			state, prepErr := checkoutSvc.PreparedCheckout(userID, "")
 			if prepErr != nil {
-				data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
+				data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()), csrfToken)
 				if errors.Is(prepErr, checkoutsvc.ErrCartEmpty) {
 					data.Error = "Cart is empty"
 					a.Render(w, a.Templates.Checkout, data)
@@ -274,7 +277,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()))
+			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()), csrfToken)
 			if strings.TrimSpace(state.Token) != "" {
 				idempotencyKey = state.Token
 			}

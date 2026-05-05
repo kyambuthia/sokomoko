@@ -76,6 +76,8 @@ type AuthService interface {
 	AdminLogin(tmpl *template.Template) http.HandlerFunc
 	AdminSetup(tmpl *template.Template) http.HandlerFunc
 	AuthMiddleware(next http.Handler) http.Handler
+	CSRFMiddleware(next http.Handler) http.Handler
+	CSRFToken(r *http.Request) string
 	Login(tmpl *template.Template) http.HandlerFunc
 	Logout() http.HandlerFunc
 	PasswordResetConfirm(tmpl *template.Template, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc

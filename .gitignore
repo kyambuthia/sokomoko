@@ -53,3 +53,7 @@ node_modules/
 *.tmp
 *.bak
 *.old
+
+# Local Go caches created by some dev environments
+.gocache/
+.gomodcache/

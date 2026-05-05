@@ -84,13 +84,13 @@ func parseAllowedHosts(raw string) map[string]struct{} {
 	return hosts
 }
 
-func buildMiddlewares(cfg config.Config) []app.Middleware {
+func buildMiddlewares(cfg config.Config, application *app.App) []app.Middleware {
 	middlewares := []app.Middleware{
 		app.Recoverer(),
 		app.RequestID(),
 		app.SecurityHeaders(),
 		app.BodyLimit(1 << 20),
-		app.CSRFSameOrigin("session_token"),
+		application.Auth.CSRFMiddleware,
 	}
 
 	if cfg.PostRateLimitMax > 0 {

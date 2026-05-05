@@ -14,6 +14,7 @@
   <form action="/signup" method="POST" class="auth-panel__form form">
     <fieldset class="form__fieldset">
       <legend class="form__legend">Registration</legend>
+      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
 
       <div class="form__group form-group">
         <label class="form__label" for="username">Username</label>

@@ -134,7 +134,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 
 	handler := app.Chain(
 		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux),
-		buildMiddlewares(cfg)...,
+		buildMiddlewares(cfg, application)...,
 	)
 
 	return &httpServer{

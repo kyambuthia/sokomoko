@@ -96,33 +96,38 @@ type AdminSetupPageData struct {
 	StaffRationale   string
 	StaffCredentials []StaffCredential
 	ShowForm         bool
+	CSRFToken        string
 }
 
 type StaffSignupPageData struct {
-	Title    string
-	Role     string
-	Message  string
-	Error    string
-	ShowForm bool
+	Title     string
+	Role      string
+	Message   string
+	Error     string
+	ShowForm  bool
+	CSRFToken string
 }
 
 type SignupPageData struct {
-	Title    string
-	Username string
-	Email    string
-	Error    string
+	Title     string
+	Username  string
+	Email     string
+	Error     string
+	CSRFToken string
 }
 
 type LoginPageData struct {
-	Title    string
-	Username string
-	Error    string
+	Title     string
+	Username  string
+	Error     string
+	CSRFToken string
 }
 
 type AdminLoginPageData struct {
-	Title    string
-	Username string
-	Error    string
+	Title     string
+	Username  string
+	Error     string
+	CSRFToken string
 }
 
 type PasswordResetRequestData struct {
@@ -133,16 +138,18 @@ type PasswordResetRequestData struct {
 	Message    string
 	Error      string
 	ResetLink  string
+	CSRFToken  string
 }
 
 type PasswordResetConfirmData struct {
-	Title    string
-	Heading  string
-	Helper   string
-	Token    string
-	Message  string
-	Error    string
-	ShowForm bool
+	Title     string
+	Heading   string
+	Helper    string
+	Token     string
+	Message   string
+	Error     string
+	ShowForm  bool
+	CSRFToken string
 }
 
 func (s *Service) shouldUseSecureCookies(r *http.Request) bool {
@@ -208,11 +215,16 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID in
 	if err != nil {
 		return err
 	}
+	csrfToken, err := generateOpaqueToken(32)
+	if err != nil {
+		return err
+	}
 	expiresAt := time.Now().Add(sessionDuration)
 
 	err = s.store.CreateSession(db.Session{
 		ID:        sessionToken,
 		UserID:    userID,
+		CSRFToken: csrfToken,
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
@@ -402,7 +414,10 @@ func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode
 // SignUp handles normal user registration.
 func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := SignupPageData{Title: "Create Account"}
+		data := SignupPageData{
+			Title:     "Create Account",
+			CSRFToken: s.CSRFTokenForSession(r),
+		}
 
 		if r.Method == http.MethodGet {
 			renderWithStatus(w, tmpl, 0, data)
@@ -458,9 +473,10 @@ func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := StaffSignupPageData{
-			Title:    "Staff Account Setup",
-			Role:     "admin",
-			ShowForm: true,
+			Title:     "Staff Account Setup",
+			Role:      "admin",
+			ShowForm:  true,
+			CSRFToken: s.CSRFTokenForSession(r),
 		}
 
 		if r.Method == http.MethodGet {
@@ -514,7 +530,10 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 // Login handles normal user authentication.
 func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := LoginPageData{Title: "Login"}
+		data := LoginPageData{
+			Title:     "Login",
+			CSRFToken: s.CSRFTokenForSession(r),
+		}
 
 		if r.Method == http.MethodGet {
 			renderWithStatus(w, tmpl, 0, data)
@@ -564,7 +583,10 @@ func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 // AdminLogin handles admin/staff authentication.
 func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := AdminLoginPageData{Title: "Admin Login"}
+		data := AdminLoginPageData{
+			Title:     "Admin Login",
+			CSRFToken: s.CSRFTokenForSession(r),
+		}
 
 		hasAdmin, err := s.store.HasAdminUser()
 		if err != nil {
@@ -648,6 +670,7 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			RecommendedStaff: recommendedStaff,
 			StaffRationale:   rationale,
 			ShowForm:         true,
+			CSRFToken:        s.CSRFTokenForSession(r),
 		}
 
 		if r.Method == http.MethodGet {
@@ -761,9 +784,10 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := PasswordResetRequestData{
-			Title:   title,
-			Heading: title,
-			Helper:  helper,
+			Title:     title,
+			Heading:   title,
+			Helper:    helper,
+			CSRFToken: s.CSRFTokenForSession(r),
 		}
 
 		if r.Method == http.MethodGet {
@@ -815,10 +839,11 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := PasswordResetConfirmData{
-			Title:    title,
-			Heading:  title,
-			Helper:   helper,
-			ShowForm: true,
+			Title:     title,
+			Heading:   title,
+			Helper:    helper,
+			ShowForm:  true,
+			CSRFToken: s.CSRFTokenForSession(r),
 		}
 
 		if r.Method == http.MethodGet {

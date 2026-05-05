@@ -29,6 +29,7 @@
 
   {{if .ShowForm}}
   <form class="auth-panel__form form" action="/staff/signup" method="POST">
+      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
     <fieldset class="form__fieldset">
       <legend class="form__legend">Staff Details</legend>
 
