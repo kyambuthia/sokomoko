@@ -10,23 +10,23 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
+	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
-	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 	"golang.org/x/crypto/bcrypt"
 )
 
-const testDBPath = "./test_integration.db"
-
-var testServer *httptest.Server
+var testDBPath string
 var testStore *db.Store
 var testTemplates *ui.Templates
+var testHandler http.Handler
 
 func TestMain(m *testing.M) {
 	setupTestServer()
@@ -37,6 +37,7 @@ func TestMain(m *testing.M) {
 
 func setupTestServer() {
 	var err error
+	testDBPath = filepath.Join(os.TempDir(), fmt.Sprintf("sokomoko_integration_%d.db", time.Now().UnixNano()))
 	testStore, err = db.OpenStore(testDBPath)
 	if err != nil {
 		panic(err)
@@ -57,37 +58,19 @@ func setupTestServer() {
 		Auth:      auth.Config{},
 	})
 
-	mainMux := http.NewServeMux()
-	adminMux := http.NewServeMux()
-	partnerMux := http.NewServeMux()
-
-	routes.RegisterPublic(a, mainMux)
-	routes.RegisterAdmin(a, adminMux)
-	routes.RegisterPartner(a, partnerMux)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if strings.HasPrefix(host, "admin.") {
-			adminMux.ServeHTTP(w, r)
-			return
-		}
-		if strings.HasPrefix(host, "partner.") {
-			partnerMux.ServeHTTP(w, r)
-			return
-		}
-		mainMux.ServeHTTP(w, r)
-	})
-
-	testServer = httptest.NewServer(handler)
+	cfg := config.Config{
+		Port:            "6969",
+		AllowedHostsRaw: "localhost,127.0.0.1,admin.localhost,partner.localhost",
+	}
+	server, _ := buildServer(cfg, a)
+	testHandler = server.Handler
 }
 
 func teardownTestServer() {
-	if testServer != nil {
-		testServer.Close()
-	}
 	if testStore != nil {
 		testStore.Close()
 	}
+	testHandler = nil
 	os.Remove(testDBPath)
 }
 
@@ -149,18 +132,35 @@ func checkoutIdempotencyKey(t *testing.T, cookies []*http.Cookie) string {
 }
 
 func makeRequest(method, path string, data url.Values, cookies []*http.Cookie, host string) (*http.Response, string) {
+	if testHandler == nil {
+		return nil, ""
+	}
+
 	var body io.Reader
 	if data != nil {
 		body = strings.NewReader(data.Encode())
 	}
 
-	req, err := http.NewRequest(method, testServer.URL+path, body)
+	requestHost := "localhost"
+	if host != "" {
+		requestHost = host
+	}
+
+	req, err := http.NewRequest(method, "http://"+requestHost+path, body)
 	if err != nil {
 		return nil, ""
 	}
 
 	if data != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+
+	// The app enforces same-origin checks for unsafe methods.
+	// Integration tests should behave like a normal browser submission.
+	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete {
+		origin := "http://" + requestHost
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Referer", origin+path)
 	}
 
 	for _, cookie := range cookies {
@@ -171,17 +171,10 @@ func makeRequest(method, path string, data url.Values, cookies []*http.Cookie, h
 		req.Host = host
 	}
 
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	recorder := httptest.NewRecorder()
+	testHandler.ServeHTTP(recorder, req)
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, ""
-	}
-
+	resp := recorder.Result()
 	defer resp.Body.Close()
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	return resp, string(bodyBytes)
