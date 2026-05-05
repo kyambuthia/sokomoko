@@ -16,6 +16,8 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
+var runHTTPServerFunc = runHTTPServer
+
 func runServe(cfg config.Config, seedOnServe bool) error {
 	resetEmailSender, err := buildPasswordResetEmailSender(cfg)
 	if err != nil {
@@ -53,7 +55,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	server, allowedHosts := buildServer(cfg, application)
 	printStartupSummary(cfg, server, allowedHosts, seedOnServe)
 
-	return wrapCommandError(commandServe, "serve http", runHTTPServer(server, store))
+	return wrapCommandError(commandServe, "serve http", runHTTPServerFunc(server, store))
 }
 
 func runMigrate(cfg config.Config) error {
