@@ -33,7 +33,7 @@ Total Documentation Lines:       5,918
 ├── CSS_ARCHITECTURE.md:           450+
 ├── TEMPLATE_BEST_PRACTICES.md:    600+
 ├── DESIGN_README.md:              350+
-├── GETTING_STARTED.md:            300+
+├── docs/GETTING_STARTED.md:       300+
 ├── VERIFICATION_CHECKLIST.md:     500+
 └── DESIGN_IMPLEMENTATION_SUMMARY: 400+
 
@@ -167,7 +167,7 @@ Templates Refactored:             7
 1. `DESIGN_QUICK_REFERENCE.md` – Class names, colors, components
 
 **For Building Pages:**
-2. `GETTING_STARTED.md` – 5-minute quickstart
+2. `docs/GETTING_STARTED.md` – 5-minute quickstart
 3. `TEMPLATE_BEST_PRACTICES.md` – HTML patterns
 
 **For Understanding:**
@@ -249,7 +249,7 @@ sokomoko/
 ├── DESIGN_SYSTEM.md                    ← Complete reference
 ├── DESIGN_QUICK_REFERENCE.md           ← Cheat sheet
 ├── DESIGN_README.md                    ← Getting started
-├── GETTING_STARTED.md                  ← 5-minute quickstart
+├── docs/GETTING_STARTED.md             ← 5-minute quickstart
 ├── CSS_ARCHITECTURE.md                 ← CSS guide
 ├── TEMPLATE_BEST_PRACTICES.md          ← HTML patterns
 ├── DESIGN_IMPLEMENTATION_SUMMARY.md    ← Detailed summary
@@ -300,7 +300,7 @@ go run ./cmd/sokomoko serve
 ```
 
 ### Building Pages
-1. Reference `GETTING_STARTED.md` for 5-minute quickstart
+1. Reference `docs/GETTING_STARTED.md` for 5-minute quickstart
 2. Copy pattern from existing template
 3. Use `DESIGN_QUICK_REFERENCE.md` for class names
 4. Test using `VERIFICATION_CHECKLIST.md`
@@ -461,7 +461,7 @@ All developers have the tools, documentation, and examples needed to:
 ---
 
 **Next Steps:**
-1. Developers: Review `GETTING_STARTED.md`
+1. Developers: Review `docs/GETTING_STARTED.md`
 2. Designers: Review `DESIGN_SYSTEM.md`
 3. QA: Use `VERIFICATION_CHECKLIST.md`
 4. Deployment: System is production-ready

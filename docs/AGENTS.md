@@ -218,5 +218,3 @@ Use consistent template data structure across all handlers.
 - Use `serve`, `migrate`, and `seed` commands via `./cmd/sokomoko`
 - Admin bootstrap lives at `admin.localhost/setup`
 - Static files embedded using Go's embed directive
-- No external frameworks beyond database drivers
-- Tests use temporary SQLite databases for isolation

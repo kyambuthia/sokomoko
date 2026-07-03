@@ -11,6 +11,9 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	t.Setenv("SESSION_COOKIE_DOMAIN", "")
 	t.Setenv("POST_RATE_LIMIT_MAX", "")
 	t.Setenv("POST_RATE_LIMIT_WINDOW_SECONDS", "")
+	t.Setenv("AUTH_ABUSE_MAX_FAILURES", "")
+	t.Setenv("AUTH_ABUSE_BACKOFF_BASE_SECONDS", "")
+	t.Setenv("AUTH_ABUSE_BACKOFF_MAX_SECONDS", "")
 	t.Setenv("PASSWORD_RESET_BASE_URL", "")
 	t.Setenv("SMTP_HOST", "")
 	t.Setenv("SMTP_PORT", "")
@@ -43,6 +46,15 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if cfg.PostRateLimitWindow != defaultPostRateWin {
 		t.Fatalf("PostRateLimitWindow = %d, want %d", cfg.PostRateLimitWindow, defaultPostRateWin)
 	}
+	if cfg.AuthAbuseMaxFailures != defaultAuthAbuseMaxFailures {
+		t.Fatalf("AuthAbuseMaxFailures = %d, want %d", cfg.AuthAbuseMaxFailures, defaultAuthAbuseMaxFailures)
+	}
+	if cfg.AuthAbuseBackoffBase != defaultAuthAbuseBackoffBaseSeconds {
+		t.Fatalf("AuthAbuseBackoffBase = %d, want %d", cfg.AuthAbuseBackoffBase, defaultAuthAbuseBackoffBaseSeconds)
+	}
+	if cfg.AuthAbuseBackoffMax != defaultAuthAbuseBackoffMaxSeconds {
+		t.Fatalf("AuthAbuseBackoffMax = %d, want %d", cfg.AuthAbuseBackoffMax, defaultAuthAbuseBackoffMaxSeconds)
+	}
 	if cfg.PasswordResetBaseURL != "" {
 		t.Fatalf("PasswordResetBaseURL = %q, want empty", cfg.PasswordResetBaseURL)
 	}
@@ -72,6 +84,9 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	t.Setenv("SESSION_COOKIE_DOMAIN", ".EXAMPLE.COM")
 	t.Setenv("POST_RATE_LIMIT_MAX", "15")
 	t.Setenv("POST_RATE_LIMIT_WINDOW_SECONDS", "90")
+	t.Setenv("AUTH_ABUSE_MAX_FAILURES", "4")
+	t.Setenv("AUTH_ABUSE_BACKOFF_BASE_SECONDS", "3")
+	t.Setenv("AUTH_ABUSE_BACKOFF_MAX_SECONDS", "120")
 	t.Setenv("PASSWORD_RESET_BASE_URL", "https://shop.example.com")
 	t.Setenv("SMTP_HOST", "SMTP.EXAMPLE.COM")
 	t.Setenv("SMTP_PORT", "2525")
@@ -103,6 +118,15 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	}
 	if cfg.PostRateLimitWindow != 90 {
 		t.Fatalf("PostRateLimitWindow = %d, want 90", cfg.PostRateLimitWindow)
+	}
+	if cfg.AuthAbuseMaxFailures != 4 {
+		t.Fatalf("AuthAbuseMaxFailures = %d, want 4", cfg.AuthAbuseMaxFailures)
+	}
+	if cfg.AuthAbuseBackoffBase != 3 {
+		t.Fatalf("AuthAbuseBackoffBase = %d, want 3", cfg.AuthAbuseBackoffBase)
+	}
+	if cfg.AuthAbuseBackoffMax != 120 {
+		t.Fatalf("AuthAbuseBackoffMax = %d, want 120", cfg.AuthAbuseBackoffMax)
 	}
 	if cfg.PasswordResetBaseURL != "https://shop.example.com" {
 		t.Fatalf("PasswordResetBaseURL = %q, unexpected", cfg.PasswordResetBaseURL)

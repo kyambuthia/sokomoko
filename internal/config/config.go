@@ -12,6 +12,9 @@ const (
 	defaultEnvironment = "development"
 	defaultPostRateMax = 0
 	defaultPostRateWin = 60
+	defaultAuthAbuseMaxFailures        = 0
+	defaultAuthAbuseBackoffBaseSeconds = 1
+	defaultAuthAbuseBackoffMaxSeconds  = 300
 	defaultSMTPPort    = "587"
 )
 
@@ -24,6 +27,9 @@ type Config struct {
 	SessionCookieDomain  string
 	PostRateLimitMax     int
 	PostRateLimitWindow  int
+	AuthAbuseMaxFailures int
+	AuthAbuseBackoffBase int
+	AuthAbuseBackoffMax  int
 	PasswordResetBaseURL string
 	SMTPHost             string
 	SMTPPort             string
@@ -42,6 +48,9 @@ func LoadFromEnv() Config {
 		SessionCookieDomain:  strings.TrimSpace(strings.ToLower(os.Getenv("SESSION_COOKIE_DOMAIN"))),
 		PostRateLimitMax:     readEnvInt("POST_RATE_LIMIT_MAX", defaultPostRateMax),
 		PostRateLimitWindow:  readEnvInt("POST_RATE_LIMIT_WINDOW_SECONDS", defaultPostRateWin),
+		AuthAbuseMaxFailures: readEnvInt("AUTH_ABUSE_MAX_FAILURES", defaultAuthAbuseMaxFailures),
+		AuthAbuseBackoffBase: readEnvInt("AUTH_ABUSE_BACKOFF_BASE_SECONDS", defaultAuthAbuseBackoffBaseSeconds),
+		AuthAbuseBackoffMax:  readEnvInt("AUTH_ABUSE_BACKOFF_MAX_SECONDS", defaultAuthAbuseBackoffMaxSeconds),
 		PasswordResetBaseURL: strings.TrimSpace(os.Getenv("PASSWORD_RESET_BASE_URL")),
 		SMTPHost:             strings.TrimSpace(strings.ToLower(os.Getenv("SMTP_HOST"))),
 		SMTPPort:             readEnv("SMTP_PORT", defaultSMTPPort),

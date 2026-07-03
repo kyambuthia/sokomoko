@@ -152,8 +152,8 @@ go fmt ./...
 - Module issues: `go mod tidy`.
 
 ## Docs
-- `AGENTS.md`
-- `GETTING_STARTED.md`
+- `docs/AGENTS.md`
+- `docs/GETTING_STARTED.md`
 - `docs/ARCHITECTURE_OVERVIEW.md`
 - `docs/roadmap/GO_COMMERCE_EVOLUTION_PLAN.md`
 - `docs/design/`

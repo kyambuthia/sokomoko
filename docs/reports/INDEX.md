@@ -7,7 +7,7 @@ Welcome! Here's your complete roadmap to the design system.
 ## 🚀 Start Here (Pick One)
 
 **I have 5 minutes:**
-→ Read `GETTING_STARTED.md`
+→ Read `docs/GETTING_STARTED.md`
 
 **I want to see it first:**
 → Run `go run ./cmd/sokomoko serve` and visit `/design`
@@ -26,7 +26,7 @@ Welcome! Here's your complete roadmap to the design system.
 | Guide | Purpose | Read When |
 |-------|---------|-----------|
 | `DESIGN_QUICK_REFERENCE.md` | Fast lookup of classes, colors, patterns | You need a class name |
-| `GETTING_STARTED.md` | 5-minute quickstart | You're new to the system |
+| `docs/GETTING_STARTED.md` | 5-minute quickstart | You're new to the system |
 
 ### Complete Guides (For Understanding)
 | Guide | Purpose | Read When |
@@ -55,7 +55,7 @@ Welcome! Here's your complete roadmap to the design system.
 4. Deep dive: `CSS_ARCHITECTURE.md` (colors section)
 
 ### I'm a Frontend Developer
-1. Read: `GETTING_STARTED.md`
+1. Read: `docs/GETTING_STARTED.md`
 2. Reference: `DESIGN_QUICK_REFERENCE.md` (for class names)
 3. Build: Using `TEMPLATE_BEST_PRACTICES.md` (patterns)
 4. Modify: Using `CSS_ARCHITECTURE.md` (when changing styles)
@@ -137,7 +137,7 @@ go run ./cmd/sokomoko serve
 ```
 
 ### Build a Page
-1. Open `GETTING_STARTED.md` (5 minutes)
+1. Open `docs/GETTING_STARTED.md` (5 minutes)
 2. Copy a template from `/internal/ui/templates/pages/`
 3. Reference `DESIGN_QUICK_REFERENCE.md` for class names
 4. Use `VERIFICATION_CHECKLIST.md` to test
@@ -163,7 +163,7 @@ go run ./cmd/sokomoko serve
 ```
 sokomoko/
 ├── INDEX.md (this file)
-├── GETTING_STARTED.md (5-minute quickstart)
+├── docs/GETTING_STARTED.md (5-minute quickstart)
 ├── DESIGN_README.md (overview)
 ├── DESIGN_QUICK_REFERENCE.md (cheat sheet)
 ├── DESIGN_SYSTEM.md (complete reference)
@@ -186,7 +186,7 @@ sokomoko/
 ## 🎓 Learning Path
 
 ### Beginner (New to System)
-1. `GETTING_STARTED.md` (5 min)
+1. `docs/GETTING_STARTED.md` (5 min)
 2. Visit `/design` in browser (5 min)
 3. Copy a template (5 min)
 4. **Total: 15 minutes**
@@ -230,7 +230,7 @@ Before deploying a page:
 ## 🔗 Quick Links
 
 **Documentation:**
-- `GETTING_STARTED.md` – Start here (5 min)
+- `docs/GETTING_STARTED.md` – Start here (5 min)
 - `DESIGN_QUICK_REFERENCE.md` – Fast lookup
 - `DESIGN_SYSTEM.md` – Complete specs
 
@@ -252,7 +252,7 @@ Before deploying a page:
 ## 🎯 Common Questions
 
 **Q: Where do I start?**
-A: Read `GETTING_STARTED.md` (5 minutes)
+A: Read `docs/GETTING_STARTED.md` (5 minutes)
 
 **Q: How do I find a class name?**
 A: Check `DESIGN_QUICK_REFERENCE.md`
@@ -314,7 +314,7 @@ A: All modern browsers (Chrome, Firefox, Safari, Edge)
 
 **Status:** ✅ COMPLETE & PRODUCTION READY
 
-**Questions?** → Start with `GETTING_STARTED.md`
+**Questions?** → Start with `docs/GETTING_STARTED.md`
 **Need examples?** → Visit `/design` in browser
 **Want full specs?** → Read `DESIGN_SYSTEM.md`
 

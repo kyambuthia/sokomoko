@@ -52,6 +52,9 @@ type Config struct {
 	Environment              string
 	AdminSetupToken          string
 	SessionCookieDomain      string
+	AuthAbuseMaxFailures     int
+	AuthAbuseBackoffBase     time.Duration
+	AuthAbuseBackoffMax      time.Duration
 	PasswordResetBaseURL     string
 	PasswordResetEmailSender PasswordResetEmailSender
 }
@@ -61,6 +64,7 @@ type Service struct {
 	environment              string
 	adminSetupToken          string
 	sessionCookieDomain      string
+	abuseLimiter             *authAbuseLimiter
 	passwordResetBaseURL     string
 	passwordResetEmailSender PasswordResetEmailSender
 }
@@ -76,9 +80,93 @@ func NewService(store store, cfg Config) *Service {
 		environment:              environment,
 		adminSetupToken:          strings.TrimSpace(cfg.AdminSetupToken),
 		sessionCookieDomain:      strings.TrimSpace(strings.ToLower(cfg.SessionCookieDomain)),
+		abuseLimiter:             newAuthAbuseLimiter(cfg.AuthAbuseMaxFailures, cfg.AuthAbuseBackoffBase, cfg.AuthAbuseBackoffMax),
 		passwordResetBaseURL:     strings.TrimSpace(cfg.PasswordResetBaseURL),
 		passwordResetEmailSender: cfg.PasswordResetEmailSender,
 	}
+}
+
+func normalizeIdentifierForAbuse(identifier string, preserveCase bool) string {
+	normalized := strings.TrimSpace(identifier)
+	if preserveCase {
+		return normalized
+	}
+	return strings.ToLower(normalized)
+}
+
+func clientIPFromRequest(r *http.Request) string {
+	if r == nil {
+		return "unknown"
+	}
+	forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if forwarded != "" {
+		parts := strings.Split(forwarded, ",")
+		if len(parts) > 0 {
+			candidate := strings.TrimSpace(parts[0])
+			if candidate != "" {
+				return candidate
+			}
+		}
+	}
+
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil {
+		host = strings.TrimSpace(r.RemoteAddr)
+	}
+	if host == "" {
+		return "unknown"
+	}
+	return host
+}
+
+func abuseScopeKey(scope, ip, identifier string) string {
+	return scope + "|" + ip + "|" + identifier
+}
+
+func (s *Service) throttleStatus(w http.ResponseWriter, retryAfter time.Duration) {
+	if retryAfter <= 0 {
+		retryAfter = time.Second
+	}
+	seconds := int(retryAfter.Seconds())
+	if retryAfter%time.Second != 0 {
+		seconds++
+	}
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+}
+
+func (s *Service) checkAbuseLock(w http.ResponseWriter, scope, identifier string, preserveCase bool, r *http.Request) bool {
+	if s.abuseLimiter == nil {
+		return false
+	}
+	ip := clientIPFromRequest(r)
+	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
+	locked, retryAfter := s.abuseLimiter.IsLocked(key, time.Now())
+	if !locked {
+		return false
+	}
+	s.throttleStatus(w, retryAfter)
+	return true
+}
+
+func (s *Service) markAbuseFailure(scope, identifier string, preserveCase bool, r *http.Request) {
+	if s.abuseLimiter == nil {
+		return
+	}
+	ip := clientIPFromRequest(r)
+	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
+	s.abuseLimiter.RecordFailure(key, time.Now())
+}
+
+func (s *Service) clearAbuseFailures(scope, identifier string, preserveCase bool, r *http.Request) {
+	if s.abuseLimiter == nil {
+		return
+	}
+	ip := clientIPFromRequest(r)
+	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
+	s.abuseLimiter.RecordSuccess(key)
 }
 
 type StaffCredential struct {
@@ -555,8 +643,15 @@ func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
+		if s.checkAbuseLock(w, "login:user", username, true, r) {
+			data.Error = "Too many attempts. Please wait and try again."
+			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+			return
+		}
+
 		user, err := s.store.GetUserByUsername(username)
 		if err != nil || user == nil || user.Role != "user" {
+			s.markAbuseFailure("login:user", username, true, r)
 			log.Printf("Login failed for user %s: %v", username, err)
 			data.Error = "Invalid credentials"
 			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
@@ -564,11 +659,13 @@ func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password+user.Salt)); err != nil {
+			s.markAbuseFailure("login:user", username, true, r)
 			log.Printf("Password mismatch for user %s: %v", username, err)
 			data.Error = "Invalid credentials"
 			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
 			return
 		}
+		s.clearAbuseFailures("login:user", username, true, r)
 
 		if err := s.startSession(w, r, user.ID); err != nil {
 			log.Printf("Error creating session in DB: %v", err)
@@ -617,8 +714,15 @@ func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
+		if s.checkAbuseLock(w, "login:admin", username, true, r) {
+			data.Error = "Too many attempts. Please wait and try again."
+			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+			return
+		}
+
 		user, err := s.store.GetUserByUsername(username)
 		if err != nil || user == nil || !containsRole([]string{"admin", "staff"}, user.Role) {
+			s.markAbuseFailure("login:admin", username, true, r)
 			log.Printf("Admin/staff login failed for user %s: %v", username, err)
 			data.Error = "Invalid credentials"
 			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
@@ -626,10 +730,12 @@ func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password+user.Salt)); err != nil {
+			s.markAbuseFailure("login:admin", username, true, r)
 			data.Error = "Invalid credentials"
 			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
 			return
 		}
+		s.clearAbuseFailures("login:admin", username, true, r)
 
 		if err := s.startSession(w, r, user.ID); err != nil {
 			log.Printf("Error creating admin session in DB: %v", err)
@@ -807,6 +913,12 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 			return
 		}
 
+		if s.checkAbuseLock(w, "password-reset:request", identifier, false, r) {
+			data.Error = "Too many attempts. Please wait and try again."
+			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+			return
+		}
+
 		user, err := s.findUserByIdentifier(identifier)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -830,6 +942,9 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 			if s.shouldExposeResetLink() {
 				data.ResetLink = resetLink
 			}
+			s.clearAbuseFailures("password-reset:request", identifier, false, r)
+		} else {
+			s.markAbuseFailure("password-reset:request", identifier, false, r)
 		}
 
 		renderWithStatus(w, tmpl, 0, data)
@@ -849,7 +964,17 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 		if r.Method == http.MethodGet {
 			token := strings.TrimSpace(r.URL.Query().Get("token"))
 			data.Token = token
+			abuseIdentifier := token
+			if abuseIdentifier == "" {
+				abuseIdentifier = "missing-token"
+			}
+			if s.checkAbuseLock(w, "password-reset:confirm", abuseIdentifier, true, r) {
+				data.Error = "Too many attempts. Please wait and try again."
+				renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+				return
+			}
 			if token == "" {
+				s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 				data.Error = "Missing reset token"
 				renderWithStatus(w, tmpl, 0, data)
 				return
@@ -861,6 +986,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 				return
 			}
 			if resetToken == nil {
+				s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 				data.Error = "Reset token is invalid or expired"
 				renderWithStatus(w, tmpl, 0, data)
 				return
@@ -868,10 +994,12 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 
 			user, err := s.store.GetUserByID(resetToken.UserID)
 			if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
+				s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 				data.Error = "Reset token is invalid for this account type"
 				renderWithStatus(w, tmpl, 0, data)
 				return
 			}
+			s.clearAbuseFailures("password-reset:confirm", abuseIdentifier, true, r)
 
 			renderWithStatus(w, tmpl, 0, data)
 			return
@@ -886,6 +1014,16 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 		password := r.FormValue("password")
 		confirmPassword := r.FormValue("confirm_password")
 		data.Token = token
+		abuseIdentifier := token
+		if abuseIdentifier == "" {
+			abuseIdentifier = "missing-token"
+		}
+
+		if s.checkAbuseLock(w, "password-reset:confirm", abuseIdentifier, true, r) {
+			data.Error = "Too many attempts. Please wait and try again."
+			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+			return
+		}
 
 		if token == "" || password == "" || confirmPassword == "" {
 			data.Error = "All fields are required"
@@ -909,6 +1047,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 		if resetToken == nil {
+			s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 			data.Error = "Reset token is invalid or expired"
 			renderWithStatus(w, tmpl, 0, data)
 			return
@@ -916,6 +1055,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 
 		user, err := s.store.GetUserByID(resetToken.UserID)
 		if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
+			s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 			data.Error = "Reset token is invalid for this account type"
 			renderWithStatus(w, tmpl, 0, data)
 			return
@@ -933,10 +1073,12 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 		if !used {
+			s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 			data.Error = "Reset token is invalid or expired"
 			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
+		s.clearAbuseFailures("password-reset:confirm", abuseIdentifier, true, r)
 
 		data.ShowForm = false
 		data.Message = "Password reset successful. You can now sign in at " + loginPath

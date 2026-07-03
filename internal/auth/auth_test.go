@@ -59,6 +59,16 @@ func clearUsersTable() {
 	}
 }
 
+func clearAuthTables() {
+	if _, err := testStore.DB.Exec("DELETE FROM password_reset_tokens"); err != nil {
+		panic(err)
+	}
+	if _, err := testStore.DB.Exec("DELETE FROM sessions"); err != nil {
+		panic(err)
+	}
+	clearUsersTable()
+}
+
 func createTestUser(username, email, password, role string) *db.User {
 	user := db.User{
 		Username: username,
@@ -181,7 +191,7 @@ func TestSignUp_InvalidEmail(t *testing.T) {
 }
 
 func TestLogin(t *testing.T) {
-	clearUsersTable()
+	clearAuthTables()
 	createTestUser("loginuser", "login@example.com", "loginpass", "user")
 
 	tmpl := template.New("login.html")
@@ -231,6 +241,88 @@ func TestLogin(t *testing.T) {
 
 	if status := rr.Code; status != http.StatusUnauthorized {
 		t.Errorf("handler returned wrong status code for non-existent user: got %v want %v", status, http.StatusUnauthorized)
+	}
+}
+
+func TestLogin_AbuseThrottlePerIPAndIdentifier(t *testing.T) {
+	clearAuthTables()
+	createTestUser("throttle_user", "throttle_user@example.com", "correctpass", "user")
+
+	tmpl := template.New("login.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}{{.Error}}{{end}}"))
+
+	svc := newTestService(Config{
+		AuthAbuseMaxFailures: 2,
+		AuthAbuseBackoffBase: time.Second,
+		AuthAbuseBackoffMax:  8 * time.Second,
+	})
+
+	data := url.Values{}
+	data.Set("username", "throttle_user")
+	data.Set("password", "wrongpass")
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.9:1234"
+	rr := httptest.NewRecorder()
+	svc.Login(tmpl).ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("first failure status=%d want=%d", rr.Code, http.StatusUnauthorized)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.9:1234"
+	rr = httptest.NewRecorder()
+	svc.Login(tmpl).ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("second failure status=%d want=%d", rr.Code, http.StatusUnauthorized)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.9:1234"
+	rr = httptest.NewRecorder()
+	svc.Login(tmpl).ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("locked status=%d want=%d", rr.Code, http.StatusTooManyRequests)
+	}
+	if strings.TrimSpace(rr.Header().Get("Retry-After")) == "" {
+		t.Fatal("expected Retry-After header while throttled")
+	}
+
+	data.Set("password", "correctpass")
+	req = httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.10:1234"
+	rr = httptest.NewRecorder()
+	svc.Login(tmpl).ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("different IP should not be throttled: status=%d want=%d", rr.Code, http.StatusFound)
+	}
+}
+
+func TestLogin_ThrottleDisabledByDefault(t *testing.T) {
+	clearAuthTables()
+	createTestUser("default_user", "default_user@example.com", "correctpass", "user")
+
+	tmpl := template.New("login.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}{{.Error}}{{end}}"))
+
+	svc := newTestService(Config{})
+	data := url.Values{}
+	data.Set("username", "default_user")
+	data.Set("password", "wrongpass")
+
+	for i := 0; i < 4; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(data.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "203.0.113.22:1234"
+		rr := httptest.NewRecorder()
+		svc.Login(tmpl).ServeHTTP(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d status=%d want=%d", i+1, rr.Code, http.StatusUnauthorized)
+		}
 	}
 }
 
@@ -310,7 +402,7 @@ func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
 }
 
 func TestPasswordResetRequest_ProductionDoesNotExposeLinkWhenEmailFails(t *testing.T) {
-	clearUsersTable()
+	clearAuthTables()
 	user := createTestUser("reset_prod_user", "reset_prod_user@example.com", "resetpass123", "user")
 
 	sendDone := make(chan struct{}, 1)
@@ -344,6 +436,80 @@ func TestPasswordResetRequest_ProductionDoesNotExposeLinkWhenEmailFails(t *testi
 	}
 	if strings.Contains(rr.Body.String(), "/password-reset/confirm?token=") {
 		t.Fatal("expected reset link not to be exposed in production mode")
+	}
+}
+
+func TestPasswordResetRequest_AbuseThrottle(t *testing.T) {
+	clearAuthTables()
+
+	svc := newTestService(Config{
+		AuthAbuseMaxFailures: 2,
+		AuthAbuseBackoffBase: time.Second,
+		AuthAbuseBackoffMax:  4 * time.Second,
+	})
+
+	tmpl := template.New("password_reset_request.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}{{.Error}}{{end}}"))
+
+	data := url.Values{}
+	data.Set("identifier", "unknown-user")
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/password-reset/request", strings.NewReader(data.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "198.51.100.11:1234"
+		rr := httptest.NewRecorder()
+		svc.PasswordResetRequest(tmpl, []string{"user"}, "Reset", "helper").ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("attempt %d status=%d want=%d", i+1, rr.Code, http.StatusOK)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/password-reset/request", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.11:1234"
+	rr := httptest.NewRecorder()
+	svc.PasswordResetRequest(tmpl, []string{"user"}, "Reset", "helper").ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("locked status=%d want=%d", rr.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestPasswordResetConfirm_AbuseThrottle(t *testing.T) {
+	clearAuthTables()
+
+	svc := newTestService(Config{
+		AuthAbuseMaxFailures: 2,
+		AuthAbuseBackoffBase: time.Second,
+		AuthAbuseBackoffMax:  4 * time.Second,
+	})
+
+	tmpl := template.New("password_reset_confirm.html")
+	template.Must(tmpl.Parse("{{define \"root_template\"}}{{.Error}}{{end}}"))
+
+	data := url.Values{}
+	data.Set("token", "invalid-token")
+	data.Set("password", "newpassword123")
+	data.Set("confirm_password", "newpassword123")
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/password-reset/confirm", strings.NewReader(data.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "198.51.100.12:1234"
+		rr := httptest.NewRecorder()
+		svc.PasswordResetConfirm(tmpl, []string{"user"}, "Confirm", "helper", "/login").ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("attempt %d status=%d want=%d", i+1, rr.Code, http.StatusOK)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/password-reset/confirm", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.12:1234"
+	rr := httptest.NewRecorder()
+	svc.PasswordResetConfirm(tmpl, []string{"user"}, "Confirm", "helper", "/login").ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("locked status=%d want=%d", rr.Code, http.StatusTooManyRequests)
 	}
 }
 

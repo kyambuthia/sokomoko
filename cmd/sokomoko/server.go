@@ -146,6 +146,9 @@ func printStartupSummary(cfg config.Config, server *httpServer, allowedHosts map
 	if cfg.PostRateLimitMax > 0 {
 		log.Printf("[startup] post_rate_limit=%d requests/%ds", cfg.PostRateLimitMax, cfg.PostRateLimitWindow)
 	}
+	if cfg.AuthAbuseMaxFailures > 0 {
+		log.Printf("[startup] auth_abuse_limit=enabled max_failures=%d backoff_base=%ds backoff_max=%ds", cfg.AuthAbuseMaxFailures, cfg.AuthAbuseBackoffBase, cfg.AuthAbuseBackoffMax)
+	}
 	log.Printf("[startup] bind=%s", server.Addr)
 	log.Printf("[startup] trusted_hosts=%s", sortedHostList(allowedHosts))
 	log.Printf("[startup] storefront=%s", localURL("localhost", cfg.Port))
