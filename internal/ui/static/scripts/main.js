@@ -226,27 +226,54 @@ class UIHeaderSearch extends HTMLElement {
     this.label = this.getAttribute("label") || "Search products";
     this.placeholder = this.getAttribute("placeholder") || "Search products";
     this.submitLabel = this.getAttribute("submit-label") || "Search";
+    this.variant = (this.getAttribute("variant") || "default").toLowerCase();
+    this.categories = (this.getAttribute("categories") || "")
+      .split("|")
+      .map((category) => category.trim())
+      .filter(Boolean);
+    this.selectedCategory = this.getAttribute("selected-category") || this.categories[0] || "All Categories";
+    this.showCamera = this.getAttribute("show-camera") === "true";
     this.inputID = `ui-header-search-${UIHeaderSearch.nextID++}`;
     this.abortController = null;
     this.debounceTimer = null;
 
-    this.classList.add("header-search");
+    this.classList.add("header-search", `header-search--${this.variant}`);
     this.innerHTML = `
-      <form action="${escapeHTML(this.action)}" method="GET" class="header-search__form" role="search">
+      <form action="${escapeHTML(this.action)}" method="GET" class="header-search__form header-search__form--${escapeHTML(this.variant)}" role="search">
         <label class="header-search__label" for="${this.inputID}">${escapeHTML(this.label)}</label>
-        <div class="header-search__control">
+        <div class="header-search__control header-search__control--${escapeHTML(this.variant)}">
+          ${this.categories.length > 0 ? `
+            <label class="header-search__label header-search__label--select" for="${this.inputID}-category">Category</label>
+            <select id="${this.inputID}-category" class="header-search__category" name="category" aria-label="Category">
+              ${this.categories
+                .map((category) => {
+                  const selected = category === this.selectedCategory ? " selected" : "";
+                  return `<option value="${escapeHTML(category)}"${selected}>${escapeHTML(category)}</option>`;
+                })
+                .join("")}
+            </select>
+            <span class="header-search__divider" aria-hidden="true"></span>
+          ` : ""}
           <input
-            type="search"
-            id="${this.inputID}"
-            name="q"
-            class="header-search__input"
-            placeholder="${escapeHTML(this.placeholder)}"
-            autocomplete="off"
-            minlength="2"
-            aria-autocomplete="list"
-            aria-expanded="false"
-            aria-controls="${this.inputID}-results"
+              type="search"
+              id="${this.inputID}"
+              name="q"
+              class="header-search__input"
+              placeholder="${escapeHTML(this.placeholder)}"
+              autocomplete="off"
+              minlength="2"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="${this.inputID}-results"
           />
+          ${this.showCamera ? `
+            <span class="header-search__camera" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                <path d="M7.5 7.5h2l1.2-1.8h2.6l1.2 1.8h2.0a2 2 0 0 1 2 2v6.8a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V9.5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                <circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+              </svg>
+            </span>
+          ` : ""}
           <button type="submit" class="btn btn--primary header-search__submit">${escapeHTML(this.submitLabel)}</button>
         </div>
         <div class="header-search__results" id="${this.inputID}-results" role="listbox" hidden></div>
