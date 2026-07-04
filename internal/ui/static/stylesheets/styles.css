@@ -2832,7 +2832,7 @@ tbody tr:hover {
     max-width: none;
     width: auto;
     margin-left: calc(var(--nav-rail-width) + var(--space-10));
-    margin-right: var(--space-8);
+    margin-right: 0;
   }
 
   .site--nav-left-rail .nav-shell--left {
