@@ -1,64 +1,39 @@
 {{ define "storefront-header-area" }}
 <header class="site-header site-header--storefront storefront-header">
-    <ui-header-banner text="Free delivery in Nairobi on orders over $75 | New arrivals added weekly | Cash on delivery available"></ui-header-banner>
-    <div class="storefront-header__masthead">
-        <div class="site-header__brand">
-            <p class="site-header__eyebrow">Quiet Market</p>
-            <a href="/" class="site-header__brandmark" aria-label="Sokomoko home">SOKOMOKO</a>
-        </div>
+    <div class="storefront-header__utility" aria-label="Storefront utilities">
+        <p class="storefront-header__announcement">Curated finds, quick checkout, and local delivery.</p>
+        <nav class="storefront-header__utility-group storefront-header__utility-group--end" aria-label="Storefront shortcuts">
+            <a href="/account" class="storefront-header__utility-link">Account</a>
+            <a href="/search?q=saved" class="storefront-header__utility-link">Saved</a>
+            <a href="/search?q=deals" class="storefront-header__utility-link">Deals</a>
+            <a href="/cart" class="storefront-header__utility-link storefront-header__utility-link--cart">Cart</a>
+        </nav>
     </div>
-    <nav
-        class="site-nav nav nav--top nav--horizontal storefront-header__nav"
-        data-nav
-        data-nav-placement="top"
-        data-nav-collapsible="mobile"
-    >
-        <div class="nav__bar">
-            <div class="nav__heading">
-                <p class="nav__label">Browse</p>
-                <p class="nav__context">{{.Title}}</p>
-            </div>
-            <button
-                type="button"
-                class="site-nav__toggle nav__toggle"
-                data-nav-toggle
-                aria-expanded="false"
-                aria-controls="primary-site-nav"
-                aria-label="Menu"
-            >
-                <span class="nav__toggle-icon" aria-hidden="true">
-                    <span class="nav__toggle-line"></span>
-                    <span class="nav__toggle-line"></span>
-                    <span class="nav__toggle-line"></span>
-                </span>
-            </button>
+    <div class="storefront-header__masthead">
+        <div class="storefront-header__brand">
+            <a href="/" class="site-header__brandmark storefront-header__brandmark" aria-label="Sokomoko home">SOKOMOKO</a>
+            <p class="storefront-header__tagline">A quieter marketplace for everyday goods.</p>
         </div>
-        <div class="site-nav__menu nav__menu" id="primary-site-nav" data-nav-menu>
-            <div class="nav__section nav__section--primary">
-                <ul class="site-nav__list nav__list">
-                    <li class="site-nav__item nav__item">
-                        <a href="/" class="site-nav__link nav__link" {{if eq .Title "Home"}}aria-current="page"{{end}}>Shop</a>
-                    </li>
-                    <li class="site-nav__item nav__item">
-                        <a href="/search" class="site-nav__link nav__link" {{if eq .Title "Search"}}aria-current="page"{{end}}>Search</a>
-                    </li>
-                    <li class="site-nav__item nav__item">
-                        <a href="/account" class="site-nav__link nav__link" {{if eq .Title "Your Account"}}aria-current="page"{{end}}>Account</a>
-                    </li>
-                    <li class="site-nav__item nav__item">
-                        <a href="/cart" class="site-nav__link nav__link" {{if eq .Title "Cart"}}aria-current="page"{{end}}>Cart</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
+        <ui-header-search
+            action="/search"
+            endpoint="/search"
+            label="Search the catalog"
+            placeholder="Search products, brands, and deals"
+            submit-label="Find"
+            variant="marketplace"
+            categories="All Departments|Electronics|Home & kitchen|Style|Office|Audio|Deals|Sell"
+            selected-category="All Departments"
+        ></ui-header-search>
+    </div>
+    <nav class="storefront-header__categories" aria-label="Featured departments">
+        <a href="/search?q=new" class="storefront-header__category-link storefront-header__category-link--active" aria-current="page">All</a>
+        <a href="/search?q=electronics" class="storefront-header__category-link">Electronics</a>
+        <a href="/search?q=home" class="storefront-header__category-link">Home</a>
+        <a href="/search?q=style" class="storefront-header__category-link">Style</a>
+        <a href="/search?q=audio" class="storefront-header__category-link">Audio</a>
+        <a href="/search?q=deals" class="storefront-header__category-link">Deals</a>
+        <a href="/search?q=sell" class="storefront-header__category-link">Sell</a>
     </nav>
-    <ui-header-search
-        action="/search"
-        endpoint="/search"
-        label="Search products"
-        placeholder="Search products"
-        submit-label="Search"
-    ></ui-header-search>
 </header>
 {{ end }}
 
