@@ -3,6 +3,9 @@
     <div class="storefront-header__utility" aria-label="Storefront utilities">
         <p class="storefront-header__announcement">Curated finds, quick checkout, and local delivery.</p>
         <nav class="storefront-header__utility-group storefront-header__utility-group--end" aria-label="Storefront shortcuts">
+            <button type="button" class="storefront-header__utility-link storefront-header__theme-toggle" data-theme-toggle aria-pressed="false">
+                Theme
+            </button>
             <a href="/account" class="storefront-header__utility-link">Account</a>
             <a href="/search?q=saved" class="storefront-header__utility-link">Saved</a>
             <a href="/search?q=deals" class="storefront-header__utility-link">Deals</a>
@@ -44,6 +47,9 @@
         <p class="site-header__title site-title">SOKOMOKO ADMIN</p>
         <p class="site-header__tagline site-tagline">Platform management and order oversight.</p>
     </div>
+    <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
+        Theme
+    </button>
 </header>
 {{ end }}
 
@@ -54,6 +60,9 @@
         <p class="site-header__title site-title">SOKOMOKO PARTNER</p>
         <p class="site-header__tagline site-tagline">Catalog updates, fulfillment flow, and store setup.</p>
     </div>
+    <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
+        Theme
+    </button>
 </header>
 {{ end }}
 

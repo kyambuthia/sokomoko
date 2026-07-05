@@ -1158,10 +1158,55 @@ function escapeHTML(value) {
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 document.addEventListener("DOMContentLoaded", () => {
+  initThemeToggle();
   initPasswordToggles();
   initNavToggles();
   initFormSubmitStates();
 });
+
+function initThemeToggle() {
+  const themeButtons = document.querySelectorAll("[data-theme-toggle]");
+  if (themeButtons.length === 0) {
+    return;
+  }
+
+  const storageKey = "sokomoko-theme";
+
+  const readTheme = () => {
+    const current = document.documentElement.getAttribute("data-theme");
+    if (current === "light" || current === "dark") {
+      return current;
+    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  };
+
+  const writeTheme = (theme) => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      window.localStorage.setItem(storageKey, theme);
+    } catch (e) {
+      // Ignore storage failures and keep the in-memory theme only.
+    }
+    themeButtons.forEach((button) => {
+      const nextTheme = theme === "dark" ? "light" : "dark";
+      button.textContent = theme === "dark" ? "Light theme" : "Dark theme";
+      button.setAttribute("aria-label", `Switch to ${nextTheme} theme`);
+      button.setAttribute("aria-pressed", String(theme === "dark"));
+      button.dataset.themeCurrent = theme;
+    });
+  };
+
+  const toggleTheme = () => {
+    const current = readTheme();
+    const next = current === "dark" ? "light" : "dark";
+    writeTheme(next);
+  };
+
+  writeTheme(readTheme());
+  themeButtons.forEach((button) => {
+    button.addEventListener("click", toggleTheme);
+  });
+}
 
 function initPasswordToggles() {
   const passwordToggles = document.querySelectorAll("[data-password-toggle]");

@@ -4,6 +4,18 @@
         <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <script>
+                        (() => {
+                                try {
+                                        const stored = window.localStorage.getItem("sokomoko-theme");
+                                        if (stored === "light" || stored === "dark") {
+                                                document.documentElement.setAttribute("data-theme", stored);
+                                        }
+                                } catch (e) {
+                                        // Ignore storage errors and fall back to system theme.
+                                }
+                        })();
+                </script>
                 <link rel="manifest" href='{{ asset "manifest.json" }}' />
                 <link rel="preload" href='{{ asset "stylesheets/styles.css" }}' as="style" />
                 <title>{{ block "title" . }}{{end}}</title>
