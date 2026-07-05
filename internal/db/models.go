@@ -2,7 +2,11 @@ package db
 
 import (
 	"database/sql"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"runtime"
 	"time"
 )
 
@@ -23,18 +27,57 @@ func ResolveProductImageURL(rawURL, slug, name, category string) string {
 	cleanURL := strings.TrimSpace(rawURL)
 	switch {
 	case cleanURL == "":
-		return fallbackProductImageURL(slug, name, category)
+		return cacheBustProductImageURL(fallbackProductImageURL(slug, name, category))
 	case strings.HasPrefix(cleanURL, "data:"):
 		return cleanURL
 	case strings.HasPrefix(cleanURL, "/"):
-		return cleanURL
+		return cacheBustProductImageURL(cleanURL)
 	case strings.HasPrefix(cleanURL, "static/"):
-		return "/" + cleanURL
+		return cacheBustProductImageURL("/" + cleanURL)
 	case strings.HasPrefix(cleanURL, "http://"), strings.HasPrefix(cleanURL, "https://"):
-		return fallbackProductImageURL(slug, name, category)
+		return cacheBustProductImageURL(fallbackProductImageURL(slug, name, category))
 	default:
-		return "/" + strings.TrimLeft(cleanURL, "/")
+		return cacheBustProductImageURL("/" + strings.TrimLeft(cleanURL, "/"))
 	}
+}
+
+func cacheBustProductImageURL(rawURL string) string {
+	cleanURL := strings.TrimSpace(rawURL)
+	if cleanURL == "" || strings.HasPrefix(cleanURL, "data:") {
+		return cleanURL
+	}
+
+	pathPart := cleanURL
+	if idx := strings.Index(pathPart, "?"); idx >= 0 {
+		pathPart = pathPart[:idx]
+	}
+	if idx := strings.Index(pathPart, "#"); idx >= 0 {
+		pathPart = pathPart[:idx]
+	}
+	if !strings.HasPrefix(pathPart, "/") {
+		return cleanURL
+	}
+
+	assetPath := strings.TrimPrefix(pathPart, "/")
+	assetPath = strings.TrimPrefix(assetPath, "static/")
+	localPath := staticAssetPath(assetPath)
+	info, err := os.Stat(localPath)
+	if err != nil || info.IsDir() {
+		return cleanURL
+	}
+
+	suffix := "v=" + strconv.FormatInt(info.ModTime().Unix(), 10)
+	return pathPart + "?" + suffix
+}
+
+func staticAssetPath(assetPath string) string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return filepath.Join("internal", "ui", "static", filepath.FromSlash(assetPath))
+	}
+
+	root := filepath.Dir(filepath.Dir(filepath.Dir(file)))
+	return filepath.Join(root, "internal", "ui", "static", filepath.FromSlash(assetPath))
 }
 
 func fallbackProductImageURL(slug, name, category string) string {
