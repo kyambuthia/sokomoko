@@ -23,6 +23,6 @@ func Root(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		a.Render(w, a.Templates.Index, indexPage(products))
+		a.Render(w, a.Templates.Index, indexPage(products, a.Auth.CSRFToken(req)))
 	}
 }

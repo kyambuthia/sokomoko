@@ -1,45 +1,50 @@
 {{ define "title" }}{{.Title}} – sokomoko{{ end }}
 
 {{ define "main-area" }}
-<section class="catalog-page">
-  <header class="catalog-page__intro">
+<main class="storefront-page product-page">
+  <header class="page-intro page-intro--compact">
     <ui-breadcrumb items='[{"label":"Home","href":"/"},{"label":"{{.Product.Name}}"}]'></ui-breadcrumb>
-    <h1 class="catalog-page__title">{{.Product.Name}}</h1>
-    <p class="catalog-page__lead">{{if .Product.Category}}{{.Product.Category}}{{else}}General Merchandise{{end}}</p>
   </header>
 
-  <section class="panel card">
-    <div class="card__body">
-      <div class="product-list" style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); align-items:start;">
-        <div>
-          <img src="{{.Product.GetPrimaryImageURL}}" alt="{{.Product.Name}}" class="product-tile__image product-card__image" width="360" height="360">
+  <section class="product-detail">
+    <div class="product-detail__media">
+      <img src="{{.Product.GetPrimaryImageURL}}" alt="{{.Product.Name}}" class="product-detail__image" width="720" height="540">
+    </div>
+
+    <div class="product-detail__content">
+      <p class="eyebrow">{{if .Product.Category}}{{.Product.Category}}{{else}}General merchandise{{end}}</p>
+      <h1 class="product-detail__title">{{.Product.Name}}</h1>
+      <div class="product-detail__price">
+        <ui-price amount="{{printf "%.2f" .Product.Price}}"></ui-price>
+      </div>
+
+      {{if gt .Product.StockQuantity 0}}
+      <p class="stock-line"><span class="stock-dot stock-dot--available"></span>{{.Product.StockQuantity}} available now</p>
+      {{else}}
+      <p class="stock-line"><span class="stock-dot stock-dot--unavailable"></span>Currently unavailable</p>
+      {{end}}
+
+      <p class="product-detail__description">{{.Product.Description}}</p>
+
+      {{if gt .Product.StockQuantity 0}}
+      <form action="/cart/add" method="POST" class="product-detail__form form">
+        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+        <input type="hidden" name="product_id" value="{{.Product.ID}}">
+        <div class="form__group form-group">
+          <label class="form__label" for="quantity">Quantity</label>
+          <ui-quantity name="quantity" value="1" min="1" max="{{.Product.StockQuantity}}"></ui-quantity>
         </div>
+        <button type="submit" class="btn btn--primary btn--full">Add to cart</button>
+      </form>
+      {{else}}
+      <button class="btn btn--secondary btn--full" type="button" disabled>Currently unavailable</button>
+      {{end}}
 
-        <div>
-          <ui-price amount="{{printf "%.2f" .Product.Price}}" style="font-size:var(--font-size-xl); margin-bottom:var(--space-3); display:inline-flex;"></ui-price>
-          {{if gt .Product.StockQuantity 0}}
-          <p style="margin-bottom:var(--space-3);"><ui-badge variant="success" label="{{.Product.StockQuantity}} available"></ui-badge></p>
-          {{else}}
-          <p style="margin-bottom:var(--space-3);"><ui-badge variant="danger" label="Out of stock"></ui-badge></p>
-          {{end}}
-
-          <p class="product-tile__description product-card__description">{{.Product.Description}}</p>
-
-          {{if gt .Product.StockQuantity 0}}
-          <form action="/cart/add" method="POST" class="form" style="max-width:320px;">
-            <input type="hidden" name="product_id" value="{{.Product.ID}}">
-            <div class="form__group form-group">
-              <label class="form__label" for="quantity">Quantity</label>
-              <ui-quantity name="quantity" value="1" min="1" max="{{.Product.StockQuantity}}"></ui-quantity>
-            </div>
-            <button type="submit" class="btn btn--full">Add to cart</button>
-          </form>
-          {{else}}
-          <button class="btn btn--full" type="button" disabled>Unavailable</button>
-          {{end}}
-        </div>
+      <div class="product-detail__reassurance">
+        <div><strong>Simple checkout</strong><span>Clear totals before you place an order.</span></div>
+        <div><strong>Delivery updates</strong><span>Follow the order from your account.</span></div>
       </div>
     </div>
   </section>
-</section>
+</main>
 {{ end }}

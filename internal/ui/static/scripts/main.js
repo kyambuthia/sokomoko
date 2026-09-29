@@ -223,6 +223,7 @@ class UIHeaderSearch extends HTMLElement {
 
     this.action = this.getAttribute("action") || "/search";
     this.endpoint = this.getAttribute("endpoint") || this.action;
+    this.csrfToken = this.getAttribute("csrf-token") || "";
     this.label = this.getAttribute("label") || "Search products";
     this.placeholder = this.getAttribute("placeholder") || "Search products";
     this.submitLabel = this.getAttribute("submit-label") || "Search";
@@ -314,13 +315,18 @@ class UIHeaderSearch extends HTMLElement {
     this.abortController = new AbortController();
 
     try {
+      const headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      };
+      if (this.csrfToken) {
+        headers["X-CSRF-Token"] = this.csrfToken;
+      }
+
       const response = await fetch(this.endpoint, {
         method: "POST",
         credentials: "same-origin",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ queryString: query }),
         signal: this.abortController.signal,
       });

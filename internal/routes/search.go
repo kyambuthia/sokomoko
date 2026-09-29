@@ -27,9 +27,9 @@ func Search(a *app.App) http.HandlerFunc {
 					return
 				}
 
-				a.Render(w, a.Templates.Search, searchPage(query, products))
+				a.Render(w, a.Templates.Search, searchPage(query, products, a.Auth.CSRFToken(req)))
 			} else {
-				a.Render(w, a.Templates.Search, searchPage("", nil))
+				a.Render(w, a.Templates.Search, searchPage("", nil, a.Auth.CSRFToken(req)))
 			}
 
 		// HANDLE POST REQUESTS - /search ROUTE

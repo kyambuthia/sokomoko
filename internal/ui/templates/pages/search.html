@@ -1,60 +1,72 @@
 {{ define "title" }}Search{{ end }}
 
 {{ define "main-area" }}
-<section class="search-page">
-  <header class="search-page__header">
-    <h1 class="search-page__title">Search Products</h1>
-    <p class="search-page__lead">Find products by name or description.</p>
+<main class="storefront-page search-page">
+  <header class="page-intro">
+    <p class="eyebrow">Browse the catalog</p>
+    <h1 class="page-intro__title">Find something useful.</h1>
+    <p class="page-intro__lead">Search by product name, category, or a word from the description.</p>
   </header>
 
-  <ui-search-form
-    action="/search"
-    value="{{.Query}}"
-    label="Search"
-    placeholder="Search for products..."
-    hint="Search by product name, category, or keywords from descriptions."
-    submit-label="Search"
-    clear-url="/search"
-    show-clear="{{if .Query}}true{{else}}false{{end}}"
-  ></ui-search-form>
+  <section class="search-panel" aria-label="Product search">
+    <ui-search-form
+      action="/search"
+      value="{{.Query}}"
+      label="Search products"
+      placeholder="Try wireless, desk, or home"
+      hint=""
+      submit-label="Search"
+      clear-url="/search"
+      show-clear="{{if .Query}}true{{else}}false{{end}}"
+    ></ui-search-form>
+  </section>
 
   {{if .Query}}
-  <section class="search-results">
-  <h2 class="search-results__title">Search Results for "{{.Query}}"</h2>
-  <p class="search-results__meta">Showing matches available in the current catalog.</p>
+  <section class="search-results" aria-labelledby="search-results-title">
+  <header class="section-heading section-heading--results">
+    <div>
+      <p class="eyebrow">Search results</p>
+      <h2 id="search-results-title">Matches for {{.Query}}</h2>
+      <p class="section-heading__lead">Showing products currently available in the catalog.</p>
+    </div>
+    <a href="/search" class="text-link">Clear search <span aria-hidden="true">×</span></a>
+  </header>
 
   {{if .NoResults}}
   <ui-alert variant="info">
-    <p>No products found matching your search.</p>
-    <p>Try searching with different keywords.</p>
+    <p>No products matched that search. Try a broader keyword.</p>
   </ui-alert>
   {{else}}
-  <div class="product-list product-grid">
+  <div class="product-grid">
     {{range .Products}}
-    <article class="product-tile product-card">
-      <a href="/products/{{.Slug}}" aria-label="View {{.Name}} details">
-        <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
+    <article class="product-card">
+      <a href="/products/{{.Slug}}" class="product-card__media" aria-label="View {{.Name}} details">
+        <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-card__image" width="480" height="360" loading="lazy">
       </a>
-      <div class="product-tile__body product-card__content">
-        <h3 class="product-tile__name product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
-        <p class="product-tile__description product-card__description">{{.Description}}</p>
+      <div class="product-card__content">
+        <div class="product-card__heading">
+          <p class="product-card__category">{{if .Category}}{{.Category}}{{else}}Everyday goods{{end}}</p>
+          <h3 class="product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
+        </div>
+        <p class="product-card__description">{{.Description}}</p>
         <div class="product-card__meta">
-          <p class="product-tile__price product-card__price">${{printf "%.2f" .Price}}</p>
+          <ui-price amount="{{printf "%.2f" .Price}}" class="product-card__price"></ui-price>
           {{if .StockQuantity}}
-          <p class="stock-state stock-state--in">{{.StockQuantity}} in stock</p>
+          <span class="stock-pill stock-pill--available">In stock</span>
           {{else}}
-          <p class="stock-state stock-state--out">Out of stock</p>
+          <span class="stock-pill stock-pill--unavailable">Sold out</span>
           {{end}}
         </div>
-        <div class="product-tile__footer product-card__footer">
+        <div class="product-card__footer">
           {{if .StockQuantity}}
           <form action="/cart/add" method="POST">
+            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
             <input type="hidden" name="product_id" value="{{.ID}}">
             <input type="hidden" name="quantity" value="1">
-            <button type="submit" class="btn btn--full product-card__button">Add to cart</button>
+            <button type="submit" class="btn btn--secondary btn--full product-card__button">Add to cart</button>
           </form>
           {{else}}
-          <button class="btn btn--full product-card__button" type="button" disabled>Unavailable</button>
+          <button class="btn btn--secondary btn--full product-card__button" type="button" disabled>Unavailable</button>
           {{end}}
         </div>
       </div>
@@ -64,5 +76,5 @@
   {{end}}
   </section>
   {{end}}
-</section>
+</main>
 {{ end }}

@@ -8,8 +8,9 @@ import (
 )
 
 type ProductPageData struct {
-	Title   string
-	Product *catalogsvc.Product
+	Title     string
+	Product   *catalogsvc.Product
+	CSRFToken string
 }
 
 func ProductDetail(a *app.App) http.HandlerFunc {
@@ -34,6 +35,6 @@ func ProductDetail(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		a.Render(w, a.Templates.Product, productPage(product))
+		a.Render(w, a.Templates.Product, productPage(product, a.Auth.CSRFToken(r)))
 	}
 }

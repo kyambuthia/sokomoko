@@ -1,34 +1,76 @@
 {{ define "title" }}sokomoko – Online Marketplace{{ end }}
 
 {{ define "main-area" }}
-<section class="catalog-page">
+<main class="storefront-home">
+  <section class="storefront-hero" aria-labelledby="storefront-hero-title">
+    <div class="storefront-hero__content">
+      <p class="eyebrow">A considered marketplace</p>
+      <h1 id="storefront-hero-title" class="storefront-hero__title">Useful things. Better chosen.</h1>
+      <p class="storefront-hero__lead">Discover everyday goods from independent sellers, with a simpler path from browse to doorstep.</p>
+      <div class="storefront-hero__actions">
+        <a href="#collection" class="btn btn--primary">Shop the collection</a>
+        <a href="/search" class="btn btn--secondary">Explore all products</a>
+      </div>
+    </div>
+    <aside class="storefront-hero__note" aria-label="Why shop Sokomoko">
+      <p class="storefront-hero__note-label">Why Sokomoko</p>
+      <ul class="value-list">
+        <li class="value-list__item">
+          <span class="value-list__number">01</span>
+          <span><strong>Less noise</strong><small>Only useful product details.</small></span>
+        </li>
+        <li class="value-list__item">
+          <span class="value-list__number">02</span>
+          <span><strong>Clear checkout</strong><small>Know what you pay before you place an order.</small></span>
+        </li>
+        <li class="value-list__item">
+          <span class="value-list__number">03</span>
+          <span><strong>Local delivery</strong><small>Updates continue after checkout.</small></span>
+        </li>
+      </ul>
+    </aside>
+  </section>
+
+  <section id="collection" class="catalog-section" aria-labelledby="collection-title">
+    <header class="section-heading">
+      <div>
+        <p class="eyebrow">Fresh from the catalog</p>
+        <h2 id="collection-title">Shop the current collection</h2>
+        <p class="section-heading__lead">A small, practical selection to start with.</p>
+      </div>
+      <a href="/search" class="text-link">View all products <span aria-hidden="true">→</span></a>
+    </header>
   {{if .HasProducts}}
-  <div class="product-list product-grid">
+  <div class="product-grid">
     {{range .Products}}
-    <article class="product-tile product-card">
-      <a href="/products/{{.Slug}}" aria-label="View {{.Name}} details">
-        <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
+    <article class="product-card">
+      <a href="/products/{{.Slug}}" class="product-card__media" aria-label="View {{.Name}} details">
+        <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-card__image" width="480" height="360" loading="lazy">
       </a>
-      <div class="product-tile__body product-card__content">
-        <h3 class="product-tile__name product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
-        <p class="product-tile__description product-card__description">{{.Description}}</p>
+      <div class="product-card__content">
+        <div class="product-card__heading">
+          <p class="product-card__category">{{if .Category}}{{.Category}}{{else}}Everyday goods{{end}}</p>
+          <h3 class="product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
+        </div>
+        <p class="product-card__description">{{.Description}}</p>
         <div class="product-card__meta">
           <ui-price amount="{{printf "%.2f" .Price}}" class="product-card__price"></ui-price>
           {{if .StockQuantity}}
-          <ui-badge variant="success" label="In stock"></ui-badge>
+          <span class="stock-pill stock-pill--available">In stock</span>
           {{else}}
-          <ui-badge variant="danger" label="Out of stock"></ui-badge>
+          <span class="stock-pill stock-pill--unavailable">Sold out</span>
           {{end}}
         </div>
-        <div class="product-tile__footer product-card__footer">
+        <div class="product-card__footer">
           {{if .StockQuantity}}
           <form action="/cart/add" method="POST">
+            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
             <input type="hidden" name="product_id" value="{{.ID}}">
             <input type="hidden" name="quantity" value="1">
-            <button type="submit" class="btn btn--full product-card__button">Add to cart</button>
+            <button type="submit" class="btn btn--secondary btn--full product-card__button">Add to cart</button>
           </form>
           {{else}}
-          <button class="btn btn--full product-card__button" type="button" disabled>Unavailable</button>
+          <button class="btn btn--secondary btn--full product-card__button" type="button" disabled>Unavailable</button>
           {{end}}
         </div>
       </div>
@@ -37,8 +79,9 @@
   </div>
   {{else}}
   <ui-alert variant="info">
-    <p>No products available. Check back soon.</p>
+    <p>No products are available yet. Check back soon.</p>
   </ui-alert>
   {{end}}
 </section>
+</main>
 {{ end }}
