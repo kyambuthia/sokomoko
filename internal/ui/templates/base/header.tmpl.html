@@ -40,20 +40,32 @@
 
 {{ define "admin-header-area" }}
 <header class="site-header site-header--workspace header">
-    <div class="site-header__copy">
-        <p class="site-header__eyebrow">Operations</p>
-        <p class="site-header__title site-title">SOKOMOKO ADMIN</p>
-        <p class="site-header__tagline site-tagline">Platform management and order oversight.</p>
+    <div class="workspace-header__bar">
+        <div class="workspace-header__brand">
+            <a href="/" class="workspace-header__brandmark">SOKOMOKO</a>
+            <div class="site-header__copy">
+                <p class="site-header__eyebrow">Operations</p>
+                <p class="site-header__title site-title">Admin Workspace</p>
+                <p class="site-header__tagline site-tagline">Platform management and order oversight.</p>
+            </div>
+        </div>
+        <span class="workspace-header__hint">Internal tools</span>
     </div>
 </header>
 {{ end }}
 
 {{ define "partner-header-area" }}
 <header class="site-header site-header--workspace header">
-    <div class="site-header__copy">
-        <p class="site-header__eyebrow">Partner Workspace</p>
-        <p class="site-header__title site-title">SOKOMOKO PARTNER</p>
-        <p class="site-header__tagline site-tagline">Catalog updates, fulfillment flow, and store setup.</p>
+    <div class="workspace-header__bar">
+        <div class="workspace-header__brand">
+            <a href="/" class="workspace-header__brandmark">SOKOMOKO</a>
+            <div class="site-header__copy">
+                <p class="site-header__eyebrow">Partner Workspace</p>
+                <p class="site-header__title site-title">Store operations</p>
+                <p class="site-header__tagline site-tagline">Catalog updates, fulfillment flow, and store setup.</p>
+            </div>
+        </div>
+        <span class="workspace-header__hint">Partner tools</span>
     </div>
 </header>
 {{ end }}

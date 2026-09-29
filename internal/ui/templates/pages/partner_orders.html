@@ -11,13 +11,16 @@
 {{ end }}
 
 {{ define "main-area" }}
-<section class="partner-page">
-  <header class="partner-page__header">
-    <h1 class="partner-page__title">Partner Fulfillment Queue</h1>
-    <p class="partner-page__lead">Accept, pack, dispatch, and complete customer orders.</p>
+<main class="workspace-page partner-page">
+  <header class="workspace-page__header">
+    <div>
+      <p class="eyebrow">Fulfillment</p>
+      <h1 class="workspace-page__title">Move orders forward.</h1>
+      <p class="workspace-page__lead">Accept, pack, dispatch, and complete customer orders from one queue.</p>
+    </div>
   </header>
 
-  <section class="partner-metrics">
+  <section class="workspace-metrics partner-metrics" aria-label="Fulfillment overview">
     <ui-metric-card label="New" value="{{.NewCount}}" note="Awaiting acceptance"></ui-metric-card>
     <ui-metric-card label="In Progress" value="{{.InProgressCount}}" note="Accepted/packing"></ui-metric-card>
     <ui-metric-card label="Dispatched" value="{{.DispatchedCount}}" note="Shipped orders"></ui-metric-card>
@@ -34,35 +37,46 @@
   <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
-  <section class="partner-actions">
+  <nav class="workspace-filters" aria-label="Filter orders">
+    <p class="eyebrow">View queue</p>
+    <div class="workspace-filters__links">
     <a href="/orders" class="btn {{if eq .Filter "all"}}{{else}}btn--secondary{{end}}">All</a>
     <a href="/orders?status=new" class="btn {{if eq .Filter "new"}}{{else}}btn--secondary{{end}}">New</a>
     <a href="/orders?status=accepted" class="btn {{if eq .Filter "accepted"}}{{else}}btn--secondary{{end}}">Accepted</a>
     <a href="/orders?status=packing" class="btn {{if eq .Filter "packing"}}{{else}}btn--secondary{{end}}">Packing</a>
     <a href="/orders?status=dispatched" class="btn {{if eq .Filter "dispatched"}}{{else}}btn--secondary{{end}}">Dispatched</a>
     <a href="/orders?status=completed" class="btn {{if eq .Filter "completed"}}{{else}}btn--secondary{{end}}">Completed</a>
-  </section>
+    </div>
+  </nav>
 
-  <section class="panel card">
-    <div class="card__header"><h3>Orders ({{.Filter}})</h3></div>
-    <div class="card__body">
+  <section class="workspace-card order-queue">
+    <div class="workspace-card__header">
+      <p class="eyebrow">Current view</p>
+      <h2>Orders: {{.Filter}}</h2>
+    </div>
+    <div class="workspace-card__body">
       {{if .Orders}}
         {{range .Orders}}
-        <article class="panel card mb-2">
-          <div class="card__header">
-            <h3>Order #{{.ID}} - {{.CustomerName}}</h3>
+        <article class="order-card">
+          <div class="order-card__header">
+            <div>
+              <p class="eyebrow">Order #{{.ID}}</p>
+              <h3>{{.CustomerName}}</h3>
+            </div>
+            <strong>${{printf "%.2f" .TotalAmount}}</strong>
           </div>
-          <div class="card__body">
-            <p><strong>Total:</strong> ${{printf "%.2f" .TotalAmount}}</p>
-            <p><strong>Delivery Address:</strong> {{.DeliveryAddress}}</p>
-            <p><strong>Status:</strong> {{.Status}} / {{.PartnerStatus}} / {{.DeliveryStatus}}</p>
-            <p><strong>Items:</strong></p>
+          <div class="order-card__body">
+            <div class="order-card__details">
+              <p><strong>Delivery address</strong><span>{{.DeliveryAddress}}</span></p>
+              <p><strong>Status</strong><span>{{.Status}} / {{.PartnerStatus}} / {{.DeliveryStatus}}</span></p>
+            </div>
+            <p class="order-card__items-label"><strong>Items</strong></p>
             <ul>
               {{range .Items}}
               <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
               {{end}}
             </ul>
-            <form action="/orders" method="POST" class="form">
+            <form action="/orders" method="POST" class="form order-card__form">
               <input type="hidden" name="order_id" value="{{.ID}}">
               <div class="form__group form-group">
                 <label class="form__label" for="partner_status_{{.ID}}">Partner status</label>
@@ -98,5 +112,5 @@
       {{end}}
     </div>
   </section>
-</section>
+</main>
 {{ end }}

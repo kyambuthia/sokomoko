@@ -11,13 +11,17 @@
 {{ end }}
 
 {{ define "main-area" }}
-<section class="partner-page">
-  <header class="partner-page__header">
-    <h1 class="partner-page__title">Partner Dashboard</h1>
-    <p class="partner-page__lead">Store operations and setup live on <code>partner.localhost</code>. Site/platform management remains on <code>admin.localhost</code>.</p>
+<main class="workspace-page partner-page">
+  <header class="workspace-page__header">
+    <div>
+      <p class="eyebrow">Partner workspace</p>
+      <h1 class="workspace-page__title">Run your store with clarity.</h1>
+      <p class="workspace-page__lead">Manage the catalog, move orders forward, and keep your store details current.</p>
+    </div>
+    <a href="/products/new" class="btn">Add a product</a>
   </header>
 
-  <section class="partner-metrics">
+  <section class="workspace-metrics partner-metrics" aria-label="Store overview">
     <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog entries"></ui-metric-card>
     <ui-metric-card label="Workspace" value="{{.StoreSlug}}" note="Store slug"></ui-metric-card>
     <ui-metric-card label="Access" value="{{.Role}}" note="Current role"></ui-metric-card>
@@ -30,16 +34,25 @@
   <ui-alert variant="danger"><p><strong>{{.OverdueOrders}}</strong> orders are overdue for acceptance (older than 2 hours).</p></ui-alert>
   {{end}}
 
-  <section class="partner-actions">
-    <a href="/products" class="btn">Manage products</a>
-    <a href="/products/new" class="btn btn--secondary">Add product</a>
-    <a href="/orders" class="btn btn--secondary">Fulfillment queue</a>
-    <a href="/setup" class="btn btn--secondary">Update store setup</a>
+  <section class="workspace-actions">
+    <div>
+      <p class="eyebrow">Next actions</p>
+      <h2>Keep the operation moving.</h2>
+    </div>
+    <div class="workspace-actions__links">
+      <a href="/products" class="btn">Manage products</a>
+      <a href="/products/new" class="btn btn--secondary">Add product</a>
+      <a href="/orders" class="btn btn--secondary">Fulfillment queue</a>
+      <a href="/setup" class="btn btn--secondary">Update store setup</a>
+    </div>
   </section>
 
-  <section class="panel card">
-    <div class="card__header"><h3>Store</h3></div>
-    <div class="card__body">
+  <section class="workspace-card">
+    <div class="workspace-card__header">
+      <p class="eyebrow">Store profile</p>
+      <h2>{{.StoreName}}</h2>
+    </div>
+    <div class="workspace-card__body workspace-card__body--details">
       <p><strong>Name:</strong> {{.StoreName}}</p>
       <p><strong>Slug:</strong> {{.StoreSlug}}</p>
       <p><strong>Contact:</strong> {{.ContactEmail}}</p>
@@ -47,12 +60,15 @@
     </div>
   </section>
 
-  <section class="panel card">
-    <div class="card__header"><h3>Session Context</h3></div>
-    <div class="card__body">
+  <section class="workspace-card workspace-card--muted">
+    <div class="workspace-card__header">
+      <p class="eyebrow">Session context</p>
+      <h2>Current access</h2>
+    </div>
+    <div class="workspace-card__body workspace-card__body--details">
       <p><strong>Signed in as:</strong> {{.Username}} ({{.Role}})</p>
       <p><strong>Products in catalog:</strong> {{.ProductCount}}</p>
     </div>
   </section>
-</section>
+</main>
 {{ end }}

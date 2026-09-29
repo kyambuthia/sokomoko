@@ -11,24 +11,22 @@
 {{ end }}
 
 {{ define "main-area" }}
-<section class="partner-page">
-  <header class="partner-page__header">
-    <h1 class="partner-page__title">Partner Products</h1>
-    <p class="partner-page__lead">Manage the store catalog for your partner workspace.</p>
+<main class="workspace-page partner-page">
+  <header class="workspace-page__header">
+    <div>
+      <p class="eyebrow">Catalog</p>
+      <h1 class="workspace-page__title">Your products.</h1>
+      <p class="workspace-page__lead">Keep pricing, categories, and stock easy to review.</p>
+    </div>
+    <a href="/products/new" class="btn">Add product</a>
   </header>
 
-  <section class="panel card">
-    <div class="card__body">
-      <div class="partner-actions">
-        <a class="btn" href="/products/new">Add Product</a>
-        <a class="btn btn--secondary" href="/dashboard">Back to Dashboard</a>
-      </div>
+  <section class="workspace-card">
+    <div class="workspace-card__header">
+      <p class="eyebrow">{{.StoreName}}</p>
+      <h2>Catalog overview</h2>
     </div>
-  </section>
-
-  <section class="panel card">
-    <div class="card__header"><h3>Catalog</h3></div>
-    <div class="card__body">
+    <div class="workspace-card__body">
       {{if .Products}}
       <div class="table-wrap">
       <table class="data-table data-table--partner">
@@ -57,5 +55,5 @@
       {{end}}
     </div>
   </section>
-</section>
+</main>
 {{ end }}
