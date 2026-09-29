@@ -11,9 +11,14 @@
 {{ end }}
 
 {{ define "main-area" }}
-<section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title">Add Product</h1>
-  <p class="auth-panel__meta">Create a new catalog item for your partner store.</p>
+<main class="workspace-page workspace-form-page">
+  <header class="workspace-page__header">
+    <div>
+      <p class="eyebrow">Catalog</p>
+      <h1 class="workspace-page__title">Add a product.</h1>
+      <p class="workspace-page__lead">Create a useful, accurate listing for your store catalog.</p>
+    </div>
+  </header>
 
   {{if .Message}}
   <ui-alert variant="info"><p>{{.Message}}</p></ui-alert>
@@ -23,7 +28,7 @@
   <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
-  <form class="auth-panel__form form" action="/products/new" method="POST">
+  <form class="workspace-card workspace-form-card form" action="/products/new" method="POST">
     <fieldset class="form__fieldset">
       {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
       <legend class="form__legend">Product Details</legend>
@@ -63,5 +68,5 @@
   </form>
 
   <p class="auth-panel__links"><a href="/products">Back to products</a></p>
-</section>
+</main>
 {{ end }}

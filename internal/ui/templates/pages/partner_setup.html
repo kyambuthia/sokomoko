@@ -11,9 +11,14 @@
 {{ end }}
 
 {{ define "main-area" }}
-<section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title">Partner Store Setup</h1>
-  <p class="auth-panel__meta">Configure your store identity on <code>partner.localhost</code>. This is separate from site management on <code>admin.localhost</code>.</p>
+<main class="workspace-page workspace-form-page">
+  <header class="workspace-page__header">
+    <div>
+      <p class="eyebrow">Store setup</p>
+      <h1 class="workspace-page__title">Give your store a clear identity.</h1>
+      <p class="workspace-page__lead">Set the details customers and your team will use to recognize this store.</p>
+    </div>
+  </header>
 
   {{if .Message}}
   <ui-alert variant="info"><p>{{.Message}}</p></ui-alert>
@@ -23,7 +28,7 @@
   <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
-  <form class="auth-panel__form form" action="/setup" method="POST">
+  <form class="workspace-card workspace-form-card form" action="/setup" method="POST">
     <fieldset class="form__fieldset">
       <legend class="form__legend">Store Identity</legend>
 
@@ -52,5 +57,5 @@
   </form>
 
   <p class="auth-panel__links"><a href="/dashboard">Go to partner dashboard</a></p>
-</section>
+</main>
 {{ end }}
