@@ -1,10 +1,11 @@
 {{ define "title" }}Cart{{ end }}
 
 {{ define "main-area" }}
-<section class="catalog-page">
-  <header class="catalog-page__intro">
-    <h1 class="catalog-page__title">Cart</h1>
-    <p class="catalog-page__lead">Review your selected products before checkout.</p>
+<main class="storefront-page cart-page">
+  <header class="page-intro">
+    <p class="eyebrow">Your selection</p>
+    <h1 class="page-intro__title">Ready when you are.</h1>
+    <p class="page-intro__lead">Review your products, adjust quantities, and continue when everything looks right.</p>
   </header>
 
   {{if .Message}}
@@ -15,59 +16,64 @@
   {{end}}
 
   {{if .Items}}
-  <section class="panel card">
-    <div class="card__header"><h3>Items</h3></div>
-    <div class="card__body">
-      <div class="table-wrap">
-        <table class="data-table data-table--partner">
-          <thead>
-            <tr><th>Product</th><th>Price</th><th>Quantity</th><th>Total</th><th>Action</th></tr>
-          </thead>
-          <tbody>
-            {{range .Items}}
-            <tr>
-              <td>{{.ProductName}}</td>
-              <td>${{printf "%.2f" .UnitPrice}}</td>
-              <td>
-                <form action="/cart/update" method="POST" class="table-action-form">
-                  {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-                  <input type="hidden" name="product_id" value="{{.ProductID}}">
-                  <input class="form__input" type="number" min="0" name="quantity" value="{{.Quantity}}">
-                  <button type="submit" class="btn btn--secondary btn--small">Update</button>
-                </form>
-              </td>
-              <td>${{printf "%.2f" .LineTotal}}</td>
-              <td>
-                <form action="/cart/remove" method="POST" class="table-action-form">
-                  {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-                  <input type="hidden" name="product_id" value="{{.ProductID}}">
-                  <button type="submit" class="btn btn--secondary btn--small">Remove</button>
-                </form>
-              </td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+  <div class="cart-layout">
+    <section class="cart-items" aria-labelledby="cart-items-title">
+      <div class="section-heading section-heading--results">
+        <div>
+          <p class="eyebrow">Your basket</p>
+          <h2 id="cart-items-title">Selected products</h2>
+        </div>
+        <span class="section-heading__meta">{{len .Items}} item{{if ne (len .Items) 1}}s{{end}}</span>
       </div>
-    </div>
-  </section>
 
-  <section class="panel card">
-    <div class="card__body">
-      <p><strong>Subtotal:</strong> ${{printf "%.2f" .Subtotal}}</p>
-      <div class="partner-actions">
-        <a href="/" class="btn btn--secondary">Continue shopping</a>
-        <a href="/checkout" class="btn">Proceed to checkout</a>
+      <div class="cart-items__list">
+        {{range .Items}}
+        <article class="cart-item">
+          <div class="cart-item__details">
+            <h3 class="cart-item__name">{{.ProductName}}</h3>
+            <p class="cart-item__price">${{printf "%.2f" .UnitPrice}} each</p>
+          </div>
+          <div class="cart-item__actions">
+            <form action="/cart/update" method="POST" class="cart-item__quantity">
+              {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+              <input type="hidden" name="product_id" value="{{.ProductID}}">
+              <label class="sr-only" for="quantity-{{.ProductID}}">Quantity for {{.ProductName}}</label>
+              <input class="form__input" id="quantity-{{.ProductID}}" type="number" min="0" name="quantity" value="{{.Quantity}}">
+              <button type="submit" class="btn btn--secondary btn--small">Update</button>
+            </form>
+            <strong class="cart-item__line-total">${{printf "%.2f" .LineTotal}}</strong>
+            <form action="/cart/remove" method="POST">
+              {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+              <input type="hidden" name="product_id" value="{{.ProductID}}">
+              <button type="submit" class="link-button">Remove</button>
+            </form>
+          </div>
+        </article>
+        {{end}}
       </div>
-    </div>
-  </section>
+    </section>
+
+    <aside class="cart-summary" aria-labelledby="cart-summary-title">
+      <p class="eyebrow">Order total</p>
+      <h2 id="cart-summary-title">Keep it simple.</h2>
+      <div class="cart-summary__row">
+        <span>Subtotal</span>
+        <strong>${{printf "%.2f" .Subtotal}}</strong>
+      </div>
+      <p class="cart-summary__note">Shipping and tax are calculated at checkout.</p>
+      <div class="cart-actions">
+        <a href="/checkout" class="btn btn--full">Proceed to checkout</a>
+        <a href="/" class="btn btn--secondary btn--full">Continue shopping</a>
+      </div>
+    </aside>
+  </div>
   {{else}}
-  <section class="panel card">
-    <div class="card__body">
-      <p class="table-empty">Your cart is empty.</p>
-      <p class="auth-panel__links"><a href="/">Browse products</a></p>
-    </div>
+  <section class="cart-empty">
+    <p class="eyebrow">Nothing here yet</p>
+    <h2>Your cart is empty.</h2>
+    <p>Start with something useful and it will show up here.</p>
+    <a href="/" class="btn">Browse products</a>
   </section>
   {{end}}
-</section>
+</main>
 {{ end }}

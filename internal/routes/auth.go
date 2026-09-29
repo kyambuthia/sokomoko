@@ -8,10 +8,11 @@ import (
 )
 
 type AccountPageData struct {
-	Title   string
-	Message string
-	Error   string
-	Orders  []accountsvc.Order
+	Title     string
+	Message   string
+	Error     string
+	Orders    []accountsvc.Order
+	CSRFToken string
 }
 
 func Auth(a *app.App) http.HandlerFunc {
@@ -33,6 +34,6 @@ func Auth(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		a.Render(w, a.Templates.Account, accountPage(req, orders))
+		a.Render(w, a.Templates.Account, accountPage(req, orders, a.Auth.CSRFToken(req)))
 	}
 }

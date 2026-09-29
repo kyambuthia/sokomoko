@@ -1,9 +1,11 @@
 {{ define "title" }}Checkout{{ end }}
 
 {{ define "main-area" }}
-<section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title">Checkout</h1>
-  <p class="auth-panel__meta">Confirm delivery details and place your order.</p>
+<main class="storefront-page checkout-page">
+  <header class="page-intro">
+    <p class="eyebrow">Final step</p>
+    <h1 class="page-intro__title">Almost there.</h1>
+    <p class="page-intro__lead">Confirm your delivery details and payment method, then we’ll take care of the rest.</p>
 
   {{if .Message}}
   <ui-alert variant="success"><p>{{.Message}}</p></ui-alert>
@@ -13,48 +15,65 @@
   {{end}}
 
   {{if .CanCheckout}}
-  <section class="panel card">
-    <div class="card__header"><h3>Order Summary</h3></div>
-    <div class="card__body">
-      <ul>
+  <div class="checkout-layout">
+    <section class="checkout-card checkout-summary" aria-labelledby="checkout-summary-title">
+      <div class="checkout-card__header">
+        <p class="eyebrow">Your order</p>
+        <h2 id="checkout-summary-title">A considered selection.</h2>
+      </div>
+      <div class="checkout-items">
         {{range .Items}}
-        <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
+        <div class="checkout-item">
+          <div>
+            <strong class="checkout-item__name">{{.ProductName}}</strong>
+            <span class="checkout-item__meta">Qty {{.Quantity}} · ${{printf "%.2f" .UnitPrice}} each</span>
+          </div>
+          <strong>${{printf "%.2f" .LineTotal}}</strong>
+        </div>
         {{end}}
-      </ul>
-      <p><strong>Subtotal:</strong> ${{printf "%.2f" .Subtotal}}</p>
-      <p><strong>Shipping:</strong> ${{printf "%.2f" .ShippingFee}}</p>
-      <p><strong>Estimated Tax:</strong> ${{printf "%.2f" .TaxAmount}}</p>
-      <p><strong>Total:</strong> ${{printf "%.2f" .TotalAmount}}</p>
-    </div>
-  </section>
+      </div>
+      <div class="checkout-totals">
+        <div class="checkout-total"><span>Subtotal</span><span>${{printf "%.2f" .Subtotal}}</span></div>
+        <div class="checkout-total"><span>Shipping</span><span>${{printf "%.2f" .ShippingFee}}</span></div>
+        <div class="checkout-total"><span>Estimated tax</span><span>${{printf "%.2f" .TaxAmount}}</span></div>
+        <div class="checkout-total checkout-total--grand"><strong>Total</strong><strong>${{printf "%.2f" .TotalAmount}}</strong></div>
+      </div>
+    </section>
 
-  <form action="{{.FormAction}}" method="POST" class="auth-panel__form form">
-    <fieldset class="form__fieldset">
-      <legend class="form__legend">Delivery</legend>
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-      <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
-      <div class="form__group form-group">
-        <label class="form__label" for="delivery_address">Delivery address</label>
-        <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="4" required>{{.DeliveryAddress}}</textarea>
+    <form action="{{.FormAction}}" method="POST" class="checkout-card checkout-form">
+      <div class="checkout-card__header">
+        <p class="eyebrow">Delivery details</p>
+        <h2>Where should we send it?</h2>
       </div>
-      <div class="form__group form-group">
-        <label class="form__label" for="payment_method">Payment method</label>
-        <select class="form__select" id="payment_method" name="payment_method" required>
-          {{range .PaymentMethods}}
-          <option value="{{.Value}}" {{if eq $.PaymentMethod .Value}}selected{{end}}>{{.Label}}</option>
-          {{end}}
-        </select>
+      <fieldset class="form__fieldset">
+        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+        <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
+        <div class="form__group form-group">
+          <label class="form__label" for="delivery_address">Delivery address</label>
+          <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="5" required>{{.DeliveryAddress}}</textarea>
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="payment_method">Payment method</label>
+          <select class="form__select" id="payment_method" name="payment_method" required>
+            {{range .PaymentMethods}}
+            <option value="{{.Value}}" {{if eq $.PaymentMethod .Value}}selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+      </fieldset>
+      <div class="checkout-form__actions">
+        <a href="/cart" class="btn btn--secondary">Back to cart</a>
+        <button type="submit" class="btn">Place order</button>
       </div>
-      <button type="submit" class="btn btn--full">Place order</button>
-    </fieldset>
-  </form>
+    </form>
+  </div>
   {{else}}
-  <section class="panel card">
-    <div class="card__body">
-      <p class="table-empty">Cart is empty. Add items before checkout.</p>
-      <p class="auth-panel__links"><a href="/">Back to storefront</a></p>
-    </div>
+  <section class="cart-empty">
+    <p class="eyebrow">Nothing to check out</p>
+    <h2>Your cart is empty.</h2>
+    <p>Add something first, then come back to complete your order.</p>
+    <a href="/" class="btn">Back to storefront</a>
   </section>
   {{end}}
-</section>
+</main>
 {{ end }}
