@@ -11,7 +11,7 @@
 {{ end }}
 
 {{ define "main-area" }}
-<main class="workspace-page partner-page">
+<main class="workspace-page partner-page" data-partner-orders>
   <header class="workspace-page__header">
     <div>
       <p class="eyebrow">Fulfillment</p>
@@ -76,7 +76,7 @@
               <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
               {{end}}
             </ul>
-            <form action="/orders" method="POST" class="form order-card__form">
+            <form action="/orders" method="POST" class="form order-card__form" data-api-partner-order>
               <input type="hidden" name="order_id" value="{{.ID}}">
               <div class="form__group form-group">
                 <label class="form__label" for="partner_status_{{.ID}}">Partner status</label>

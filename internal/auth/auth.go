@@ -727,7 +727,7 @@ func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		user, err := s.store.GetUserByUsername(username)
-		if err != nil || user == nil || !containsRole([]string{"admin", "staff"}, user.Role) {
+		if err != nil || user == nil || !containsRole([]string{"admin", "staff", "partner"}, user.Role) {
 			s.markAbuseFailure("login:admin", username, true, r)
 			log.Printf("Admin/staff login failed for user %s: %v", username, err)
 			data.Error = "Invalid credentials"

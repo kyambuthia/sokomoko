@@ -14,13 +14,9 @@ This roadmap follows the current source boundaries and the known issues in
 
 ## Phase 2: identity and operations
 
-1. Decide whether partner is a real user-facing role or only an operational
-   surface.
-2. Enforce partner ownership in product, inventory, and order queries if
-   partner accounts remain.
-3. Add explicit authorization tests for every host and role combination.
-4. Add database backup and restore procedures.
-5. Add structured logs, metrics, and deployment smoke tests.
+1. Expand explicit authorization tests for every host and role combination.
+2. Add database backup and restore procedures.
+3. Add structured logs, metrics, and deployment smoke tests.
 
 ## Phase 3: commerce completeness
 

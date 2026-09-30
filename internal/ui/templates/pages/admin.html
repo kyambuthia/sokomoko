@@ -11,7 +11,7 @@
 {{ end }}
 
 {{ define "main-area" }}
-<main class="workspace-page admin-page">
+<main class="workspace-page admin-page" data-admin-workspace>
   <header class="workspace-page__header">
     <div>
       <p class="eyebrow">Admin workspace</p>
@@ -22,14 +22,14 @@
 
   {{if eq .Title "Admin Dashboard"}}
   <section class="workspace-metrics admin-metrics" aria-label="Platform overview">
-    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog items"></ui-metric-card>
-    <ui-metric-card label="Active Sessions" value="{{.SessionCount}}" note="Signed-in users"></ui-metric-card>
-    <ui-metric-card label="Staff Accounts" value="{{.StaffCount}}" note="Admin-managed staff"></ui-metric-card>
+    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog items" data-admin-metric="product_count"></ui-metric-card>
+    <ui-metric-card label="Active Sessions" value="{{.SessionCount}}" note="Signed-in users" data-admin-metric="session_count"></ui-metric-card>
+    <ui-metric-card label="Staff Accounts" value="{{.StaffCount}}" note="Admin-managed staff" data-admin-metric="staff_count"></ui-metric-card>
   </section>
 
   <section class="workspace-card">
     <div class="workspace-card__body">
-      <p class="admin-summary"><strong>Users:</strong> {{.UserCount}} customers, {{.StaffCount}} staff, {{.AdminCount}} admins</p>
+      <p class="admin-summary" data-admin-users><strong>Users:</strong> {{.UserCount}} customers, {{.StaffCount}} staff, {{.AdminCount}} admins</p>
     </div>
   </section>
 
@@ -112,7 +112,7 @@
             {{end}}
           </ul>
           {{if eq $.Role "admin"}}
-          <form action="/orders" method="POST" class="form order-card__form">
+          <form action="/orders" method="POST" class="form order-card__form" data-api-admin-order>
             <input type="hidden" name="order_id" value="{{.ID}}">
             <div class="form__group form-group">
               <label class="form__label" for="status_{{.ID}}">Order status</label>

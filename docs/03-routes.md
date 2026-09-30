@@ -77,9 +77,9 @@ Host: partner.localhost or another allowed host beginning with partner.
 | GET, POST | /orders | admin, staff | Fulfillment and delivery updates |
 | GET | /static/... | public | Static assets |
 
-Despite the host name and reset-page wording, the partner mux currently
-accepts admin and staff users, not users with role partner. Product and order
-operations are not currently partitioned by partner account.
+The partner mux accepts admin, staff, and partner users. Partner users see and
+mutate only their own products and orders; admin and staff users retain global
+operational access.
 
 ## Cross-cutting behavior
 

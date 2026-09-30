@@ -60,7 +60,7 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		view, err := svc.Orders(strings.TrimSpace(r.URL.Query().Get("status")))
+		view, err := svc.OrdersForActor(partnerActorFromContext(r), strings.TrimSpace(r.URL.Query().Get("status")))
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

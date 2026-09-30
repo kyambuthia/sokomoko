@@ -1,4 +1,7 @@
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
 t.db
 # Binaries for programs and plugins
 *.exe

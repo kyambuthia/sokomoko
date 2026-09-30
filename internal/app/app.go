@@ -64,9 +64,13 @@ type AdminService interface {
 
 type PartnerService interface {
 	CreateProduct(input partnersvc.CreateProductInput) error
+	CreateProductForActor(actor *partnersvc.Actor, input partnersvc.CreateProductInput) error
 	Dashboard() (partnersvc.DashboardData, error)
+	DashboardForActor(actor *partnersvc.Actor) (partnersvc.DashboardData, error)
 	Orders(filter string) (partnersvc.OrdersData, error)
+	OrdersForActor(actor *partnersvc.Actor, filter string) (partnersvc.OrdersData, error)
 	Products() (partnersvc.ProductsData, error)
+	ProductsForActor(actor *partnersvc.Actor) (partnersvc.ProductsData, error)
 	SaveStoreSettings(input partnersvc.StoreSettingsInput) (partnersvc.StoreSettings, error)
 	StoreSettings() (*partnersvc.StoreSettings, error)
 	UpdateOrder(actor *partnersvc.Actor, input partnersvc.UpdateOrderInput) error

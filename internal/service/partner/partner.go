@@ -1,6 +1,7 @@
 package partner
 
 import (
+	"database/sql"
 	"errors"
 	"strconv"
 	"strings"
@@ -56,6 +57,7 @@ type Product struct {
 	Category      string
 	Price         float64
 	StockQuantity int
+	PartnerID     int
 }
 
 type Category struct {
@@ -64,6 +66,7 @@ type Category struct {
 }
 
 type OrderItem struct {
+	ProductID   int
 	ProductName string
 	Quantity    int
 	LineTotal   float64
@@ -78,6 +81,7 @@ type Order struct {
 	DeliveryNotice  string
 	DeliveryAddress string
 	TotalAmount     float64
+	CreatedAt       time.Time
 	Items           []OrderItem
 }
 
@@ -151,28 +155,36 @@ func (s *Service) SaveStoreSettings(input StoreSettingsInput) (StoreSettings, er
 }
 
 func (s *Service) Dashboard() (DashboardData, error) {
+	return s.DashboardForActor(nil)
+}
+
+func (s *Service) DashboardForActor(actor *Actor) (DashboardData, error) {
 	settings, err := s.requireStoreSettings()
 	if err != nil {
 		return DashboardData{}, err
 	}
 
-	productCount, err := s.store.CountProducts()
+	products, err := s.ProductsForActor(actor)
 	if err != nil {
 		return DashboardData{}, err
 	}
-	orderSummary, err := s.store.GetOrderSummary()
+	orders, err := s.OrdersForActor(actor, "")
 	if err != nil {
 		return DashboardData{}, err
 	}
 
 	return DashboardData{
 		Settings:     *settings,
-		ProductCount: productCount,
-		OrderSummary: orderSummary,
+		ProductCount: len(products.Products),
+		OrderSummary: orders.Summary,
 	}, nil
 }
 
 func (s *Service) Products() (ProductsData, error) {
+	return s.ProductsForActor(nil)
+}
+
+func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
 	settings, err := s.requireStoreSettings()
 	if err != nil {
 		return ProductsData{}, err
@@ -181,6 +193,15 @@ func (s *Service) Products() (ProductsData, error) {
 	products, err := s.store.GetProducts()
 	if err != nil {
 		return ProductsData{}, err
+	}
+	if actorIsPartner(actor) {
+		filtered := products[:0]
+		for _, product := range products {
+			if product.PartnerID == actor.ID {
+				filtered = append(filtered, product)
+			}
+		}
+		products = filtered
 	}
 	categories, err := s.store.GetCategories()
 	if err != nil {
@@ -195,6 +216,10 @@ func (s *Service) Products() (ProductsData, error) {
 }
 
 func (s *Service) CreateProduct(input CreateProductInput) error {
+	return s.CreateProductForActor(nil, input)
+}
+
+func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) error {
 	if _, err := s.requireStoreSettings(); err != nil {
 		return err
 	}
@@ -230,6 +255,9 @@ func (s *Service) CreateProduct(input CreateProductInput) error {
 		Price:         price,
 		StockQuantity: stock,
 	}
+	if actorIsPartner(actor) {
+		product.PartnerID = sql.NullInt64{Int64: int64(actor.ID), Valid: true}
+	}
 
 	if categoryIDRaw != "" {
 		categoryID, parseErr := strconv.Atoi(categoryIDRaw)
@@ -256,6 +284,10 @@ func (s *Service) CreateProduct(input CreateProductInput) error {
 }
 
 func (s *Service) Orders(filter string) (OrdersData, error) {
+	return s.OrdersForActor(nil, filter)
+}
+
+func (s *Service) OrdersForActor(actor *Actor, filter string) (OrdersData, error) {
 	cleanFilter := strings.TrimSpace(filter)
 	if cleanFilter == "" {
 		cleanFilter = "all"
@@ -265,17 +297,34 @@ func (s *Service) Orders(filter string) (OrdersData, error) {
 	if err != nil {
 		return OrdersData{}, err
 	}
+	if actorIsPartner(actor) {
+		products, productErr := s.store.GetProducts()
+		if productErr != nil {
+			return OrdersData{}, productErr
+		}
+		owners := make(map[int]int, len(products))
+		for _, product := range products {
+			owners[product.ID] = product.PartnerID
+		}
+		owned := orders[:0]
+		for _, order := range orders {
+			for _, item := range order.Items {
+				if owners[item.ProductID] == actor.ID {
+					owned = append(owned, order)
+					break
+				}
+			}
+		}
+		orders = owned
+	}
+
+	summary := summaryForOrders(orders)
 
 	filtered := make([]Order, 0, len(orders))
 	for _, order := range orders {
 		if cleanFilter == "all" || order.PartnerStatus == cleanFilter {
 			filtered = append(filtered, order)
 		}
-	}
-
-	summary, err := s.store.GetOrderSummary()
-	if err != nil {
-		return OrdersData{}, err
 	}
 
 	return OrdersData{
@@ -286,13 +335,16 @@ func (s *Service) Orders(filter string) (OrdersData, error) {
 }
 
 func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
-	if actor == nil || (actor.Role != "admin" && actor.Role != "staff") {
+	if actor == nil || (actor.Role != "admin" && actor.Role != "staff" && actor.Role != "partner") {
 		return ErrForbiddenOrderUpdate
 	}
 
 	orderID, err := strconv.Atoi(strings.TrimSpace(input.OrderID))
 	if err != nil || orderID <= 0 {
 		return ErrInvalidOrderID
+	}
+	if actorIsPartner(actor) && !s.orderBelongsToPartner(orderID, actor.ID) {
+		return ErrForbiddenOrderUpdate
 	}
 
 	partnerStatus := strings.TrimSpace(input.PartnerStatus)
@@ -344,6 +396,7 @@ func mapProduct(product db.Product) Product {
 		Category:      product.Category,
 		Price:         product.Price,
 		StockQuantity: product.StockQuantity,
+		PartnerID:     int(product.PartnerID.Int64),
 	}
 }
 
@@ -368,6 +421,7 @@ func mapOrder(order db.FulfillmentOrder) Order {
 	items := make([]OrderItem, 0, len(order.Items))
 	for _, item := range order.Items {
 		items = append(items, OrderItem{
+			ProductID:   item.ProductID,
 			ProductName: item.ProductName,
 			Quantity:    item.Quantity,
 			LineTotal:   item.LineTotal,
@@ -383,8 +437,64 @@ func mapOrder(order db.FulfillmentOrder) Order {
 		DeliveryNotice:  order.DeliveryNotice,
 		DeliveryAddress: order.DeliveryAddress,
 		TotalAmount:     order.TotalAmount,
+		CreatedAt:       order.CreatedAt,
 		Items:           items,
 	}
+}
+
+func actorIsPartner(actor *Actor) bool {
+	return actor != nil && actor.Role == "partner" && actor.ID > 0
+}
+
+func summaryForOrders(orders []Order) Summary {
+	var summary Summary
+	for _, order := range orders {
+		if order.Status == "cancelled" {
+			continue
+		}
+		switch order.PartnerStatus {
+		case "new":
+			summary.NewCount++
+		case "accepted", "packing":
+			summary.InProgressCount++
+		case "dispatched":
+			summary.DispatchedCount++
+		case "completed":
+			summary.CompletedCount++
+		}
+		if (order.PartnerStatus == "new" || order.PartnerStatus == "accepted") &&
+			!order.CreatedAt.IsZero() && time.Since(order.CreatedAt) >= 2*time.Hour {
+			summary.OverdueCount++
+		}
+	}
+	return summary
+}
+
+func (s *Service) orderBelongsToPartner(orderID, partnerID int) bool {
+	orders, err := s.store.ListOrdersForFulfillment()
+	if err != nil {
+		return false
+	}
+	products, err := s.store.GetProducts()
+	if err != nil {
+		return false
+	}
+	owners := make(map[int]int, len(products))
+	for _, product := range products {
+		owners[product.ID] = product.PartnerID
+	}
+	for _, order := range orders {
+		if order.ID != orderID {
+			continue
+		}
+		for _, item := range order.Items {
+			if owners[item.ProductID] == partnerID {
+				return true
+			}
+		}
+		return false
+	}
+	return false
 }
 
 func slugify(value string) string {

@@ -10,6 +10,7 @@ import (
 var (
 	roleUser       = []string{"user"}
 	roleAdminStaff = []string{"admin", "staff"}
+	rolePartnerOps = []string{"admin", "staff", "partner"}
 )
 
 func withAuth(a *app.App, h http.Handler) http.Handler {
@@ -114,7 +115,7 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 		"/password-reset/request",
 		a.Auth.PasswordResetRequest(
 			a.Templates.PasswordResetRequest,
-			roleAdminStaff,
+			rolePartnerOps,
 			"Reset Partner Password",
 			"Enter username or email to request a password reset for partner access.",
 		),
@@ -123,16 +124,16 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 		"/password-reset/confirm",
 		a.Auth.PasswordResetConfirm(
 			a.Templates.PasswordResetConfirm,
-			roleAdminStaff,
+			rolePartnerOps,
 			"Set New Partner Password",
 			"Choose a new password for your partner account.",
 			"/login",
 		),
 	)
-	mux.Handle("/setup", withAnyRole(a, roleAdminStaff, http.HandlerFunc(PartnerSetup(a))))
-	mux.Handle("/dashboard", withAnyRole(a, roleAdminStaff, http.HandlerFunc(PartnerDashboard(a))))
-	mux.Handle("/products", withAnyRole(a, roleAdminStaff, http.HandlerFunc(PartnerProducts(a))))
-	mux.Handle("/products/new", withAnyRole(a, roleAdminStaff, http.HandlerFunc(PartnerProductNew(a))))
-	mux.Handle("/orders", withAnyRole(a, roleAdminStaff, http.HandlerFunc(PartnerOrders(a))))
+	mux.Handle("/setup", withAnyRole(a, rolePartnerOps, http.HandlerFunc(PartnerSetup(a))))
+	mux.Handle("/dashboard", withAnyRole(a, rolePartnerOps, http.HandlerFunc(PartnerDashboard(a))))
+	mux.Handle("/products", withAnyRole(a, rolePartnerOps, http.HandlerFunc(PartnerProducts(a))))
+	mux.Handle("/products/new", withAnyRole(a, rolePartnerOps, http.HandlerFunc(PartnerProductNew(a))))
+	mux.Handle("/orders", withAnyRole(a, rolePartnerOps, http.HandlerFunc(PartnerOrders(a))))
 	mux.Handle("/static/", Static(a.StaticFS))
 }

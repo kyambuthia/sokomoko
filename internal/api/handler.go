@@ -253,7 +253,7 @@ func mapAdminOrder(order adminsvc.Order) orderDTO {
 func mapPartnerOrder(order partnersvc.Order) orderDTO {
 	items := make([]orderItemDTO, 0, len(order.Items))
 	for _, item := range order.Items {
-		items = append(items, orderItemDTO{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
+		items = append(items, orderItemDTO{ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
 	}
 	return orderDTO{
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,

@@ -1,17 +1,11 @@
 package routes
 
 import (
-	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 )
-
-type SearchFormValues struct {
-	QueryString string `json:"queryString"`
-}
 
 func Search(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
@@ -32,34 +26,10 @@ func Search(a *app.App) http.HandlerFunc {
 				a.Render(w, a.Templates.Search, searchPage("", nil, a.Auth.CSRFToken(req)))
 			}
 
-		// HANDLE POST REQUESTS - /search ROUTE
 		case "POST":
-			reqBody, err := io.ReadAll(req.Body)
-			if err != nil {
-				log.Printf("Unable to read request body: %v", err)
-				http.Error(w, "Unable to read request body", http.StatusBadRequest)
-				return
-			}
-
-			var formData SearchFormValues
-			err = json.Unmarshal(reqBody, &formData)
-			if err != nil {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
-				return
-			}
-
-			products, err := a.Catalog.Search(formData.QueryString)
-			if err != nil {
-				log.Printf("Error searching products: %v", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			err = json.NewEncoder(w).Encode(products)
-			if err != nil {
-				log.Printf("Error encoding products: %v", err)
-			}
+			w.Header().Set("Deprecation", "true")
+			w.Header().Set("Link", "</api/v1/catalog/search>; rel=successor-version")
+			http.Error(w, "Search JSON moved to GET /api/v1/catalog/search?q=...", http.StatusGone)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

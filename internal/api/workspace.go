@@ -47,6 +47,31 @@ type salesReportDTO struct {
 	DeliveredCount int     `json:"delivered_count"`
 }
 
+type partnerSummaryDTO struct {
+	NewCount        int `json:"new_count"`
+	InProgressCount int `json:"in_progress_count"`
+	DispatchedCount int `json:"dispatched_count"`
+	CompletedCount  int `json:"completed_count"`
+	OverdueCount    int `json:"overdue_count"`
+}
+
+type partnerDashboardDTO struct {
+	StoreName    string            `json:"store_name"`
+	StoreSlug    string            `json:"store_slug"`
+	Description  string            `json:"description"`
+	ContactEmail string            `json:"contact_email"`
+	ProductCount int               `json:"product_count"`
+	OrderSummary partnerSummaryDTO `json:"order_summary"`
+}
+
+func mapPartnerSummary(summary partnersvc.Summary) partnerSummaryDTO {
+	return partnerSummaryDTO{
+		NewCount: summary.NewCount, InProgressCount: summary.InProgressCount,
+		DispatchedCount: summary.DispatchedCount, CompletedCount: summary.CompletedCount,
+		OverdueCount: summary.OverdueCount,
+	}
+}
+
 func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 	tail := strings.Trim(pathTail(r.URL.Path, apiPrefix+"/admin/"), "/")
 	parts := strings.Split(tail, "/")
@@ -229,12 +254,17 @@ func (h *Handler) partner(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		data, err := h.app.Partner.Dashboard()
+		actor := partnerActor(r)
+		data, err := h.app.Partner.DashboardForActor(actor)
 		if err != nil {
 			writePartnerError(w, err)
 			return
 		}
-		writeData(w, http.StatusOK, data)
+		writeData(w, http.StatusOK, partnerDashboardDTO{
+			StoreName: data.Settings.StoreName, StoreSlug: data.Settings.StoreSlug,
+			Description: data.Settings.Description, ContactEmail: data.Settings.ContactEmail,
+			ProductCount: data.ProductCount, OrderSummary: mapPartnerSummary(data.OrderSummary),
+		})
 	case "products":
 		h.partnerProducts(w, r, parts)
 	case "orders":
@@ -248,7 +278,7 @@ func (h *Handler) partner(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		data, err := h.app.Partner.Products()
+		data, err := h.app.Partner.ProductsForActor(partnerActor(r))
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -272,7 +302,7 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 		writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 		return
 	}
-	if err := h.app.Partner.CreateProduct(partnersvc.CreateProductInput{
+	if err := h.app.Partner.CreateProductForActor(partnerActor(r), partnersvc.CreateProductInput{
 		Name: input.Name, Description: input.Description, Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID,
 	}); err != nil {
 		writePartnerError(w, err)
@@ -283,7 +313,7 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 
 func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		data, err := h.app.Partner.Orders(strings.TrimSpace(r.URL.Query().Get("status")))
+		data, err := h.app.Partner.OrdersForActor(partnerActor(r), strings.TrimSpace(r.URL.Query().Get("status")))
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -293,9 +323,9 @@ func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []
 			items = append(items, mapPartnerOrder(order))
 		}
 		writeData(w, http.StatusOK, struct {
-			Items   []orderDTO         `json:"items"`
-			Summary partnersvc.Summary `json:"summary"`
-		}{Items: items, Summary: data.Summary})
+			Items   []orderDTO        `json:"items"`
+			Summary partnerSummaryDTO `json:"summary"`
+		}{Items: items, Summary: mapPartnerSummary(data.Summary)})
 		return
 	}
 	if len(parts) != 2 || r.Method != http.MethodPatch {
@@ -366,4 +396,12 @@ func writePartnerError(w http.ResponseWriter, err error) {
 func isAdmin(r *http.Request) bool {
 	user := auth.GetUserFromContext(r.Context())
 	return user != nil && user.Role == "admin"
+}
+
+func partnerActor(r *http.Request) *partnersvc.Actor {
+	user := auth.GetUserFromContext(r.Context())
+	if user == nil {
+		return nil
+	}
+	return &partnersvc.Actor{ID: user.ID, Role: user.Role}
 }

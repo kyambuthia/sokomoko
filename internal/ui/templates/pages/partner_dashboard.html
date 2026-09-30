@@ -11,7 +11,7 @@
 {{ end }}
 
 {{ define "main-area" }}
-<main class="workspace-page partner-page">
+<main class="workspace-page partner-page" data-partner-dashboard>
   <header class="workspace-page__header">
     <div>
       <p class="eyebrow">Partner workspace</p>
@@ -22,12 +22,12 @@
   </header>
 
   <section class="workspace-metrics partner-metrics" aria-label="Store overview">
-    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog entries"></ui-metric-card>
+    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog entries" data-partner-metric="product_count"></ui-metric-card>
     <ui-metric-card label="Workspace" value="{{.StoreSlug}}" note="Store slug"></ui-metric-card>
     <ui-metric-card label="Access" value="{{.Role}}" note="Current role"></ui-metric-card>
-    <ui-metric-card label="New Orders" value="{{.NewOrders}}" note="Awaiting acceptance"></ui-metric-card>
-    <ui-metric-card label="In Progress" value="{{.InProgressOrders}}" note="Accepted or packing"></ui-metric-card>
-    <ui-metric-card label="Dispatched" value="{{.DispatchedOrders}}" note="On the road"></ui-metric-card>
+    <ui-metric-card label="New Orders" value="{{.NewOrders}}" note="Awaiting acceptance" data-partner-metric="new_orders"></ui-metric-card>
+    <ui-metric-card label="In Progress" value="{{.InProgressOrders}}" note="Accepted or packing" data-partner-metric="in_progress_orders"></ui-metric-card>
+    <ui-metric-card label="Dispatched" value="{{.DispatchedOrders}}" note="On the road" data-partner-metric="dispatched_orders"></ui-metric-card>
   </section>
 
   {{if gt .OverdueOrders 0}}

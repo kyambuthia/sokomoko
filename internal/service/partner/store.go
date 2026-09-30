@@ -30,6 +30,7 @@ type productDraft struct {
 	Price         float64
 	StockQuantity int
 	CategoryID    sql.NullInt64
+	PartnerID     sql.NullInt64
 }
 
 func newDBStore(store *db.Store) store {
@@ -52,6 +53,7 @@ func (s *dbStore) CreateProduct(product productDraft) error {
 		Price:         product.Price,
 		StockQuantity: product.StockQuantity,
 		CategoryID:    product.CategoryID,
+		PartnerID:     product.PartnerID,
 	})
 	return err
 }

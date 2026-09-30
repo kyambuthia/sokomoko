@@ -11,10 +11,10 @@ Authentication is implemented in
 | user | customer signup | customer login and customer reset |
 | staff | admin/staff signup | admin login and operational reset |
 | admin | admin setup or admin seed | admin login and operational reset |
-| partner | seed workflow | stored in the schema, but not accepted by the current admin login handler |
+| partner | seed workflow | partner host login and partner operations |
 
-The current partner host is therefore an admin/staff operational surface. It is
-not a separate partner-user authentication flow.
+The partner host is an operational surface for admin, staff, and partner users.
+Partner users are scoped to their own catalog and order operations.
 
 ## Sessions
 
@@ -71,8 +71,9 @@ On admin.localhost:
 - GET|POST /login accepts admin and staff.
 - GET|POST /staff/signup is admin-only.
 
-The partner host reuses the admin login handler and the same admin/staff role
-guard for its operational pages.
+The partner host reuses the admin login handler and accepts admin, staff, and
+partner users. Partner users are scoped to their own products and orders;
+admin and staff users retain global operational access.
 
 ## Password reset
 

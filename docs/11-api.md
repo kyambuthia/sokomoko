@@ -64,9 +64,9 @@ value in the `Idempotency-Key` header.
 
 ## Workspace APIs
 
-Admin and partner endpoints reuse the current role guards. The partner surface
-remains subject to the identity/scoping limitation documented in
-`docs/08-known-issues.md`; the API does not broaden that access model.
+Admin and partner endpoints reuse the current role guards. Partner users are
+scoped to their own catalog and fulfillment records; admin and staff users
+retain global operational access.
 
 Workspace routes include:
 

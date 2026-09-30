@@ -157,9 +157,97 @@
     }
   }
 
+  function updateMetrics(selector, values) {
+    Object.entries(values || {}).forEach(([key, value]) => {
+      document.querySelector(`[${selector}="${CSS.escape(key)}"]`)?.setAttribute("value", String(value ?? 0));
+    });
+  }
+
+  async function refreshAdminWorkspace() {
+    if (!document.querySelector("[data-admin-workspace]") || !api()) return;
+    try {
+      const metrics = await api().request("/admin/metrics");
+      updateMetrics("data-admin-metric", metrics);
+      const summary = document.querySelector("[data-admin-users]");
+      if (summary) {
+        summary.innerHTML = `<strong>Users:</strong> ${Number(metrics.user_count || 0)} customers, ${Number(metrics.staff_count || 0)} staff, ${Number(metrics.admin_count || 0)} admins`;
+      }
+    } catch (_) {
+      // The server-rendered workspace remains authoritative if refresh fails.
+    }
+  }
+
+  async function refreshPartnerDashboard() {
+    if (!document.querySelector("[data-partner-dashboard]") || !api()) return;
+    try {
+      const dashboard = await api().request("/partner/dashboard");
+      const summary = dashboard.order_summary || {};
+      updateMetrics("data-partner-metric", {
+        product_count: dashboard.product_count,
+        new_orders: summary.new_count,
+        in_progress_orders: summary.in_progress_count,
+        dispatched_orders: summary.dispatched_count,
+      });
+    } catch (_) {
+      // The server-rendered workspace remains authoritative if refresh fails.
+    }
+  }
+
+  function initWorkspaceOrderForms() {
+    document.querySelectorAll("form[data-api-admin-order], form[data-api-partner-order]").forEach((form) => {
+      form.addEventListener("submit", async (event) => {
+        if (!api() || !form.checkValidity()) return;
+        event.preventDefault();
+        setSubmitting(form, true);
+        const data = new FormData(form);
+        const orderID = data.get("order_id");
+        const isAdmin = form.hasAttribute("data-api-admin-order");
+        const body = isAdmin
+          ? {
+              status: data.get("status"),
+              partner_status: data.get("partner_status"),
+              delivery_status: data.get("delivery_status"),
+              delivery_notice: data.get("delivery_notice"),
+            }
+          : {
+              partner_status: data.get("partner_status"),
+              delivery_status: data.get("delivery_status"),
+              delivery_notice: data.get("delivery_notice"),
+            };
+        try {
+          await api().request(`${isAdmin ? "/admin/orders" : "/partner/orders"}/${encodeURIComponent(orderID)}`, {
+            method: "PATCH",
+            body,
+          });
+          window.UIToast?.success("Order update saved.");
+          const card = form.closest(".order-card");
+          const status = [body.status, body.partner_status, body.delivery_status].filter(Boolean).join(" / ");
+          card?.querySelector(".order-card__details p:nth-child(2) span")?.replaceChildren(status);
+        } catch (error) {
+          if (error.status === 401) {
+            form.submit();
+            return;
+          }
+          showError(error);
+        } finally {
+          setSubmitting(form, false);
+        }
+      });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     initCartForms();
     initCheckoutForm();
+    initWorkspaceOrderForms();
     refreshAccountOrders();
+    refreshAdminWorkspace();
+    refreshPartnerDashboard();
+    if (document.querySelector("[data-admin-workspace], [data-partner-dashboard]")) {
+      window.setInterval(() => {
+        refreshAdminWorkspace();
+        refreshPartnerDashboard();
+      }, 30000);
+    }
   });
 })();
