@@ -23,7 +23,7 @@
       </div>
       <div class="checkout-items">
         {{range .Items}}
-        <div class="checkout-item">
+        <div class="checkout-item" aria-label="{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}">
           <div>
             <strong class="checkout-item__name">{{.ProductName}}</strong>
             <span class="checkout-item__meta">Qty {{.Quantity}} · ${{printf "%.2f" .UnitPrice}} each</span>

@@ -10,6 +10,7 @@ import (
 
 type AdminPageData struct {
 	Title          string
+	CSRFToken      string
 	Message        string
 	Role           string
 	ProductCount   int
@@ -32,7 +33,8 @@ type AdminPageData struct {
 	OrderMessage   string
 }
 
-func renderAdminPage(a *app.App, w http.ResponseWriter, data AdminPageData) {
+func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, data AdminPageData) {
+	data.CSRFToken = a.Auth.CSRFToken(r)
 	a.Render(w, a.Templates.Admin, data)
 }
 
@@ -55,7 +57,7 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		renderAdminPage(a, w, adminDashboardPage(metrics, adminRoleFromContext(r)))
+		renderAdminPage(a, w, r, adminDashboardPage(metrics, adminRoleFromContext(r)))
 	}
 }
 
@@ -81,7 +83,7 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		renderAdminPage(a, w, adminProductsPage(metrics, adminRoleFromContext(r), products))
+		renderAdminPage(a, w, r, adminProductsPage(metrics, adminRoleFromContext(r), products))
 	}
 }
 
@@ -142,7 +144,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 		if responseStatus != http.StatusOK {
 			w.WriteHeader(responseStatus)
 		}
-		renderAdminPage(a, w, page)
+		renderAdminPage(a, w, r, page)
 	}
 }
 
@@ -168,7 +170,7 @@ func AdminReports(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		renderAdminPage(a, w, adminReportsPage(metrics, adminRoleFromContext(r), report))
+		renderAdminPage(a, w, r, adminReportsPage(metrics, adminRoleFromContext(r), report))
 	}
 }
 
@@ -187,7 +189,7 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		renderAdminPage(a, w, adminDeliveriesPage(metrics, adminRoleFromContext(r)))
+		renderAdminPage(a, w, r, adminDeliveriesPage(metrics, adminRoleFromContext(r)))
 	}
 }
 
@@ -233,7 +235,7 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			return
 		}
 		page.TeamMembers = teamMembers
-		renderAdminPage(a, w, page)
+		renderAdminPage(a, w, r, page)
 	}
 }
 
@@ -258,6 +260,6 @@ func AdminAudit(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		renderAdminPage(a, w, adminAuditPage(metrics, adminRoleFromContext(r), logs))
+		renderAdminPage(a, w, r, adminAuditPage(metrics, adminRoleFromContext(r), logs))
 	}
 }

@@ -7,15 +7,15 @@ import (
 )
 
 const (
-	defaultPort        = "6969"
-	defaultDBPath      = "./db/t.db"
-	defaultEnvironment = "development"
-	defaultPostRateMax = 0
-	defaultPostRateWin = 60
+	defaultPort                        = "6969"
+	defaultDBPath                      = "./db/t.db"
+	defaultEnvironment                 = "development"
+	defaultPostRateMax                 = 0
+	defaultPostRateWin                 = 60
 	defaultAuthAbuseMaxFailures        = 0
 	defaultAuthAbuseBackoffBaseSeconds = 1
 	defaultAuthAbuseBackoffMaxSeconds  = 300
-	defaultSMTPPort    = "587"
+	defaultSMTPPort                    = "587"
 )
 
 type Config struct {

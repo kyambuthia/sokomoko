@@ -10,15 +10,17 @@ import (
 )
 
 type PartnerSetupData struct {
-	Title    string
-	Heading  string
-	Message  string
-	Error    string
-	Settings partnersvc.StoreSettings
+	Title     string
+	CSRFToken string
+	Heading   string
+	Message   string
+	Error     string
+	Settings  partnersvc.StoreSettings
 }
 
 type PartnerDashboardData struct {
 	Title            string
+	CSRFToken        string
 	StoreName        string
 	StoreSlug        string
 	Description      string
@@ -35,6 +37,7 @@ type PartnerDashboardData struct {
 
 type PartnerProductsData struct {
 	Title      string
+	CSRFToken  string
 	StoreName  string
 	Products   []partnersvc.Product
 	Message    string
@@ -84,8 +87,9 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 		}
 
 		data := PartnerSetupData{
-			Title:   "Store Setup",
-			Heading: "Partner Store Setup",
+			Title:     "Store Setup",
+			CSRFToken: a.Auth.CSRFToken(r),
+			Heading:   "Partner Store Setup",
 		}
 		if existing != nil {
 			data.Settings = *existing
@@ -140,7 +144,9 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 		}
 
 		role, username := partnerIdentity(r)
-		a.Render(w, a.Templates.PartnerDashboard, partnerDashboardPage(view, role, username))
+		page := partnerDashboardPage(view, role, username)
+		page.CSRFToken = a.Auth.CSRFToken(r)
+		a.Render(w, a.Templates.PartnerDashboard, page)
 	}
 }
 
@@ -158,7 +164,9 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		a.Render(w, a.Templates.PartnerProducts, partnerProductsPage(view))
+		page := partnerProductsPage(view)
+		page.CSRFToken = a.Auth.CSRFToken(r)
+		a.Render(w, a.Templates.PartnerProducts, page)
 	}
 }
 
