@@ -1,14 +1,29 @@
 package account
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import (
+	"time"
+
+	"github.com/kyambuthia/sokomoko/internal/db"
+)
 
 type Order struct {
-	ID             int
-	Status         string
-	PartnerStatus  string
-	DeliveryStatus string
-	DeliveryNotice string
-	TotalAmount    float64
+	ID              int
+	Status          string
+	PartnerStatus   string
+	DeliveryStatus  string
+	DeliveryNotice  string
+	DeliveryAddress string
+	TotalAmount     float64
+	CreatedAt       time.Time
+	Items           []OrderItem
+}
+
+type OrderItem struct {
+	ProductID   int
+	ProductName string
+	Quantity    int
+	UnitPrice   float64
+	LineTotal   float64
 }
 
 type Service struct {

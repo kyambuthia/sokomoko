@@ -35,11 +35,15 @@ func runHTTPServer(server *httpServer, store *db.Store) error {
 	return nil
 }
 
-func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux *http.ServeMux) http.Handler {
+func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux, apiMux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := app.CanonicalHost(r.Host)
 		if _, ok := allowedHosts[host]; !ok {
 			http.Error(w, "Invalid host", http.StatusBadRequest)
+			return
+		}
+		if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			apiMux.ServeHTTP(w, r)
 			return
 		}
 

@@ -22,13 +22,26 @@ func (s *dbStore) ListOrdersByUser(userID int) ([]Order, error) {
 
 	mapped := make([]Order, 0, len(orders))
 	for _, order := range orders {
+		items := make([]OrderItem, 0, len(order.Items))
+		for _, item := range order.Items {
+			items = append(items, OrderItem{
+				ProductID:   item.ProductID,
+				ProductName: item.ProductName,
+				Quantity:    item.Quantity,
+				UnitPrice:   item.UnitPrice,
+				LineTotal:   item.LineTotal,
+			})
+		}
 		mapped = append(mapped, Order{
-			ID:             order.ID,
-			Status:         order.Status,
-			PartnerStatus:  order.PartnerStatus,
-			DeliveryStatus: order.DeliveryStatus,
-			DeliveryNotice: order.DeliveryNotice,
-			TotalAmount:    order.TotalAmount,
+			ID:              order.ID,
+			Status:          order.Status,
+			PartnerStatus:   order.PartnerStatus,
+			DeliveryStatus:  order.DeliveryStatus,
+			DeliveryNotice:  order.DeliveryNotice,
+			DeliveryAddress: order.DeliveryAddress,
+			TotalAmount:     order.TotalAmount,
+			CreatedAt:       order.CreatedAt,
+			Items:           items,
 		})
 	}
 	return mapped, nil

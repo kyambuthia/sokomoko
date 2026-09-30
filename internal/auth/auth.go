@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -30,6 +31,11 @@ const (
 )
 
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
+
+var (
+	errNoSession      = errors.New("no authenticated session")
+	errInvalidSession = errors.New("invalid authenticated session")
+)
 
 type PasswordResetEmailSender func(ctx context.Context, recipientEmail string, resetLink string) error
 
@@ -1122,9 +1128,13 @@ const userContextKey contextKey = "user"
 // AuthMiddleware provides authentication middleware for protected routes
 func (s *Service) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(sessionCookieName)
+		user, err := s.authenticatedUser(r)
 		if err != nil {
-			if err == http.ErrNoCookie {
+			if errors.Is(err, errNoSession) {
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
+			}
+			if errors.Is(err, errInvalidSession) {
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
@@ -1132,26 +1142,57 @@ func (s *Service) AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		sess, err := s.store.GetSession(cookie.Value)
-		if err != nil || sess == nil || sess.ExpiresAt.Before(time.Now()) {
-			if sess != nil {
-				_ = s.store.DeleteSession(cookie.Value)
-			}
-			http.Redirect(w, r, "/login", http.StatusFound)
-			return
-		}
+		ctx := context.WithValue(r.Context(), userContextKey, user)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
-		user, err := s.store.GetUserByID(sess.UserID)
-		if err != nil || user == nil {
-			log.Printf("Error retrieving user from DB for session %d: %v", sess.UserID, err)
-			_ = s.store.DeleteSession(cookie.Value)
-			http.Redirect(w, r, "/login", http.StatusFound)
+// APIAuthMiddleware authenticates the current session without redirecting an
+// API client to an HTML page. It is intended for same-origin JSON requests
+// made by the progressive-enhancement layer.
+func (s *Service) APIAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, err := s.authenticatedUser(r)
+		if err != nil {
+			writeAPIAuthError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), userContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (s *Service) authenticatedUser(r *http.Request) (*db.User, error) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			return nil, errNoSession
+		}
+		return nil, err
+	}
+
+	sess, err := s.store.GetSession(cookie.Value)
+	if err != nil || sess == nil || sess.ExpiresAt.Before(time.Now()) {
+		if sess != nil {
+			_ = s.store.DeleteSession(cookie.Value)
+		}
+		return nil, errInvalidSession
+	}
+
+	user, err := s.store.GetUserByID(sess.UserID)
+	if err != nil || user == nil {
+		log.Printf("Error retrieving user from DB for session %d: %v", sess.UserID, err)
+		_ = s.store.DeleteSession(cookie.Value)
+		return nil, errInvalidSession
+	}
+	return user, nil
+}
+
+func writeAPIAuthError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + message + `"}}`))
 }
 
 // GetUserFromContext retrieves the user from the request context

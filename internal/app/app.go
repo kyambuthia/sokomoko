@@ -73,6 +73,7 @@ type PartnerService interface {
 }
 
 type AuthService interface {
+	APIAuthMiddleware(next http.Handler) http.Handler
 	AdminLogin(tmpl *template.Template) http.HandlerFunc
 	AdminSetup(tmpl *template.Template) http.HandlerFunc
 	AuthMiddleware(next http.Handler) http.Handler

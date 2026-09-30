@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kyambuthia/sokomoko/internal/api"
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/bootstrap"
@@ -119,10 +120,12 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()
 	partnerMux := http.NewServeMux()
+	apiMux := http.NewServeMux()
 
 	routes.RegisterPublic(application, mainMux)
 	routes.RegisterAdmin(application, adminMux)
 	routes.RegisterPartner(application, partnerMux)
+	api.Register(application, apiMux)
 
 	allowedHosts := parseAllowedHosts(cfg.AllowedHostsRaw)
 	if len(allowedHosts) == 0 {
@@ -136,7 +139,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	log.Printf("Trusted hosts: %s", sortedHostList(allowedHosts))
 
 	handler := app.Chain(
-		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux),
+		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, apiMux),
 		buildMiddlewares(cfg, application)...,
 	)
 
