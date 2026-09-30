@@ -21,6 +21,10 @@ type apiEnvelope struct {
 }
 
 func makeAPIRequest(t *testing.T, method, path string, body any, cookies []*http.Cookie, csrf bool, headers map[string]string) (*http.Response, []byte) {
+	return makeAPIRequestOnHost(t, "localhost", method, path, body, cookies, csrf, headers)
+}
+
+func makeAPIRequestOnHost(t *testing.T, host, method, path string, body any, cookies []*http.Cookie, csrf bool, headers map[string]string) (*http.Response, []byte) {
 	t.Helper()
 	var bodyReader io.Reader
 	if body != nil {
@@ -30,8 +34,8 @@ func makeAPIRequest(t *testing.T, method, path string, body any, cookies []*http
 		}
 		bodyReader = bytes.NewReader(encoded)
 	}
-	req := httptest.NewRequest(method, "http://localhost"+path, bodyReader)
-	req.Host = "localhost"
+	req := httptest.NewRequest(method, "http://"+host+path, bodyReader)
+	req.Host = host
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -178,6 +182,64 @@ func TestAPI_CheckoutPlacementIsIdempotent(t *testing.T) {
 	}
 	if len(orders) != 1 {
 		t.Fatalf("expected one order after replay, got %d", len(orders))
+	}
+}
+
+func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
+	clearAllTables()
+	if _, err := testStore.DB.Exec(`INSERT INTO store_settings (id, store_name, store_slug, description, contact_email) VALUES (1, 'API Store', 'api-store', 'API test store', 'store@example.com')`); err != nil {
+		t.Fatalf("create store settings: %v", err)
+	}
+
+	suffix := time.Now().UnixNano()
+	partnerA := fmt.Sprintf("partner_a_%d", suffix)
+	partnerB := fmt.Sprintf("partner_b_%d", suffix)
+	password := "strongpass123"
+	createTestUser(t, partnerA, partnerA+"@example.com", password, "partner")
+	createTestUser(t, partnerB, partnerB+"@example.com", password, "partner")
+	partnerAID := mustUserID(t, partnerA)
+	partnerBID := mustUserID(t, partnerB)
+
+	productA := createTestProduct(t, "Partner A Product", fmt.Sprintf("partner-a-%d", suffix), 10, 5)
+	productB := createTestProduct(t, "Partner B Product", fmt.Sprintf("partner-b-%d", suffix), 12, 5)
+	if _, err := testStore.DB.Exec("UPDATE products SET partner_id = ? WHERE id IN (?, ?)", partnerAID, productA, productB); err != nil {
+		t.Fatalf("assign products: %v", err)
+	}
+	if _, err := testStore.DB.Exec("UPDATE products SET partner_id = ? WHERE id = ?", partnerBID, productB); err != nil {
+		t.Fatalf("assign partner B product: %v", err)
+	}
+
+	customer := fmt.Sprintf("partner_customer_%d", suffix)
+	createTestUser(t, customer, customer+"@example.com", password, "user")
+	customerID := mustUserID(t, customer)
+	if err := testStore.AddToCart(int(customerID), int(productB), 1); err != nil {
+		t.Fatalf("add customer cart: %v", err)
+	}
+	orderID, err := testStore.PlaceOrderFromCart(int(customerID), "Partner API Lane")
+	if err != nil {
+		t.Fatalf("create partner-scoping order: %v", err)
+	}
+
+	cookie := loginAndGetSessionCookie(t, "partner.localhost", partnerA, password)
+	resp, body := makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/products", nil, []*http.Cookie{cookie}, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("partner products status=%d body=%s", resp.StatusCode, body)
+	}
+	var products struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+	}
+	decodeAPIData(t, body, &products)
+	if len(products.Items) != 1 || products.Items[0].Name != "Partner A Product" {
+		t.Fatalf("partner A saw unexpected products: %#v", products.Items)
+	}
+
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, fmt.Sprintf("/api/v1/partner/orders/%d", orderID), map[string]any{
+		"partner_status": "accepted", "delivery_status": "processing", "delivery_notice": "not yours",
+	}, []*http.Cookie{cookie}, true, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-partner update status=%d body=%s", resp.StatusCode, body)
 	}
 }
 
