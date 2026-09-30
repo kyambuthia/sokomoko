@@ -1202,6 +1202,7 @@ func (s *Service) authenticatedUser(r *http.Request) (*db.User, error) {
 
 func writeAPIAuthError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + message + `"}}`))
 }

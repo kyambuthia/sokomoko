@@ -86,6 +86,7 @@ func isAPIRequest(r *http.Request) bool {
 
 func writeAPIJSONError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(apiErrorEnvelope{
 		Error: apiErrorBody{Code: code, Message: message},
