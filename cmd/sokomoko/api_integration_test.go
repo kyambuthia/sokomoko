@@ -235,6 +235,32 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 		t.Fatalf("partner A saw unexpected products: %#v", products.Items)
 	}
 
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/settings", nil, []*http.Cookie{cookie}, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("partner settings read status=%d body=%s", resp.StatusCode, body)
+	}
+	var settings struct {
+		StoreName    string `json:"store_name"`
+		StoreSlug    string `json:"store_slug"`
+		ContactEmail string `json:"contact_email"`
+	}
+	decodeAPIData(t, body, &settings)
+	if settings.StoreName != "API Store" || settings.StoreSlug != "api-store" || settings.ContactEmail != "store@example.com" {
+		t.Fatalf("unexpected partner settings: %#v", settings)
+	}
+
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, "/api/v1/partner/settings", map[string]any{
+		"store_name": "Updated API Store", "store_slug": "updated-api-store",
+		"description": "Updated API description", "contact_email": "updated@example.com",
+	}, []*http.Cookie{cookie}, true, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("partner settings update status=%d body=%s", resp.StatusCode, body)
+	}
+	decodeAPIData(t, body, &settings)
+	if settings.StoreName != "Updated API Store" || settings.StoreSlug != "updated-api-store" || settings.ContactEmail != "updated@example.com" {
+		t.Fatalf("unexpected updated partner settings: %#v", settings)
+	}
+
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, fmt.Sprintf("/api/v1/partner/orders/%d", orderID), map[string]any{
 		"partner_status": "accepted", "delivery_status": "processing", "delivery_notice": "not yours",
 	}, []*http.Cookie{cookie}, true, nil)

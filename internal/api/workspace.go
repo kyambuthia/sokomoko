@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
@@ -29,6 +30,41 @@ type partnerProductInput struct {
 	Price       string `json:"price"`
 	Stock       string `json:"stock"`
 	CategoryID  string `json:"category_id"`
+}
+
+type partnerSettingsInput struct {
+	StoreName    string `json:"store_name"`
+	StoreSlug    string `json:"store_slug"`
+	Description  string `json:"description"`
+	ContactEmail string `json:"contact_email"`
+}
+
+type partnerSettingsDTO struct {
+	StoreName    string `json:"store_name"`
+	StoreSlug    string `json:"store_slug"`
+	Description  string `json:"description"`
+	ContactEmail string `json:"contact_email"`
+}
+
+type categoryDTO struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type teamMemberDTO struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
+}
+
+type auditLogDTO struct {
+	CreatedAt   time.Time `json:"created_at"`
+	ActorUserID *int      `json:"actor_user_id,omitempty"`
+	Action      string    `json:"action"`
+	TargetType  string    `json:"target_type"`
+	TargetID    *int      `json:"target_id,omitempty"`
+	Details     string    `json:"details"`
 }
 
 type workspaceMetricsDTO struct {
@@ -70,6 +106,44 @@ func mapPartnerSummary(summary partnersvc.Summary) partnerSummaryDTO {
 		DispatchedCount: summary.DispatchedCount, CompletedCount: summary.CompletedCount,
 		OverdueCount: summary.OverdueCount,
 	}
+}
+
+func mapPartnerSettings(settings partnersvc.StoreSettings) partnerSettingsDTO {
+	return partnerSettingsDTO{
+		StoreName: settings.StoreName, StoreSlug: settings.StoreSlug,
+		Description: settings.Description, ContactEmail: settings.ContactEmail,
+	}
+}
+
+func mapCategory(category partnersvc.Category) categoryDTO {
+	return categoryDTO{ID: category.ID, Name: category.Name}
+}
+
+func mapCategories(categories []partnersvc.Category) []categoryDTO {
+	items := make([]categoryDTO, 0, len(categories))
+	for _, category := range categories {
+		items = append(items, mapCategory(category))
+	}
+	return items
+}
+
+func mapTeamMember(member adminsvc.TeamMember) teamMemberDTO {
+	return teamMemberDTO{ID: member.ID, Username: member.Username, Email: member.Email, Role: member.Role}
+}
+
+func mapAuditLog(log adminsvc.AuditLog) auditLogDTO {
+	result := auditLogDTO{
+		CreatedAt: log.CreatedAt, Action: log.Action, TargetType: log.TargetType, Details: log.Details,
+	}
+	if log.ActorUserID.Valid {
+		actorID := int(log.ActorUserID.Int64)
+		result.ActorUserID = &actorID
+	}
+	if log.TargetID.Valid {
+		targetID := int(log.TargetID.Int64)
+		result.TargetID = &targetID
+	}
+	return result
 }
 
 func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +218,11 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load audit log")
 			return
 		}
-		writeData(w, http.StatusOK, logs)
+		items := make([]auditLogDTO, 0, len(logs))
+		for _, log := range logs {
+			items = append(items, mapAuditLog(log))
+		}
+		writeData(w, http.StatusOK, items)
 	default:
 		writeError(w, http.StatusNotFound, "resource_not_found", "Admin resource not found")
 	}
@@ -206,7 +284,11 @@ func (h *Handler) adminTeam(w http.ResponseWriter, r *http.Request, parts []stri
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load team")
 			return
 		}
-		writeData(w, http.StatusOK, members)
+		items := make([]teamMemberDTO, 0, len(members))
+		for _, member := range members {
+			items = append(items, mapTeamMember(member))
+		}
+		writeData(w, http.StatusOK, items)
 		return
 	}
 	if len(parts) != 2 || r.Method != http.MethodDelete {
@@ -288,9 +370,9 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 			items = append(items, mapPartnerProduct(product))
 		}
 		writeData(w, http.StatusOK, struct {
-			Items      []productDTO          `json:"items"`
-			Categories []partnersvc.Category `json:"categories"`
-		}{Items: items, Categories: data.Categories})
+			Items      []productDTO  `json:"items"`
+			Categories []categoryDTO `json:"categories"`
+		}{Items: items, Categories: mapCategories(data.Categories)})
 		return
 	}
 	if len(parts) != 1 || r.Method != http.MethodPost {
@@ -360,19 +442,22 @@ func (h *Handler) partnerSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "store_not_configured", "Store settings are not configured")
 			return
 		}
-		writeData(w, http.StatusOK, settings)
+		writeData(w, http.StatusOK, mapPartnerSettings(*settings))
 	case http.MethodPatch:
-		var input partnersvc.StoreSettingsInput
+		var input partnerSettingsInput
 		if err := decodeJSON(r, &input); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 			return
 		}
-		settings, err := h.app.Partner.SaveStoreSettings(input)
+		settings, err := h.app.Partner.SaveStoreSettings(partnersvc.StoreSettingsInput{
+			StoreName: input.StoreName, StoreSlug: input.StoreSlug,
+			Description: input.Description, ContactEmail: input.ContactEmail,
+		})
 		if err != nil {
 			writePartnerError(w, err)
 			return
 		}
-		writeData(w, http.StatusOK, settings)
+		writeData(w, http.StatusOK, mapPartnerSettings(settings))
 	default:
 		methodNotAllowed(w)
 	}
