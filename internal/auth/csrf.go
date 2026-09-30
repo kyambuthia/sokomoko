@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -37,6 +38,10 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		if err != nil || sess == nil {
 			// Invalid or expired session
 			log.Printf("CSRF check: invalid session")
+			if isAPIRequest(r) {
+				writeAPIJSONError(w, http.StatusForbidden, "invalid_session", "Invalid session")
+				return
+			}
 			http.Error(w, "Invalid session", http.StatusForbidden)
 			return
 		}
@@ -51,12 +56,20 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		expectedToken := strings.TrimSpace(sess.CSRFToken)
 		if expectedToken == "" || providedToken == "" {
 			log.Printf("CSRF check: missing token (expected: %t, provided: %t)", expectedToken != "", providedToken != "")
+			if isAPIRequest(r) {
+				writeAPIJSONError(w, http.StatusForbidden, "csrf_token_missing", "CSRF token missing")
+				return
+			}
 			http.Error(w, "CSRF token missing", http.StatusForbidden)
 			return
 		}
 
 		if subtle.ConstantTimeCompare([]byte(providedToken), []byte(expectedToken)) != 1 {
 			log.Printf("CSRF check: token mismatch")
+			if isAPIRequest(r) {
+				writeAPIJSONError(w, http.StatusForbidden, "csrf_token_invalid", "CSRF token invalid")
+				return
+			}
 			http.Error(w, "CSRF token invalid", http.StatusForbidden)
 			return
 		}
@@ -65,6 +78,27 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), csrfTokenContextKey, expectedToken)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func isAPIRequest(r *http.Request) bool {
+	return r != nil && (r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/"))
+}
+
+func writeAPIJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(apiErrorEnvelope{
+		Error: apiErrorBody{Code: code, Message: message},
+	})
+}
+
+type apiErrorEnvelope struct {
+	Error apiErrorBody `json:"error"`
+}
+
+type apiErrorBody struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 // isSafeMethod checks if the HTTP method is safe (doesn't change state)
