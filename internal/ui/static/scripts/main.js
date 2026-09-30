@@ -315,19 +315,10 @@ class UIHeaderSearch extends HTMLElement {
     this.abortController = new AbortController();
 
     try {
-      const headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-      };
-      if (this.csrfToken) {
-        headers["X-CSRF-Token"] = this.csrfToken;
-      }
-
-      const response = await fetch(this.endpoint, {
-        method: "POST",
+      const response = await fetch(`${this.endpoint}?q=${encodeURIComponent(query)}&limit=6`, {
+        method: "GET",
         credentials: "same-origin",
-        headers,
-        body: JSON.stringify({ queryString: query }),
+        headers: { "Accept": "application/json" },
         signal: this.abortController.signal,
       });
 
@@ -335,7 +326,8 @@ class UIHeaderSearch extends HTMLElement {
         throw new Error(`Search failed: ${response.status}`);
       }
 
-      const products = await response.json();
+      const payload = await response.json();
+      const products = payload?.data?.items || [];
       this.renderResults(Array.isArray(products) ? products.slice(0, 6) : [], query);
     } catch (error) {
       if (error.name !== "AbortError") {

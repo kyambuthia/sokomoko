@@ -22,7 +22,7 @@
         <h2 id="account-orders-title">Recent orders</h2>
       </div>
     </div>
-    <div class="account-orders__body">
+    <div class="account-orders__body" data-account-orders>
       {{if .Orders}}
       <div class="table-wrap">
         <table class="data-table account-orders__table">
@@ -31,12 +31,12 @@
           </thead>
           <tbody>
             {{range .Orders}}
-            <tr>
+            <tr data-order-id="{{.ID}}">
               <td>#{{.ID}}</td>
-              <td>{{.Status}} ({{.PartnerStatus}})</td>
-              <td>{{.DeliveryStatus}}</td>
+              <td data-order-status>{{.Status}} ({{.PartnerStatus}})</td>
+              <td data-delivery-status>{{.DeliveryStatus}}</td>
               <td>${{printf "%.2f" .TotalAmount}}</td>
-              <td>{{if .DeliveryNotice}}{{.DeliveryNotice}}{{else}}No updates yet{{end}}</td>
+              <td data-delivery-notice>{{if .DeliveryNotice}}{{.DeliveryNotice}}{{else}}No updates yet{{end}}</td>
             </tr>
             {{end}}
           </tbody>

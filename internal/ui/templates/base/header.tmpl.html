@@ -6,7 +6,7 @@
             <a href="/account" class="storefront-header__utility-link">Account</a>
             <a href="/search?q=saved" class="storefront-header__utility-link">Saved</a>
             <a href="/search?q=deals" class="storefront-header__utility-link">Deals</a>
-            <a href="/cart" class="storefront-header__utility-link storefront-header__utility-link--cart">Cart</a>
+            <a href="/cart" class="storefront-header__utility-link storefront-header__utility-link--cart" data-cart-count>Cart</a>
         </nav>
     </div>
     <div class="storefront-header__masthead">
@@ -16,7 +16,7 @@
         </div>
         <ui-header-search
             action="/search"
-            endpoint="/search"
+            endpoint="/api/v1/catalog/search"
             csrf-token="{{.CSRFToken}}"
             label="Search the catalog"
             placeholder="Search products, brands, and deals"

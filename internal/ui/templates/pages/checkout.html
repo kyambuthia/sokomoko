@@ -40,7 +40,7 @@
       </div>
     </section>
 
-    <form action="{{.FormAction}}" method="POST" class="checkout-card checkout-form">
+    <form action="{{.FormAction}}" method="POST" class="checkout-card checkout-form" data-api-checkout data-checkout-token="{{.IdempotencyKey}}">
       <div class="checkout-card__header">
         <p class="eyebrow">Delivery details</p>
         <h2>Where should we send it?</h2>

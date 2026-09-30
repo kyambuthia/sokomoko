@@ -4,6 +4,7 @@
         <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <meta name="csrf-token" content="{{.CSRFToken}}" />
                 <link rel="manifest" href='{{ asset "manifest.json" }}' />
                 <link rel="preload" href='{{ asset "stylesheets/styles.css" }}' as="style" />
                 <title>{{ block "title" . }}{{end}}</title>
@@ -35,7 +36,9 @@
                                 {{ end }}
                         </div>
                  </div>
+                <script src='{{ asset "scripts/api.js" }}' defer></script>
                 <script src='{{ asset "scripts/main.js" }}' defer></script>
+                <script src='{{ asset "scripts/dynamic.js" }}' defer></script>
         </body>
 </html>
 {{ end }}

@@ -1,7 +1,7 @@
 {{ define "title" }}Cart{{ end }}
 
 {{ define "main-area" }}
-<main class="storefront-page cart-page">
+<main class="storefront-page cart-page" data-cart-page>
   <header class="page-intro">
     <p class="eyebrow">Your selection</p>
     <h1 class="page-intro__title">Ready when you are.</h1>
@@ -28,7 +28,7 @@
 
       <div class="cart-items__list">
         {{range .Items}}
-        <article class="cart-item">
+        <article class="cart-item" data-cart-item="{{.ProductID}}">
           <div class="cart-item__details">
             <h3 class="cart-item__name">{{.ProductName}}</h3>
             <p class="cart-item__price">${{printf "%.2f" .UnitPrice}} each</p>
@@ -41,7 +41,7 @@
               <input class="form__input" id="quantity-{{.ProductID}}" type="number" min="0" name="quantity" value="{{.Quantity}}">
               <button type="submit" class="btn btn--secondary btn--small">Update</button>
             </form>
-            <strong class="cart-item__line-total">${{printf "%.2f" .LineTotal}}</strong>
+            <strong class="cart-item__line-total" data-cart-line-total>${{printf "%.2f" .LineTotal}}</strong>
             <form action="/cart/remove" method="POST">
               {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
               <input type="hidden" name="product_id" value="{{.ProductID}}">
@@ -58,7 +58,7 @@
       <h2 id="cart-summary-title">Keep it simple.</h2>
       <div class="cart-summary__row">
         <span>Subtotal</span>
-        <strong>${{printf "%.2f" .Subtotal}}</strong>
+        <strong data-cart-subtotal>${{printf "%.2f" .Subtotal}}</strong>
       </div>
       <p class="cart-summary__note">Shipping and tax are calculated at checkout.</p>
       <div class="cart-actions">
