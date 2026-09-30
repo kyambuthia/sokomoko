@@ -28,6 +28,7 @@ Read the maintained documentation in this order:
 8. [Known issues](docs/08-known-issues.md)
 9. [Roadmap](docs/09-roadmap.md)
 10. [Contributor rules](docs/10-contributing.md)
+11. [Dynamic JSON API](docs/11-api.md)
 
 ## Stack
 
