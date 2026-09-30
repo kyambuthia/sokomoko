@@ -32,6 +32,8 @@ type Handler struct {
 
 func Register(a *app.App, mux *http.ServeMux) {
 	h := &Handler{app: a}
+	mux.HandleFunc(apiPrefix, h.notFound)
+	mux.HandleFunc(apiPrefix+"/", h.notFound)
 
 	// Public catalog reads.
 	mux.HandleFunc(apiPrefix+"/catalog/products", h.catalogProducts)
@@ -52,6 +54,10 @@ func Register(a *app.App, mux *http.ServeMux) {
 	// used on storefront, admin, and partner hosts without duplicating routes.
 	mux.Handle(apiPrefix+"/admin/", h.role([]string{"admin", "staff"}, http.HandlerFunc(h.admin)))
 	mux.Handle(apiPrefix+"/partner/", h.role([]string{"admin", "staff"}, http.HandlerFunc(h.partner)))
+}
+
+func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
+	writeError(w, http.StatusNotFound, "not_found", "API route not found")
 }
 
 func (h *Handler) authenticated(next http.Handler) http.Handler {

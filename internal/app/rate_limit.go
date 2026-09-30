@@ -76,8 +76,18 @@ func RateLimitByIP(max int, window time.Duration, methods ...string) Middleware 
 	}
 
 	limiter := newIPRateLimiter(max, window)
+	limitedMethods := make(map[string]struct{}, len(methods))
+	for _, method := range methods {
+		limitedMethods[strings.ToUpper(strings.TrimSpace(method))] = struct{}{}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if len(limitedMethods) > 0 {
+				if _, ok := limitedMethods[strings.ToUpper(r.Method)]; !ok {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 			ip := clientIPFromRemoteAddr(r.RemoteAddr)
 			allowed, retryAfter := limiter.allow(ip, time.Now())
 			if !allowed {
