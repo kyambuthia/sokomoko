@@ -377,6 +377,17 @@ func isLoopbackRequest(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+func isPartnerHost(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	host := strings.TrimSpace(strings.ToLower(r.Host))
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	return strings.HasPrefix(host, "partner.")
+}
+
 func (s *Service) validAdminSetupToken(r *http.Request) bool {
 	expected := strings.TrimSpace(s.adminSetupToken)
 	if expected == "" {
@@ -696,7 +707,7 @@ func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		if !hasAdmin {
+		if !hasAdmin && !isPartnerHost(r) {
 			http.Redirect(w, r, "/setup", http.StatusFound)
 			return
 		}

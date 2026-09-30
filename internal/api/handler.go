@@ -53,7 +53,7 @@ func Register(a *app.App, mux *http.ServeMux) {
 	// Workspace APIs. Role checks are applied per resource so one mux can be
 	// used on storefront, admin, and partner hosts without duplicating routes.
 	mux.Handle(apiPrefix+"/admin/", h.role([]string{"admin", "staff"}, http.HandlerFunc(h.admin)))
-	mux.Handle(apiPrefix+"/partner/", h.role([]string{"admin", "staff"}, http.HandlerFunc(h.partner)))
+	mux.Handle(apiPrefix+"/partner/", h.role([]string{"admin", "staff", "partner"}, http.HandlerFunc(h.partner)))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
