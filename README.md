@@ -1,161 +1,130 @@
 # Sokomoko
 
-Lightweight e-commerce app built with Go + SQLite + server-rendered HTML.
+A multi-vendor marketplace built with Go, PostgreSQL, and server-rendered HTML
+enhanced by small custom web components.
 
 ## Stack
-- Go (`net/http`, `html/template`)
-- SQLite (`github.com/ncruces/go-sqlite3`)
-- Embedded + on-disk static assets (`internal/ui/static`)
 
-## Repo Layout
+- Go 1.25 (`net/http`, `html/template`, `log/slog`)
+- PostgreSQL 15+ via `pgx` (`database/sql` driver), versioned embedded migrations
+- Server-side rendered templates and static assets embedded in the binary
+- Progressive-enhancement web components (`internal/ui/static/scripts/components.js`)
+
+## Repo layout
+
 ```text
-cmd/sokomoko/        Main server entrypoint (host-based routing)
-internal/app/        App wiring and template renderer
-internal/routes/     Public/admin/partner route registration
-internal/service/    Feature services and DB adapters
-internal/auth/       Login/signup/session/auth middleware
-internal/db/         Store, schema bootstrap, queries, seed data
-internal/ui/         Embedded templates/static files
-db/schema.sql        SQL schema reference
-db/t.db              Local SQLite database (created/used at runtime)
+cmd/sokomoko/              CLI: serve, migrate, seed; host routing and middleware
+internal/app/              App composition, rendering, middleware, rate limiting
+internal/auth/             Sessions, login, signup, password reset, CSRF, throttling
+internal/config/           Environment configuration and validation
+internal/db/               PostgreSQL store, queries, transactions
+internal/db/migrations/    Versioned SQL migrations (embedded)
+internal/db/dbtest/        Isolated per-test PostgreSQL schemas
+internal/money/            Integer-cent money type
+internal/routes/           HTTP handlers, JSON endpoints, page view models
+internal/service/          Feature services (catalog, commerce, checkout, ...)
+internal/ui/               Templates, static assets, template helpers
+docs/                      Architecture, roadmap, design notes
 ```
 
-## Quick Start
+## Quick start
+
+With Docker (PostgreSQL and the app):
+
 ```bash
-git clone https://github.com/kyambuthia/sokomoko.git
-cd sokomoko
-go mod tidy
-go run ./cmd/sokomoko migrate
-go run ./cmd/sokomoko seed
-go run ./cmd/sokomoko serve
+docker compose up --build
 ```
 
-Server default: `http://localhost:6969`
+Or run PostgreSQL in Docker and the app with Go:
 
-For a one-step local boot with seed data:
 ```bash
-go run ./cmd/sokomoko serve --seed
+make db-up            # PostgreSQL on localhost:5432 (user/password: sokomoko)
+make run              # migrate, seed demo data, serve on :6969
 ```
+
+Add these host entries so the three surfaces resolve locally:
+
+```text
+127.0.0.1 localhost admin.localhost partner.localhost
+```
+
+| Host | Purpose |
+| --- | --- |
+| `http://localhost:6969` | Storefront: browse, cart, checkout, account |
+| `http://admin.localhost:6969` | Platform admin: first-run `/setup`, orders, reports, team, audit |
+| `http://partner.localhost:6969` | Partner workspace: store setup, products, fulfillment |
+
+First-run admin setup happens at `admin.localhost/setup` (loopback only, or with
+`ADMIN_SETUP_TOKEN`), or seed an admin with `ADMIN_PASSWORD` when running `seed`.
 
 ## Configuration
-- `PORT` (default: `6969`)
-- `DB_PATH` (default: `./db/t.db`)
-- `ALLOWED_HOSTS` (comma-separated trusted hosts; default: `localhost,127.0.0.1,admin.localhost,partner.localhost`)
-- `ENV` (`production` enables stricter cookie behavior in auth flows)
-- `SESSION_COOKIE_DOMAIN` (optional; set to a shared domain such as `.example.com` to reuse login sessions across subdomains)
-- `POST_RATE_LIMIT_MAX` (optional; max POST requests allowed per IP in each rate-limit window; default: `0` disabled)
-- `POST_RATE_LIMIT_WINDOW_SECONDS` (optional; window size for POST rate limit; default: `60`)
-- `PASSWORD_RESET_BASE_URL` (optional; absolute base URL for reset links in email, e.g. `https://shop.example.com`)
-- `SMTP_HOST` / `SMTP_PORT` (optional; SMTP server host/port for password reset delivery, default port `587`)
-- `SMTP_USERNAME` / `SMTP_PASSWORD` (optional; SMTP auth credentials)
-- `SMTP_FROM` (optional; sender email for reset delivery, required when SMTP is enabled)
 
-Example:
+All settings are environment variables; see [`.env.example`](.env.example) for
+the full list with comments. The important ones:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | `postgres://sokomoko@localhost:5432/sokomoko?sslmode=disable` | Required in production |
+| `ENV` | `development` | `production` enables secure cookies, JSON logs, strict validation |
+| `PORT` | `6969` | |
+| `ALLOWED_HOSTS` | local hosts | Required in production |
+| `PASSWORD_RESET_BASE_URL` | | Required in production |
+| `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For`/`-Proto`; only behind a proxy that overwrites them |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `20` / `10` | Pool sizing |
+| `DB_QUERY_TIMEOUT_SECONDS` | `10` | Upper bound on any single store call |
+| `LOG_FORMAT` / `LOG_LEVEL` | `text` (`json` in production) / `info` | |
+| `POST_RATE_LIMIT_MAX` | `0` (off) | POSTs per client IP per window |
+| `AUTH_ABUSE_MAX_FAILURES` | `0` (off) | Login/reset failures before backoff |
+| `SMTP_HOST`, `SMTP_FROM`, ... | | Password reset email delivery |
+
+The server refuses to start in production when required settings are missing.
+
+## Development
+
 ```bash
-PORT=8080 \
-DB_PATH=./db/t.db \
-ALLOWED_HOSTS=shop.example.com,admin.example.com,partner.example.com \
-SESSION_COOKIE_DOMAIN=.example.com \
-POST_RATE_LIMIT_MAX=120 \
-POST_RATE_LIMIT_WINDOW_SECONDS=60 \
-PASSWORD_RESET_BASE_URL=https://shop.example.com \
-SMTP_HOST=smtp.example.com \
-SMTP_PORT=587 \
-SMTP_USERNAME=mailer \
-SMTP_PASSWORD=change-me \
-SMTP_FROM=no-reply@example.com \
-ENV=production \
-go run ./cmd/sokomoko serve
+make help        # list targets
+make migrate     # apply migrations
+make seed        # migrations + demo partners and catalog
+make test        # full test suite (needs PostgreSQL)
+make test-race   # with the race detector
+make lint        # gofmt, go vet, JavaScript syntax check
+make docker      # build the production image
 ```
 
-## Domain Architecture
-The server routes by host:
-- `localhost:6969`: customer storefront and customer account auth
-- `admin.localhost:6969`: platform/site management (admin + staff)
-- `partner.localhost:6969`: store setup and partner operations
+Tests that need a database read `SOKOMOKO_TEST_DATABASE_URL` and create a
+throwaway schema per package, so they can share one database and run in
+parallel. Without the variable they are skipped; CI sets
+`SOKOMOKO_REQUIRE_DB_TESTS=1` so a missing database fails the build instead.
 
-Add host entries locally:
-```text
-127.0.0.1 localhost
-127.0.0.1 admin.localhost
-127.0.0.1 partner.localhost
-```
-
-## Auth and Setup Flows
-Customer (`localhost`):
-- Signup: `/signup`
-- Login: `/login`
-- Password reset request: `/password-reset/request`
-- Password reset confirm: `/password-reset/confirm`
-- Account: `/account`
-
-Admin/Staff (`admin.localhost`):
-- First-run bootstrap: `/setup` (creates root admin, optional staff)
-- Login: `/login`
-- Staff creation (admin-only): `/staff/signup`
-- Password reset request: `/password-reset/request`
-- Password reset confirm: `/password-reset/confirm`
-- Management dashboard/routes: `/`, `/products`, `/orders`, `/reports`, `/deliveries`
-
-Partner (`partner.localhost`):
-- Login: `/login` (admin/staff)
-- Store setup: `/setup`
-- Partner dashboard: `/dashboard`
-- Password reset request: `/password-reset/request`
-- Password reset confirm: `/password-reset/confirm`
-
-## Runtime Notes
-- `serve` applies schema, then starts the server.
-- `seed` applies schema and runs bootstrap seed workflows.
-- `migrate` applies schema changes without starting the server.
-- First-run admin setup is done on `admin.localhost/setup` if no admin exists.
-- Staff role is supported alongside admin and user.
-- Password reset uses one-time, expiring reset tokens.
-- Password reset can send email links via SMTP when configured (`SMTP_HOST` + `SMTP_FROM`).
-- Store setup is persisted in `store_settings`.
-- Static file serving checks disk first (`internal/ui/static`), then embedded assets.
-- Static asset URLs are cache-busted using dynamic version query strings.
-- Built-in hardening includes: security headers, panic recovery, request IDs, request logging, 1MB request body limit, same-origin checks for cookie-authenticated unsafe requests, trusted-host validation, and periodic cleanup of expired sessions/reset tokens.
-- Optional IP-based POST rate limiting can be enabled via `POST_RATE_LIMIT_MAX` and `POST_RATE_LIMIT_WINDOW_SECONDS`.
-- Health endpoints: `/healthz` (liveness), `/readyz` (database readiness) on public/admin/partner hosts.
-
-## Development Commands
 ```bash
-# Migrate schema
-go run ./cmd/sokomoko migrate
-
-# Seed bootstrap data
-go run ./cmd/sokomoko seed
-
-# Run server
-go run ./cmd/sokomoko serve
-
-# Run server with bootstrap seed
-go run ./cmd/sokomoko serve --seed
-
-# Build
-go build -o bin/sokomoko ./cmd/sokomoko
-
-# Test
-go test ./...
-go test -v ./...
-go test -cover ./...
-
-# Format
-go fmt ./...
+make db-up && make db-test-create
+SOKOMOKO_TEST_DATABASE_URL=postgres://sokomoko:sokomoko@localhost:5432/sokomoko_test?sslmode=disable make test
 ```
 
-## Troubleshooting
-- Port in use: set another port (`PORT=8080`).
-- Host mismatch: confirm `/etc/hosts` or Windows hosts file has `admin.localhost` and `partner.localhost`.
-- SQLite lock issues during local dev: stop duplicate server processes.
-- Module issues: `go mod tidy`.
+## Database migrations
+
+Migrations live in `internal/db/migrations/NNNN_description.sql`, are embedded in
+the binary, and run in order inside transactions. A PostgreSQL advisory lock
+stops two instances from migrating at once. `serve` applies pending migrations
+on startup; `migrate` applies them and exits. Never edit an applied migration;
+add a new one.
+
+## Deployment
+
+The `Dockerfile` builds a static binary into a distroless, non-root image
+(about 60 MB) that defaults to `ENV=production` and port 8080. Behind a TLS
+terminating proxy set `TRUST_PROXY_HEADERS=true`. Health endpoints on every host:
+
+- `/healthz` liveness
+- `/readyz` database readiness
+
+A background job releases expired checkout stock holds every minute and prunes
+expired sessions and reset tokens every five minutes.
 
 ## Docs
-- `docs/AGENTS.md`
-- `docs/GETTING_STARTED.md`
-- `docs/ARCHITECTURE_OVERVIEW.md`
-- `docs/roadmap/GO_COMMERCE_EVOLUTION_PLAN.md`
-- `docs/design/`
-- `docs/reports/`
-- `docs/authentication.md`
+
+- [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md): layers, data model, request flow
+- [`docs/roadmap/ROADMAP.md`](docs/roadmap/ROADMAP.md): production status and feature roadmap
+- [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md): first contribution walkthrough
+- [`docs/authentication.md`](docs/authentication.md): auth flows
+- [`docs/design/`](docs/design/): UI design system

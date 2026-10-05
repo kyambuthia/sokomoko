@@ -1,3 +1,5 @@
+> **Historical:** written before the October 2026 PostgreSQL migration. See [ROADMAP.md](ROADMAP.md) for current status.
+
 # Go Commerce Evolution Plan
 
 Last updated: April 4, 2026

@@ -1,6 +1,6 @@
 # AGENTS.md - Development Guide for Sokomoko E-Commerce Platform
 
-This document provides essential information for AI agents working on the Sokomoko e-commerce platform built with Go, HTML, CSS, JavaScript, and SQLite3.
+This document provides essential information for AI agents working on the Sokomoko e-commerce platform built with Go, HTML, CSS, JavaScript, and PostgreSQL.
 
 ## Build Commands
 
@@ -59,7 +59,7 @@ sokomoko/
 │   ├── routes/              # HTTP handlers
 │   ├── service/             # Feature services and adapters
 │   └── ui/                  # HTML templates and static assets
-├── db/schema.sql            # Database schema
+├── internal/db/migrations/  # Versioned PostgreSQL migrations
 └── go.mod                   # Go module
 ```
 
@@ -168,10 +168,10 @@ func TestCreateUser_ValidUser_ReturnsID(t *testing.T) {
 
 ## Database Schema
 
-The active application uses the schema applied by the current `internal/db` store layer and `db/schema.sql`.
+The schema is defined by the numbered migrations in `internal/db/migrations`, applied in order by `Store.Migrate`.
 
 When making database changes:
-- Update `db/schema.sql`
+- Add a new numbered migration file; never edit one that has been applied
 - Keep the `internal/db` query layer in sync
 - Run `go run ./cmd/sokomoko migrate` or `go test ./...` to verify behavior
 
@@ -179,7 +179,8 @@ When making database changes:
 
 ### Password Handling
 - Always use bcrypt for password hashing
-- Generate unique salt for each user
+- bcrypt embeds its own per-hash salt; do not add a separate salt
+- Reject passwords over 72 bytes instead of letting bcrypt truncate them
 - Never store plain text passwords
 - Use secure password comparison
 
@@ -193,7 +194,7 @@ When making database changes:
 - Validate all user input
 - Use parameterized queries to prevent SQL injection
 - Sanitize HTML output to prevent XSS
-- Implement CSRF protection for forms
+- Every state-changing form needs a `csrf_token` hidden field (page data carries `CSRFToken`)
 
 ## Common Patterns
 
@@ -206,7 +207,8 @@ Use consistent template data structure across all handlers.
 ## Environment Variables
 
 - `PORT`: Server port (default: 6969)
-- `DB_PATH`: Database file path (default: ./db/t.db)
+- `DATABASE_URL`: PostgreSQL connection string (required in production)
+- `SOKOMOKO_TEST_DATABASE_URL`: database the test suite creates throwaway schemas in
 - `ALLOWED_HOSTS`: Comma-separated trusted hosts
 - `ADMIN_SETUP_TOKEN`: Optional token for admin bootstrap outside loopback
 - `SESSION_COOKIE_DOMAIN`: Optional shared cookie domain

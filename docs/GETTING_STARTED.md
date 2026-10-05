@@ -1,6 +1,6 @@
 # Getting Started with Sokomoko
 
-Contributor quick start for the current Go + SQLite + server-rendered app.
+Contributor quick start for the Go + PostgreSQL + server-rendered app.
 
 ## 1. Boot the app locally
 
@@ -12,12 +12,14 @@ Add the local hostnames used by the app:
 127.0.0.1 partner.localhost
 ```
 
-Start the app with bootstrap data:
+Start PostgreSQL and the app with demo data:
 
 ```bash
-cd /home/mbuthi/Projects/sokomoko
-go run ./cmd/sokomoko serve --seed
+make db-up        # PostgreSQL 17 in Docker on localhost:5432
+make run          # migrate, seed, and serve on :6969
 ```
+
+Or run everything in containers with `docker compose up --build`.
 
 Open:
 
@@ -25,13 +27,13 @@ Open:
 - `http://admin.localhost:6969` for admin and staff
 - `http://partner.localhost:6969` for partner setup and fulfillment
 
-If you want schema only:
+To apply migrations only:
 
 ```bash
 go run ./cmd/sokomoko migrate
 ```
 
-If you want schema plus bootstrap data without starting the server:
+To apply migrations and seed demo data without starting the server:
 
 ```bash
 go run ./cmd/sokomoko seed
@@ -47,7 +49,7 @@ The app is routed by host, not by one shared URL space:
 
 The normal request flow is:
 
-1. `cmd/sokomoko` loads config, opens the DB, applies schema, composes the app, and starts the HTTP server.
+1. `cmd/sokomoko` loads and validates config, opens PostgreSQL, applies migrations, composes the app, and starts the HTTP server.
 2. `internal/app` wires the feature services, templates, static files, and middleware.
 3. `internal/routes` registers host-specific handlers.
 4. `internal/service/*` holds feature rules and view-facing domain logic.
@@ -59,7 +61,7 @@ More detail lives in [docs/ARCHITECTURE_OVERVIEW.md](/home/mbuthi/Projects/sokom
 
 - Add or change routes in `internal/routes`.
 - Add business rules in `internal/service`.
-- Add or change SQL in `internal/db` and keep `db/schema.sql` aligned.
+- Add or change SQL in `internal/db`; schema changes go in a new file in `internal/db/migrations`.
 - Change shared wiring and middleware in `internal/app` and `cmd/sokomoko`.
 - Change pages and assets in `internal/ui/templates` and `internal/ui/static`.
 
@@ -67,39 +69,34 @@ If a change crosses layers, start at the service boundary and keep the route and
 
 ## 4. Run the tests that matter
 
-Run the full suite:
+DB-backed tests need PostgreSQL. Each package gets its own throwaway schema:
 
 ```bash
-go test ./...
+make db-up && make db-test-create
+export SOKOMOKO_TEST_DATABASE_URL=postgres://sokomoko:sokomoko@localhost:5432/sokomoko_test?sslmode=disable
+make test          # or: go test ./...
+make test-race
+make lint
 ```
 
 Common targeted runs:
 
 ```bash
+go test ./internal/db -run TestConcurrentCheckoutNeverOversells
 go test ./internal/auth
-go test ./internal/db
-go test ./internal/service/commerce
-go test ./internal/service/partner
+go test ./internal/service/checkout
 go test ./cmd/sokomoko
 ```
 
-## 5. Current product and engineering priorities
+## 5. Current priorities
 
-The codebase is in decent shape structurally, but the next work should focus on production hardening rather than more surface-area expansion.
-
-Top priorities:
-
-1. Replace the current same-origin-only CSRF check with real CSRF protection for login, signup, password reset, and all unsafe form posts.
-2. Add auth throttling and lockout policy for login and password reset endpoints.
-3. Make admin bootstrap transactional so partial staff provisioning cannot strand credentials.
-4. Add startup validation and fail-fast production checks for SMTP, cookie, and HTTPS-related configuration.
-5. Replace placeholder checkout payments with a real payment flow and idempotent order submission.
-
-The maintained backlog is in [docs/TODO.md](/home/mbuthi/Projects/sokomoko/docs/TODO.md) and the deployment view is in [docs/roadmap/DEPLOYMENT_READINESS_ROADMAP.md](/home/mbuthi/Projects/sokomoko/docs/roadmap/DEPLOYMENT_READINESS_ROADMAP.md).
+See [docs/roadmap/ROADMAP.md](roadmap/ROADMAP.md). The launch blockers are real
+payments, a transactional admin bootstrap, backups, secrets handling, and a TLS
+proxy guide.
 
 ## 6. Read these next
 
-- [README.md](/home/mbuthi/Projects/sokomoko/README.md)
-- [docs/ARCHITECTURE_OVERVIEW.md](/home/mbuthi/Projects/sokomoko/docs/ARCHITECTURE_OVERVIEW.md)
-- [docs/authentication.md](/home/mbuthi/Projects/sokomoko/docs/authentication.md)
-- [docs/TODO.md](/home/mbuthi/Projects/sokomoko/docs/TODO.md)
+- [README.md](../README.md)
+- [docs/ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)
+- [docs/authentication.md](authentication.md)
+- [docs/roadmap/ROADMAP.md](roadmap/ROADMAP.md)

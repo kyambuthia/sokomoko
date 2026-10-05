@@ -30,10 +30,10 @@ Last updated: April 9, 2026
 
 ---
 
-## Deferred Items
+## Deferred Items (resolved October 2026)
 
-These require more extensive refactoring:
+1. ~~Cart/Checkout Stock Race Condition~~ - Fixed: row locks (`SELECT ... FOR UPDATE`) plus an oversell CHECK constraint on PostgreSQL
+2. ~~Float-to-Integer Money~~ - Fixed: all money stored as integer cents
+3. ~~Empty Cart Edge Case~~ - Handled
 
-1. **Cart/Checkout Stock Race Condition** - Needs SELECT FOR UPDATE for atomic locking
-2. **Float-to-Integer Money** - Breaking schema change, needs migration system
-3. **Empty Cart Edge Case** - Already handled; existing error handling covers this case
+Open work is tracked in [roadmap/ROADMAP.md](roadmap/ROADMAP.md).
