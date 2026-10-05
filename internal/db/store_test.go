@@ -2,6 +2,8 @@ package db
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -171,5 +173,73 @@ func TestWrapDBError_TransientClassification(t *testing.T) {
 	}
 	if !IsTransientError(ErrTransient) {
 		t.Fatalf("ErrTransient not transient")
+	}
+}
+
+func TestBootstrapAdmin_IsAtomicAndSingleShot(t *testing.T) {
+	s := newTestStore(t)
+	// A pre-existing user occupies the first staff username.
+	if _, err := s.CreateUser(User{Username: "staff01", Email: "taken@example.com", PasswordHash: "h"}); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	namer := func(i, attempt int) (string, string) {
+		name := fmt.Sprintf("staff%02d", i)
+		if attempt > 0 {
+			name = fmt.Sprintf("staff%02d_%d", i, attempt)
+		}
+		return name, name + "@sokomoko.local"
+	}
+
+	staff, err := s.BootstrapAdmin(User{Username: "root", Email: "root@example.com", PasswordHash: "h"}, []string{"h1", "h2"}, namer)
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	if len(staff) != 2 || staff[0].Username != "staff01_1" || staff[1].Username != "staff02" {
+		t.Fatalf("staff = %+v", staff)
+	}
+
+	if _, err := s.BootstrapAdmin(User{Username: "root2", Email: "root2@example.com", PasswordHash: "h"}, nil, namer); !errors.Is(err, ErrAdminExists) {
+		t.Fatalf("second bootstrap err = %v, want ErrAdminExists", err)
+	}
+	if count, _ := s.CountUsersByRole(RoleAdmin); count != 1 {
+		t.Fatalf("admins = %d", count)
+	}
+}
+
+func TestBootstrapAdmin_ConcurrentCallsCreateOneAdmin(t *testing.T) {
+	s := newTestStore(t)
+	namer := func(i, attempt int) (string, string) {
+		name := fmt.Sprintf("staff%02d_%d", i, attempt)
+		return name, name + "@sokomoko.local"
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 5)
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := s.BootstrapAdmin(User{Username: fmt.Sprintf("root%d", i), Email: fmt.Sprintf("root%d@example.com", i), PasswordHash: "h"}, []string{"h"}, namer)
+			errs <- err
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+
+	successes := 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, ErrAdminExists):
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successful bootstraps = %d, want 1", successes)
+	}
+	if count, _ := s.CountUsersByRole(RoleStaff); count != 1 {
+		t.Fatalf("staff = %d, want 1 (no partial provisioning from losers)", count)
 	}
 }

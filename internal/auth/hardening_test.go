@@ -140,3 +140,38 @@ func TestHashPassword_RejectsOverlongPasswords(t *testing.T) {
 		t.Fatalf("73 byte password accepted")
 	}
 }
+
+func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
+	clearAuthTables()
+	tmpl := template.Must(template.New("x").Parse(`{{define "root_template"}}{{.Error}}{{range .StaffCredentials}}[{{.Username}}:{{.TempPassword}}]{{end}}{{end}}`))
+	svc := newTestService(Config{AdminSetupToken: "setup-secret"})
+
+	submit := func() *httptest.ResponseRecorder {
+		form := url.Values{
+			"setup_token":      {"setup-secret"},
+			"admin_username":   {"rootadmin"},
+			"admin_email":      {"root@example.com"},
+			"admin_password":   {"RootPassword123"},
+			"confirm_password": {"RootPassword123"},
+			"staff_count":      {"2"},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/setup", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+		svc.AdminSetup(tmpl).ServeHTTP(rr, req)
+		return rr
+	}
+
+	rr := submit()
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "[staff01:") || !strings.Contains(rr.Body.String(), "[staff02:") {
+		t.Fatalf("first setup status=%d body=%q", rr.Code, rr.Body.String())
+	}
+	staff, _ := testStore.GetUserByUsername("staff01")
+	if staff == nil || staff.Role != db.RoleStaff {
+		t.Fatalf("staff01 = %+v", staff)
+	}
+
+	if again := submit(); again.Code != http.StatusFound || again.Header().Get("Location") != "/login" {
+		t.Fatalf("second setup status=%d location=%q, want redirect to /login", again.Code, again.Header().Get("Location"))
+	}
+}

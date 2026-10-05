@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"errors"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -45,6 +46,7 @@ type store interface {
 	GetUserByUsername(username string) (*db.User, error)
 	GetValidPasswordResetToken(token string) (*db.PasswordResetToken, error)
 	HasAdminUser() (bool, error)
+	BootstrapAdmin(admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
 	UsePasswordResetToken(token, passwordHash string) (bool, error)
 }
 
@@ -849,52 +851,56 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			staffCount = parsed
 		}
 
-		if _, err := createUserWithPassword(s.store, adminUsername, adminEmail, adminPassword, "admin"); err != nil {
+		adminHash, err := hashPassword(adminPassword)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		tempPasswords := make([]string, staffCount)
+		staffHashes := make([]string, staffCount)
+		for i := range tempPasswords {
+			token, tokenErr := generateOpaqueToken(12)
+			if tokenErr != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			tempPasswords[i] = token
+			if staffHashes[i], err = hashPassword(token); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		staffUsers, err := s.store.BootstrapAdmin(
+			db.User{Username: adminUsername, Email: adminEmail, PasswordHash: adminHash},
+			staffHashes,
+			func(i, attempt int) (string, string) {
+				username := fmt.Sprintf("staff%02d", i)
+				if attempt > 0 {
+					username = fmt.Sprintf("staff%02d_%d", i, attempt)
+				}
+				return username, username + "@sokomoko.local"
+			},
+		)
+		if errors.Is(err, db.ErrAdminExists) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		if err != nil {
+			log.Printf("admin bootstrap failed: %v", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create admin account. Username or email may already exist.")
 			data.Error = message
 			renderWithStatus(w, tmpl, statusCode, data)
 			return
 		}
 
-		staffCredentials := make([]StaffCredential, 0, staffCount)
-		for i := 1; i <= staffCount; i++ {
-			created := false
-			for attempt := 0; attempt < 10; attempt++ {
-				suffix := ""
-				if attempt > 0 {
-					suffix = fmt.Sprintf("_%d", attempt)
-				}
-				username := fmt.Sprintf("staff%02d%s", i, suffix)
-				email := fmt.Sprintf("%s@sokomoko.local", username)
-				tempPassword, tokenErr := generateOpaqueToken(9)
-				if tokenErr != nil {
-					data.Error = "Failed to generate staff credentials"
-					renderWithStatus(w, tmpl, 0, data)
-					return
-				}
-				tempPassword += "Aa1!"
-
-				if _, err := createUserWithPassword(s.store, username, email, tempPassword, "staff"); err != nil {
-					if !isUniqueConstraintErr(err) {
-						data.Error = "Failed to provision staff accounts."
-						renderWithStatus(w, tmpl, 0, data)
-						return
-					}
-					continue
-				}
-				staffCredentials = append(staffCredentials, StaffCredential{
-					Username:     username,
-					Email:        email,
-					TempPassword: tempPassword,
-				})
-				created = true
-				break
-			}
-			if !created {
-				data.Error = "Failed to provision all staff accounts."
-				renderWithStatus(w, tmpl, 0, data)
-				return
-			}
+		staffCredentials := make([]StaffCredential, 0, len(staffUsers))
+		for i, user := range staffUsers {
+			staffCredentials = append(staffCredentials, StaffCredential{
+				Username:     user.Username,
+				Email:        user.Email,
+				TempPassword: tempPasswords[i],
+			})
 		}
 
 		data.ShowForm = false

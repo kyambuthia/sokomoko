@@ -29,6 +29,7 @@ race detector against PostgreSQL.
 - [x] Startup config validation; production refuses to boot without `DATABASE_URL`, `ALLOWED_HOSTS`, `PASSWORD_RESET_BASE_URL`
 - [x] Structured `slog` logs (JSON in production) with validated request IDs
 - [x] Background expiry of checkout stock holds
+- [x] First-run admin bootstrap is a single advisory-locked transaction (no partial or duplicate admins)
 - [x] Dockerfile (static, non-root, distroless), docker-compose, Makefile, `.env.example`
 - [x] CI: gofmt, `go mod tidy` check, vet, JS syntax, `go test -race` on PostgreSQL, image build
 - [x] Web components for live cart, add-to-cart, checkout countdown, order tracking, table filters and more
@@ -43,18 +44,14 @@ These block a public launch.
    outside CSRF, verified by signature), and statuses `authorized`, `captured`,
    `failed`, `refunded`. Tables: `payments`, `payment_attempts`; new
    `payment_events` for webhook idempotency.
-2. **Transactional admin bootstrap.** `AdminSetup` creates the admin and then
-   staff accounts one by one. A failure midway leaves a partial state, and two
-   concurrent setups can both pass the "no admin yet" check. Wrap it in one
-   transaction guarded by `pg_advisory_xact_lock`. Layer: `auth`, `db`.
-3. **Backups and restore runbook.** Daily `pg_dump` or managed point-in-time
+2. **Backups and restore runbook.** Daily `pg_dump` or managed point-in-time
    recovery, restore drills, and documented RPO and RTO.
-4. **Secrets handling.** Load SMTP and payment secrets from the platform secret
+3. **Secrets handling.** Load SMTP and payment secrets from the platform secret
    store; never from committed files. Document rotation.
-5. **TLS and proxy deployment guide.** A reference reverse proxy config (Caddy or
+4. **TLS and proxy deployment guide.** A reference reverse proxy config (Caddy or
    nginx) with HSTS, `TRUST_PROXY_HEADERS=true`, `SESSION_COOKIE_DOMAIN`, and
    host mapping for the three surfaces.
-6. **Legal pages.** Terms, privacy, and returns pages, and real footer links
+5. **Legal pages.** Terms, privacy, and returns pages, and real footer links
    (the footer links are currently `#`).
 
 ## Phase 1: Commerce essentials

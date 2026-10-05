@@ -91,8 +91,7 @@ go test ./cmd/sokomoko
 ## 5. Current priorities
 
 See [docs/roadmap/ROADMAP.md](roadmap/ROADMAP.md). The launch blockers are real
-payments, a transactional admin bootstrap, backups, secrets handling, and a TLS
-proxy guide.
+payments, backups, secrets handling, a TLS proxy guide, and legal pages.
 
 ## 6. Read these next
 
