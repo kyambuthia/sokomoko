@@ -156,7 +156,7 @@ func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
 }
 
 func printStartupSummary(cfg config.Config, server *httpServer, allowedHosts map[string]struct{}, seedOnServe bool) {
-	log.Printf("[startup] sokomoko booting")
+	log.Printf("[startup] sokomoko %s booting", version)
 	log.Printf("[startup] env=%s port=%s schema_version=%d", cfg.Environment, cfg.Port, db.LatestSchemaVersion())
 	log.Printf("[startup] seed_on_startup=%t", seedOnServe)
 	if cfg.SessionCookieDomain != "" {

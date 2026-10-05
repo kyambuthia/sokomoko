@@ -1,0 +1,11 @@
+.git
+.github
+.gomodcache
+.gocache
+bin
+sokomoko
+*.db
+*.log
+.env
+.env.*
+docs

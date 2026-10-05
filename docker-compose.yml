@@ -1,0 +1,42 @@
+# Local development stack: PostgreSQL plus the app.
+#
+#   docker compose up --build
+#
+# The storefront is then at http://localhost:6969, the admin workspace at
+# http://admin.localhost:6969 and the partner workspace at
+# http://partner.localhost:6969.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sokomoko
+      POSTGRES_PASSWORD: sokomoko
+      POSTGRES_DB: sokomoko
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sokomoko -d sokomoko"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    command: ["serve", "--seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENV: development
+      PORT: "6969"
+      LOG_FORMAT: text
+      DATABASE_URL: postgres://sokomoko:sokomoko@db:5432/sokomoko?sslmode=disable
+      ALLOWED_HOSTS: localhost,127.0.0.1,admin.localhost,partner.localhost
+      ADMIN_SETUP_TOKEN: ${ADMIN_SETUP_TOKEN:-local-setup-token}
+    ports:
+      - "127.0.0.1:6969:6969"
+
+volumes:
+  pgdata:
