@@ -2,11 +2,11 @@ package auth
 
 import (
 	"bytes"
-	"errors"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
