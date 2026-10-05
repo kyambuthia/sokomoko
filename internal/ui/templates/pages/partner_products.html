@@ -17,6 +17,8 @@
     <p class="partner-page__lead">Manage the store catalog for your partner workspace.</p>
   </header>
 
+  {{if .Message}}<ui-alert variant="success"><p>{{.Message}}</p></ui-alert>{{end}}
+  {{if .Error}}<ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>{{end}}
   <section class="panel card">
     <div class="card__body">
       <div class="partner-actions">
@@ -31,10 +33,12 @@
     <div class="card__body">
       {{if .Products}}
       <div class="table-wrap">
-      <table class="data-table data-table--partner">
+      <ui-table-filter for="partner-products" placeholder="Filter products"></ui-table-filter>
+      <table class="data-table data-table--partner" id="partner-products">
         <thead>
           <tr>
             <th>Name</th>
+            <th>Partner</th>
             <th>Category</th>
             <th>Price</th>
             <th>Stock</th>
@@ -44,8 +48,9 @@
           {{range .Products}}
           <tr>
             <td>{{.Name}}</td>
+            <td>{{if .PartnerName}}{{.PartnerName}}{{else}}&mdash;{{end}}</td>
             <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
-            <td>${{printf "%.2f" .Price}}</td>
+            <td>${{.Price}}</td>
             <td>{{.StockQuantity}}</td>
           </tr>
           {{end}}

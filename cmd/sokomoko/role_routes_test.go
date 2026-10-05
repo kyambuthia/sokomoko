@@ -51,7 +51,7 @@ func createPendingOrderForRoleTests(t *testing.T, suffix int64) int64 {
 		t,
 		"Role Test Product",
 		fmt.Sprintf("role-test-product-%d", suffix),
-		19.99,
+		1999,
 		10,
 	)
 	if err := testStore.AddToCart(int(buyerID), int(productID), 1); err != nil {
@@ -67,7 +67,7 @@ func createPendingOrderForRoleTests(t *testing.T, suffix int64) int64 {
 func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	adminUsername := fmt.Sprintf("admin_%d", suffix)
 	adminPassword := "AdminPass12345"
 	createTestUser(t, adminUsername, fmt.Sprintf("admin_%d@example.com", suffix), adminPassword, "admin")
@@ -96,7 +96,7 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 			"delivery_notice": {"accepted by admin"},
 		},
 		[]*http.Cookie{adminCookie},
-		http.StatusOK,
+		http.StatusFound,
 	)
 	expectRouteStatus(
 		t,
@@ -121,7 +121,7 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 		"admin.localhost",
 		url.Values{"user_id": {fmt.Sprintf("%d", staffToDeactivateID)}},
 		[]*http.Cookie{adminCookie},
-		http.StatusOK,
+		http.StatusFound,
 	)
 	deactivated, err := testStore.GetUserByID(int(staffToDeactivateID))
 	if err != nil {
@@ -159,7 +159,7 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 			"delivery_notice": {"accepted by partner"},
 		},
 		[]*http.Cookie{adminCookie},
-		http.StatusOK,
+		http.StatusFound,
 	)
 
 	newStaffUsername := fmt.Sprintf("staff_new_%d", suffix)
@@ -188,7 +188,7 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 func TestIntegration_StaffCanAccessStaffRoutesAndBlockedFromAdminOnly(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	createTestUser(t, fmt.Sprintf("admin_%d", suffix), fmt.Sprintf("admin_%d@example.com", suffix), "AdminPass12345", "admin")
 	staffUsername := fmt.Sprintf("staff_%d", suffix)
 	staffPassword := "StaffPass12345"
@@ -242,7 +242,7 @@ func TestIntegration_StaffCanAccessStaffRoutesAndBlockedFromAdminOnly(t *testing
 			"delivery_notice": {"partner queue updated"},
 		},
 		[]*http.Cookie{staffCookie},
-		http.StatusOK,
+		http.StatusFound,
 	)
 
 	expectRouteStatus(t, http.MethodGet, "/signup", "partner.localhost", nil, []*http.Cookie{staffCookie}, http.StatusForbidden)

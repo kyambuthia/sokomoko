@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -23,17 +25,22 @@ type ReadinessChecker interface {
 
 type CatalogService interface {
 	AllProducts() ([]catalogsvc.Product, error)
+	Browse(filter catalogsvc.Filter) ([]catalogsvc.Product, error)
+	Categories() ([]catalogsvc.Category, error)
 	ProductBySlug(slug string) (*catalogsvc.Product, error)
 	Search(query string) ([]catalogsvc.Product, error)
+	SearchInCategory(query, category string) ([]catalogsvc.Product, error)
 }
 
 type AccountService interface {
+	OrderForUser(userID, orderID int) (*accountsvc.Order, error)
 	OrdersForUser(userID int) ([]accountsvc.Order, error)
 }
 
 type CommerceService interface {
 	AddToCart(userID, productID, quantity int) error
-	GetCart(userID int) ([]commerceSvc.CartItem, float64, error)
+	Cart(userID int) (commerceSvc.Cart, error)
+	ItemCount(userID int) (int, error)
 	RemoveFromCart(userID, productID int) error
 	UpdateCartItem(userID, productID, quantity int) error
 }
@@ -80,10 +87,12 @@ type AuthService interface {
 	CSRFToken(r *http.Request) string
 	Login(tmpl *template.Template) http.HandlerFunc
 	Logout() http.HandlerFunc
+	OptionalUser(next http.Handler) http.Handler
 	PasswordResetConfirm(tmpl *template.Template, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc
 	PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc
 	SignUp(tmpl *template.Template) http.HandlerFunc
 	StaffSignUp(tmpl *template.Template) http.HandlerFunc
+	WorkspaceLogin(tmpl *template.Template) http.HandlerFunc
 }
 
 type Dependencies struct {
@@ -130,11 +139,36 @@ func New(deps Dependencies) *App {
 	}
 }
 
+// Render executes tmpl into a buffer and writes it with a 200 status. Rendering
+// to a buffer first means a template error produces a clean error page rather
+// than a truncated document.
 func (a *App) Render(w http.ResponseWriter, tmpl *template.Template, data any) {
-	err := tmpl.ExecuteTemplate(w, "root_template", data)
-	if err != nil {
-		log.Printf("Template execution error: %v", err)
+	a.RenderStatus(w, tmpl, http.StatusOK, data)
+}
+
+// RenderStatus is Render with an explicit status code.
+func (a *App) RenderStatus(w http.ResponseWriter, tmpl *template.Template, status int, data any) {
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "root_template", data); err != nil {
+		log.Printf("template execution error: %v", err)
 		RenderErrorPage(w, nil, http.StatusInternalServerError, "Internal Server Error", "We could not render this page.")
 		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		log.Printf("response write error: %v", err)
+	}
+}
+
+// JSON writes v as a JSON response.
+func JSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("json encode error: %v", err)
 	}
 }

@@ -1,26 +1,20 @@
 package app
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
 func TestCompose_WiresFeatureServices(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "compose.db")
-
-	store, err := db.OpenStore(path)
+	store, err := db.OpenStore(dbtest.DSN(t))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	defer func() {
-		_ = store.Close()
-		_ = os.Remove(path)
-	}()
+	defer store.Close()
 
 	if err := store.ApplySchema(); err != nil {
 		t.Fatalf("apply schema: %v", err)

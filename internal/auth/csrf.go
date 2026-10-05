@@ -34,10 +34,20 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 
 		// Retrieve session to get the CSRF token
 		sess, err := s.store.GetSession(cookie.Value)
-		if err != nil || sess == nil {
-			// Invalid or expired session
-			log.Printf("CSRF check: invalid session")
-			http.Error(w, "Invalid session", http.StatusForbidden)
+		if err != nil {
+			log.Printf("CSRF check: session lookup failed: %v", err)
+			http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if sess == nil {
+			// The cookie refers to an expired or revoked session (for example
+			// after a password reset). Treat the request as anonymous rather
+			// than locking the browser out of /login: drop the cookie from both
+			// the response and this request so downstream handlers cannot
+			// authenticate with it.
+			s.clearSessionCookie(w, r)
+			r = withoutSessionCookie(r)
+			next.ServeHTTP(w, r)
 			return
 		}
 
@@ -119,4 +129,17 @@ func (s *Service) CSRFTokenInput(r *http.Request) template.HTML {
 // CSRFToken returns the CSRF token string for use in templates
 func (s *Service) CSRFToken(r *http.Request) string {
 	return s.CSRFTokenForSession(r)
+}
+
+// withoutSessionCookie returns a shallow copy of r whose Cookie header omits the
+// session cookie.
+func withoutSessionCookie(r *http.Request) *http.Request {
+	r2 := r.Clone(r.Context())
+	r2.Header.Del("Cookie")
+	for _, c := range r.Cookies() {
+		if c.Name != sessionCookieName {
+			r2.AddCookie(c)
+		}
+	}
+	return r2
 }

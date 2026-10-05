@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
 
 	"github.com/kyambuthia/sokomoko/internal/config"
 )
@@ -34,6 +36,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	cfg := config.LoadFromEnv()
+	configureLogging(cfg)
 	switch cmd.Name {
 	case commandMigrate:
 		return runMigrate(cfg)
@@ -82,4 +85,24 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  serve      Apply schema and start the HTTP server.")
 	_, _ = fmt.Fprintln(w, "  migrate    Apply schema changes and exit.")
 	_, _ = fmt.Fprintln(w, "  seed       Apply schema, run bootstrap seed workflows, and exit.")
+}
+
+// configureLogging installs a slog default handler. The standard log package
+// routes through it, so every log line shares the configured format.
+func configureLogging(cfg config.Config) {
+	level := slog.LevelInfo
+	switch cfg.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler = slog.NewTextHandler(os.Stderr, opts)
+	if cfg.LogFormat == "json" {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(handler))
 }

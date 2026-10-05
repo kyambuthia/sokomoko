@@ -1,53 +1,40 @@
 {{ define "root_template" }}
 <!DOCTYPE html>
-<html>
+<html lang="en">
         <head>
                 <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <script>
-                        (() => {
-                                try {
-                                        const stored = window.localStorage.getItem("sokomoko-theme");
-                                        if (stored === "light" || stored === "dark") {
-                                                document.documentElement.setAttribute("data-theme", stored);
-                                        }
-                                } catch (e) {
-                                        // Ignore storage errors and fall back to system theme.
-                                }
-                        })();
-                </script>
-                <link rel="manifest" href='{{ asset "manifest.json" }}' />
-                <link rel="preload" href='{{ asset "stylesheets/styles.css" }}' as="style" />
-                <title>{{ block "title" . }}{{end}}</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta name="color-scheme" content="light dark">
+                <script src='{{ asset "scripts/theme-init.js" }}'></script>
+                <link rel="manifest" href='{{ asset "manifest.json" }}'>
+                <title>{{ block "title" . }}Sokomoko{{end}}</title>
                 <link rel="stylesheet" href='{{ asset "stylesheets/styles.css" }}'>
+                <script src='{{ asset "scripts/main.js" }}' defer></script>
+                <script src='{{ asset "scripts/components.js" }}' defer></script>
         </head>
         <body class="{{ block "body-class" . }}site site--storefront{{ end }}">
-                <!-- header-area. -->
+                <a class="skip-link" href="#main-content">Skip to content</a>
                 <div class="site__header wrapper--header">
                         {{ block "header-area" . }}
                         {{ end }}
                 </div>
 
-                <!-- nav-area. -->
                 {{ block "nav-area" . }}
                 {{ end }}
 
-                <!-- main-area. -->
-                <div class="site__main wrapper--main">
+                <div class="site__main wrapper--main" id="main-content" tabindex="-1">
                         <div class="site__container container">
                                 {{ block "main-area" . }}
                                 {{ end }}
                         </div>
                 </div>
 
-                <!-- footer-area. -->
-                 <div class="site__footer wrapper--footer">
+                <div class="site__footer wrapper--footer">
                         <div class="site__container container">
                                 {{ block "footer-area" . }}
                                 {{ end }}
                         </div>
-                 </div>
-                <script src='{{ asset "scripts/main.js" }}' defer></script>
+                </div>
         </body>
 </html>
 {{ end }}

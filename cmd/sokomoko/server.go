@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
 )
@@ -95,7 +96,8 @@ func buildMiddlewares(cfg config.Config, application *app.App) []app.Middleware 
 
 	if cfg.PostRateLimitMax > 0 {
 		window := time.Duration(cfg.PostRateLimitWindow) * time.Second
-		middlewares = append(middlewares, app.RateLimitByIP(cfg.PostRateLimitMax, window, http.MethodPost))
+		clientIP := func(r *http.Request) string { return auth.ClientIP(r, cfg.TrustProxyHeaders) }
+		middlewares = append(middlewares, app.RateLimitByKey(cfg.PostRateLimitMax, window, clientIP, http.MethodPost))
 	}
 
 	middlewares = append(middlewares, app.RequestLogger())
@@ -111,11 +113,25 @@ func sortedHostList(hosts map[string]struct{}) string {
 	return strings.Join(list, ",")
 }
 
+// runBackgroundCleanup expires stale reservations every minute and prunes
+// sessions and reset tokens every five minutes until done is closed.
 func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
+	reservations := time.NewTicker(time.Minute)
+	defer reservations.Stop()
+	housekeeping := time.NewTicker(5 * time.Minute)
+	defer housekeeping.Stop()
 
-	run := func() {
+	releaseReservations := func() {
+		released, err := store.ReleaseExpiredReservations()
+		if err != nil {
+			log.Printf("reservation expiry failed: %v", err)
+			return
+		}
+		if released > 0 {
+			log.Printf("[cleanup] released %d expired stock reservations", released)
+		}
+	}
+	prune := func() {
 		if err := store.CleanupSessions(); err != nil {
 			log.Printf("session cleanup failed: %v", err)
 		}
@@ -124,21 +140,24 @@ func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
 		}
 	}
 
-	run()
+	releaseReservations()
+	prune()
 	for {
 		select {
 		case <-done:
 			log.Println("[cleanup] background cleanup stopped")
 			return
-		case <-ticker.C:
-			run()
+		case <-reservations.C:
+			releaseReservations()
+		case <-housekeeping.C:
+			prune()
 		}
 	}
 }
 
 func printStartupSummary(cfg config.Config, server *httpServer, allowedHosts map[string]struct{}, seedOnServe bool) {
 	log.Printf("[startup] sokomoko booting")
-	log.Printf("[startup] env=%s port=%s db=%s", cfg.Environment, cfg.Port, cfg.DBPath)
+	log.Printf("[startup] env=%s port=%s schema_version=%d", cfg.Environment, cfg.Port, db.LatestSchemaVersion())
 	log.Printf("[startup] seed_on_startup=%t", seedOnServe)
 	if cfg.SessionCookieDomain != "" {
 		log.Printf("[startup] session_cookie_domain=%s", cfg.SessionCookieDomain)

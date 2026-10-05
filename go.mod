@@ -1,15 +1,16 @@
 module github.com/kyambuthia/sokomoko
 
-go 1.24.0
+go 1.25.0
+
+require golang.org/x/crypto v0.40.0 // Updated from remote
+
+require golang.org/x/text v0.30.0 // indirect
+
+require github.com/jackc/pgx/v5 v5.10.0
 
 require (
-	github.com/ncruces/go-sqlite3 v0.26.3 // Updated from remote
-	golang.org/x/crypto v0.40.0 // Updated from remote
-)
-
-require (
-	github.com/ncruces/julianday v1.0.0 // indirect
-	github.com/tetratelabs/wazero v1.9.0 // indirect; indirect // Updated from remote
-	golang.org/x/sys v0.34.0 // indirect; indirect // Updated from remote
-	golang.org/x/text v0.30.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	golang.org/x/sync v0.17.0 // indirect
 )

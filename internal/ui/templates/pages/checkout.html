@@ -1,60 +1,70 @@
-{{ define "title" }}Checkout{{ end }}
+{{ define "title" }}Checkout – Sokomoko{{ end }}
 
 {{ define "main-area" }}
-<section class="auth-panel auth-sheet">
+<section class="auth-panel auth-sheet checkout-page">
   <h1 class="auth-panel__title">Checkout</h1>
   <p class="auth-panel__meta">Confirm delivery details and place your order.</p>
 
-  {{if .Message}}
-  <ui-alert variant="success"><p>{{.Message}}</p></ui-alert>
-  {{end}}
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
+  {{ if .Error }}
+  <ui-alert variant="danger"><p>{{ .Error }}</p></ui-alert>
+  {{ end }}
 
-  {{if .CanCheckout}}
+  {{ if .CanCheckout }}
+  {{ if .ExpiresAt }}
+  <ui-countdown
+    class="checkout-page__hold"
+    deadline="{{ .ExpiresAt }}"
+    expired-message="Your reserved items were released. Reload this page to reserve them again."
+  >
+    <p>Items in your cart are reserved for 15 minutes.</p>
+  </ui-countdown>
+  {{ end }}
+
   <section class="panel card">
-    <div class="card__header"><h3>Order Summary</h3></div>
+    <div class="card__header"><h2 class="card__title">Order Summary</h2></div>
     <div class="card__body">
-      <ul>
-        {{range .Items}}
-        <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
-        {{end}}
+      <ul class="checkout-page__lines">
+        {{ range .Items }}
+        <li>{{ .ProductName }} &times; {{ .Quantity }} <span>${{ .LineTotal }}</span></li>
+        {{ end }}
       </ul>
-      <p><strong>Subtotal:</strong> ${{printf "%.2f" .Subtotal}}</p>
-      <p><strong>Shipping:</strong> ${{printf "%.2f" .ShippingFee}}</p>
-      <p><strong>Estimated Tax:</strong> ${{printf "%.2f" .TaxAmount}}</p>
-      <p><strong>Total:</strong> ${{printf "%.2f" .TotalAmount}}</p>
+      <dl class="checkout-page__totals">
+        <div><dt>Subtotal</dt><dd>${{ .Subtotal }}</dd></div>
+        <div><dt>Shipping</dt><dd>{{ if eq .ShippingFee.String "0.00" }}Free{{ else }}${{ .ShippingFee }}{{ end }}</dd></div>
+        <div><dt>Estimated tax</dt><dd>${{ .TaxAmount }}</dd></div>
+        <div class="checkout-page__total"><dt>Total</dt><dd>${{ .TotalAmount }}</dd></div>
+      </dl>
     </div>
   </section>
 
-  <form action="{{.FormAction}}" method="POST" class="auth-panel__form form">
+  <form action="{{ .FormAction }}" method="POST" class="auth-panel__form form" data-submit-once>
     <fieldset class="form__fieldset">
       <legend class="form__legend">Delivery</legend>
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-      <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <input type="hidden" name="idempotency_key" value="{{ .IdempotencyKey }}">
       <div class="form__group form-group">
         <label class="form__label" for="delivery_address">Delivery address</label>
-        <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="4" required>{{.DeliveryAddress}}</textarea>
+        <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="4" maxlength="500" required autocomplete="street-address">{{ .DeliveryAddress }}</textarea>
+        <ui-char-counter for="delivery_address"></ui-char-counter>
       </div>
       <div class="form__group form-group">
         <label class="form__label" for="payment_method">Payment method</label>
         <select class="form__select" id="payment_method" name="payment_method" required>
-          {{range .PaymentMethods}}
-          <option value="{{.Value}}" {{if eq $.PaymentMethod .Value}}selected{{end}}>{{.Label}}</option>
-          {{end}}
+          {{ range .PaymentMethods }}
+          <option value="{{ .Value }}" {{ if eq $.PaymentMethod .Value }}selected{{ end }}>{{ .Label }}</option>
+          {{ end }}
         </select>
       </div>
-      <button type="submit" class="btn btn--full">Place order</button>
+      <button type="submit" class="btn btn--full">Place order &middot; ${{ .TotalAmount }}</button>
     </fieldset>
   </form>
-  {{else}}
+  {{ else }}
   <section class="panel card">
     <div class="card__body">
-      <p class="table-empty">Cart is empty. Add items before checkout.</p>
-      <p class="auth-panel__links"><a href="/">Back to storefront</a></p>
+      <p class="table-empty">Your cart is empty. Add items before checkout.</p>
+      <p class="auth-panel__links"><a href="/cart">Review cart</a> &middot; <a href="/">Back to storefront</a></p>
     </div>
   </section>
-  {{end}}
+  {{ end }}
 </section>
 {{ end }}

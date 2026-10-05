@@ -2,13 +2,12 @@ package main
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 )
 
 func TestParseCommand(t *testing.T) {
@@ -74,73 +73,51 @@ func TestParseCommand(t *testing.T) {
 }
 
 func TestRunMigrate_AppliesSchema(t *testing.T) {
-	cfg := config.Config{DBPath: tempDBPath(t, "migrate")}
+	cfg := config.Config{DatabaseURL: dbtest.DSN(t)}
 
 	if err := runMigrate(cfg); err != nil {
 		t.Fatalf("runMigrate failed: %v", err)
 	}
-
-	store := openExistingStore(t, cfg.DBPath)
-
-	var count int
-	if err := store.DB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'").Scan(&count); err != nil {
-		t.Fatalf("query schema: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("expected users table to exist, got count=%d", count)
-	}
+	assertSchemaApplied(t, cfg.DatabaseURL)
 }
 
 func TestRunSeed_BootstrapsCatalog(t *testing.T) {
-	cfg := config.Config{DBPath: tempDBPath(t, "seed")}
+	cfg := config.Config{DatabaseURL: dbtest.DSN(t)}
 
 	if err := runSeed(cfg); err != nil {
 		t.Fatalf("runSeed failed: %v", err)
 	}
-
-	store := openExistingStore(t, cfg.DBPath)
-
-	productCount, err := store.CountProducts()
-	if err != nil {
-		t.Fatalf("count products: %v", err)
-	}
-	if productCount == 0 {
+	if countProducts(t, cfg.DatabaseURL) == 0 {
 		t.Fatal("expected seed command to create catalog products")
 	}
 }
 
 func TestRunMigrate_ErrorIncludesCommandContext(t *testing.T) {
-	cfg := config.Config{
-		DBPath: filepath.Join(t.TempDir(), "missing", "test.db"),
-	}
+	cfg := config.Config{DatabaseURL: "postgres://nobody@127.0.0.1:1/missing?sslmode=disable&connect_timeout=1"}
 
 	err := runMigrate(cfg)
 	if err == nil {
-		t.Fatal("expected migrate to fail for missing directory")
+		t.Fatal("expected migrate to fail for an unreachable database")
 	}
 	if !strings.Contains(err.Error(), "migrate: open store:") {
 		t.Fatalf("expected command-scoped error, got %v", err)
 	}
 }
 
-func tempDBPath(t *testing.T, prefix string) string {
-	t.Helper()
-
-	path := filepath.Join(t.TempDir(), prefix+".db")
-	return path
+func TestRunServe_RejectsInvalidProductionConfig(t *testing.T) {
+	err := runServe(config.Config{Environment: "production", Port: "6969", LogFormat: "json"}, false)
+	if err == nil || !strings.Contains(err.Error(), "validate config") {
+		t.Fatalf("expected config validation error, got %v", err)
+	}
 }
 
-func openExistingStore(t *testing.T, path string) *db.Store {
+func openExistingStore(t *testing.T, dsn string) *db.Store {
 	t.Helper()
 
-	store, err := db.OpenStore(path)
+	store, err := db.OpenStore(dsn)
 	if err != nil {
 		t.Fatalf("open existing store: %v", err)
 	}
-
-	t.Cleanup(func() {
-		_ = store.Close()
-		_ = os.Remove(path)
-	})
+	t.Cleanup(func() { _ = store.Close() })
 	return store
 }

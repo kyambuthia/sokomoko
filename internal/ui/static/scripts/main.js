@@ -60,7 +60,7 @@ class UIAlert extends HTMLElement {
         }
       </style>
       <section class="alert" role="${role}" aria-live="${ariaLive}">
-        ${title ? `<span class="title">${title}</span>` : ""}
+        ${title ? `<span class="title">${escapeHTML(title)}</span>` : ""}
         <slot></slot>
       </section>
     `;
@@ -128,9 +128,9 @@ class UIMetricCard extends HTMLElement {
         }
       </style>
       <article class="metric">
-        <h3 class="label">${label}</h3>
-        <p class="value">${value}</p>
-        ${note ? `<p class="note">${note}</p>` : ""}
+        <h3 class="label">${escapeHTML(label)}</h3>
+        <p class="value">${escapeHTML(value)}</p>
+        ${note ? `<p class="note">${escapeHTML(note)}</p>` : ""}
       </article>
     `;
   }
@@ -233,6 +233,7 @@ class UIHeaderSearch extends HTMLElement {
       .filter(Boolean);
     this.selectedCategory = this.getAttribute("selected-category") || this.categories[0] || "All Categories";
     this.showCamera = this.getAttribute("show-camera") === "true";
+    this.categoriesEndpoint = this.getAttribute("categories-endpoint") || "";
     this.inputID = `ui-header-search-${UIHeaderSearch.nextID++}`;
     this.abortController = null;
     this.debounceTimer = null;
@@ -282,6 +283,12 @@ class UIHeaderSearch extends HTMLElement {
 
     this.input = this.querySelector(".header-search__input");
     this.results = this.querySelector(".header-search__results");
+    this.categorySelect = this.querySelector(".header-search__category");
+    const current = new URLSearchParams(window.location.search);
+    if (window.location.pathname === "/search" && current.get("q")) {
+      this.input.value = current.get("q");
+    }
+    this.loadCategories(current.get("category"));
     this.input.addEventListener("input", () => this.scheduleSearch());
     this.input.addEventListener("focus", () => this.scheduleSearch(0));
     this.input.addEventListener("keydown", (event) => {
@@ -294,6 +301,23 @@ class UIHeaderSearch extends HTMLElement {
         this.hideResults();
       }
     });
+  }
+
+  async loadCategories(selected) {
+    if (!this.categoriesEndpoint || !this.categorySelect) return;
+    if (!window.SokomokoComponents && document.readyState === "loading") {
+      // components.js is a later deferred script; it has run by DOMContentLoaded.
+      await new Promise((resolve) => document.addEventListener("DOMContentLoaded", resolve, { once: true }));
+    }
+    if (!window.SokomokoComponents) return;
+    const categories = await window.SokomokoComponents.fetchCategories(this.categoriesEndpoint);
+    for (const category of categories) {
+      const option = document.createElement("option");
+      option.value = category.slug;
+      option.textContent = category.name;
+      if (category.slug === selected) option.selected = true;
+      this.categorySelect.append(option);
+    }
   }
 
   scheduleSearch(delay = 180) {
@@ -314,14 +338,14 @@ class UIHeaderSearch extends HTMLElement {
     this.abortController = new AbortController();
 
     try {
-      const response = await fetch(this.endpoint, {
-        method: "POST",
+      const params = new URLSearchParams({ q: query });
+      const category = this.categorySelect?.value || "";
+      if (category && category !== "All Departments") {
+        params.set("category", category);
+      }
+      const response = await fetch(`${this.endpoint}?${params}`, {
         credentials: "same-origin",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ queryString: query }),
+        headers: { Accept: "application/json" },
         signal: this.abortController.signal,
       });
 
@@ -329,8 +353,9 @@ class UIHeaderSearch extends HTMLElement {
         throw new Error(`Search failed: ${response.status}`);
       }
 
-      const products = await response.json();
-      this.renderResults(Array.isArray(products) ? products.slice(0, 6) : [], query);
+      const body = await response.json();
+      const products = Array.isArray(body.results) ? body.results : [];
+      this.renderResults(products.slice(0, 6), query);
     } catch (error) {
       if (error.name !== "AbortError") {
         this.renderStatus("Quick find is unavailable.");
@@ -351,11 +376,10 @@ class UIHeaderSearch extends HTMLElement {
 
     this.results.innerHTML = products
       .map((product) => {
-        const name = product.Name || product.name || "Product";
-        const slug = product.Slug || product.slug || "";
-        const price = Number(product.Price || product.price || 0);
-        const stock = Number(product.StockQuantity || product.stockQuantity || 0);
-        const href = slug ? `/products/${encodeURIComponent(slug)}` : this.action;
+        const name = product.name || "Product";
+        const href = product.url || this.action;
+        const price = Number.parseFloat(product.price || "0");
+        const inStock = Boolean(product.inStock);
         const priceLabel = new Intl.NumberFormat("en-US", {
           style: "currency",
           currency: "USD",
@@ -364,7 +388,7 @@ class UIHeaderSearch extends HTMLElement {
         return `
           <a class="header-search__result" href="${escapeHTML(href)}" role="option">
             <span class="header-search__result-name">${escapeHTML(name)}</span>
-            <span class="header-search__result-meta">${escapeHTML(priceLabel)} | ${stock > 0 ? "In stock" : "Out of stock"}</span>
+            <span class="header-search__result-meta">${escapeHTML(priceLabel)} | ${inStock ? "In stock" : "Out of stock"}</span>
           </a>
         `;
       })

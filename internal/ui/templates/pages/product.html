@@ -1,43 +1,56 @@
-{{ define "title" }}{{.Title}} – sokomoko{{ end }}
+{{ define "title" }}{{ .Title }} – Sokomoko{{ end }}
 
 {{ define "main-area" }}
-<section class="catalog-page">
+<section class="catalog-page product-page">
   <header class="catalog-page__intro">
-    <ui-breadcrumb items='[{"label":"Home","href":"/"},{"label":"{{.Product.Name}}"}]'></ui-breadcrumb>
-    <h1 class="catalog-page__title">{{.Product.Name}}</h1>
-    <p class="catalog-page__lead">{{if .Product.Category}}{{.Product.Category}}{{else}}General Merchandise{{end}}</p>
+    <ui-breadcrumb items="{{ json .Breadcrumbs }}">
+      <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">Home</a></nav>
+    </ui-breadcrumb>
+    <h1 class="catalog-page__title">{{ .Product.Name }}</h1>
+    <p class="catalog-page__lead">
+      {{ if .Product.Category }}{{ .Product.Category }}{{ else }}General Merchandise{{ end }}
+      {{ if .Product.PartnerName }}&middot; Sold by {{ .Product.PartnerName }}{{ end }}
+    </p>
   </header>
 
   <section class="panel card">
-    <div class="card__body">
-      <div class="product-list" style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); align-items:start;">
-        <div>
-          <img src="{{.Product.GetPrimaryImageURL}}" alt="{{.Product.Name}}" class="product-tile__image product-card__image" width="360" height="360">
-        </div>
+    <div class="card__body product-page__layout">
+      <div class="product-page__media">
+        <img src="{{ .Product.ImageURL }}" alt="{{ .Product.ImageAlt }}" class="product-tile__image product-card__image" width="360" height="360" decoding="async">
+      </div>
 
-        <div>
-          <ui-price amount="{{printf "%.2f" .Product.Price}}" style="font-size:var(--font-size-xl); margin-bottom:var(--space-3); display:inline-flex;"></ui-price>
-          {{if gt .Product.StockQuantity 0}}
-          <p style="margin-bottom:var(--space-3);"><ui-badge variant="success" label="{{.Product.StockQuantity}} available"></ui-badge></p>
-          {{else}}
-          <p style="margin-bottom:var(--space-3);"><ui-badge variant="danger" label="Out of stock"></ui-badge></p>
-          {{end}}
+      <div class="product-page__details">
+        <ui-price amount="{{ .Product.Price }}" size="lg">${{ .Product.Price }}</ui-price>
+        <p class="product-page__stock">
+          {{ if .Product.InStock }}
+          <ui-badge variant="success" label="{{ .Product.StockQuantity }} available">{{ .Product.StockQuantity }} available</ui-badge>
+          {{ else }}
+          <ui-badge variant="danger" label="Out of stock">Out of stock</ui-badge>
+          {{ end }}
+        </p>
 
-          <p class="product-tile__description product-card__description">{{.Product.Description}}</p>
+        <p class="product-tile__description product-card__description">{{ .Product.Description }}</p>
 
-          {{if gt .Product.StockQuantity 0}}
-          <form action="/cart/add" method="POST" class="form" style="max-width:320px;">
-            <input type="hidden" name="product_id" value="{{.Product.ID}}">
+        {{ if .Product.InStock }}
+        <ui-add-to-cart product-name="{{ .Product.Name }}">
+          <form action="/cart/add" method="POST" class="form product-page__form">
+            {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+            <input type="hidden" name="product_id" value="{{ .Product.ID }}">
             <div class="form__group form-group">
               <label class="form__label" for="quantity">Quantity</label>
-              <ui-quantity name="quantity" value="1" min="1" max="{{.Product.StockQuantity}}"></ui-quantity>
+              <ui-quantity name="quantity" value="1" min="1" max="{{ .Product.StockQuantity }}">
+                <input class="form__input" type="number" id="quantity" name="quantity" value="1" min="1" max="{{ .Product.StockQuantity }}">
+              </ui-quantity>
             </div>
             <button type="submit" class="btn btn--full">Add to cart</button>
           </form>
-          {{else}}
-          <button class="btn btn--full" type="button" disabled>Unavailable</button>
-          {{end}}
-        </div>
+        </ui-add-to-cart>
+        {{ else }}
+        <button class="btn btn--full" type="button" disabled>Unavailable</button>
+        {{ end }}
+        {{ if not .Viewer.SignedIn }}
+        <p class="form__hint"><a href="/login?next=/products/{{ .Product.Slug }}">Sign in</a> to add items to your cart.</p>
+        {{ end }}
       </div>
     </div>
   </section>

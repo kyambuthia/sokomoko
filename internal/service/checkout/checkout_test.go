@@ -2,22 +2,18 @@ package checkout
 
 import (
 	"database/sql"
-	"math"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
 func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 	t.Helper()
 
-	path := "./test_checkout_service.db"
-	_ = os.Remove(path)
-
-	store, err := db.OpenStore(path)
+	store, err := db.OpenStore(dbtest.DSN(t))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -25,10 +21,7 @@ func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 		t.Fatalf("apply schema: %v", err)
 	}
 
-	cleanup := func() {
-		_ = store.Close()
-		_ = os.Remove(path)
-	}
+	cleanup := func() { _ = store.Close() }
 
 	return New(store, paymentsvc.New()), store, cleanup
 }
@@ -40,9 +33,7 @@ func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 		Username:     "u_test",
 		Email:        "u_test@example.com",
 		PasswordHash: "hash",
-		Salt:         "salt",
 		Role:         "user",
-		Slug:         "u-test",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -60,7 +51,7 @@ func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 		Name:          "Product A",
 		Slug:          "product-a",
 		Description:   "desc",
-		Price:         10.0,
+		Price:         1000,
 		StockQuantity: stock,
 		CategoryID:    sql.NullInt64{Int64: catID, Valid: true},
 	})
@@ -87,18 +78,14 @@ func TestCheckout_ValidationErrors(t *testing.T) {
 }
 
 func TestCalculateSummary(t *testing.T) {
-	summary := CalculateSummary(20)
-	if summary.Subtotal != 20 {
-		t.Fatalf("subtotal = %.2f, want 20.00", summary.Subtotal)
+	summary := CalculateSummary(2000)
+	if summary.Subtotal != 2000 || summary.ShippingFee != 650 || summary.TaxAmount != 160 || summary.Total != 2810 {
+		t.Fatalf("summary = %+v, want 20.00 + 6.50 + 1.60 = 28.10", summary)
 	}
-	if summary.ShippingFee != 6.50 {
-		t.Fatalf("shipping = %.2f, want 6.50", summary.ShippingFee)
-	}
-	if summary.TaxAmount != 1.60 {
-		t.Fatalf("tax = %.2f, want 1.60", summary.TaxAmount)
-	}
-	if summary.Total != 28.10 {
-		t.Fatalf("total = %.2f, want 28.10", summary.Total)
+
+	free := CalculateSummary(8000)
+	if free.ShippingFee != 0 || free.Total != 8640 {
+		t.Fatalf("free shipping summary = %+v", free)
 	}
 }
 
@@ -162,8 +149,8 @@ func TestPrepare_CreatesCheckoutReservations(t *testing.T) {
 	if len(checkout.Lines) != 1 {
 		t.Fatalf("checkout lines length = %d, want 1", len(checkout.Lines))
 	}
-	if checkout.TotalAmount != 28.10 {
-		t.Fatalf("checkout total = %.2f, want 28.10", checkout.TotalAmount)
+	if checkout.TotalAmount != 2810 {
+		t.Fatalf("checkout total = %s, want 28.10", checkout.TotalAmount)
 	}
 }
 
@@ -192,8 +179,8 @@ func TestPreparedCheckout_ReturnsPersistedSnapshotState(t *testing.T) {
 	if state.Items[0].Quantity != 2 {
 		t.Fatalf("item quantity = %d, want 2", state.Items[0].Quantity)
 	}
-	if math.Abs(state.Summary.Total-28.10) > 0.001 {
-		t.Fatalf("summary total = %.2f, want 28.10", state.Summary.Total)
+	if state.Summary.Total != 2810 {
+		t.Fatalf("summary total = %s, want 28.10", state.Summary.Total)
 	}
 
 	checkout, err := store.GetCheckoutByToken(userID, state.Token)
@@ -272,8 +259,8 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("orders length = %d, want 1", len(orders))
 	}
-	if math.Abs(orders[0].TotalAmount-summary.Total) > 0.001 {
-		t.Fatalf("order total = %.2f, want %.2f", orders[0].TotalAmount, summary.Total)
+	if orders[0].TotalAmount != summary.Total {
+		t.Fatalf("order total = %s, want %s", orders[0].TotalAmount, summary.Total)
 	}
 	if orders[0].DeliveryNotice == "" {
 		t.Fatal("expected delivery notice to include payment/price context")
@@ -371,8 +358,8 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 	if replayedOrderID != orderID {
 		t.Fatalf("replayed order id = %d, want %d", replayedOrderID, orderID)
 	}
-	if math.Abs(replaySummary.Total-28.10) > 0.001 {
-		t.Fatalf("replayed total = %.2f, want 28.10", replaySummary.Total)
+	if replaySummary.Total != 2810 {
+		t.Fatalf("replayed total = %s, want 28.10", replaySummary.Total)
 	}
 
 	orders, err := store.ListOrdersByUser(userID)
@@ -392,7 +379,9 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 	}
 }
 
-func TestCheckoutWithPayment_UsesPersistedCheckoutSnapshot(t *testing.T) {
+// Changing the cart after a checkout was prepared must not place an order for
+// the stale snapshot; the checkout is re-prepared from the current cart.
+func TestCheckoutWithPayment_RepricesAfterCartChange(t *testing.T) {
 	svc, store, cleanup := newTestService(t)
 	defer cleanup()
 
@@ -417,8 +406,8 @@ func TestCheckoutWithPayment_UsesPersistedCheckoutSnapshot(t *testing.T) {
 	if orderID == 0 {
 		t.Fatal("expected non-zero order id")
 	}
-	if math.Abs(summary.Total-28.10) > 0.001 {
-		t.Fatalf("summary total = %.2f, want 28.10", summary.Total)
+	if summary.Total != 1730 {
+		t.Fatalf("summary total = %s, want 17.30", summary.Total)
 	}
 
 	orders, err := store.ListOrdersByUser(userID)
@@ -431,8 +420,8 @@ func TestCheckoutWithPayment_UsesPersistedCheckoutSnapshot(t *testing.T) {
 	if len(orders[0].Items) != 1 {
 		t.Fatalf("order items length = %d, want 1", len(orders[0].Items))
 	}
-	if orders[0].Items[0].Quantity != 2 {
-		t.Fatalf("order quantity = %d, want 2", orders[0].Items[0].Quantity)
+	if orders[0].Items[0].Quantity != 1 {
+		t.Fatalf("order quantity = %d, want 1", orders[0].Items[0].Quantity)
 	}
 
 	checkout, err := store.GetCheckoutByToken(userID, key)
@@ -447,5 +436,21 @@ func TestCheckoutWithPayment_UsesPersistedCheckoutSnapshot(t *testing.T) {
 	}
 	if !checkout.OrderID.Valid || int(checkout.OrderID.Int64) != int(orderID) {
 		t.Fatalf("checkout order id = %v, want %d", checkout.OrderID, orderID)
+	}
+}
+
+func TestCheckoutWithPayment_CompletedTokenCannotBeReused(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 5)
+	_ = store.AddToCart(userID, productID, 1)
+	key := "single-use"
+	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "", key); err != nil {
+		t.Fatalf("first checkout: %v", err)
+	}
+	state, err := svc.PreparedCheckout(userID, key)
+	if err != ErrCartEmpty {
+		t.Fatalf("prepared completed checkout = %+v, %v; want ErrCartEmpty", state, err)
 	}
 }

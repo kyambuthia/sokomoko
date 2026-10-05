@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -18,7 +19,20 @@ import (
 
 var runHTTPServerFunc = runHTTPServer
 
+// openStore connects to PostgreSQL with the configured pool settings.
+func openStore(cfg config.Config) (*db.Store, error) {
+	return db.Open(context.Background(), cfg.DatabaseURL, db.PoolOptions{
+		MaxOpenConns:    cfg.DBMaxOpenConns,
+		MaxIdleConns:    cfg.DBMaxIdleConns,
+		ConnMaxLifetime: time.Duration(cfg.DBConnMaxLifetime) * time.Second,
+		QueryTimeout:    time.Duration(cfg.DBQueryTimeout) * time.Second,
+	})
+}
+
 func runServe(cfg config.Config, seedOnServe bool) error {
+	if err := cfg.Validate(); err != nil {
+		return wrapCommandError(commandServe, "validate config", err)
+	}
 	resetEmailSender, err := buildPasswordResetEmailSender(cfg)
 	if err != nil {
 		return wrapCommandError(commandServe, "configure password reset email", err)
@@ -29,7 +43,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 		return wrapCommandError(commandServe, "parse templates", fmt.Errorf("parse templates: %w", err))
 	}
 
-	store, err := db.OpenStore(cfg.DBPath)
+	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandServe, "open store", err)
 	}
@@ -53,6 +67,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 			AuthAbuseBackoffMax:      time.Duration(cfg.AuthAbuseBackoffMax) * time.Second,
 			PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
 			PasswordResetEmailSender: resetEmailSender,
+			TrustProxyHeaders:        cfg.TrustProxyHeaders,
 		},
 	})
 	server, allowedHosts := buildServer(cfg, application)
@@ -62,7 +77,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 }
 
 func runMigrate(cfg config.Config) error {
-	store, err := db.OpenStore(cfg.DBPath)
+	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandMigrate, "open store", err)
 	}
@@ -72,12 +87,12 @@ func runMigrate(cfg config.Config) error {
 		return wrapCommandError(commandMigrate, "apply schema", err)
 	}
 
-	log.Printf("[startup] schema applied db=%s", cfg.DBPath)
+	log.Printf("[startup] schema applied version=%d", db.LatestSchemaVersion())
 	return nil
 }
 
 func runSeed(cfg config.Config) error {
-	store, err := db.OpenStore(cfg.DBPath)
+	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandSeed, "open store", err)
 	}
@@ -87,7 +102,7 @@ func runSeed(cfg config.Config) error {
 		return wrapCommandError(commandSeed, "prepare store", err)
 	}
 
-	log.Printf("[startup] seed completed db=%s", cfg.DBPath)
+	log.Printf("[startup] seed completed")
 	return nil
 }
 

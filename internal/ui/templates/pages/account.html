@@ -1,44 +1,48 @@
-{{ define "title" }}{{.Title}}{{ end }}
+{{ define "title" }}{{ .Title }} – Sokomoko{{ end }}
 
 {{ define "main-area" }}
 <section class="account-page">
   <header class="catalog-page__intro">
-    <h1 class="catalog-page__title">{{.Title}}</h1>
-    <p class="catalog-page__lead">Track orders, delivery notices, and manage account access.</p>
+    <h1 class="catalog-page__title">{{ .Title }}</h1>
+    <p class="catalog-page__lead">Signed in as {{ .Viewer.Username }}. Track orders and delivery notices.</p>
   </header>
 
-  {{if .Message}}
-  <ui-alert variant="success"><p>{{.Message}}</p></ui-alert>
-  {{end}}
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
+  {{ template "flash" .Flash }}
 
   <section class="panel card">
-    <div class="card__header"><h3>Recent Orders</h3></div>
+    <div class="card__header"><h2 class="card__title">Orders</h2></div>
     <div class="card__body">
-      {{if .Orders}}
-      <div class="table-wrap">
-        <table class="data-table data-table--partner">
-          <thead>
-            <tr><th>Order</th><th>Status</th><th>Delivery</th><th>Total</th><th>Notice</th></tr>
-          </thead>
-          <tbody>
-            {{range .Orders}}
-            <tr>
-              <td>#{{.ID}}</td>
-              <td>{{.Status}} ({{.PartnerStatus}})</td>
-              <td>{{.DeliveryStatus}}</td>
-              <td>${{printf "%.2f" .TotalAmount}}</td>
-              <td>{{if .DeliveryNotice}}{{.DeliveryNotice}}{{else}}No updates yet{{end}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
-      </div>
-      {{else}}
+      {{ if .Orders }}
+      <ol class="order-list">
+        {{ range .Orders }}
+        <li class="order-list__item" id="order-{{ .ID }}">
+          <article class="order-card">
+            <header class="order-card__header">
+              <h3 class="order-card__title">Order #{{ .ID }}</h3>
+              <p class="order-card__meta">
+                Placed <ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "Jan 2, 2006 15:04 MST" }}</ui-relative-time>
+                &middot; ${{ .TotalAmount }}
+              </p>
+            </header>
+            {{ template "order-status" . }}
+            <p class="order-card__notice" data-order-notice>{{ if .DeliveryNotice }}{{ .DeliveryNotice }}{{ else }}No updates yet.{{ end }}</p>
+            <details class="order-card__details">
+              <summary>Items and delivery details</summary>
+              <ul>
+                {{ range .Items }}
+                <li>{{ .ProductName }} &times; {{ .Quantity }} &middot; ${{ .LineTotal }}</li>
+                {{ end }}
+              </ul>
+              <p><strong>Deliver to:</strong> {{ .DeliveryAddress }}</p>
+              <p class="text-muted">Subtotal ${{ .Subtotal }} &middot; Shipping ${{ .ShippingFee }} &middot; Tax ${{ .TaxAmount }}</p>
+            </details>
+          </article>
+        </li>
+        {{ end }}
+      </ol>
+      {{ else }}
       <p class="table-empty">No orders yet.</p>
-      {{end}}
+      {{ end }}
     </div>
   </section>
 
@@ -48,6 +52,7 @@
         <a href="/cart" class="btn">View Cart</a>
         <a href="/" class="btn btn--secondary">Continue Shopping</a>
         <form action="/logout" method="POST" class="account-actions__form">
+          {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
           <button type="submit" class="btn btn--secondary">Sign Out</button>
         </form>
       </div>

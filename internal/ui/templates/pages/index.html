@@ -1,44 +1,19 @@
-{{ define "title" }}sokomoko – Online Marketplace{{ end }}
+{{ define "title" }}Sokomoko – Online Marketplace{{ end }}
 
 {{ define "main-area" }}
 <section class="catalog-page">
-  {{if .HasProducts}}
+  <header class="catalog-page__intro">
+    <h1 class="catalog-page__title">Everyday goods, delivered</h1>
+    <p class="catalog-page__lead">Browse the catalog from our partner stores.</p>
+  </header>
+  {{ if .HasProducts }}
   <div class="product-list product-grid">
-    {{range .Products}}
-    <article class="product-tile product-card">
-      <a href="/products/{{.Slug}}" aria-label="View {{.Name}} details">
-        <img src="{{.GetPrimaryImageURL}}" alt="{{.Name}}" class="product-tile__image product-card__image" width="200" height="200">
-      </a>
-      <div class="product-tile__body product-card__content">
-        <h3 class="product-tile__name product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
-        <p class="product-tile__description product-card__description">{{.Description}}</p>
-        <div class="product-card__meta">
-          <ui-price amount="{{printf "%.2f" .Price}}" class="product-card__price"></ui-price>
-          {{if .StockQuantity}}
-          <ui-badge variant="success" label="In stock"></ui-badge>
-          {{else}}
-          <ui-badge variant="danger" label="Out of stock"></ui-badge>
-          {{end}}
-        </div>
-        <div class="product-tile__footer product-card__footer">
-          {{if .StockQuantity}}
-          <form action="/cart/add" method="POST">
-            <input type="hidden" name="product_id" value="{{.ID}}">
-            <input type="hidden" name="quantity" value="1">
-            <button type="submit" class="btn btn--full product-card__button">Add to cart</button>
-          </form>
-          {{else}}
-          <button class="btn btn--full product-card__button" type="button" disabled>Unavailable</button>
-          {{end}}
-        </div>
-      </div>
-    </article>
-    {{end}}
+    {{ range .Products }}
+    {{ template "product-card" (dict "Product" . "CSRFToken" $.CSRFToken) }}
+    {{ end }}
   </div>
-  {{else}}
-  <ui-alert variant="info">
-    <p>No products available. Check back soon.</p>
-  </ui-alert>
-  {{end}}
+  {{ else }}
+  <ui-alert variant="info"><p>No products available yet. Check back soon.</p></ui-alert>
+  {{ end }}
 </section>
 {{ end }}

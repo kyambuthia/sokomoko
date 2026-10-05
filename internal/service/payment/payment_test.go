@@ -20,7 +20,7 @@ func TestSupportedMethods(t *testing.T) {
 func TestBuildRecord_CashOnDeliveryPending(t *testing.T) {
 	svc := New()
 
-	record, err := svc.BuildRecord(MethodCashOnDelivery, 42.5)
+	record, err := svc.BuildRecord(MethodCashOnDelivery, 4250)
 	if err != nil {
 		t.Fatalf("BuildRecord error = %v", err)
 	}
@@ -35,7 +35,7 @@ func TestBuildRecord_CashOnDeliveryPending(t *testing.T) {
 func TestBuildRecord_PlaceholderCaptured(t *testing.T) {
 	svc := New()
 
-	record, err := svc.BuildRecord(MethodCardPlaceholder, 42.5)
+	record, err := svc.BuildRecord(MethodCardPlaceholder, 4250)
 	if err != nil {
 		t.Fatalf("BuildRecord error = %v", err)
 	}

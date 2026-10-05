@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,14 +12,14 @@ import (
 func TestIntegration_CartRejectsQuantityAboveStock(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("stockuser_%d", suffix)
 	email := fmt.Sprintf("stock_%d@example.com", suffix)
 	password := "strongpass123"
 	createTestUser(t, username, email, password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
 
-	productID := createTestProduct(t, "Low Stock Product", fmt.Sprintf("low-stock-%d", suffix), 12.0, 2)
+	productID := createTestProduct(t, "Low Stock Product", fmt.Sprintf("low-stock-%d", suffix), 1200, 2)
 
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
@@ -29,9 +28,7 @@ func TestIntegration_CartRejectsQuantityAboveStock(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("POST /cart/add status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
-	if got := resp.Header.Get("Location"); got != "/cart?error=Requested+quantity+exceeds+available+stock" {
-		t.Fatalf("add redirect location=%q expected=%q", got, "/cart?error=Requested+quantity+exceeds+available+stock")
-	}
+	assertFlashRedirect(t, resp, "/cart", "Requested quantity exceeds available stock")
 
 	addData.Set("quantity", "1")
 	resp, _ = makeRequest(http.MethodPost, "/cart/add", addData, []*http.Cookie{cookie}, "")
@@ -46,22 +43,20 @@ func TestIntegration_CartRejectsQuantityAboveStock(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("POST /cart/update status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
-	if got := resp.Header.Get("Location"); got != "/cart?error=Requested+quantity+exceeds+available+stock" {
-		t.Fatalf("update redirect location=%q expected=%q", got, "/cart?error=Requested+quantity+exceeds+available+stock")
-	}
+	assertFlashRedirect(t, resp, "/cart", "Requested quantity exceeds available stock")
 }
 
 func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("buyer_price_%d", suffix)
 	email := fmt.Sprintf("buyer_price_%d@example.com", suffix)
 	password := "strongpass123"
 	userID := createTestUser(t, username, email, password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
 
-	productID := createTestProduct(t, "Pricing Product", fmt.Sprintf("pricing-product-%d", suffix), 10.0, 10)
+	productID := createTestProduct(t, "Pricing Product", fmt.Sprintf("pricing-product-%d", suffix), 1000, 10)
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
 	addData.Set("quantity", "2")
@@ -78,7 +73,7 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
-	if got := resp.Header.Get("Location"); !strings.HasPrefix(got, "/account?message=Order+") {
+	if got := resp.Header.Get("Location"); !strings.HasPrefix(got, "/account#order-") {
 		t.Fatalf("checkout redirect location=%q expected account success redirect", got)
 	}
 
@@ -89,8 +84,8 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 	if len(orders) != 1 {
 		t.Fatalf("expected 1 order, got %d", len(orders))
 	}
-	if math.Abs(orders[0].TotalAmount-28.10) > 0.001 {
-		t.Fatalf("order total amount=%.2f expected=28.10", orders[0].TotalAmount)
+	if orders[0].TotalAmount != 2810 {
+		t.Fatalf("order total amount=%s expected=28.10", orders[0].TotalAmount)
 	}
 	if !strings.Contains(orders[0].DeliveryNotice, "Payment method selected: Card (placeholder)") {
 		t.Fatalf("expected payment method in delivery notice, got %q", orders[0].DeliveryNotice)
@@ -111,14 +106,14 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("buyer_replay_%d", suffix)
 	email := fmt.Sprintf("buyer_replay_%d@example.com", suffix)
 	password := "strongpass123"
 	userID := createTestUser(t, username, email, password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
 
-	productID := createTestProduct(t, "Replay Product", fmt.Sprintf("replay-product-%d", suffix), 14.0, 10)
+	productID := createTestProduct(t, "Replay Product", fmt.Sprintf("replay-product-%d", suffix), 1400, 10)
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
 	addData.Set("quantity", "2")
@@ -163,7 +158,7 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	password := "strongpass123"
 
 	userA := fmt.Sprintf("reserve_a_%d", suffix)
@@ -177,7 +172,7 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 	cookieA := loginAndGetSessionCookie(t, "", userA, password)
 	cookieB := loginAndGetSessionCookie(t, "", userB, password)
 
-	productID := createTestProduct(t, "Reserved Product", fmt.Sprintf("reserved-product-%d", suffix), 18.0, 1)
+	productID := createTestProduct(t, "Reserved Product", fmt.Sprintf("reserved-product-%d", suffix), 1800, 1)
 
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
@@ -209,8 +204,8 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 	checkoutData.Set("delivery_address", "Blocked Lane")
 	checkoutData.Set("payment_method", "card_placeholder")
 	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookieB}, "")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /checkout B status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /checkout B status=%d expected=%d", resp.StatusCode, http.StatusUnprocessableEntity)
 	}
 	if !strings.Contains(body, "One or more cart items exceed available stock") {
 		t.Fatalf("expected stock reservation error in body, got %q", body)
@@ -225,17 +220,17 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 	}
 }
 
-func TestIntegration_CheckoutValidationRendersPersistedSnapshot(t *testing.T) {
+func TestIntegration_CheckoutValidationRendersCurrentCart(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("buyer_snapshot_%d", suffix)
 	email := fmt.Sprintf("buyer_snapshot_%d@example.com", suffix)
 	password := "strongpass123"
 	createTestUser(t, username, email, password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
 
-	productID := createTestProduct(t, "Snapshot Product", fmt.Sprintf("snapshot-product-%d", suffix), 10.0, 5)
+	productID := createTestProduct(t, "Snapshot Product", fmt.Sprintf("snapshot-product-%d", suffix), 1000, 5)
 
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
@@ -259,28 +254,30 @@ func TestIntegration_CheckoutValidationRendersPersistedSnapshot(t *testing.T) {
 	checkoutData.Set("payment_method", "card_placeholder")
 	checkoutData.Set("idempotency_key", idempotencyKey)
 	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusUnprocessableEntity)
 	}
 	if !strings.Contains(body, "Delivery address is required") {
 		t.Fatalf("expected validation error in body, got %q", body)
 	}
-	if !strings.Contains(body, "Snapshot Product × 2 - $20.00") {
-		t.Fatalf("expected persisted checkout line in body, got %q", body)
+	// The cart changed after the checkout was prepared, so the re-rendered
+	// checkout reflects the current cart rather than the stale snapshot.
+	if !strings.Contains(body, "Snapshot Product &times; 1 <span>$10.00</span>") || !strings.Contains(body, "$17.30") {
+		t.Fatalf("expected re-priced checkout line in body, got %q", body)
 	}
 }
 
 func TestIntegration_CheckoutDraftSurvivesRefresh(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("buyer_draft_%d", suffix)
 	email := fmt.Sprintf("buyer_draft_%d@example.com", suffix)
 	password := "strongpass123"
 	createTestUser(t, username, email, password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
 
-	productID := createTestProduct(t, "Draft Product", fmt.Sprintf("draft-product-%d", suffix), 10.0, 5)
+	productID := createTestProduct(t, "Draft Product", fmt.Sprintf("draft-product-%d", suffix), 1000, 5)
 
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
@@ -297,8 +294,8 @@ func TestIntegration_CheckoutDraftSurvivesRefresh(t *testing.T) {
 	checkoutData.Set("payment_method", "wire_transfer")
 	checkoutData.Set("idempotency_key", idempotencyKey)
 	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusOK)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusUnprocessableEntity)
 	}
 	if !strings.Contains(body, "Choose a supported payment method") {
 		t.Fatalf("expected invalid payment error in body, got %q", body)
@@ -324,14 +321,14 @@ func TestIntegration_CheckoutDraftSurvivesRefresh(t *testing.T) {
 func TestIntegration_CheckoutCanResumeFromQueryToken(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("buyer_resume_%d", suffix)
 	email := fmt.Sprintf("buyer_resume_%d@example.com", suffix)
 	password := "strongpass123"
 	userID := createTestUser(t, username, email, password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
 
-	productID := createTestProduct(t, "Resume Product", fmt.Sprintf("resume-product-%d", suffix), 10.0, 5)
+	productID := createTestProduct(t, "Resume Product", fmt.Sprintf("resume-product-%d", suffix), 1000, 5)
 
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
@@ -366,7 +363,7 @@ func TestIntegration_CheckoutCanResumeFromQueryToken(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("expected 1 resumed order, got %d", len(orders))
 	}
-	if math.Abs(orders[0].TotalAmount-28.10) > 0.001 {
-		t.Fatalf("order total amount=%.2f expected=28.10", orders[0].TotalAmount)
+	if orders[0].TotalAmount != 2810 {
+		t.Fatalf("order total amount=%s expected=28.10", orders[0].TotalAmount)
 	}
 }

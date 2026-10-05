@@ -25,6 +25,7 @@
 
   <form class="auth-panel__form form" action="/setup" method="POST">
     <fieldset class="form__fieldset">
+      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
       <legend class="form__legend">Store Identity</legend>
 
       <div class="form__group form-group">
@@ -34,7 +35,8 @@
 
       <div class="form__group form-group">
         <label class="form__label" for="store_slug">Store Slug</label>
-        <input class="form__input" type="text" id="store_slug" name="store_slug" value="{{.Settings.StoreSlug}}" required>
+        <input class="form__input" type="text" id="store_slug" name="store_slug" value="{{.Settings.StoreSlug}}" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" aria-describedby="store_slug_hint">
+        <small class="form__hint" id="store_slug_hint">Lowercase letters, numbers, and dashes.</small>
       </div>
 
       <div class="form__group form-group">

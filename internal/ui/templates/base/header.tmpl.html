@@ -7,9 +7,9 @@
                 Theme
             </button>
             <a href="/account" class="storefront-header__utility-link">Account</a>
-            <a href="/search?q=saved" class="storefront-header__utility-link">Saved</a>
-            <a href="/search?q=deals" class="storefront-header__utility-link">Deals</a>
-            <a href="/cart" class="storefront-header__utility-link storefront-header__utility-link--cart">Cart</a>
+            <a href="/cart" class="storefront-header__utility-link storefront-header__utility-link--cart">
+                Cart <ui-cart-count endpoint="/api/cart" label="items in cart"></ui-cart-count>
+            </a>
         </nav>
     </div>
     <div class="storefront-header__masthead">
@@ -19,24 +19,26 @@
         </div>
         <ui-header-search
             action="/search"
-            endpoint="/search"
+            endpoint="/api/search"
             label="Search the catalog"
             placeholder="Search products, brands, and deals"
             submit-label="Find"
             variant="marketplace"
-            categories="All Departments|Electronics|Home & kitchen|Style|Office|Audio|Deals|Sell"
+            categories="All Departments"
+            categories-endpoint="/api/categories"
             selected-category="All Departments"
-        ></ui-header-search>
+        >
+            <form action="/search" method="GET" role="search" class="header-search__fallback">
+                <label class="visually-hidden" for="header-search-fallback">Search the catalog</label>
+                <input id="header-search-fallback" class="form__input" type="search" name="q" placeholder="Search products" minlength="2">
+                <button type="submit" class="btn btn--primary">Find</button>
+            </form>
+        </ui-header-search>
     </div>
-    <nav class="storefront-header__categories" aria-label="Featured departments">
-        <a href="/search?q=new" class="storefront-header__category-link storefront-header__category-link--active" aria-current="page">All</a>
-        <a href="/search?q=electronics" class="storefront-header__category-link">Electronics</a>
-        <a href="/search?q=home" class="storefront-header__category-link">Home</a>
-        <a href="/search?q=style" class="storefront-header__category-link">Style</a>
-        <a href="/search?q=audio" class="storefront-header__category-link">Audio</a>
-        <a href="/search?q=deals" class="storefront-header__category-link">Deals</a>
-        <a href="/search?q=sell" class="storefront-header__category-link">Sell</a>
-    </nav>
+    <ui-category-nav class="storefront-header__categories" endpoint="/api/categories" aria-label="Featured departments">
+        <a href="/" class="storefront-header__category-link storefront-header__category-link--active">All</a>
+        <a href="/search?category=electronics" class="storefront-header__category-link">Electronics</a>
+    </ui-category-nav>
 </header>
 {{ end }}
 
@@ -47,9 +49,17 @@
         <p class="site-header__title site-title">SOKOMOKO ADMIN</p>
         <p class="site-header__tagline site-tagline">Platform management and order oversight.</p>
     </div>
-    <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
-        Theme
-    </button>
+    <div class="site-header__actions">
+        <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
+            Theme
+        </button>
+        {{ if .CSRFToken }}
+        <form action="/logout" method="POST" class="site-header__logout">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="site-header__theme-toggle">Sign out</button>
+        </form>
+        {{ end }}
+    </div>
 </header>
 {{ end }}
 
@@ -60,9 +70,17 @@
         <p class="site-header__title site-title">SOKOMOKO PARTNER</p>
         <p class="site-header__tagline site-tagline">Catalog updates, fulfillment flow, and store setup.</p>
     </div>
-    <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
-        Theme
-    </button>
+    <div class="site-header__actions">
+        <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
+            Theme
+        </button>
+        {{ if .CSRFToken }}
+        <form action="/logout" method="POST" class="site-header__logout">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <button type="submit" class="site-header__theme-toggle">Sign out</button>
+        </form>
+        {{ end }}
+    </div>
 </header>
 {{ end }}
 

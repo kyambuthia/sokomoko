@@ -62,6 +62,7 @@ func adminReportsPage(metrics adminsvc.Metrics, role string, report adminsvc.Sal
 	page.ShippedCount = report.ShippedCount
 	page.DeliveredCount = report.DeliveredCount
 	page.OrderCount = report.OrderCount
+	page.CancelledCount = report.CancelledCount
 	return page
 }
 

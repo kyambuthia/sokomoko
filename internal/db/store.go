@@ -1,126 +1,97 @@
+// Package db is the PostgreSQL persistence layer for Sokomoko.
 package db
 
 import (
 	"context"
 	"database/sql"
-	_ "embed"
-	"log"
-	"os"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
 
-	_ "github.com/ncruces/go-sqlite3/driver"
-	_ "github.com/ncruces/go-sqlite3/embed"
+	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 )
 
+const (
+	defaultQueryTimeout = 10 * time.Second
+	maxTxAttempts       = 3
+)
+
+// PoolOptions tunes the database/sql connection pool.
+type PoolOptions struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+	QueryTimeout    time.Duration
+}
+
+func (o PoolOptions) withDefaults() PoolOptions {
+	if o.MaxOpenConns <= 0 {
+		o.MaxOpenConns = 20
+	}
+	if o.MaxIdleConns <= 0 || o.MaxIdleConns > o.MaxOpenConns {
+		o.MaxIdleConns = o.MaxOpenConns / 2
+		if o.MaxIdleConns < 1 {
+			o.MaxIdleConns = 1
+		}
+	}
+	if o.ConnMaxLifetime <= 0 {
+		o.ConnMaxLifetime = 30 * time.Minute
+	}
+	if o.ConnMaxIdleTime <= 0 {
+		o.ConnMaxIdleTime = 5 * time.Minute
+	}
+	if o.QueryTimeout <= 0 {
+		o.QueryTimeout = defaultQueryTimeout
+	}
+	return o
+}
+
 type Store struct {
-	DB *sql.DB
+	DB           *sql.DB
+	queryTimeout time.Duration
 }
 
-//go:embed schema.sql
-var schemaSQL string
+// querier is satisfied by both *sql.DB and *sql.Tx.
+type querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
 
-func InitDB() {
-	store, err := OpenStoreFromEnv()
+// OpenStore connects to PostgreSQL using a libpq style URL or DSN with the
+// default pool settings.
+func OpenStore(databaseURL string) (*Store, error) {
+	return Open(context.Background(), databaseURL, PoolOptions{})
+}
+
+// Open connects to PostgreSQL and verifies the connection.
+func Open(ctx context.Context, databaseURL string, opts PoolOptions) (*Store, error) {
+	dsn := strings.TrimSpace(databaseURL)
+	if dsn == "" {
+		return nil, errors.New("database url is required")
+	}
+	opts = opts.withDefaults()
+
+	conn, err := sql.Open("pgx", dsn)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
-	defer store.Close()
+	conn.SetMaxOpenConns(opts.MaxOpenConns)
+	conn.SetMaxIdleConns(opts.MaxIdleConns)
+	conn.SetConnMaxLifetime(opts.ConnMaxLifetime)
+	conn.SetConnMaxIdleTime(opts.ConnMaxIdleTime)
 
-	if err := store.ApplySchema(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func OpenStoreFromEnv() (*Store, error) {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./db/t.db"
-	}
-	return OpenStore(dbPath)
-}
-
-func OpenStore(dbPath string) (*Store, error) {
-	return openStore(dbPath)
-}
-
-func openStore(dbPath string) (*Store, error) {
-	dbConn, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
+	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := conn.PingContext(pingCtx); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("connect to database: %w", err)
 	}
 
-	if err = dbConn.Ping(); err != nil {
-		_ = dbConn.Close()
-		return nil, err
-	}
-
-	if _, err = dbConn.Exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;"); err != nil {
-		_ = dbConn.Close()
-		return nil, err
-	}
-
-	// Keep pool bounded but allow nested read queries used by rendering paths.
-	dbConn.SetMaxOpenConns(10)
-	dbConn.SetMaxIdleConns(10)
-	dbConn.SetConnMaxLifetime(0)
-
-	return &Store{DB: dbConn}, nil
-}
-
-func (s *Store) ApplySchema() error {
-	if s == nil || s.DB == nil {
-		return sql.ErrConnDone
-	}
-
-	if _, err := s.DB.Exec(schemaSQL); err != nil {
-		return err
-	}
-
-	if err := s.migrateLegacySessionsCSRFToken(); err != nil {
-		return err
-	}
-
-	return s.recordSchemaVersion()
-}
-
-func (s *Store) migrateLegacySessionsCSRFToken() error {
-	if s == nil || s.DB == nil {
-		return sql.ErrConnDone
-	}
-
-	rows, err := s.DB.Query("PRAGMA table_info(sessions)")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	hasCSRFToken := false
-	for rows.Next() {
-		var cid int
-		var name string
-		var colType string
-		var notNull int
-		var defaultValue sql.NullString
-		var pk int
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
-			return err
-		}
-		if name == "csrf_token" {
-			hasCSRFToken = true
-			break
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	if hasCSRFToken {
-		return nil
-	}
-
-	// Existing databases may have a sessions table created before CSRF tokens existed.
-	// Default to empty; empty tokens will be rejected, forcing re-login.
-	_, err = s.DB.Exec("ALTER TABLE sessions ADD COLUMN csrf_token TEXT NOT NULL DEFAULT ''")
-	return err
+	return &Store{DB: conn, queryTimeout: opts.QueryTimeout}, nil
 }
 
 func (s *Store) Close() error {
@@ -135,4 +106,56 @@ func (s *Store) PingContext(ctx context.Context) error {
 		return sql.ErrConnDone
 	}
 	return s.DB.PingContext(ctx)
+}
+
+// ctx returns a context bounded by the store's query timeout. Store methods do
+// not take a caller context yet, so this keeps a slow query from pinning a
+// connection forever.
+func (s *Store) ctx() (context.Context, context.CancelFunc) {
+	timeout := s.queryTimeout
+	if timeout <= 0 {
+		timeout = defaultQueryTimeout
+	}
+	return context.WithTimeout(context.Background(), timeout)
+}
+
+// withTx runs fn inside a transaction, retrying on serialization failures and
+// deadlocks. fn must be safe to re-run.
+func (s *Store) withTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	var err error
+	for attempt := 1; attempt <= maxTxAttempts; attempt++ {
+		err = s.runTx(ctx, fn)
+		if err == nil || !isRetryableTxError(err) || ctx.Err() != nil {
+			return err
+		}
+		time.Sleep(time.Duration(attempt*attempt) * 10 * time.Millisecond)
+	}
+	return err
+}
+
+func (s *Store) runTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return wrapDBError(err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return wrapDBError(tx.Commit())
+}
+
+func isRetryableTxError(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	switch pgErr.Code {
+	case "40001", "40P01":
+		return true
+	}
+	return false
 }

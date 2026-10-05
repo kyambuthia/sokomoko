@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 var ErrInvalidMethod = errors.New("invalid payment method")
@@ -80,7 +81,7 @@ func (s *Service) IsSupportedMethod(method string) bool {
 	return false
 }
 
-func (s *Service) BuildRecord(method string, totalAmount float64) (db.PaymentRecordInput, error) {
+func (s *Service) BuildRecord(method string, totalAmount money.Cents) (db.PaymentRecordInput, error) {
 	method = strings.TrimSpace(strings.ToLower(method))
 	record := db.PaymentRecordInput{
 		Method:   method,

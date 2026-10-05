@@ -53,16 +53,17 @@
             <h3>Order #{{.ID}} - {{.CustomerName}}</h3>
           </div>
           <div class="card__body">
-            <p><strong>Total:</strong> ${{printf "%.2f" .TotalAmount}}</p>
+            <p><strong>Total:</strong> ${{.TotalAmount}} &middot; placed <ui-relative-time datetime="{{rfc3339 .CreatedAt}}">{{.CreatedAt.Format "Jan 2 15:04"}}</ui-relative-time></p>
             <p><strong>Delivery Address:</strong> {{.DeliveryAddress}}</p>
             <p><strong>Status:</strong> {{.Status}} / {{.PartnerStatus}} / {{.DeliveryStatus}}</p>
             <p><strong>Items:</strong></p>
             <ul>
               {{range .Items}}
-              <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
+              <li>{{.ProductName}} × {{.Quantity}} - ${{.LineTotal}}</li>
               {{end}}
             </ul>
-            <form action="/orders" method="POST" class="form">
+            <form action="/orders{{if ne $.Filter "all"}}?status={{$.Filter}}{{end}}" method="POST" class="form">
+              {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
               <input type="hidden" name="order_id" value="{{.ID}}">
               <div class="form__group form-group">
                 <label class="form__label" for="partner_status_{{.ID}}">Partner status</label>

@@ -3,135 +3,53 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
 
 const (
-	defaultWarehouseID   = 1
-	defaultWarehouseName = "Default Warehouse"
-	defaultWarehouseSlug = "default"
-
-	stockMovementInitial     = "initial"
-	stockMovementAdjustment  = "adjustment"
-	stockMovementReservation = "reservation"
-	stockMovementRelease     = "release"
-	stockMovementAllocation  = "allocation"
+	stockMovementInitial      = "initial"
+	stockMovementAdjustment   = "adjustment"
+	stockMovementReservation  = "reservation"
+	stockMovementRelease      = "release"
+	stockMovementAllocation   = "allocation"
+	stockMovementDeallocation = "deallocation"
+	stockMovementShipment     = "shipment"
 )
 
-const (
-	StockReservationStatusActive    = "active"
-	StockReservationStatusReleased  = "released"
-	StockReservationStatusExpired   = "expired"
-	StockReservationStatusConverted = "converted"
-)
-
-func ensureDefaultWarehouseTx(tx *sql.Tx) (int64, error) {
-	if _, err := tx.Exec(
-		`INSERT OR IGNORE INTO warehouses (id, name, slug, is_default)
-		 VALUES (?, ?, ?, 1)`,
-		defaultWarehouseID, defaultWarehouseName, defaultWarehouseSlug,
-	); err != nil {
-		return 0, err
+// defaultWarehouseID returns the warehouse that new stock is booked into and
+// orders are sourced from.
+func defaultWarehouseID(ctx context.Context, q querier) (int, error) {
+	var id int
+	err := q.QueryRowContext(ctx, "SELECT id FROM warehouses WHERE is_default").Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errors.New("no default warehouse configured")
 	}
-
-	var warehouseID int64
-	if err := tx.QueryRow(
-		"SELECT id FROM warehouses WHERE slug = ?",
-		defaultWarehouseSlug,
-	).Scan(&warehouseID); err != nil {
-		return 0, err
-	}
-	return warehouseID, nil
+	return id, err
 }
 
-func ensureInventoryStockTx(tx *sql.Tx, productID int, fallbackAvailable int) (int64, error) {
-	warehouseID, err := ensureDefaultWarehouseTx(tx)
-	if err != nil {
-		return 0, err
-	}
-
-	if fallbackAvailable < 0 {
-		fallbackAvailable = 0
-	}
-
-	if _, err := tx.Exec(
-		`INSERT OR IGNORE INTO inventory_stocks (product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity)
-		 VALUES (?, ?, ?, 0, 0)`,
-		productID, warehouseID, fallbackAvailable,
-	); err != nil {
-		return 0, err
-	}
-
-	return warehouseID, nil
-}
-
-func ensureDefaultWarehouseConn(conn *sql.Conn) (int64, error) {
-	ctx := context.Background()
-
-	if _, err := conn.ExecContext(
-		ctx,
-		`INSERT OR IGNORE INTO warehouses (id, name, slug, is_default)
-		 VALUES (?, ?, ?, 1)`,
-		defaultWarehouseID, defaultWarehouseName, defaultWarehouseSlug,
-	); err != nil {
-		return 0, err
-	}
-
-	var warehouseID int64
-	if err := conn.QueryRowContext(
-		ctx,
-		"SELECT id FROM warehouses WHERE slug = ?",
-		defaultWarehouseSlug,
-	).Scan(&warehouseID); err != nil {
-		return 0, err
-	}
-	return warehouseID, nil
-}
-
-func ensureInventoryStockConn(conn *sql.Conn, productID int, fallbackAvailable int) (int64, error) {
-	warehouseID, err := ensureDefaultWarehouseConn(conn)
-	if err != nil {
-		return 0, err
-	}
-
-	if fallbackAvailable < 0 {
-		fallbackAvailable = 0
-	}
-
-	if _, err := conn.ExecContext(
-		context.Background(),
-		`INSERT OR IGNORE INTO inventory_stocks (product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity)
-		 VALUES (?, ?, ?, 0, 0)`,
-		productID, warehouseID, fallbackAvailable,
-	); err != nil {
-		return 0, err
-	}
-
-	return warehouseID, nil
-}
-
-func getInventoryStockTx(tx *sql.Tx, productID int, warehouseID int64) (*InventoryStock, error) {
-	stock := &InventoryStock{}
-	err := tx.QueryRow(
-		`SELECT id, product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity, created_at, updated_at
-		 FROM inventory_stocks
-		 WHERE product_id = ? AND warehouse_id = ?`,
+// lockInventoryStock returns the inventory row for update, creating an empty
+// row when the product has never been stocked in the warehouse.
+func lockInventoryStock(ctx context.Context, tx *sql.Tx, productID, warehouseID int) (*InventoryStock, error) {
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO inventory_stocks (product_id, warehouse_id) VALUES ($1, $2)
+		 ON CONFLICT (product_id, warehouse_id) DO NOTHING`,
 		productID, warehouseID,
-	).Scan(
-		&stock.ID,
-		&stock.ProductID,
-		&stock.WarehouseID,
-		&stock.OnHandQuantity,
-		&stock.ReservedQuantity,
-		&stock.AllocatedQuantity,
-		&stock.CreatedAt,
-		&stock.UpdatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	); err != nil {
+		return nil, err
 	}
+
+	stock := &InventoryStock{}
+	err := tx.QueryRowContext(ctx,
+		`SELECT product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity, updated_at
+		 FROM inventory_stocks
+		 WHERE product_id = $1 AND warehouse_id = $2
+		 FOR UPDATE`,
+		productID, warehouseID,
+	).Scan(&stock.ProductID, &stock.WarehouseID, &stock.OnHandQuantity, &stock.ReservedQuantity, &stock.AllocatedQuantity, &stock.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -139,564 +57,193 @@ func getInventoryStockTx(tx *sql.Tx, productID int, warehouseID int64) (*Invento
 	return stock, nil
 }
 
-func syncProductStockQuantityTx(tx *sql.Tx, productID int) error {
-	_, err := tx.Exec(
-		`UPDATE products
-		 SET stock_quantity = MAX(
-		     COALESCE((
-		         SELECT SUM(on_hand_quantity - reserved_quantity - allocated_quantity)
-		         FROM inventory_stocks
-		         WHERE product_id = ?
-		     ), 0),
-		     0
-		 ),
-		     updated_at = CURRENT_TIMESTAMP
-		 WHERE id = ?`,
-		productID, productID,
+func recordStockMovement(ctx context.Context, q querier, productID, warehouseID int, movementType string, quantityDelta int, reference string) error {
+	_, err := q.ExecContext(ctx,
+		`INSERT INTO stock_movements (product_id, warehouse_id, movement_type, quantity_delta, reference)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		productID, warehouseID, movementType, quantityDelta, strings.TrimSpace(reference),
 	)
 	return err
 }
 
-func syncProductStockQuantity(conn *sql.Conn, productID int) error {
-	_, err := conn.ExecContext(
-		context.Background(),
-		`UPDATE products
-		 SET stock_quantity = MAX(
-		     COALESCE((
-		         SELECT SUM(on_hand_quantity - reserved_quantity - allocated_quantity)
-		         FROM inventory_stocks
-		         WHERE product_id = ?
-		     ), 0),
-		     0
-		 ),
-		     updated_at = CURRENT_TIMESTAMP
-		 WHERE id = ?`,
-		productID, productID,
-	)
-	return err
+type releasedReservation struct {
+	ProductID      int
+	WarehouseID    int
+	Quantity       int
+	ReservationKey string
 }
 
-func recordStockMovementTx(tx *sql.Tx, productID int, warehouseID int64, movementType string, quantityDelta int, note string) error {
-	_, err := tx.Exec(
-		`INSERT INTO stock_movements (product_id, warehouse_id, movement_type, quantity_delta, note)
-		 VALUES (?, ?, ?, ?, ?)`,
-		productID, warehouseID, movementType, quantityDelta, nullIfEmpty(note),
-	)
-	return err
-}
-
-func recordStockMovement(conn *sql.Conn, productID int, warehouseID int64, movementType string, quantityDelta int, note string) error {
-	_, err := conn.ExecContext(
-		context.Background(),
-		`INSERT INTO stock_movements (product_id, warehouse_id, movement_type, quantity_delta, note)
-		 VALUES (?, ?, ?, ?, ?)`,
-		productID, warehouseID, movementType, quantityDelta, nullIfEmpty(note),
-	)
-	return err
-}
-
-func expireActiveStockReservationsTx(tx *sql.Tx, now time.Time) error {
-	rows, err := tx.Query(
-		`SELECT id, product_id, warehouse_id, quantity
-		 FROM stock_reservations
-		 WHERE status = ? AND expires_at IS NOT NULL AND expires_at <= ?`,
-		StockReservationStatusActive,
-		now.UTC(),
+// releaseReservationsTx moves matching active reservations to newStatus and
+// returns their quantities to available stock. The predicate is appended to a
+// WHERE clause that already restricts to active reservations; its parameters
+// start at $2.
+func releaseReservationsTx(ctx context.Context, tx *sql.Tx, newStatus, predicate string, args ...any) (int, error) {
+	rows, err := tx.QueryContext(ctx,
+		`UPDATE stock_reservations
+		 SET status = $1, released_at = now()
+		 WHERE status = 'active' AND `+predicate+`
+		 RETURNING product_id, warehouse_id, quantity, reservation_key`,
+		append([]any{newStatus}, args...)...,
 	)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	defer rows.Close()
-
-	type expiredReservation struct {
-		ID          int
-		ProductID   int
-		WarehouseID int
-		Quantity    int
-	}
-	expired := []expiredReservation{}
+	released := []releasedReservation{}
 	for rows.Next() {
-		reservation := expiredReservation{}
-		if err := rows.Scan(&reservation.ID, &reservation.ProductID, &reservation.WarehouseID, &reservation.Quantity); err != nil {
-			return err
+		var r releasedReservation
+		if err := rows.Scan(&r.ProductID, &r.WarehouseID, &r.Quantity, &r.ReservationKey); err != nil {
+			rows.Close()
+			return 0, err
 		}
-		expired = append(expired, reservation)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
+		released = append(released, r)
 	}
 	if err := rows.Close(); err != nil {
-		return err
+		return 0, err
 	}
 
-	for _, reservation := range expired {
-		if _, err := tx.Exec(
+	// Touch inventory rows in a stable order to avoid deadlocks with
+	// concurrent reservers.
+	sort.Slice(released, func(i, j int) bool {
+		if released[i].ProductID != released[j].ProductID {
+			return released[i].ProductID < released[j].ProductID
+		}
+		return released[i].WarehouseID < released[j].WarehouseID
+	})
+
+	reason := "reservation released"
+	if newStatus == StockReservationStatusExpired {
+		reason = "reservation expired"
+	}
+	for _, r := range released {
+		if _, err := tx.ExecContext(ctx,
 			`UPDATE inventory_stocks
-			 SET reserved_quantity = CASE
-			     WHEN reserved_quantity >= ? THEN reserved_quantity - ?
-			     ELSE 0
-			 END,
-			     updated_at = CURRENT_TIMESTAMP
-			 WHERE product_id = ? AND warehouse_id = ?`,
-			reservation.Quantity,
-			reservation.Quantity,
-			reservation.ProductID,
-			reservation.WarehouseID,
+			 SET reserved_quantity = GREATEST(reserved_quantity - $1, 0)
+			 WHERE product_id = $2 AND warehouse_id = $3`,
+			r.Quantity, r.ProductID, r.WarehouseID,
 		); err != nil {
-			return err
+			return 0, err
 		}
-		if _, err := tx.Exec(
-			`UPDATE stock_reservations
-			 SET status = ?, released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-			 WHERE id = ?`,
-			StockReservationStatusExpired,
-			reservation.ID,
-		); err != nil {
-			return err
-		}
-		if err := recordStockMovementTx(tx, reservation.ProductID, int64(reservation.WarehouseID), stockMovementRelease, reservation.Quantity, "reservation expired"); err != nil {
-			return err
-		}
-		if err := syncProductStockQuantityTx(tx, reservation.ProductID); err != nil {
-			return err
+		if err := recordStockMovement(ctx, tx, r.ProductID, r.WarehouseID, stockMovementRelease, r.Quantity,
+			fmt.Sprintf("%s:%s", reason, r.ReservationKey)); err != nil {
+			return 0, err
 		}
 	}
-
-	return nil
+	return len(released), nil
 }
 
-func expireActiveStockReservations(conn *sql.Conn, now time.Time) error {
-	ctx := context.Background()
-
-	rows, err := conn.QueryContext(
-		ctx,
-		`SELECT id, product_id, warehouse_id, quantity
-		 FROM stock_reservations
-		 WHERE status = ? AND expires_at IS NOT NULL AND expires_at <= ?`,
-		StockReservationStatusActive,
-		now.UTC(),
-	)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	type expiredReservation struct {
-		ID          int
-		ProductID   int
-		WarehouseID int
-		Quantity    int
-	}
-	expired := []expiredReservation{}
-	for rows.Next() {
-		reservation := expiredReservation{}
-		if err := rows.Scan(&reservation.ID, &reservation.ProductID, &reservation.WarehouseID, &reservation.Quantity); err != nil {
-			return err
-		}
-		expired = append(expired, reservation)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-
-	for _, reservation := range expired {
-		if _, err := conn.ExecContext(
-			ctx,
-			`UPDATE inventory_stocks
-			 SET reserved_quantity = CASE
-			     WHEN reserved_quantity >= ? THEN reserved_quantity - ?
-			     ELSE 0
-			 END,
-			     updated_at = CURRENT_TIMESTAMP
-			 WHERE product_id = ? AND warehouse_id = ?`,
-			reservation.Quantity,
-			reservation.Quantity,
-			reservation.ProductID,
-			reservation.WarehouseID,
-		); err != nil {
-			return err
-		}
-		if _, err := conn.ExecContext(
-			ctx,
-			`UPDATE stock_reservations
-			 SET status = ?, released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-			 WHERE id = ?`,
-			StockReservationStatusExpired,
-			reservation.ID,
-		); err != nil {
-			return err
-		}
-		if err := recordStockMovement(conn, reservation.ProductID, int64(reservation.WarehouseID), stockMovementRelease, reservation.Quantity, "reservation expired"); err != nil {
-			return err
-		}
-		if err := syncProductStockQuantity(conn, reservation.ProductID); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func releaseActiveStockReservationsForUserTx(tx *sql.Tx, userID int) error {
-	rows, err := tx.Query(
-		`SELECT id, product_id, warehouse_id, quantity, reservation_key
-		 FROM stock_reservations
-		 WHERE user_id = ? AND status = ?`,
-		userID,
-		StockReservationStatusActive,
-	)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	type activeReservation struct {
-		ID             int
-		ProductID      int
-		WarehouseID    int
-		Quantity       int
-		ReservationKey sql.NullString
-	}
-	reservations := []activeReservation{}
-	for rows.Next() {
-		reservation := activeReservation{}
-		if err := rows.Scan(&reservation.ID, &reservation.ProductID, &reservation.WarehouseID, &reservation.Quantity, &reservation.ReservationKey); err != nil {
-			return err
-		}
-		reservations = append(reservations, reservation)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-
-	for _, reservation := range reservations {
-		if _, err := tx.Exec(
-			`UPDATE inventory_stocks
-			 SET reserved_quantity = CASE
-			     WHEN reserved_quantity >= ? THEN reserved_quantity - ?
-			     ELSE 0
-			 END,
-			     updated_at = CURRENT_TIMESTAMP
-			 WHERE product_id = ? AND warehouse_id = ?`,
-			reservation.Quantity,
-			reservation.Quantity,
-			reservation.ProductID,
-			reservation.WarehouseID,
-		); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(
-			`UPDATE stock_reservations
-			 SET status = ?, released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-			 WHERE id = ?`,
-			StockReservationStatusReleased,
-			reservation.ID,
-		); err != nil {
-			return err
-		}
-		note := "reservation released"
-		if reservation.ReservationKey.Valid && strings.TrimSpace(reservation.ReservationKey.String) != "" {
-			note = fmt.Sprintf("reservation:%s released", reservation.ReservationKey.String)
-		}
-		if err := recordStockMovementTx(tx, reservation.ProductID, int64(reservation.WarehouseID), stockMovementRelease, reservation.Quantity, note); err != nil {
-			return err
-		}
-		if err := syncProductStockQuantityTx(tx, reservation.ProductID); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func releaseActiveStockReservationsForUser(conn *sql.Conn, userID int) error {
-	ctx := context.Background()
-
-	rows, err := conn.QueryContext(
-		ctx,
-		`SELECT id, product_id, warehouse_id, quantity, reservation_key
-		 FROM stock_reservations
-		 WHERE user_id = ? AND status = ?`,
-		userID,
-		StockReservationStatusActive,
-	)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	type activeReservation struct {
-		ID             int
-		ProductID      int
-		WarehouseID    int
-		Quantity       int
-		ReservationKey sql.NullString
-	}
-	reservations := []activeReservation{}
-	for rows.Next() {
-		reservation := activeReservation{}
-		if err := rows.Scan(&reservation.ID, &reservation.ProductID, &reservation.WarehouseID, &reservation.Quantity, &reservation.ReservationKey); err != nil {
-			return err
-		}
-		reservations = append(reservations, reservation)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-
-	for _, reservation := range reservations {
-		if _, err := conn.ExecContext(
-			ctx,
-			`UPDATE inventory_stocks
-			 SET reserved_quantity = CASE
-			     WHEN reserved_quantity >= ? THEN reserved_quantity - ?
-			     ELSE 0
-			 END,
-			     updated_at = CURRENT_TIMESTAMP
-			 WHERE product_id = ? AND warehouse_id = ?`,
-			reservation.Quantity,
-			reservation.Quantity,
-			reservation.ProductID,
-			reservation.WarehouseID,
-		); err != nil {
-			return err
-		}
-		if _, err := conn.ExecContext(
-			ctx,
-			`UPDATE stock_reservations
-			 SET status = ?, released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-			 WHERE id = ?`,
-			StockReservationStatusReleased,
-			reservation.ID,
-		); err != nil {
-			return err
-		}
-		note := "reservation released"
-		if reservation.ReservationKey.Valid && strings.TrimSpace(reservation.ReservationKey.String) != "" {
-			note = fmt.Sprintf("reservation:%s released", reservation.ReservationKey.String)
-		}
-		if err := recordStockMovement(conn, reservation.ProductID, int64(reservation.WarehouseID), stockMovementRelease, reservation.Quantity, note); err != nil {
-			return err
-		}
-		if err := syncProductStockQuantity(conn, reservation.ProductID); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
+// ReserveCartForCheckout holds stock for every cart line under reservationKey
+// until expiresAt. Any reservations the user already holds are released first,
+// so a user only ever holds stock for one checkout.
 func (s *Store) ReserveCartForCheckout(userID int, reservationKey string, expiresAt time.Time) error {
 	key := strings.TrimSpace(reservationKey)
 	if key == "" {
-		return fmt.Errorf("reservation key is required")
+		return errors.New("reservation key is required")
 	}
+	ctx, cancel := s.ctx()
+	defer cancel()
 
-	conn, err := s.DB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = conn.Close()
-	}()
-
-	if _, err := conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); err != nil {
-		return err
-	}
-
-	var doRollback bool
-	defer func() {
-		if doRollback {
-			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
-		}
-	}()
-
-	if err := expireActiveStockReservations(conn, time.Now().UTC()); err != nil {
-		doRollback = true
-		return err
-	}
-	if err := releaseActiveStockReservationsForUser(conn, userID); err != nil {
-		doRollback = true
-		return err
-	}
-
-	var cartID int64
-	err = conn.QueryRowContext(context.Background(), "SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
-	if err == sql.ErrNoRows {
-		doRollback = true
-		return ErrCartEmpty
-	}
-	if err != nil {
-		doRollback = true
-		return err
-	}
-
-	type reservationLine struct {
-		ProductID     int
-		ProductName   string
-		Quantity      int
-		StockQuantity int
-	}
-
-	rows, err := conn.QueryContext(context.Background(),
-		`SELECT p.id, p.name, ci.quantity,
-		        COALESCE(inv.available_quantity, p.stock_quantity) AS available_quantity
-		 FROM cart_items ci
-		 JOIN products p ON p.id = ci.product_id
-		 LEFT JOIN (
-		     SELECT product_id, SUM(on_hand_quantity - reserved_quantity - allocated_quantity) AS available_quantity
-		     FROM inventory_stocks
-		     GROUP BY product_id
-		 ) inv ON inv.product_id = p.id
-		 WHERE ci.cart_id = ? AND p.deleted_at IS NULL
-		 ORDER BY p.name`,
-		cartID,
-	)
-	if err != nil {
-		doRollback = true
-		return err
-	}
-
-	lines := []reservationLine{}
-	for rows.Next() {
-		line := reservationLine{}
-		if err := rows.Scan(&line.ProductID, &line.ProductName, &line.Quantity, &line.StockQuantity); err != nil {
-			_ = rows.Close()
-			doRollback = true
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased, "user_id = $2", userID); err != nil {
 			return err
 		}
-		lines = append(lines, line)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		doRollback = true
-		return err
-	}
-	if err := rows.Close(); err != nil {
-		doRollback = true
-		return err
-	}
-	if len(lines) == 0 {
-		doRollback = true
-		return ErrCartEmpty
-	}
 
-	for _, line := range lines {
-		warehouseID, err := ensureInventoryStockConn(conn, line.ProductID, line.StockQuantity)
+		lines, err := cartLinesTx(ctx, tx, userID)
 		if err != nil {
-			doRollback = true
+			return err
+		}
+		if len(lines) == 0 {
+			return ErrCartEmpty
+		}
+
+		warehouseID, err := defaultWarehouseID(ctx, tx)
+		if err != nil {
 			return err
 		}
 
-		var stock InventoryStock
-		stockErr := conn.QueryRowContext(context.Background(),
-			`SELECT id, product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity, created_at, updated_at
-			 FROM inventory_stocks
-			 WHERE product_id = ? AND warehouse_id = ?`,
-			line.ProductID, warehouseID,
-		).Scan(
-			&stock.ID,
-			&stock.ProductID,
-			&stock.WarehouseID,
-			&stock.OnHandQuantity,
-			&stock.ReservedQuantity,
-			&stock.AllocatedQuantity,
-			&stock.CreatedAt,
-			&stock.UpdatedAt,
+		for _, line := range lines {
+			stock, err := lockInventoryStock(ctx, tx, line.ProductID, warehouseID)
+			if err != nil {
+				return err
+			}
+			if line.Quantity > stock.AvailableQuantity {
+				return fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
+			}
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE inventory_stocks SET reserved_quantity = reserved_quantity + $1
+				 WHERE product_id = $2 AND warehouse_id = $3`,
+				line.Quantity, line.ProductID, warehouseID,
+			); err != nil {
+				return wrapDBError(err)
+			}
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO stock_reservations (product_id, warehouse_id, user_id, reservation_key, quantity, expires_at)
+				 VALUES ($1, $2, $3, $4, $5, $6)`,
+				line.ProductID, warehouseID, userID, key, line.Quantity, expiresAt.UTC(),
+			); err != nil {
+				return err
+			}
+			if err := recordStockMovement(ctx, tx, line.ProductID, warehouseID, stockMovementReservation, -line.Quantity, "reservation:"+key); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// ReleaseExpiredReservations returns expired reservation holds to available
+// stock and expires their open checkouts. It is run periodically.
+func (s *Store) ReleaseExpiredReservations() (int, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	released := 0
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		count, err := releaseReservationsTx(ctx, tx, StockReservationStatusExpired, "expires_at <= now()")
+		if err != nil {
+			return err
+		}
+		released = count
+		_, err = tx.ExecContext(ctx,
+			"UPDATE checkouts SET status = $1 WHERE status = $2 AND expires_at <= now()",
+			CheckoutStatusExpired, CheckoutStatusOpen,
 		)
-		if stockErr == sql.ErrNoRows {
-			doRollback = true
-			return fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
-		}
-		if stockErr != nil {
-			doRollback = true
-			return stockErr
-		}
-		stock.AvailableQuantity = stock.OnHandQuantity - stock.ReservedQuantity - stock.AllocatedQuantity
+		return err
+	})
+	return released, err
+}
 
-		if line.Quantity > stock.AvailableQuantity {
-			doRollback = true
-			return fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
-		}
+// ReleaseUserReservations drops the user's stock holds and cancels their open
+// checkouts. It runs whenever the cart changes so a checkout never places an
+// order for a stale snapshot of the cart.
+func (s *Store) ReleaseUserReservations(userID int) error {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		return invalidateCheckoutsTx(ctx, tx, userID)
+	})
+}
 
-		result, updateErr := conn.ExecContext(context.Background(),
-			`UPDATE inventory_stocks
-			 SET reserved_quantity = reserved_quantity + ?, updated_at = CURRENT_TIMESTAMP
-			 WHERE product_id = ? AND warehouse_id = ?
-			   AND (on_hand_quantity - reserved_quantity - allocated_quantity) >= ?`,
-			line.Quantity,
-			line.ProductID,
-			warehouseID,
-			line.Quantity,
-		)
-		if updateErr != nil {
-			doRollback = true
-			return updateErr
-		}
-		affected, rowsErr := result.RowsAffected()
-		if rowsErr != nil {
-			doRollback = true
-			return rowsErr
-		}
-		if affected == 0 {
-			doRollback = true
-			return fmt.Errorf("%w: %s", ErrInsufficientStock, line.ProductName)
-		}
-
-		if _, err := conn.ExecContext(context.Background(),
-			`INSERT INTO stock_reservations (product_id, warehouse_id, user_id, reservation_key, quantity, status, expires_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			line.ProductID,
-			warehouseID,
-			userID,
-			key,
-			line.Quantity,
-			StockReservationStatusActive,
-			expiresAt.UTC(),
-		); err != nil {
-			doRollback = true
-			return err
-		}
-		if err := recordStockMovement(conn, line.ProductID, warehouseID, stockMovementReservation, -line.Quantity, fmt.Sprintf("reservation:%s", key)); err != nil {
-			doRollback = true
-			return err
-		}
-		if err := syncProductStockQuantity(conn, line.ProductID); err != nil {
-			doRollback = true
-			return err
-		}
-	}
-
-	if _, err := conn.ExecContext(context.Background(), "COMMIT"); err != nil {
-		doRollback = true
+func invalidateCheckoutsTx(ctx context.Context, tx *sql.Tx, userID int) error {
+	if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased, "user_id = $2", userID); err != nil {
 		return err
 	}
-
-	return nil
+	_, err := tx.ExecContext(ctx,
+		"UPDATE checkouts SET status = $1 WHERE user_id = $2 AND status = $3",
+		CheckoutStatusCancelled, userID, CheckoutStatusOpen,
+	)
+	return err
 }
 
 func (s *Store) ListActiveStockReservationsByKey(userID int, reservationKey string) ([]StockReservation, error) {
-	rows, err := s.DB.Query(
-		`SELECT id, product_id, warehouse_id, user_id, reservation_key, quantity, status, expires_at, released_at, created_at, updated_at
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id, product_id, warehouse_id, user_id, reservation_key, quantity, status, expires_at, released_at, created_at
 		 FROM stock_reservations
-		 WHERE user_id = ? AND reservation_key = ? AND status = ?
+		 WHERE user_id = $1 AND reservation_key = $2 AND status = 'active'
 		 ORDER BY id`,
-		userID,
-		strings.TrimSpace(reservationKey),
-		StockReservationStatusActive,
+		userID, strings.TrimSpace(reservationKey),
 	)
 	if err != nil {
 		return nil, err
@@ -705,32 +252,23 @@ func (s *Store) ListActiveStockReservationsByKey(userID int, reservationKey stri
 
 	reservations := []StockReservation{}
 	for rows.Next() {
-		reservation := StockReservation{}
-		if err := rows.Scan(
-			&reservation.ID,
-			&reservation.ProductID,
-			&reservation.WarehouseID,
-			&reservation.UserID,
-			&reservation.ReservationKey,
-			&reservation.Quantity,
-			&reservation.Status,
-			&reservation.ExpiresAt,
-			&reservation.ReleasedAt,
-			&reservation.CreatedAt,
-			&reservation.UpdatedAt,
-		); err != nil {
+		var r StockReservation
+		if err := rows.Scan(&r.ID, &r.ProductID, &r.WarehouseID, &r.UserID, &r.ReservationKey, &r.Quantity, &r.Status, &r.ExpiresAt, &r.ReleasedAt, &r.CreatedAt); err != nil {
 			return nil, err
 		}
-		reservations = append(reservations, reservation)
+		reservations = append(reservations, r)
 	}
 	return reservations, rows.Err()
 }
 
 func (s *Store) ListInventoryStocksByProductID(productID int) ([]InventoryStock, error) {
-	rows, err := s.DB.Query(
-		`SELECT id, product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity, created_at, updated_at
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT product_id, warehouse_id, on_hand_quantity, reserved_quantity, allocated_quantity, updated_at
 		 FROM inventory_stocks
-		 WHERE product_id = ?
+		 WHERE product_id = $1
 		 ORDER BY warehouse_id`,
 		productID,
 	)
@@ -741,17 +279,8 @@ func (s *Store) ListInventoryStocksByProductID(productID int) ([]InventoryStock,
 
 	stocks := []InventoryStock{}
 	for rows.Next() {
-		stock := InventoryStock{}
-		if err := rows.Scan(
-			&stock.ID,
-			&stock.ProductID,
-			&stock.WarehouseID,
-			&stock.OnHandQuantity,
-			&stock.ReservedQuantity,
-			&stock.AllocatedQuantity,
-			&stock.CreatedAt,
-			&stock.UpdatedAt,
-		); err != nil {
+		var stock InventoryStock
+		if err := rows.Scan(&stock.ProductID, &stock.WarehouseID, &stock.OnHandQuantity, &stock.ReservedQuantity, &stock.AllocatedQuantity, &stock.UpdatedAt); err != nil {
 			return nil, err
 		}
 		stock.AvailableQuantity = stock.OnHandQuantity - stock.ReservedQuantity - stock.AllocatedQuantity
@@ -761,10 +290,13 @@ func (s *Store) ListInventoryStocksByProductID(productID int) ([]InventoryStock,
 }
 
 func (s *Store) ListStockMovementsByProductID(productID int) ([]StockMovement, error) {
-	rows, err := s.DB.Query(
-		`SELECT id, product_id, warehouse_id, movement_type, quantity_delta, note, created_at
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id, product_id, warehouse_id, movement_type, quantity_delta, reference, created_at
 		 FROM stock_movements
-		 WHERE product_id = ?
+		 WHERE product_id = $1
 		 ORDER BY id`,
 		productID,
 	)
@@ -775,19 +307,103 @@ func (s *Store) ListStockMovementsByProductID(productID int) ([]StockMovement, e
 
 	movements := []StockMovement{}
 	for rows.Next() {
-		movement := StockMovement{}
-		if err := rows.Scan(
-			&movement.ID,
-			&movement.ProductID,
-			&movement.WarehouseID,
-			&movement.MovementType,
-			&movement.QuantityDelta,
-			&movement.Note,
-			&movement.CreatedAt,
-		); err != nil {
+		var m StockMovement
+		if err := rows.Scan(&m.ID, &m.ProductID, &m.WarehouseID, &m.MovementType, &m.QuantityDelta, &m.Reference, &m.CreatedAt); err != nil {
 			return nil, err
 		}
-		movements = append(movements, movement)
+		movements = append(movements, m)
 	}
 	return movements, rows.Err()
+}
+
+type orderStockLine struct {
+	ProductID   int
+	WarehouseID int
+	Quantity    int
+}
+
+func orderStockLinesTx(ctx context.Context, tx *sql.Tx, orderID int) ([]orderStockLine, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT product_id, warehouse_id, quantity
+		 FROM order_items WHERE order_id = $1
+		 ORDER BY product_id, warehouse_id`,
+		orderID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	lines := []orderStockLine{}
+	for rows.Next() {
+		var line orderStockLine
+		if err := rows.Scan(&line.ProductID, &line.WarehouseID, &line.Quantity); err != nil {
+			return nil, err
+		}
+		lines = append(lines, line)
+	}
+	return lines, rows.Err()
+}
+
+// applyOrderInventoryTransition moves an order's stock between allocated,
+// shipped, and released. It is idempotent: calling it with the order's current
+// state does nothing.
+//
+//	allocated -> shipped:  on_hand and allocated both drop (goods left the warehouse)
+//	allocated -> released: allocated drops (order cancelled before shipping)
+//
+// Shipped and released are terminal for inventory.
+func applyOrderInventoryTransition(ctx context.Context, tx *sql.Tx, orderID int, current, target string) error {
+	if current == target || current != "allocated" {
+		return nil
+	}
+
+	lines, err := orderStockLinesTx(ctx, tx, orderID)
+	if err != nil {
+		return err
+	}
+
+	for _, line := range lines {
+		var (
+			stmt         string
+			movementType string
+			delta        int
+		)
+		switch target {
+		case "shipped":
+			stmt = `UPDATE inventory_stocks
+			        SET on_hand_quantity = on_hand_quantity - $1, allocated_quantity = allocated_quantity - $1
+			        WHERE product_id = $2 AND warehouse_id = $3`
+			movementType, delta = stockMovementShipment, -line.Quantity
+		case "released":
+			stmt = `UPDATE inventory_stocks
+			        SET allocated_quantity = allocated_quantity - $1
+			        WHERE product_id = $2 AND warehouse_id = $3`
+			movementType, delta = stockMovementDeallocation, line.Quantity
+		default:
+			return fmt.Errorf("unknown inventory state %q", target)
+		}
+		if _, err := tx.ExecContext(ctx, stmt, line.Quantity, line.ProductID, line.WarehouseID); err != nil {
+			return wrapDBError(err)
+		}
+		if err := recordStockMovement(ctx, tx, line.ProductID, line.WarehouseID, movementType, delta, fmt.Sprintf("order:%d", orderID)); err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.ExecContext(ctx, "UPDATE orders SET inventory_state = $1 WHERE id = $2", target, orderID)
+	return err
+}
+
+// inventoryStateFor maps order statuses to the inventory state they require.
+func inventoryStateFor(status, partnerStatus string) string {
+	switch {
+	case status == OrderStatusCancelled || partnerStatus == "cancelled":
+		return "released"
+	case status == OrderStatusShipped || status == OrderStatusDelivered ||
+		partnerStatus == "dispatched" || partnerStatus == "completed":
+		return "shipped"
+	default:
+		return "allocated"
+	}
 }

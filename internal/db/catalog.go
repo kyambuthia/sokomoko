@@ -1,38 +1,16 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"log"
 	"strings"
 )
 
-// CreateCategory inserts a new category into the database
-func (s *Store) CreateCategory(category Category) (int64, error) {
-	stmt, err := s.DB.Prepare(
-		"INSERT INTO categories (name, slug, description, parent_id) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
+const categoryColumns = "id, name, slug, description, parent_id, created_at, updated_at, deleted_at"
 
-	res, err := stmt.Exec(category.Name, category.Slug, category.Description, category.ParentID)
-	if err != nil {
-		return 0, err
-	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
-}
-
-// GetCategoryByID retrieves a category by its ID
-func (s *Store) GetCategoryByID(id int) (*Category, error) {
-	row := s.DB.QueryRow(
-		"SELECT id, name, slug, description, parent_id, created_at, updated_at, deleted_at FROM categories WHERE id = ? AND deleted_at IS NULL", id)
-
+func scanCategory(row interface{ Scan(...any) error }) (*Category, error) {
 	category := &Category{}
 	err := row.Scan(
 		&category.ID,
@@ -42,9 +20,9 @@ func (s *Store) GetCategoryByID(id int) (*Category, error) {
 		&category.ParentID,
 		&category.CreatedAt,
 		&category.UpdatedAt,
-		&category.DeletedAt)
-
-	if err == sql.ErrNoRows {
+		&category.DeletedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -53,40 +31,69 @@ func (s *Store) GetCategoryByID(id int) (*Category, error) {
 	return category, nil
 }
 
-// UpdateCategory updates an existing category's information
-func (s *Store) UpdateCategory(category Category) error {
-	stmt, err := s.DB.Prepare(
-		"UPDATE categories SET name = ?, slug = ?, description = ?, parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+func (s *Store) CreateCategory(category Category) (int64, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
 
-	_, err = stmt.Exec(category.Name, category.Slug, category.Description, category.ParentID, category.ID)
-	if err != nil {
-		return err
-	}
-	return nil
+	var id int64
+	err := s.DB.QueryRowContext(ctx,
+		`INSERT INTO categories (name, slug, description, parent_id)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id`,
+		strings.TrimSpace(category.Name),
+		strings.TrimSpace(category.Slug),
+		strings.TrimSpace(category.Description),
+		category.ParentID,
+	).Scan(&id)
+	return id, wrapDBError(err)
 }
 
-// DeleteCategory deletes a category from the database by ID
-func (s *Store) DeleteCategory(id int) error {
-	stmt, err := s.DB.Prepare("UPDATE categories SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+func (s *Store) GetCategoryByID(id int) (*Category, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	return scanCategory(s.DB.QueryRowContext(ctx,
+		"SELECT "+categoryColumns+" FROM categories WHERE id = $1 AND deleted_at IS NULL", id,
+	))
+}
 
-	_, err = stmt.Exec(id)
-	if err != nil {
-		return err
-	}
-	return nil
+func (s *Store) GetCategoryBySlug(slug string) (*Category, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	return scanCategory(s.DB.QueryRowContext(ctx,
+		"SELECT "+categoryColumns+" FROM categories WHERE slug = $1 AND deleted_at IS NULL",
+		strings.TrimSpace(slug),
+	))
+}
+
+func (s *Store) UpdateCategory(category Category) error {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	_, err := s.DB.ExecContext(ctx,
+		`UPDATE categories SET name = $1, slug = $2, description = $3, parent_id = $4
+		 WHERE id = $5 AND deleted_at IS NULL`,
+		strings.TrimSpace(category.Name),
+		strings.TrimSpace(category.Slug),
+		strings.TrimSpace(category.Description),
+		category.ParentID,
+		category.ID,
+	)
+	return wrapDBError(err)
+}
+
+func (s *Store) DeleteCategory(id int) error {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	_, err := s.DB.ExecContext(ctx, "UPDATE categories SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id)
+	return err
 }
 
 func (s *Store) GetAllCategories() ([]Category, error) {
-	rows, err := s.DB.Query(
-		"SELECT id, name, slug, description, parent_id, created_at, updated_at, deleted_at FROM categories WHERE deleted_at IS NULL ORDER BY name")
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	rows, err := s.DB.QueryContext(ctx,
+		"SELECT "+categoryColumns+" FROM categories WHERE deleted_at IS NULL ORDER BY lower(name)",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -94,388 +101,375 @@ func (s *Store) GetAllCategories() ([]Category, error) {
 
 	categories := []Category{}
 	for rows.Next() {
-		category := Category{}
-		if err := rows.Scan(
-			&category.ID,
-			&category.Name,
-			&category.Slug,
-			&category.Description,
-			&category.ParentID,
-			&category.CreatedAt,
-			&category.UpdatedAt,
-			&category.DeletedAt,
-		); err != nil {
+		category, err := scanCategory(rows)
+		if err != nil {
 			return nil, err
 		}
-		categories = append(categories, category)
+		categories = append(categories, *category)
 	}
-	return categories, nil
+	return categories, rows.Err()
 }
 
-// CreateProduct inserts a new product into the database
-func (s *Store) CreateProduct(product Product) (int64, error) {
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
+// productSelect projects a product with its category, partner, and available
+// stock. The LATERAL sum is driven by the inventory_stocks primary key.
+const productSelect = `
+SELECT p.id, p.name, p.slug, p.description, p.price_cents, p.currency,
+       stock.available_quantity,
+       COALESCE(c.name, ''), p.category_id, p.partner_id, COALESCE(pt.name, ''),
+       p.created_at, p.updated_at
+FROM products p
+LEFT JOIN categories c ON c.id = p.category_id AND c.deleted_at IS NULL
+LEFT JOIN partners pt ON pt.id = p.partner_id
+CROSS JOIN LATERAL (
+    SELECT COALESCE(SUM(s.on_hand_quantity - s.reserved_quantity - s.allocated_quantity), 0)::INTEGER AS available_quantity
+    FROM inventory_stocks s
+    WHERE s.product_id = p.id
+) stock`
 
-	product.Price = RoundMoney(product.Price)
-
-	// Product inserts trigger inventory row creation against the default
-	// warehouse, so ensure that warehouse exists before the insert fires.
-	if _, err := ensureDefaultWarehouseTx(tx); err != nil {
-		return 0, err
-	}
-
-	res, err := tx.Exec(
-		"INSERT INTO products (name, slug, description, price, stock_quantity, category_id, partner_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		product.Name, product.Slug, product.Description, product.Price, product.StockQuantity, product.CategoryID, product.PartnerID,
-	)
-	if err != nil {
-		return 0, wrapProductCreateError(err)
-	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-
-	warehouseID, err := ensureInventoryStockTx(tx, int(id), product.StockQuantity)
-	if err != nil {
-		return 0, err
-	}
-	if product.StockQuantity > 0 {
-		if err := recordStockMovementTx(tx, int(id), warehouseID, stockMovementInitial, product.StockQuantity, "product creation"); err != nil {
-			return 0, err
-		}
-	}
-
-	for _, img := range product.Images {
-		if _, err := tx.Exec(
-			"INSERT INTO product_images (product_id, url, alt_text, display_order) VALUES (?, ?, ?, ?)",
-			id, img.URL, img.AltText, img.DisplayOrder,
-		); err != nil {
-			return 0, err
-		}
-	}
-
-	if err = tx.Commit(); err != nil {
-		return 0, err
-	}
-	return id, nil
-}
-
-// GetProductByID retrieves a product by its ID
-func (s *Store) GetProductByID(id int) (*Product, error) {
-	row := s.DB.QueryRow(
-		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.partner_id, u.username, p.created_at, p.updated_at, p.deleted_at
-		 FROM products p
-		 LEFT JOIN categories c ON p.category_id = c.id
-		 LEFT JOIN users u ON p.partner_id = u.id
-		 WHERE p.id = ? AND p.deleted_at IS NULL`, id)
-
+func scanProduct(row interface{ Scan(...any) error }) (*Product, error) {
 	product := &Product{}
-	var categoryName, partnerName sql.NullString
 	err := row.Scan(
 		&product.ID,
 		&product.Name,
 		&product.Slug,
 		&product.Description,
 		&product.Price,
+		&product.Currency,
 		&product.StockQuantity,
-		&categoryName,
+		&product.Category,
 		&product.CategoryID,
 		&product.PartnerID,
-		&partnerName,
+		&product.PartnerName,
 		&product.CreatedAt,
 		&product.UpdatedAt,
-		&product.DeletedAt)
-
-	if err == sql.ErrNoRows {
+	)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	product.Price = RoundMoney(product.Price)
-
-	if categoryName.Valid {
-		product.Category = categoryName.String
-	}
-	if partnerName.Valid {
-		product.PartnerName = partnerName.String
-	}
-
-	images, err := s.GetProductImages(product.ID)
-	if err != nil {
-		log.Printf("Error fetching images for product %d: %v", product.ID, err)
-	} else {
-		product.Images = images
-	}
-
 	return product, nil
 }
 
-// UpdateProduct updates an existing product's information
-func (s *Store) UpdateProduct(product Product) error {
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
+// CreateProduct inserts a product, its opening stock in the default warehouse,
+// and any images in one transaction.
+func (s *Store) CreateProduct(product Product) (int64, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
 
-	var currentAvailable int
-	if err = tx.QueryRow("SELECT stock_quantity FROM products WHERE id = ?", product.ID).Scan(&currentAvailable); err != nil {
-		return err
+	if product.Price < 0 {
+		return 0, fmt.Errorf("price must not be negative")
 	}
-
-	warehouseID, err := ensureInventoryStockTx(tx, product.ID, currentAvailable)
-	if err != nil {
-		return err
+	if product.StockQuantity < 0 {
+		return 0, ErrInvalidQuantity
+	}
+	currency := strings.TrimSpace(product.Currency)
+	if currency == "" {
+		currency = "USD"
 	}
 
-	stock, err := getInventoryStockTx(tx, product.ID, warehouseID)
-	if err != nil {
-		return err
-	}
-	if stock == nil {
-		return sql.ErrNoRows
-	}
-
-	targetOnHand := product.StockQuantity + stock.ReservedQuantity + stock.AllocatedQuantity
-	if targetOnHand < 0 {
-		targetOnHand = 0
-	}
-	delta := targetOnHand - stock.OnHandQuantity
-	product.Price = RoundMoney(product.Price)
-
-	if _, err = tx.Exec(
-		`UPDATE inventory_stocks
-		 SET on_hand_quantity = ?, updated_at = CURRENT_TIMESTAMP
-		 WHERE product_id = ? AND warehouse_id = ?`,
-		targetOnHand, product.ID, warehouseID,
-	); err != nil {
-		return err
-	}
-	if delta != 0 {
-		if err := recordStockMovementTx(tx, product.ID, warehouseID, stockMovementAdjustment, delta, "product update"); err != nil {
+	var id int64
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		warehouseID, err := defaultWarehouseID(ctx, tx)
+		if err != nil {
 			return err
 		}
-	}
 
-	if _, err = tx.Exec(
-		"UPDATE products SET name = ?, slug = ?, description = ?, price = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-		product.Name, product.Slug, product.Description, product.Price, product.CategoryID, product.ID,
-	); err != nil {
-		return err
-	}
+		if err := tx.QueryRowContext(ctx,
+			`INSERT INTO products (name, slug, description, price_cents, currency, category_id, partner_id)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			 RETURNING id`,
+			strings.TrimSpace(product.Name),
+			strings.TrimSpace(product.Slug),
+			strings.TrimSpace(product.Description),
+			int64(product.Price),
+			currency,
+			product.CategoryID,
+			product.PartnerID,
+		).Scan(&id); err != nil {
+			return wrapProductCreateError(err)
+		}
 
-	if err = syncProductStockQuantityTx(tx, product.ID); err != nil {
-		return err
-	}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO inventory_stocks (product_id, warehouse_id, on_hand_quantity)
+			 VALUES ($1, $2, $3)`,
+			id, warehouseID, product.StockQuantity,
+		); err != nil {
+			return err
+		}
+		if product.StockQuantity > 0 {
+			if err := recordStockMovement(ctx, tx, int(id), warehouseID, stockMovementInitial, product.StockQuantity, "product creation"); err != nil {
+				return err
+			}
+		}
 
-	if err = tx.Commit(); err != nil {
-		return err
+		for i, img := range product.Images {
+			position := img.DisplayOrder
+			if position <= 0 {
+				position = i
+			}
+			if _, err := tx.ExecContext(ctx,
+				"INSERT INTO product_images (product_id, url, alt_text, position) VALUES ($1, $2, $3, $4)",
+				id, strings.TrimSpace(img.URL), strings.TrimSpace(img.AltText), position,
+			); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
-	return nil
+	return id, nil
 }
 
-// DeleteProduct deletes a product from the database by ID
+func (s *Store) GetProductByID(id int) (*Product, error) {
+	return s.getProduct("p.id = $1", id)
+}
+
+func (s *Store) GetProductBySlug(slug string) (*Product, error) {
+	return s.getProduct("p.slug = $1", strings.TrimSpace(slug))
+}
+
+func (s *Store) getProduct(predicate string, arg any) (*Product, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	product, err := scanProduct(s.DB.QueryRowContext(ctx,
+		productSelect+" WHERE "+predicate+" AND p.deleted_at IS NULL", arg,
+	))
+	if err != nil || product == nil {
+		return product, err
+	}
+
+	images, err := s.getProductImagesByProductIDs(ctx, []int{product.ID})
+	if err != nil {
+		return nil, err
+	}
+	product.Images = images[product.ID]
+	return product, nil
+}
+
+// UpdateProduct updates catalog fields and sets the available quantity in the
+// default warehouse to product.StockQuantity, keeping reserved and allocated
+// stock untouched.
+func (s *Store) UpdateProduct(product Product) error {
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	if product.StockQuantity < 0 {
+		return ErrInvalidQuantity
+	}
+
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx,
+			`UPDATE products
+			 SET name = $1, slug = $2, description = $3, price_cents = $4, category_id = $5
+			 WHERE id = $6 AND deleted_at IS NULL`,
+			strings.TrimSpace(product.Name),
+			strings.TrimSpace(product.Slug),
+			strings.TrimSpace(product.Description),
+			int64(product.Price),
+			product.CategoryID,
+			product.ID,
+		)
+		if err != nil {
+			return wrapProductCreateError(err)
+		}
+		affected, err := rowsAffected(result)
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return ErrProductNotFound
+		}
+
+		warehouseID, err := defaultWarehouseID(ctx, tx)
+		if err != nil {
+			return err
+		}
+		stock, err := lockInventoryStock(ctx, tx, product.ID, warehouseID)
+		if err != nil {
+			return err
+		}
+
+		targetOnHand := product.StockQuantity + stock.ReservedQuantity + stock.AllocatedQuantity
+		delta := targetOnHand - stock.OnHandQuantity
+		if delta == 0 {
+			return nil
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE inventory_stocks SET on_hand_quantity = $1
+			 WHERE product_id = $2 AND warehouse_id = $3`,
+			targetOnHand, product.ID, warehouseID,
+		); err != nil {
+			return err
+		}
+		return recordStockMovement(ctx, tx, product.ID, warehouseID, stockMovementAdjustment, delta, "product update")
+	})
+}
+
+// DeleteProduct soft-deletes a product and removes it from carts.
 func (s *Store) DeleteProduct(id int) error {
-	stmt, err := s.DB.Prepare("UPDATE products SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+	ctx, cancel := s.ctx()
+	defer cancel()
 
-	_, err = stmt.Exec(id)
-	if err != nil {
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "UPDATE products SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "DELETE FROM cart_items WHERE product_id = $1", id)
 		return err
-	}
-	return nil
+	})
 }
 
-// SearchProducts searches for products by name or description
+// ProductFilter narrows ListProducts. Zero values mean "no filter".
+type ProductFilter struct {
+	Query       string
+	Category    string // category slug or case-insensitive name
+	PartnerID   int
+	InStockOnly bool
+	Limit       int
+	Offset      int
+}
+
+// ListProducts returns active products matching the filter. A text query uses
+// the full-text index and falls back to substring matching so partial words
+// still match.
+func (s *Store) ListProducts(filter ProductFilter) ([]Product, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	var (
+		where   = []string{"p.deleted_at IS NULL"}
+		args    []any
+		orderBy = "lower(p.name), p.id"
+	)
+	addArg := func(value any) string {
+		args = append(args, value)
+		return fmt.Sprintf("$%d", len(args))
+	}
+
+	if query := strings.TrimSpace(filter.Query); query != "" {
+		tsArg := addArg(query)
+		likeArg := addArg("%" + escapeLike(query) + "%")
+		where = append(where, fmt.Sprintf(
+			"(p.search_vector @@ websearch_to_tsquery('simple', %[1]s) OR p.name ILIKE %[2]s OR p.description ILIKE %[2]s)",
+			tsArg, likeArg,
+		))
+		orderBy = fmt.Sprintf("ts_rank(p.search_vector, websearch_to_tsquery('simple', %s)) DESC, lower(p.name), p.id", tsArg)
+	}
+	if category := strings.TrimSpace(filter.Category); category != "" {
+		arg := addArg(category)
+		where = append(where, fmt.Sprintf("(c.slug = lower(%[1]s) OR lower(c.name) = lower(%[1]s))", arg))
+	}
+	if filter.PartnerID > 0 {
+		where = append(where, "p.partner_id = "+addArg(filter.PartnerID))
+	}
+	if filter.InStockOnly {
+		where = append(where, "stock.available_quantity > 0")
+	}
+
+	query := productSelect + " WHERE " + strings.Join(where, " AND ") + " ORDER BY " + orderBy
+	if filter.Limit > 0 {
+		query += " LIMIT " + addArg(filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query += " OFFSET " + addArg(filter.Offset)
+	}
+
+	rows, err := s.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	products := []Product{}
+	ids := []int{}
+	for rows.Next() {
+		product, err := scanProduct(rows)
+		if err != nil {
+			return nil, err
+		}
+		products = append(products, *product)
+		ids = append(ids, product.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	images, err := s.getProductImagesByProductIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range products {
+		products[i].Images = images[products[i].ID]
+	}
+	return products, nil
+}
+
+// GetAllProducts returns every active product ordered by name.
+func (s *Store) GetAllProducts() ([]Product, error) {
+	return s.ListProducts(ProductFilter{})
+}
+
+// SearchProducts matches products by name or description.
 func (s *Store) SearchProducts(query string) ([]Product, error) {
-	if query == "" {
+	if strings.TrimSpace(query) == "" {
 		return []Product{}, nil
 	}
-
-	rows, err := s.DB.Query(
-		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.partner_id, u.username, p.created_at, p.updated_at, p.deleted_at
-		 FROM products p
-		 LEFT JOIN categories c ON p.category_id = c.id
-		 LEFT JOIN users u ON p.partner_id = u.id
-		 WHERE (p.name LIKE ? OR p.description LIKE ?) AND p.deleted_at IS NULL
-		 ORDER BY p.name`,
-		"%"+query+"%", "%"+query+"%")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var products []Product
-	productIDs := []int{}
-	for rows.Next() {
-		product := Product{}
-		var categoryName, partnerName sql.NullString
-		err := rows.Scan(
-			&product.ID,
-			&product.Name,
-			&product.Slug,
-			&product.Description,
-			&product.Price,
-			&product.StockQuantity,
-			&categoryName,
-			&product.CategoryID,
-			&product.PartnerID,
-			&partnerName,
-			&product.CreatedAt,
-			&product.UpdatedAt,
-			&product.DeletedAt)
-		if err != nil {
-			return nil, err
-		}
-
-		product.Price = RoundMoney(product.Price)
-
-		if categoryName.Valid {
-			product.Category = categoryName.String
-		}
-		if partnerName.Valid {
-			product.PartnerName = partnerName.String
-		}
-
-		products = append(products, product)
-		productIDs = append(productIDs, product.ID)
-	}
-	imagesByProduct, err := s.GetProductImagesByProductIDs(productIDs)
-	if err != nil {
-		return nil, err
-	}
-	for i := range products {
-		products[i].Images = imagesByProduct[products[i].ID]
-	}
-	return products, nil
+	return s.ListProducts(ProductFilter{Query: query})
 }
 
-// GetAllProducts retrieves all products from the database
-func (s *Store) GetAllProducts() ([]Product, error) {
-	rows, err := s.DB.Query(
-		`SELECT p.id, p.name, p.slug, p.description, p.price, p.stock_quantity, c.name, p.category_id, p.partner_id, u.username, p.created_at, p.updated_at, p.deleted_at
-		 FROM products p
-		 LEFT JOIN categories c ON p.category_id = c.id
-		 LEFT JOIN users u ON p.partner_id = u.id
-		 WHERE p.deleted_at IS NULL
-		 ORDER BY p.name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var products []Product
-	productIDs := []int{}
-	for rows.Next() {
-		product := Product{}
-		var categoryName, partnerName sql.NullString
-		err := rows.Scan(
-			&product.ID,
-			&product.Name,
-			&product.Slug,
-			&product.Description,
-			&product.Price,
-			&product.StockQuantity,
-			&categoryName,
-			&product.CategoryID,
-			&product.PartnerID,
-			&partnerName,
-			&product.CreatedAt,
-			&product.UpdatedAt,
-			&product.DeletedAt)
-		if err != nil {
-			return nil, err
-		}
-
-		if categoryName.Valid {
-			product.Category = categoryName.String
-		}
-		if partnerName.Valid {
-			product.PartnerName = partnerName.String
-		}
-
-		products = append(products, product)
-		productIDs = append(productIDs, product.ID)
-	}
-	imagesByProduct, err := s.GetProductImagesByProductIDs(productIDs)
-	if err != nil {
-		return nil, err
-	}
-	for i := range products {
-		products[i].Images = imagesByProduct[products[i].ID]
-	}
-	return products, nil
+func (s *Store) CountProducts() (int, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var count int
+	err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM products WHERE deleted_at IS NULL").Scan(&count)
+	return count, err
 }
 
 func (s *Store) CreateProductImage(img ProductImage) (int64, error) {
-	stmt, err := s.DB.Prepare("INSERT INTO product_images (product_id, url, alt_text, display_order) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
-	res, err := stmt.Exec(img.ProductID, img.URL, img.AltText, img.DisplayOrder)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var id int64
+	err := s.DB.QueryRowContext(ctx,
+		"INSERT INTO product_images (product_id, url, alt_text, position) VALUES ($1, $2, $3, $4) RETURNING id",
+		img.ProductID, strings.TrimSpace(img.URL), strings.TrimSpace(img.AltText), img.DisplayOrder,
+	).Scan(&id)
+	return id, wrapDBError(err)
 }
 
 func (s *Store) GetProductImages(productID int) ([]ProductImage, error) {
-	rows, err := s.DB.Query("SELECT id, product_id, url, alt_text, display_order, created_at FROM product_images WHERE product_id = ? ORDER BY display_order", productID)
+	ctx, cancel := s.ctx()
+	defer cancel()
+	images, err := s.getProductImagesByProductIDs(ctx, []int{productID})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var images []ProductImage
-	for rows.Next() {
-		img := ProductImage{}
-		err := rows.Scan(&img.ID, &img.ProductID, &img.URL, &img.AltText, &img.DisplayOrder, &img.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		images = append(images, img)
-	}
-	return images, nil
+	return images[productID], nil
 }
 
 func (s *Store) GetProductImagesByProductIDs(productIDs []int) (map[int][]ProductImage, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	return s.getProductImagesByProductIDs(ctx, productIDs)
+}
+
+func (s *Store) getProductImagesByProductIDs(ctx context.Context, productIDs []int) (map[int][]ProductImage, error) {
 	imagesByProduct := map[int][]ProductImage{}
 	if len(productIDs) == 0 {
 		return imagesByProduct, nil
 	}
 
-	placeholders := make([]string, len(productIDs))
-	args := make([]interface{}, 0, len(productIDs))
-	for i, id := range productIDs {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-
-	query := fmt.Sprintf(
-		`SELECT id, product_id, url, alt_text, display_order, created_at
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id, product_id, url, alt_text, position, created_at
 		 FROM product_images
-		 WHERE product_id IN (%s)
-		 ORDER BY product_id, display_order`,
-		strings.Join(placeholders, ","),
+		 WHERE product_id = ANY($1)
+		 ORDER BY product_id, position, id`,
+		int64Slice(productIDs),
 	)
-	rows, err := s.DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -488,10 +482,12 @@ func (s *Store) GetProductImagesByProductIDs(productIDs []int) (map[int][]Produc
 		}
 		imagesByProduct[img.ProductID] = append(imagesByProduct[img.ProductID], img)
 	}
-	return imagesByProduct, nil
+	return imagesByProduct, rows.Err()
 }
 
 func (s *Store) DeleteProductImage(id int) error {
-	_, err := s.DB.Exec("DELETE FROM product_images WHERE id = ?", id)
+	ctx, cancel := s.ctx()
+	defer cancel()
+	_, err := s.DB.ExecContext(ctx, "DELETE FROM product_images WHERE id = $1", id)
 	return err
 }

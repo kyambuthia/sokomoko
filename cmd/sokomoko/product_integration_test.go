@@ -11,10 +11,10 @@ import (
 func TestIntegration_ProductDetailRoute(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	slug := fmt.Sprintf("detail-product-%d", suffix)
 	name := "Detail Product"
-	createTestProduct(t, name, slug, 25.0, 4)
+	createTestProduct(t, name, slug, 2500, 4)
 
 	resp, body := makeRequest(http.MethodGet, "/products/"+slug, nil, nil, "")
 	if resp == nil {

@@ -6,19 +6,19 @@ import (
 )
 
 type abuseEntry struct {
-	failures     int
-	lockedUntil  time.Time
-	lastSeenAt   time.Time
+	failures    int
+	lockedUntil time.Time
+	lastSeenAt  time.Time
 }
 
 type authAbuseLimiter struct {
-	mu             sync.Mutex
-	maxFailures    int
-	backoffBase    time.Duration
-	backoffMax     time.Duration
-	entries        map[string]abuseEntry
-	cleanupEvery   time.Duration
-	lastCleanupAt  time.Time
+	mu            sync.Mutex
+	maxFailures   int
+	backoffBase   time.Duration
+	backoffMax    time.Duration
+	entries       map[string]abuseEntry
+	cleanupEvery  time.Duration
+	lastCleanupAt time.Time
 }
 
 func newAuthAbuseLimiter(maxFailures int, backoffBase, backoffMax time.Duration) *authAbuseLimiter {

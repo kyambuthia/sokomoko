@@ -48,17 +48,13 @@
   {{end}}
 
   {{if eq .Title "Product Management"}}
-  <section class="admin-actions">
-    <a href="/products/new" class="btn">Add New Product</a>
-    <a href="/products/import" class="btn btn--secondary">Import Products</a>
-    <a href="/products/export" class="btn btn--secondary">Export Products</a>
-  </section>
 
   <section class="panel card">
     <div class="card__header"><h3>Catalog</h3></div>
     <div class="card__body">
       <div class="table-wrap">
-        <table class="data-table data-table--admin">
+        <ui-table-filter for="admin-products" placeholder="Filter products"></ui-table-filter>
+        <table class="data-table data-table--admin" id="admin-products">
           <thead>
             <tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th></tr>
           </thead>
@@ -68,13 +64,13 @@
               <tr>
                 <td>{{.Name}}</td>
                 <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
-                <td>${{printf "%.2f" .Price}}</td>
+                <td>${{.Price}}</td>
                 <td>{{.StockQuantity}}</td>
                 <td>{{if gt .StockQuantity 0}}Active{{else}}Out of stock{{end}}</td>
               </tr>
               {{end}}
             {{else}}
-              <tr><td colspan="5" class="table-empty">No products found. <a href="/products/new">Add your first product</a>.</td></tr>
+              <tr><td colspan="5" class="table-empty">No products found. Partners add products from the partner workspace.</td></tr>
             {{end}}
           </tbody>
         </table>
@@ -95,16 +91,17 @@
       <article class="panel card mb-2">
         <div class="card__header"><h3>Order #{{.ID}} - {{.CustomerName}}</h3></div>
         <div class="card__body">
-          <p><strong>Total:</strong> ${{printf "%.2f" .TotalAmount}}</p>
+          <p><strong>Total:</strong> ${{.TotalAmount}} &middot; placed <ui-relative-time datetime="{{rfc3339 .CreatedAt}}">{{.CreatedAt.Format "Jan 2 15:04"}}</ui-relative-time></p>
           <p><strong>Delivery Address:</strong> {{.DeliveryAddress}}</p>
           <p><strong>Current:</strong> {{.Status}} / {{.PartnerStatus}} / {{.DeliveryStatus}}</p>
           <ul>
             {{range .Items}}
-            <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
+            <li>{{.ProductName}} × {{.Quantity}} - ${{.LineTotal}}</li>
             {{end}}
           </ul>
           {{if eq $.Role "admin"}}
           <form action="/orders" method="POST" class="form">
+            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
             <input type="hidden" name="order_id" value="{{.ID}}">
             <div class="form__group form-group">
               <label class="form__label" for="status_{{.ID}}">Order status</label>
@@ -157,7 +154,7 @@
 
   {{if eq .Title "Sales Reports"}}
   <section class="admin-metrics">
-    <ui-metric-card label="Total Revenue" value="${{printf "%.2f" .RevenueTotal}}" note="Non-cancelled orders"></ui-metric-card>
+    <ui-metric-card label="Total Revenue" value="${{.RevenueTotal}}" note="Non-cancelled orders"></ui-metric-card>
     <ui-metric-card label="Total Orders" value="{{.OrderCount}}" note="All statuses"></ui-metric-card>
     <ui-metric-card label="Active Users" value="{{.SessionCount}}" note="Current sessions"></ui-metric-card>
   </section>
@@ -166,7 +163,8 @@
     <div class="card__body">
       <p><strong>Pending/Processing:</strong> {{.PendingCount}}</p>
       <p><strong>Shipped:</strong> {{.ShippedCount}}</p>
-      <p class="mb-0"><strong>Delivered:</strong> {{.DeliveredCount}}</p>
+      <p><strong>Delivered:</strong> {{.DeliveredCount}}</p>
+      <p class="mb-0"><strong>Cancelled:</strong> {{.CancelledCount}}</p>
     </div>
   </section>
   {{end}}
@@ -183,7 +181,8 @@
     <div class="card__header"><h3>User Directory</h3></div>
     <div class="card__body">
       <div class="table-wrap">
-        <table class="data-table data-table--admin">
+        <ui-table-filter for="admin-team" placeholder="Filter users"></ui-table-filter>
+        <table class="data-table data-table--admin" id="admin-team">
           <thead>
             <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Action</th></tr>
           </thead>
@@ -197,10 +196,13 @@
                 <td>{{.Role}}</td>
                 <td>
                   {{if ne .Role "admin"}}
-                  <form method="POST" action="/team" class="table-action-form">
-                    <input type="hidden" name="user_id" value="{{.ID}}">
-                    <button type="submit" class="btn btn--secondary btn--small">Deactivate</button>
-                  </form>
+                  <ui-confirm message="Deactivate {{.Username}}? They will be signed out immediately.">
+                    <form method="POST" action="/team" class="table-action-form">
+                      {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+                      <input type="hidden" name="user_id" value="{{.ID}}">
+                      <button type="submit" class="btn btn--secondary btn--small">Deactivate</button>
+                    </form>
+                  </ui-confirm>
                   {{else}}
                   <span>Protected</span>
                   {{end}}
@@ -228,8 +230,8 @@
           <tbody>
           {{range .AuditLogs}}
           <tr>
-            <td>{{.CreatedAt}}</td>
-            <td>{{if .ActorUserID.Valid}}{{.ActorUserID.Int64}}{{else}}system{{end}}</td>
+            <td><ui-relative-time datetime="{{rfc3339 .CreatedAt}}">{{.CreatedAt.Format "2006-01-02 15:04 MST"}}</ui-relative-time></td>
+            <td>{{if .ActorName}}{{.ActorName}}{{else if .ActorUserID.Valid}}#{{.ActorUserID.Int64}}{{else}}system{{end}}</td>
             <td>{{.Action}}</td>
             <td>{{.TargetType}} {{if .TargetID.Valid}}#{{.TargetID.Int64}}{{end}}</td>
             <td>{{.Details}}</td>
