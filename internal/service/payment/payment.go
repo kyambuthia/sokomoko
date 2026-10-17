@@ -41,11 +41,7 @@ func (s *Service) GenerateIdempotencyKey() (string, error) {
 }
 
 func (s *Service) SupportedMethods() []string {
-	return []string{
-		MethodCashOnDelivery,
-		MethodCardPlaceholder,
-		MethodMobilePlaceholder,
-	}
+	return []string{MethodCashOnDelivery}
 }
 
 func (s *Service) SupportedMethodOptions() []MethodOption {
@@ -89,25 +85,12 @@ func (s *Service) BuildRecord(method string, totalAmount money.Cents) (db.Paymen
 		Amount:   totalAmount,
 	}
 
-	switch method {
-	case MethodCashOnDelivery:
-		record.Provider = "manual_cash_on_delivery"
-		record.Status = db.PaymentStatusPending
-		return record, nil
-	case MethodCardPlaceholder:
-		record.Provider = "placeholder_card"
-		record.Status = db.PaymentStatusCaptured
-	case MethodMobilePlaceholder:
-		record.Provider = "placeholder_mobile_money"
-		record.Status = db.PaymentStatusCaptured
-	default:
+	// A payment is captured only after verified settlement by a real provider.
+	// Historical placeholder method names are retained for displaying old orders.
+	if method != MethodCashOnDelivery {
 		return db.PaymentRecordInput{}, ErrInvalidMethod
 	}
-
-	externalReference, err := s.GenerateIdempotencyKey()
-	if err != nil {
-		return db.PaymentRecordInput{}, err
-	}
-	record.ExternalReference = "pay_" + externalReference
+	record.Provider = "manual_cash_on_delivery"
+	record.Status = db.PaymentStatusPending
 	return record, nil
 }

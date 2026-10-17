@@ -206,7 +206,7 @@ func TestSaveDraft_PersistsDeliveryAddressAndReusesOpenCheckout(t *testing.T) {
 		t.Fatalf("prepared checkout error = %v", err)
 	}
 
-	draftState, err := svc.SaveDraft(userID, initialState.Token, "Saved Nairobi Lane", paymentsvc.MethodCardPlaceholder)
+	draftState, err := svc.SaveDraft(userID, initialState.Token, "Saved Nairobi Lane", paymentsvc.MethodCashOnDelivery)
 	if err != nil {
 		t.Fatalf("save draft error = %v", err)
 	}
@@ -216,8 +216,8 @@ func TestSaveDraft_PersistsDeliveryAddressAndReusesOpenCheckout(t *testing.T) {
 	if draftState.DeliveryAddress != "Saved Nairobi Lane" {
 		t.Fatalf("draft address = %q, want %q", draftState.DeliveryAddress, "Saved Nairobi Lane")
 	}
-	if draftState.PaymentMethod != paymentsvc.MethodCardPlaceholder {
-		t.Fatalf("draft payment method = %q, want %q", draftState.PaymentMethod, paymentsvc.MethodCardPlaceholder)
+	if draftState.PaymentMethod != paymentsvc.MethodCashOnDelivery {
+		t.Fatalf("draft payment method = %q, want %q", draftState.PaymentMethod, paymentsvc.MethodCashOnDelivery)
 	}
 
 	refreshedState, err := svc.PreparedCheckout(userID, "")
@@ -230,8 +230,8 @@ func TestSaveDraft_PersistsDeliveryAddressAndReusesOpenCheckout(t *testing.T) {
 	if refreshedState.DeliveryAddress != "Saved Nairobi Lane" {
 		t.Fatalf("refreshed address = %q, want %q", refreshedState.DeliveryAddress, "Saved Nairobi Lane")
 	}
-	if refreshedState.PaymentMethod != paymentsvc.MethodCardPlaceholder {
-		t.Fatalf("refreshed payment method = %q, want %q", refreshedState.PaymentMethod, paymentsvc.MethodCardPlaceholder)
+	if refreshedState.PaymentMethod != paymentsvc.MethodCashOnDelivery {
+		t.Fatalf("refreshed payment method = %q, want %q", refreshedState.PaymentMethod, paymentsvc.MethodCashOnDelivery)
 	}
 }
 
@@ -244,7 +244,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, "")
+	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, "")
 	if err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}
@@ -273,8 +273,8 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 	if len(payments) != 1 {
 		t.Fatalf("payments length = %d, want 1", len(payments))
 	}
-	if payments[0].Status != db.PaymentStatusCaptured {
-		t.Fatalf("payment status = %q, want %q", payments[0].Status, db.PaymentStatusCaptured)
+	if payments[0].Status != db.PaymentStatusPending {
+		t.Fatalf("payment status = %q, want %q", payments[0].Status, db.PaymentStatusPending)
 	}
 
 	stocks, err := store.ListInventoryStocksByProductID(productID)
@@ -306,7 +306,7 @@ func TestCheckoutWithPayment_ConvertsActiveReservations(t *testing.T) {
 		t.Fatalf("prepare error = %v", err)
 	}
 
-	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key); err != nil {
+	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key); err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}
 
@@ -347,11 +347,11 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 		t.Fatalf("generate key error = %v", err)
 	}
 
-	orderID, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key)
+	orderID, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
 	if err != nil {
 		t.Fatalf("first checkout error = %v", err)
 	}
-	replayedOrderID, replaySummary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key)
+	replayedOrderID, replaySummary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
 	if err != nil {
 		t.Fatalf("replay checkout error = %v", err)
 	}
@@ -399,7 +399,7 @@ func TestCheckoutWithPayment_RepricesAfterCartChange(t *testing.T) {
 		t.Fatalf("update cart quantity error = %v", err)
 	}
 
-	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCardPlaceholder, key)
+	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
 	if err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}

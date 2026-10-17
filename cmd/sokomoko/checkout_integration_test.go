@@ -67,7 +67,7 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 
 	checkoutData := url.Values{}
 	checkoutData.Set("delivery_address", "Pricing Lane")
-	checkoutData.Set("payment_method", "card_placeholder")
+	checkoutData.Set("payment_method", "cash_on_delivery")
 	checkoutData.Set("idempotency_key", checkoutIdempotencyKey(t, []*http.Cookie{cookie}))
 	resp, _ = makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
 	if resp.StatusCode != http.StatusFound {
@@ -87,7 +87,7 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 	if orders[0].TotalAmount != 2810 {
 		t.Fatalf("order total amount=%s expected=28.10", orders[0].TotalAmount)
 	}
-	if !strings.Contains(orders[0].DeliveryNotice, "Payment method selected: Card (placeholder)") {
+	if !strings.Contains(orders[0].DeliveryNotice, "Payment method selected: Cash on Delivery") {
 		t.Fatalf("expected payment method in delivery notice, got %q", orders[0].DeliveryNotice)
 	}
 
@@ -98,8 +98,8 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 	if len(payments) != 1 {
 		t.Fatalf("expected 1 payment, got %d", len(payments))
 	}
-	if payments[0].Status != "captured" {
-		t.Fatalf("payment status=%q expected=%q", payments[0].Status, "captured")
+	if payments[0].Status != "pending" {
+		t.Fatalf("payment status=%q expected=%q", payments[0].Status, "pending")
 	}
 }
 
@@ -125,7 +125,7 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 	idempotencyKey := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
 	checkoutData := url.Values{}
 	checkoutData.Set("delivery_address", "Replay Lane")
-	checkoutData.Set("payment_method", "card_placeholder")
+	checkoutData.Set("payment_method", "cash_on_delivery")
 	checkoutData.Set("idempotency_key", idempotencyKey)
 
 	resp, _ = makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
@@ -152,6 +152,36 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 	}
 	if len(payments) != 1 {
 		t.Fatalf("expected 1 payment after replay, got %d", len(payments))
+	}
+}
+
+func TestIntegration_CheckoutRejectsSimulatedPayments(t *testing.T) {
+	clearAllTables()
+	userID := createTestUser(t, "no_fake_payments", "no_fake@example.com", "strongpass123", "user")
+	cookie := loginAndGetSessionCookie(t, "", "no_fake_payments", "strongpass123")
+	productID := createTestProduct(t, "Payment Safety Product", "payment-safety", 1400, 10)
+	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
+		t.Fatal(err)
+	}
+	key := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
+	for _, method := range []string{"card_placeholder", "mobile_money_placeholder"} {
+		data := url.Values{
+			"delivery_address": {"Delivery Lane"},
+			"payment_method":   {method},
+			"idempotency_key":  {key},
+		}
+		resp, body := makeRequest(http.MethodPost, "/checkout", data, []*http.Cookie{cookie}, "")
+		if resp.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Choose a supported payment method") {
+			t.Fatalf("%s: status=%d, expected payment validation error", method, resp.StatusCode)
+		}
+	}
+	orders, err := testStore.ListOrdersByUser(int(userID))
+	if err != nil || len(orders) != 0 {
+		t.Fatalf("unsupported payments created orders: count=%d error=%v", len(orders), err)
+	}
+	items, _, err := testStore.GetCartItems(int(userID))
+	if err != nil || len(items) != 1 {
+		t.Fatalf("cart changed after payment rejection: count=%d error=%v", len(items), err)
 	}
 }
 
@@ -202,7 +232,7 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 
 	checkoutData := url.Values{}
 	checkoutData.Set("delivery_address", "Blocked Lane")
-	checkoutData.Set("payment_method", "card_placeholder")
+	checkoutData.Set("payment_method", "cash_on_delivery")
 	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookieB}, "")
 	if resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("POST /checkout B status=%d expected=%d", resp.StatusCode, http.StatusUnprocessableEntity)
@@ -251,7 +281,7 @@ func TestIntegration_CheckoutValidationRendersCurrentCart(t *testing.T) {
 	}
 
 	checkoutData := url.Values{}
-	checkoutData.Set("payment_method", "card_placeholder")
+	checkoutData.Set("payment_method", "cash_on_delivery")
 	checkoutData.Set("idempotency_key", idempotencyKey)
 	resp, body := makeRequest(http.MethodPost, "/checkout", checkoutData, []*http.Cookie{cookie}, "")
 	if resp.StatusCode != http.StatusUnprocessableEntity {
@@ -350,7 +380,7 @@ func TestIntegration_CheckoutCanResumeFromQueryToken(t *testing.T) {
 
 	checkoutData := url.Values{}
 	checkoutData.Set("delivery_address", "Resume Lane")
-	checkoutData.Set("payment_method", "card_placeholder")
+	checkoutData.Set("payment_method", "cash_on_delivery")
 	resp, _ = makeRequest(http.MethodPost, "/checkout?checkout="+url.QueryEscape(idempotencyKey), checkoutData, []*http.Cookie{cookie}, "")
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("POST /checkout?checkout=token status=%d expected=%d", resp.StatusCode, http.StatusFound)
