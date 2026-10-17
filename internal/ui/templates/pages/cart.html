@@ -8,11 +8,8 @@
     <p class="page-intro__lead">Review your products, adjust quantities, and continue when everything looks right.</p>
   </header>
 
-  {{if .Message}}
-  <ui-alert variant="success"><p>{{.Message}}</p></ui-alert>
-  {{end}}
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
+  {{if .Flash.Message}}
+  <ui-alert variant="{{.Flash.Kind}}"><p>{{.Flash.Message}}</p></ui-alert>
   {{end}}
 
   {{if .Items}}
@@ -31,7 +28,7 @@
         <article class="cart-item" data-cart-item="{{.ProductID}}">
           <div class="cart-item__details">
             <h3 class="cart-item__name">{{.ProductName}}</h3>
-            <p class="cart-item__price">${{printf "%.2f" .UnitPrice}} each</p>
+            <p class="cart-item__price">${{.UnitPrice}} each</p>
           </div>
           <div class="cart-item__actions">
             <form action="/cart/update" method="POST" class="cart-item__quantity">
@@ -41,7 +38,7 @@
               <input class="form__input" id="quantity-{{.ProductID}}" type="number" min="0" name="quantity" value="{{.Quantity}}">
               <button type="submit" class="btn btn--secondary btn--small">Update</button>
             </form>
-            <strong class="cart-item__line-total" data-cart-line-total>${{printf "%.2f" .LineTotal}}</strong>
+            <strong class="cart-item__line-total" data-cart-line-total>${{.LineTotal}}</strong>
             <form action="/cart/remove" method="POST">
               {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
               <input type="hidden" name="product_id" value="{{.ProductID}}">
@@ -58,7 +55,7 @@
       <h2 id="cart-summary-title">Keep it simple.</h2>
       <div class="cart-summary__row">
         <span>Subtotal</span>
-        <strong data-cart-subtotal>${{printf "%.2f" .Subtotal}}</strong>
+        <strong data-cart-subtotal>${{.Subtotal}}</strong>
       </div>
       <p class="cart-summary__note">Shipping and tax are calculated at checkout.</p>
       <div class="cart-actions">

@@ -1,11 +1,14 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLoadFromEnv_Defaults(t *testing.T) {
 	t.Setenv("ENV", "")
 	t.Setenv("PORT", "")
-	t.Setenv("DB_PATH", "")
+	t.Setenv("DATABASE_URL", "")
 	t.Setenv("ALLOWED_HOSTS", "")
 	t.Setenv("ADMIN_SETUP_TOKEN", "")
 	t.Setenv("SESSION_COOKIE_DOMAIN", "")
@@ -28,8 +31,8 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 	if cfg.Port != defaultPort {
 		t.Fatalf("Port = %q, want %q", cfg.Port, defaultPort)
 	}
-	if cfg.DBPath != defaultDBPath {
-		t.Fatalf("DBPath = %q, want %q", cfg.DBPath, defaultDBPath)
+	if cfg.DatabaseURL != defaultDatabaseURL || cfg.DatabaseURLExplicit {
+		t.Fatalf("DatabaseURL = %q explicit=%t, want default", cfg.DatabaseURL, cfg.DatabaseURLExplicit)
 	}
 	if cfg.AllowedHostsRaw != "" {
 		t.Fatalf("AllowedHostsRaw = %q, want empty", cfg.AllowedHostsRaw)
@@ -78,7 +81,7 @@ func TestLoadFromEnv_Defaults(t *testing.T) {
 func TestLoadFromEnv_Values(t *testing.T) {
 	t.Setenv("ENV", "production")
 	t.Setenv("PORT", "8080")
-	t.Setenv("DB_PATH", "/tmp/app.db")
+	t.Setenv("DATABASE_URL", "postgres://app@db/app")
 	t.Setenv("ALLOWED_HOSTS", "localhost,admin.localhost")
 	t.Setenv("ADMIN_SETUP_TOKEN", "s3cr3t")
 	t.Setenv("SESSION_COOKIE_DOMAIN", ".EXAMPLE.COM")
@@ -101,8 +104,8 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	if cfg.Port != "8080" {
 		t.Fatalf("Port = %q, want 8080", cfg.Port)
 	}
-	if cfg.DBPath != "/tmp/app.db" {
-		t.Fatalf("DBPath = %q, want /tmp/app.db", cfg.DBPath)
+	if cfg.DatabaseURL != "postgres://app@db/app" || !cfg.DatabaseURLExplicit {
+		t.Fatalf("DatabaseURL = %q", cfg.DatabaseURL)
 	}
 	if cfg.AllowedHostsRaw != "localhost,admin.localhost" {
 		t.Fatalf("AllowedHostsRaw = %q, unexpected", cfg.AllowedHostsRaw)
@@ -148,5 +151,103 @@ func TestLoadFromEnv_Values(t *testing.T) {
 	}
 	if !cfg.IsProduction() {
 		t.Fatal("IsProduction() = false, want true")
+	}
+}
+
+func TestValidate_ProductionRequiresExplicitSettings(t *testing.T) {
+	cfg := Config{Environment: "production", Port: "8080", LogFormat: "json", DatabaseURL: defaultDatabaseURL}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected production validation error")
+	}
+	for _, want := range []string{"DATABASE_URL", "ALLOWED_HOSTS", "PASSWORD_RESET_BASE_URL"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %s", err, want)
+		}
+	}
+
+	cfg.DatabaseURLExplicit = true
+	cfg.AllowedHostsRaw = "shop.example.com"
+	cfg.PasswordResetBaseURL = "https://shop.example.com"
+	cfg.SMTPHost = "smtp.example.com"
+	cfg.SMTPPort = "587"
+	cfg.SMTPFrom = "support@example.com"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid production config rejected: %v", err)
+	}
+}
+
+func productionConfig() Config {
+	return Config{
+		Environment: "production", Port: "8080", LogFormat: "json",
+		DatabaseURL: "postgres://app@db/app", DatabaseURLExplicit: true,
+		AllowedHostsRaw:      "shop.example.com,admin.example.com,partner.example.com",
+		PasswordResetBaseURL: "https://shop.example.com",
+		SMTPHost:             "smtp.example.com", SMTPPort: "587", SMTPFrom: "support@example.com",
+	}
+}
+
+func TestValidate_RejectsUnsafeProductionSettings(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*Config)
+		want   string
+	}{
+		{"zero port", func(c *Config) { c.Port = "0" }, "PORT"},
+		{"large port", func(c *Config) { c.Port = "65536" }, "PORT"},
+		{"unknown environment", func(c *Config) { c.Environment = "prodution" }, "ENV"},
+		{"wildcard host", func(c *Config) { c.AllowedHostsRaw = "*.example.com" }, "ALLOWED_HOSTS"},
+		{"URL host", func(c *Config) { c.AllowedHostsRaw = "https://shop.example.com" }, "ALLOWED_HOSTS"},
+		{"empty hosts", func(c *Config) { c.AllowedHostsRaw = ", ," }, "ALLOWED_HOSTS"},
+		{"insecure reset", func(c *Config) { c.PasswordResetBaseURL = "http://shop.example.com" }, "PASSWORD_RESET_BASE_URL"},
+		{"untrusted reset", func(c *Config) { c.PasswordResetBaseURL = "https://other.example.com" }, "PASSWORD_RESET_BASE_URL"},
+		{"reset query", func(c *Config) { c.PasswordResetBaseURL += "?token=oops" }, "PASSWORD_RESET_BASE_URL"},
+		{"no recovery email", func(c *Config) { c.SMTPHost = ""; c.SMTPFrom = "" }, "SMTP"},
+		{"invalid sender", func(c *Config) { c.SMTPFrom = "invalid" }, "SMTP_FROM"},
+		{"partial email auth", func(c *Config) { c.SMTPUsername = "mailer" }, "SMTP_USERNAME"},
+		{"weak setup token", func(c *Config) { c.AdminSetupToken = "short" }, "ADMIN_SETUP_TOKEN"},
+		{"unrelated cookie domain", func(c *Config) { c.SessionCookieDomain = ".other.com" }, "SESSION_COOKIE_DOMAIN"},
+		{"inverted pool", func(c *Config) { c.DBMaxOpenConns = 2; c.DBMaxIdleConns = 4 }, "DB_MAX_IDLE_CONNS"},
+		{"zero rate window", func(c *Config) { c.PostRateLimitMax = 10 }, "POST_RATE_LIMIT_WINDOW_SECONDS"},
+		{"inverted auth backoff", func(c *Config) { c.AuthAbuseMaxFailures = 5; c.AuthAbuseBackoffBase = 10; c.AuthAbuseBackoffMax = 1 }, "AUTH_ABUSE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := productionConfig()
+			tc.change(&cfg)
+			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %s", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadFromEnv_RejectsMalformedLimitsAndProxyFlag(t *testing.T) {
+	for _, name := range []string{"DB_MAX_OPEN_CONNS", "POST_RATE_LIMIT_MAX", "AUTH_ABUSE_MAX_FAILURES", "TRUST_PROXY_HEADERS"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("ENV", "development")
+			t.Setenv(name, "typo")
+			if err := LoadFromEnv().Validate(); err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("error = %v, want malformed %s", err, name)
+			}
+		})
+	}
+}
+
+func TestValidateDatabase_DoesNotRequireWebConfiguration(t *testing.T) {
+	cfg := Config{Environment: "production", DatabaseURL: "postgres://app@db/app", DatabaseURLExplicit: true}
+	if err := cfg.ValidateDatabase(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.DatabaseURLExplicit = false
+	if err := cfg.ValidateDatabase(); err == nil {
+		t.Fatal("production migration accepted implicit database")
+	}
+}
+
+func TestValidate_SMTPRequiresHostAndFrom(t *testing.T) {
+	cfg := Config{Port: "6969", LogFormat: "text", SMTPHost: "smtp.example.com"}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "SMTP") {
+		t.Fatalf("err = %v, want SMTP error", err)
 	}
 }

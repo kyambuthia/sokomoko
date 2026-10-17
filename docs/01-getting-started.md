@@ -1,75 +1,104 @@
-# Getting started
+# Getting Started with Sokomoko
 
-This is the shortest path from a checkout to a working local instance.
+Contributor quick start for the Go + PostgreSQL + server-rendered app.
 
-## 1. Prepare hostnames
+## 1. Boot the app locally
 
-The server selects a mux from the request host. Add these entries to the local
-hosts file:
+Add the local hostnames used by the app:
 
-    127.0.0.1 localhost
-    127.0.0.1 admin.localhost
-    127.0.0.1 partner.localhost
+```text
+127.0.0.1 localhost
+127.0.0.1 admin.localhost
+127.0.0.1 partner.localhost
+```
 
-The trusted-host default is defined in
-[cmd/sokomoko/serve.go](../cmd/sokomoko/serve.go) and can be replaced with
-ALLOWED_HOSTS.
+Start PostgreSQL and the app with demo data:
 
-## 2. Start the application
+```bash
+make db-up        # PostgreSQL 17 in Docker on localhost:5432
+make run          # migrate, seed, and serve on :6969
+```
 
-For an empty application database:
+Or run everything in containers with `docker compose up --build`.
 
-    go run ./cmd/sokomoko migrate
-    go run ./cmd/sokomoko serve
+Open:
 
-For a disposable local database with sample users, categories, products, and
-images:
+- `http://localhost:6969` for the storefront
+- `http://admin.localhost:6969` for admin and staff
+- `http://partner.localhost:6969` for partner setup and fulfillment
 
-    go run ./cmd/sokomoko serve --seed
+To apply migrations only:
 
-The seed workflow reads ADMIN_PASSWORD before creating the admin seed user.
-Partner seed users currently use credentials defined in
-[internal/db/seed.go](../internal/db/seed.go).
+```bash
+go run ./cmd/sokomoko migrate
+```
 
-## 3. Open the three surfaces
+To apply migrations and seed demo data without starting the server:
 
-- http://localhost:6969 — storefront and customer account
-- http://admin.localhost:6969 — admin setup, staff, products, orders, reports
-- http://partner.localhost:6969 — store setup, catalog, and fulfillment
+```bash
+go run ./cmd/sokomoko seed
+```
 
-Health checks are available at /healthz and /readyz on every host surface.
+## 2. Know the shape of the app
 
-## 4. First admin setup
+The app is routed by host, not by one shared URL space:
 
-When no admin user exists, open http://admin.localhost:6969/setup.
-Loopback requests are accepted automatically. Non-loopback requests require
-ADMIN_SETUP_TOKEN, supplied as either the X-Admin-Setup-Token header or the
-setup_token form field.
+- `localhost` serves the customer storefront, cart, checkout, and account pages.
+- `admin.localhost` serves admin bootstrap, admin login, dashboards, reporting, and team tools.
+- `partner.localhost` serves store setup, catalog management, and fulfillment pages.
 
-The setup flow creates the root admin and can provision recommended staff
-accounts. It displays generated temporary staff credentials once.
+The normal request flow is:
 
-## 5. Find the right source file
+1. `cmd/sokomoko` loads and validates config, opens PostgreSQL, applies migrations, composes the app, and starts the HTTP server.
+2. `internal/app` wires the feature services, templates, static files, and middleware.
+3. `internal/routes` registers host-specific handlers.
+4. `internal/service/*` holds feature rules and view-facing domain logic.
+5. `internal/db` owns SQL, transactions, and persistence concerns.
 
-| Change | Start here |
-| --- | --- |
-| CLI command or startup | cmd/sokomoko |
-| Host routing or middleware | cmd/sokomoko/server.go, internal/app |
-| URL registration | internal/routes/register.go |
-| Request/page handler | internal/routes |
-| Business rule | internal/service |
-| SQL, transactions, or models | internal/db |
-| Auth/session behavior | internal/auth |
-| HTML templates | internal/ui/templates |
-| CSS, JavaScript, images | internal/ui/static |
+More detail lives in [Architecture](02-architecture.md).
 
-## 6. Verify changes
+## 3. Know where to make changes
 
-Use the narrowest relevant package test first, then run:
+- Add or change routes in `internal/routes`.
+- Add business rules in `internal/service`.
+- Add or change SQL in `internal/db`; schema changes go in a new file in `internal/db/migrations`.
+- Change shared wiring and middleware in `internal/app` and `cmd/sokomoko`.
+- Change pages and assets in `internal/ui/templates` and `internal/ui/static`.
 
-    go test ./...
-    go vet ./internal/... ./cmd/...
+If a change crosses layers, start at the service boundary and keep the route and DB changes narrow.
 
-The test suite uses SQLite files in several packages. If a test process is
-interrupted, check for leftover *.db-journal files before interpreting the
-working tree.
+## 4. Run the tests that matter
+
+DB-backed tests need PostgreSQL. Each package gets its own throwaway schema:
+
+```bash
+make db-up && make db-test-create
+export SOKOMOKO_TEST_DATABASE_URL=postgres://sokomoko:sokomoko@localhost:5432/sokomoko_test?sslmode=disable
+make test          # or: go test ./...
+make test-race
+make lint
+```
+
+Common targeted runs:
+
+```bash
+go test ./internal/db -run TestConcurrentCheckoutNeverOversells
+go test ./internal/auth
+go test ./internal/service/checkout
+go test ./cmd/sokomoko
+```
+
+## 5. Current priorities
+
+See [docs/roadmap/ROADMAP.md](roadmap/ROADMAP.md). Remaining work includes online payment providers, business policies, and production operational validation.
+
+## 6. Read these next
+
+- [README.md](../README.md)
+- [docs/ARCHITECTURE_OVERVIEW.md](02-architecture.md)
+- [docs/authentication.md](04-authentication.md)
+- [docs/roadmap/ROADMAP.md](roadmap/ROADMAP.md)
+
+The versioned JSON API and `api.js`/`dynamic.js` enhance the redesigned pages;
+see [the API contract](11-api.md). Monetary JSON values remain numeric major
+currency units; stored and calculated amounts use integer cents.

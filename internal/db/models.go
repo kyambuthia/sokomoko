@@ -2,84 +2,41 @@ package db
 
 import (
 	"database/sql"
-	"strings"
 	"time"
+
+	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
-const DefaultProductImageURL = "/static/images/gray_fabric_bluetooth_speaker.png"
+const (
+	RolePartner = "partner"
+	RoleUser    = "user"
+	RoleStaff   = "staff"
+	RoleAdmin   = "admin"
+)
 
-var bundledProductImageURLs = []string{
-	"/static/images/black_adjustable_desk_lamp.png",
-	"/static/images/black_over_ear_headphones.png",
-	"/static/images/gray_fabric_bluetooth_speaker.png",
-	"/static/images/iphone_category_card.png",
-	"/static/images/product_tv.png",
-	"/static/images/stainless_steel_electric_kettle.png",
-	"/static/images/white_wireless_earbuds_charging_case.png",
-}
-
-// ResolveProductImageURL normalizes product image URLs to bundled local assets.
-func ResolveProductImageURL(rawURL, slug, name, category string) string {
-	cleanURL := strings.TrimSpace(rawURL)
-	switch {
-	case cleanURL == "":
-		return fallbackProductImageURL(slug, name, category)
-	case strings.HasPrefix(cleanURL, "data:"):
-		return cleanURL
-	case strings.HasPrefix(cleanURL, "/"):
-		return cleanURL
-	case strings.HasPrefix(cleanURL, "static/"):
-		return "/" + cleanURL
-	case strings.HasPrefix(cleanURL, "http://"), strings.HasPrefix(cleanURL, "https://"):
-		return fallbackProductImageURL(slug, name, category)
-	default:
-		return "/" + strings.TrimLeft(cleanURL, "/")
-	}
-}
-
-func fallbackProductImageURL(slug, name, category string) string {
-	descriptor := strings.ToLower(strings.TrimSpace(strings.Join([]string{slug, name, category}, " ")))
-	switch {
-	case strings.Contains(descriptor, "earbud"):
-		return "/static/images/white_wireless_earbuds_charging_case.png"
-	case strings.Contains(descriptor, "headphone"):
-		return "/static/images/black_over_ear_headphones.png"
-	case strings.Contains(descriptor, "speaker"):
-		return "/static/images/gray_fabric_bluetooth_speaker.png"
-	case strings.Contains(descriptor, "lamp"):
-		return "/static/images/black_adjustable_desk_lamp.png"
-	case strings.Contains(descriptor, "kettle"):
-		return "/static/images/stainless_steel_electric_kettle.png"
-	case strings.Contains(descriptor, "tv"), strings.Contains(descriptor, "television"), strings.Contains(descriptor, "monitor"):
-		return "/static/images/product_tv.png"
-	}
-
-	if descriptor == "" {
-		return DefaultProductImageURL
-	}
-
-	sum := 0
-	for _, r := range descriptor {
-		sum += int(r)
-	}
-	return bundledProductImageURLs[sum%len(bundledProductImageURLs)]
-}
-
-// User represents a user in the system
+// User represents an account in the system. Passwords are bcrypt hashes; the
+// bcrypt format embeds its own salt.
 type User struct {
 	ID           int
 	Username     string
 	Email        string
 	PasswordHash string
-	Salt         string
 	Role         string
-	Slug         string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    sql.NullTime
 }
 
-// Category represents a product category
+type Partner struct {
+	ID           int
+	Name         string
+	Slug         string
+	ContactEmail string
+	Status       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type Category struct {
 	ID          int
 	Name        string
@@ -91,13 +48,15 @@ type Category struct {
 	DeletedAt   sql.NullTime
 }
 
-// Product represents a product in the system
+// Product is a catalog listing. StockQuantity is the currently available
+// quantity derived from inventory (on hand minus reserved and allocated).
 type Product struct {
 	ID            int
 	Name          string
 	Slug          string
 	Description   string
-	Price         float64
+	Price         money.Cents
+	Currency      string
 	StockQuantity int
 	Category      string
 	CategoryID    sql.NullInt64
@@ -106,19 +65,16 @@ type Product struct {
 	Images        []ProductImage
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
-	DeletedAt     sql.NullTime
 }
 
-// GetPrimaryImageURL returns the first image URL or a placeholder
-func (p Product) GetPrimaryImageURL() string {
-	imageURL := ""
-	if len(p.Images) > 0 {
-		imageURL = p.Images[0].URL
+// PrimaryImage returns the raw URL of the first image, or "" when none exist.
+func (p Product) PrimaryImage() string {
+	if len(p.Images) == 0 {
+		return ""
 	}
-	return ResolveProductImageURL(imageURL, p.Slug, p.Name, p.Category)
+	return p.Images[0].URL
 }
 
-// ProductImage represents an image for a product
 type ProductImage struct {
 	ID           int
 	ProductID    int
@@ -133,34 +89,36 @@ type Warehouse struct {
 	Name      string
 	Slug      string
 	IsDefault bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type InventoryStock struct {
-	ID                int
 	ProductID         int
 	WarehouseID       int
 	OnHandQuantity    int
 	ReservedQuantity  int
 	AllocatedQuantity int
 	AvailableQuantity int
-	CreatedAt         time.Time
 	UpdatedAt         time.Time
 }
+
+const (
+	StockReservationStatusActive    = "active"
+	StockReservationStatusReleased  = "released"
+	StockReservationStatusExpired   = "expired"
+	StockReservationStatusConverted = "converted"
+)
 
 type StockReservation struct {
 	ID             int
 	ProductID      int
 	WarehouseID    int
-	UserID         sql.NullInt64
-	ReservationKey sql.NullString
+	UserID         int
+	ReservationKey string
 	Quantity       int
 	Status         string
-	ExpiresAt      sql.NullTime
+	ExpiresAt      time.Time
 	ReleasedAt     sql.NullTime
 	CreatedAt      time.Time
-	UpdatedAt      time.Time
 }
 
 type StockMovement struct {
@@ -169,11 +127,10 @@ type StockMovement struct {
 	WarehouseID   int
 	MovementType  string
 	QuantityDelta int
-	Note          sql.NullString
+	Reference     string
 	CreatedAt     time.Time
 }
 
-// Session represents a persistent user session
 type Session struct {
 	ID        string
 	UserID    int
@@ -192,7 +149,6 @@ type PasswordResetToken struct {
 }
 
 type StoreSettings struct {
-	ID            int
 	StoreName     string
 	StoreSlug     string
 	Description   string
@@ -206,30 +162,57 @@ type CartItem struct {
 	ProductName     string
 	ProductSlug     string
 	ProductImageURL string
-	UnitPrice       float64
+	UnitPrice       money.Cents
 	Quantity        int
 	StockQuantity   int
-	LineTotal       float64
+	LineTotal       money.Cents
 }
 
 type OrderItem struct {
 	ProductID   int
+	PartnerID   sql.NullInt64
 	ProductName string
 	Quantity    int
-	UnitPrice   float64
-	LineTotal   float64
+	UnitPrice   money.Cents
+	LineTotal   money.Cents
 }
 
-type CustomerOrder struct {
+const (
+	OrderStatusPending    = "pending"
+	OrderStatusProcessing = "processing"
+	OrderStatusShipped    = "shipped"
+	OrderStatusDelivered  = "delivered"
+	OrderStatusCancelled  = "cancelled"
+)
+
+// Order is the shared order projection used by customer, partner, and admin
+// views.
+type Order struct {
 	ID              int
+	UserID          int
+	CustomerName    string
 	Status          string
 	PartnerStatus   string
 	DeliveryStatus  string
+	InventoryState  string
 	DeliveryAddress string
 	DeliveryNotice  string
-	TotalAmount     float64
+	Currency        string
+	Subtotal        money.Cents
+	ShippingFee     money.Cents
+	TaxAmount       money.Cents
+	TotalAmount     money.Cents
 	CreatedAt       time.Time
+	UpdatedAt       time.Time
 	Items           []OrderItem
+}
+
+// OrderTotals carries the priced breakdown for an order.
+type OrderTotals struct {
+	Subtotal    money.Cents
+	ShippingFee money.Cents
+	TaxAmount   money.Cents
+	Total       money.Cents
 }
 
 const (
@@ -246,12 +229,12 @@ type Checkout struct {
 	Status          string
 	Currency        string
 	PaymentMethod   string
-	SubtotalAmount  float64
-	ShippingFee     float64
-	TaxAmount       float64
-	TotalAmount     float64
-	DeliveryAddress sql.NullString
-	ExpiresAt       sql.NullTime
+	SubtotalAmount  money.Cents
+	ShippingFee     money.Cents
+	TaxAmount       money.Cents
+	TotalAmount     money.Cents
+	DeliveryAddress string
+	ExpiresAt       time.Time
 	CompletedAt     sql.NullTime
 	OrderID         sql.NullInt64
 	CreatedAt       time.Time
@@ -260,37 +243,32 @@ type Checkout struct {
 }
 
 type CheckoutLine struct {
-	ID             int
-	CheckoutID     int
-	ProductID      int
-	ProductName    string
-	Quantity       int
-	UnitPrice      float64
-	LineTotal      float64
-	ReservationKey sql.NullString
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID          int
+	CheckoutID  int
+	ProductID   int
+	ProductName string
+	Quantity    int
+	UnitPrice   money.Cents
+	LineTotal   money.Cents
 }
 
 type CheckoutInput struct {
 	Token          string
 	Currency       string
 	PaymentMethod  string
-	SubtotalAmount float64
-	ShippingFee    float64
-	TaxAmount      float64
-	TotalAmount    float64
+	SubtotalAmount money.Cents
+	ShippingFee    money.Cents
+	TaxAmount      money.Cents
+	TotalAmount    money.Cents
 	ExpiresAt      time.Time
 	Lines          []CheckoutLineInput
 }
 
 type CheckoutLineInput struct {
-	ProductID      int
-	ProductName    string
-	Quantity       int
-	UnitPrice      float64
-	LineTotal      float64
-	ReservationKey string
+	ProductID   int
+	ProductName string
+	Quantity    int
+	UnitPrice   money.Cents
 }
 
 const (
@@ -314,34 +292,10 @@ type Payment struct {
 	Provider          string
 	Status            string
 	Currency          string
-	Amount            float64
+	Amount            money.Cents
 	ExternalReference sql.NullString
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
-}
-
-type PaymentAttempt struct {
-	ID                int
-	PaymentID         int
-	Status            string
-	RequestReference  sql.NullString
-	ExternalReference sql.NullString
-	ErrorMessage      sql.NullString
-	CreatedAt         time.Time
-}
-
-type FulfillmentOrder struct {
-	ID              int
-	CustomerUserID  int
-	CustomerName    string
-	Status          string
-	PartnerStatus   string
-	DeliveryStatus  string
-	DeliveryNotice  string
-	DeliveryAddress string
-	TotalAmount     float64
-	CreatedAt       time.Time
-	Items           []OrderItem
 }
 
 type PartnerOrderSummary struct {
@@ -355,6 +309,7 @@ type PartnerOrderSummary struct {
 type AuditLog struct {
 	ID          int
 	ActorUserID sql.NullInt64
+	ActorName   string
 	Action      string
 	TargetType  string
 	TargetID    sql.NullInt64
@@ -365,6 +320,6 @@ type AuditLog struct {
 type CheckoutPlacement struct {
 	OrderID     int64
 	PaymentID   int64
-	TotalAmount float64
+	TotalAmount money.Cents
 	Reused      bool
 }

@@ -2,22 +2,25 @@ package notify
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/mail"
 	"net/smtp"
 	"strings"
+	"time"
 )
 
 const defaultSMTPPort = "587"
 
 type SMTPConfig struct {
-	Host     string
-	Port     string
-	Username string
-	Password string
-	From     string
-	AppName  string
+	Host       string
+	Port       string
+	Username   string
+	Password   string
+	From       string
+	AppName    string
+	RequireTLS bool
 }
 
 type SMTPSender struct {
@@ -44,6 +47,9 @@ func NewSMTPSender(cfg SMTPConfig) (*SMTPSender, error) {
 	if cfg.From == "" {
 		return nil, fmt.Errorf("smtp from address is required")
 	}
+	if strings.ContainsAny(cfg.From, "\r\n") {
+		return nil, fmt.Errorf("invalid smtp from address")
+	}
 	if _, err := mail.ParseAddress(cfg.From); err != nil {
 		return nil, fmt.Errorf("invalid smtp from address: %w", err)
 	}
@@ -60,7 +66,11 @@ func (s *SMTPSender) SendPasswordResetEmail(ctx context.Context, recipientEmail 
 	if recipient == "" {
 		return fmt.Errorf("recipient email is required")
 	}
-	if _, err := mail.ParseAddress(recipient); err != nil {
+	to, err := mail.ParseAddress(recipient)
+	if strings.ContainsAny(recipient, "\r\n") {
+		return fmt.Errorf("invalid recipient email")
+	}
+	if err != nil {
 		return fmt.Errorf("invalid recipient email: %w", err)
 	}
 	if strings.TrimSpace(resetLink) == "" {
@@ -69,13 +79,55 @@ func (s *SMTPSender) SendPasswordResetEmail(ctx context.Context, recipientEmail 
 
 	message := buildPasswordResetMessage(s.cfg.From, recipient, s.cfg.AppName, resetLink)
 	address := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
-
-	var auth smtp.Auth
-	if s.cfg.Username != "" && s.cfg.Password != "" {
-		auth = smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", address)
+	if err != nil {
+		return err
 	}
-
-	return smtp.SendMail(address, auth, s.cfg.From, []string{recipient}, []byte(message))
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	deadline, _ := ctx.Deadline()
+	if err := conn.SetDeadline(deadline); err != nil {
+		return err
+	}
+	client, err := smtp.NewClient(conn, s.cfg.Host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: s.cfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
+			return err
+		}
+	} else if s.cfg.RequireTLS {
+		return fmt.Errorf("SMTP server must support STARTTLS")
+	}
+	if s.cfg.Username != "" && s.cfg.Password != "" {
+		if err := client.Auth(smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)); err != nil {
+			return err
+		}
+	}
+	from, _ := mail.ParseAddress(s.cfg.From) // validated by NewSMTPSender
+	if err := client.Mail(from.Address); err != nil {
+		return err
+	}
+	if err := client.Rcpt(to.Address); err != nil {
+		return err
+	}
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write([]byte(message)); err != nil {
+		_ = writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }
 
 func buildPasswordResetMessage(from string, to string, appName string, resetLink string) string {

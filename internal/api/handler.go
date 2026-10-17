@@ -12,6 +12,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/money"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
@@ -125,9 +126,9 @@ type productDTO struct {
 func mapProduct(product catalogsvc.Product) productDTO {
 	return productDTO{
 		ID: product.ID, Name: product.Name, Slug: product.Slug,
-		Description: product.Description, Price: product.Price,
+		Description: product.Description, Price: product.Price.Float64(),
 		StockQuantity: product.StockQuantity, Category: product.Category,
-		PrimaryImage: product.PrimaryImage,
+		PrimaryImage: product.ImageURL,
 	}
 }
 
@@ -147,16 +148,16 @@ type cartDTO struct {
 	Subtotal float64       `json:"subtotal"`
 }
 
-func mapCart(items []commerceSvc.CartItem, subtotal float64) cartDTO {
+func mapCart(items []commerceSvc.CartItem, subtotal money.Cents) cartDTO {
 	mapped := make([]cartItemDTO, 0, len(items))
 	for _, item := range items {
 		mapped = append(mapped, cartItemDTO{
 			ProductID: item.ProductID, ProductName: item.ProductName,
-			UnitPrice: item.UnitPrice, Quantity: item.Quantity,
-			StockQuantity: item.StockQuantity, LineTotal: item.LineTotal,
+			UnitPrice: item.UnitPrice.Float64(), Quantity: item.Quantity,
+			StockQuantity: item.StockQuantity, LineTotal: item.LineTotal.Float64(),
 		})
 	}
-	return cartDTO{Items: mapped, Subtotal: subtotal}
+	return cartDTO{Items: mapped, Subtotal: subtotal.Float64()}
 }
 
 type checkoutItemDTO struct {
@@ -190,13 +191,13 @@ func mapCheckout(state checkoutsvc.PageState, methods []paymentMethodDTO) checko
 	for _, item := range state.Items {
 		items = append(items, checkoutItemDTO{
 			ProductID: item.ProductID, ProductName: item.ProductName,
-			Quantity: item.Quantity, UnitPrice: item.UnitPrice, LineTotal: item.LineTotal,
+			Quantity: item.Quantity, UnitPrice: item.UnitPrice.Float64(), LineTotal: item.LineTotal.Float64(),
 		})
 	}
 	return checkoutDTO{
-		Token: state.Token, Items: items, Subtotal: state.Summary.Subtotal,
-		ShippingFee: state.Summary.ShippingFee, TaxAmount: state.Summary.TaxAmount,
-		TotalAmount: state.Summary.Total, PaymentMethod: state.PaymentMethod,
+		Token: state.Token, Items: items, Subtotal: state.Summary.Subtotal.Float64(),
+		ShippingFee: state.Summary.ShippingFee.Float64(), TaxAmount: state.Summary.TaxAmount.Float64(),
+		TotalAmount: state.Summary.Total.Float64(), PaymentMethod: state.PaymentMethod,
 		DeliveryAddress: state.DeliveryAddress, CanCheckout: state.CanCheckout,
 		PaymentMethods: methods,
 	}
@@ -227,13 +228,13 @@ func mapAccountOrder(order accountsvc.Order) orderDTO {
 	for _, item := range order.Items {
 		items = append(items, orderItemDTO{
 			ProductID: item.ProductID, ProductName: item.ProductName,
-			Quantity: item.Quantity, UnitPrice: item.UnitPrice, LineTotal: item.LineTotal,
+			Quantity: item.Quantity, UnitPrice: item.UnitPrice.Float64(), LineTotal: item.LineTotal.Float64(),
 		})
 	}
 	return orderDTO{
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,
 		DeliveryStatus: order.DeliveryStatus, DeliveryNotice: order.DeliveryNotice,
-		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount,
+		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(),
 		CreatedAt: order.CreatedAt, Items: items,
 	}
 }
@@ -241,33 +242,33 @@ func mapAccountOrder(order accountsvc.Order) orderDTO {
 func mapAdminOrder(order adminsvc.Order) orderDTO {
 	items := make([]orderItemDTO, 0, len(order.Items))
 	for _, item := range order.Items {
-		items = append(items, orderItemDTO{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
+		items = append(items, orderItemDTO{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal.Float64()})
 	}
 	return orderDTO{
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,
 		DeliveryStatus: order.DeliveryStatus, DeliveryNotice: order.DeliveryNotice,
-		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount, Items: items,
+		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), Items: items,
 	}
 }
 
 func mapPartnerOrder(order partnersvc.Order) orderDTO {
 	items := make([]orderItemDTO, 0, len(order.Items))
 	for _, item := range order.Items {
-		items = append(items, orderItemDTO{ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
+		items = append(items, orderItemDTO{ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal.Float64()})
 	}
 	return orderDTO{
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,
 		DeliveryStatus: order.DeliveryStatus, DeliveryNotice: order.DeliveryNotice,
-		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount, Items: items,
+		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), Items: items,
 	}
 }
 
 func mapPartnerProduct(product partnersvc.Product) productDTO {
-	return productDTO{ID: product.ID, Name: product.Name, Category: product.Category, Price: product.Price, StockQuantity: product.StockQuantity}
+	return productDTO{ID: product.ID, Name: product.Name, Category: product.Category, Price: product.Price.Float64(), StockQuantity: product.StockQuantity}
 }
 
 func mapAdminProduct(product adminsvc.Product) productDTO {
-	return productDTO{Name: product.Name, Category: product.Category, Price: product.Price, StockQuantity: product.StockQuantity}
+	return productDTO{Name: product.Name, Category: product.Category, Price: product.Price.Float64(), StockQuantity: product.StockQuantity}
 }
 
 func isNotFound(err error) bool {

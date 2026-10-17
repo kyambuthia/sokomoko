@@ -51,7 +51,7 @@ func TestRateLimitByIP_BlocksWhenExceeded(t *testing.T) {
 	}
 }
 
-func TestRateLimitByIP_SkipsNonConfiguredMethod(t *testing.T) {
+func TestRateLimitByIP_IgnoresNonConfiguredMethod(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}), RateLimitByIP(1, time.Minute, http.MethodPost))
@@ -71,7 +71,7 @@ func TestRateLimitByIP_SkipsNonConfiguredMethod(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
-		t.Fatalf("second request status=%d want=%d", rec.Code, http.StatusNoContent)
+		t.Fatalf("GET requests must not count against a POST-only limit: status=%d", rec.Code)
 	}
 }
 

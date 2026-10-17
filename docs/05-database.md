@@ -1,25 +1,14 @@
 # Database and commerce state
 
-The application uses SQLite through
-[internal/db/store.go](../internal/db/store.go). The live schema is embedded
-from [internal/db/schema.sql](../internal/db/schema.sql).
+PostgreSQL is accessed through `database/sql` and pgx v5. Versioned migrations in
+`internal/db/migrations` are embedded in the binary and applied transactionally
+under an advisory lock. Production `serve` verifies migration history; the
+separate `migrate` command applies changes. Never modify applied migrations.
 
-## Connection behavior
-
-Opening the store:
-
-- enables foreign keys
-- sets a five-second busy timeout
-- limits the pool to ten open and ten idle connections
-- keeps connections alive for the process lifetime
-
-Applying the schema is idempotent. It also adds sessions.csrf_token to legacy
-databases that do not have that column and records schema version 2.
-Incremental migration steps are not implemented.
-
-The root db/schema.sql file is an older snapshot and is not loaded at runtime.
-It does not include all current schema features, so changes should target the
-embedded internal/db/schema.sql file.
+Pool and query limits are configured with `DB_MAX_OPEN_CONNS`,
+`DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME_SECONDS`, and `DB_QUERY_TIMEOUT_SECONDS`.
+Money is stored as integer cents and computed using `internal/money.Cents`.
+The versioned API converts amounts to numeric major units at its boundary.
 
 ## Tables by concern
 
@@ -29,7 +18,9 @@ embedded internal/db/schema.sql file.
 - sessions
 - password_reset_tokens
 - store_settings
-- schema_version
+- schema_migrations
+- partners
+- partner_users (explicit login-account membership)
 
 User roles allowed by the live schema are user, staff, admin, and partner.
 Store settings are a single row identified by id 1.
@@ -40,7 +31,7 @@ Store settings are a single row identified by id 1.
 - products
 - product_images
 
-Products have a unique slug, price, stock_quantity projection, optional
+Products have a unique slug, price_cents, derived available-stock projection, optional
 category, and optional partner_id. Soft-delete timestamps exist on users,
 categories, and products.
 
@@ -56,9 +47,8 @@ reserved, and allocated quantities. Reservations have active, released,
 expired, and converted states. Movements record initial, adjustment,
 reservation, release, allocation, and return changes.
 
-products.stock_quantity is synchronized from inventory operations; the
-inventory tables are the operational source for reservation and allocation
-behavior.
+Available stock is computed from inventory on hand minus reserved and allocated
+quantities. Inventory rows are locked in product-ID order for mutations.
 
 ### Commerce
 
@@ -89,7 +79,7 @@ attempts are pending, completed, or failed.
 
 The checkout service uses a fifteen-minute reservation hold:
 
-1. Reserve the current cart in an immediate SQLite transaction.
+1. Reserve the current cart in a PostgreSQL transaction with inventory row locks.
 2. Expire stale reservations and release the user's previous active hold.
 3. Persist a checkout snapshot with subtotal, shipping, tax, and total.
 4. On submit, validate address and supported payment method.
@@ -115,14 +105,13 @@ The bootstrap service runs:
 4. initial catalog seed
 
 Admin seed requires ADMIN_PASSWORD and optionally reads ADMIN_USERNAME and
-ADMIN_EMAIL. Partner seed accounts use fixed credentials in
-[internal/db/seed.go](../internal/db/seed.go), which makes the seed workflow
-appropriate only for disposable development data.
+ADMIN_EMAIL. Demo partner records and catalog data are development-only; partner login
+accounts require explicit membership in `partner_users`. Production rejects seeding.
 
 ## Database commands
 
     go run ./cmd/sokomoko migrate
     go run ./cmd/sokomoko seed
 
-Tests create temporary SQLite stores and exercise the same schema path used by
-the application.
+Tests create isolated PostgreSQL schemas using `SOKOMOKO_TEST_DATABASE_URL`.
+Set `SOKOMOKO_REQUIRE_DB_TESTS=1` to fail instead of skipping when it is absent.

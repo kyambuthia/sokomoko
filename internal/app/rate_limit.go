@@ -70,26 +70,33 @@ func (l *ipRateLimiter) cleanupLocked(now time.Time) {
 	l.lastCleanup = now
 }
 
+// RateLimitByIP limits requests per remote address. When methods are given,
+// only requests with those methods are counted and limited.
 func RateLimitByIP(max int, window time.Duration, methods ...string) Middleware {
+	return RateLimitByKey(max, window, func(r *http.Request) string {
+		return clientIPFromRemoteAddr(r.RemoteAddr)
+	}, methods...)
+}
+
+// RateLimitByKey limits requests per key, for example a proxy-aware client IP.
+func RateLimitByKey(max int, window time.Duration, keyFunc func(*http.Request) string, methods ...string) Middleware {
 	if max <= 0 || window <= 0 {
 		return func(next http.Handler) http.Handler { return next }
 	}
 
-	limiter := newIPRateLimiter(max, window)
-	limitedMethods := make(map[string]struct{}, len(methods))
-	for _, method := range methods {
-		limitedMethods[strings.ToUpper(strings.TrimSpace(method))] = struct{}{}
+	limited := map[string]bool{}
+	for _, m := range methods {
+		limited[strings.ToUpper(strings.TrimSpace(m))] = true
 	}
+
+	limiter := newIPRateLimiter(max, window)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if len(limitedMethods) > 0 {
-				if _, ok := limitedMethods[strings.ToUpper(r.Method)]; !ok {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if len(limited) > 0 && !limited[r.Method] {
+				next.ServeHTTP(w, r)
+				return
 			}
-			ip := clientIPFromRemoteAddr(r.RemoteAddr)
-			allowed, retryAfter := limiter.allow(ip, time.Now())
+			allowed, retryAfter := limiter.allow(keyFunc(r), time.Now())
 			if !allowed {
 				retryAfterSeconds := int(math.Ceil(retryAfter.Seconds()))
 				if retryAfterSeconds < 1 {
@@ -99,7 +106,6 @@ func RateLimitByIP(max int, window time.Duration, methods ...string) Middleware 
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 				return
 			}
-
 			next.ServeHTTP(w, r)
 		})
 	}

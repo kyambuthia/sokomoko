@@ -38,7 +38,7 @@ Prefer focused tests while developing:
 - Keep money rounding and checkout totals in checkout code.
 - Add CSRF fields to every authenticated unsafe form.
 - Use Auth.CSRFToken for JavaScript requests carrying the session cookie.
-- Update the canonical embedded schema at internal/db/schema.sql when the
+- Add a new numbered migration in internal/db/migrations when the
   database model changes.
 - Add tests where the rule lives.
 - Reuse existing template base files and CSS tokens before adding new patterns.
@@ -50,5 +50,5 @@ Prefer focused tests while developing:
 - Schema application is idempotent, but incremental migrations are not yet
   implemented.
 - serve --seed is intended for disposable development data.
-- Do not commit local SQLite databases, journal files, generated assets, or
+- Do not commit local database dumps, generated assets, or
   credentials.

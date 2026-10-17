@@ -9,8 +9,8 @@ import (
 func TestSupportedMethods(t *testing.T) {
 	svc := New()
 	methods := svc.SupportedMethods()
-	if len(methods) != 3 {
-		t.Fatalf("methods length = %d, want 3", len(methods))
+	if len(methods) != 1 {
+		t.Fatalf("methods length = %d, want 1", len(methods))
 	}
 	if methods[0] != MethodCashOnDelivery {
 		t.Fatalf("first method = %q, want %q", methods[0], MethodCashOnDelivery)
@@ -20,7 +20,7 @@ func TestSupportedMethods(t *testing.T) {
 func TestBuildRecord_CashOnDeliveryPending(t *testing.T) {
 	svc := New()
 
-	record, err := svc.BuildRecord(MethodCashOnDelivery, 42.5)
+	record, err := svc.BuildRecord(MethodCashOnDelivery, 4250)
 	if err != nil {
 		t.Fatalf("BuildRecord error = %v", err)
 	}
@@ -32,18 +32,17 @@ func TestBuildRecord_CashOnDeliveryPending(t *testing.T) {
 	}
 }
 
-func TestBuildRecord_PlaceholderCaptured(t *testing.T) {
+func TestBuildRecord_RejectsUnimplementedProviders(t *testing.T) {
 	svc := New()
-
-	record, err := svc.BuildRecord(MethodCardPlaceholder, 42.5)
-	if err != nil {
-		t.Fatalf("BuildRecord error = %v", err)
-	}
-	if record.Status != db.PaymentStatusCaptured {
-		t.Fatalf("status = %q, want %q", record.Status, db.PaymentStatusCaptured)
-	}
-	if record.ExternalReference == "" {
-		t.Fatal("expected external reference for placeholder card payment")
+	for _, method := range []string{MethodCardPlaceholder, MethodMobilePlaceholder} {
+		t.Run(method, func(t *testing.T) {
+			if svc.IsSupportedMethod(method) {
+				t.Fatal("unimplemented provider advertised as supported")
+			}
+			if _, err := svc.BuildRecord(method, 4250); err != ErrInvalidMethod {
+				t.Fatalf("error = %v, want %v", err, ErrInvalidMethod)
+			}
+		})
 	}
 }
 

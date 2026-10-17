@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 var ErrInvalidMethod = errors.New("invalid payment method")
@@ -40,11 +41,7 @@ func (s *Service) GenerateIdempotencyKey() (string, error) {
 }
 
 func (s *Service) SupportedMethods() []string {
-	return []string{
-		MethodCashOnDelivery,
-		MethodCardPlaceholder,
-		MethodMobilePlaceholder,
-	}
+	return []string{MethodCashOnDelivery}
 }
 
 func (s *Service) SupportedMethodOptions() []MethodOption {
@@ -80,7 +77,7 @@ func (s *Service) IsSupportedMethod(method string) bool {
 	return false
 }
 
-func (s *Service) BuildRecord(method string, totalAmount float64) (db.PaymentRecordInput, error) {
+func (s *Service) BuildRecord(method string, totalAmount money.Cents) (db.PaymentRecordInput, error) {
 	method = strings.TrimSpace(strings.ToLower(method))
 	record := db.PaymentRecordInput{
 		Method:   method,
@@ -88,25 +85,12 @@ func (s *Service) BuildRecord(method string, totalAmount float64) (db.PaymentRec
 		Amount:   totalAmount,
 	}
 
-	switch method {
-	case MethodCashOnDelivery:
-		record.Provider = "manual_cash_on_delivery"
-		record.Status = db.PaymentStatusPending
-		return record, nil
-	case MethodCardPlaceholder:
-		record.Provider = "placeholder_card"
-		record.Status = db.PaymentStatusCaptured
-	case MethodMobilePlaceholder:
-		record.Provider = "placeholder_mobile_money"
-		record.Status = db.PaymentStatusCaptured
-	default:
+	// A payment is captured only after verified settlement by a real provider.
+	// Historical placeholder method names are retained for displaying old orders.
+	if method != MethodCashOnDelivery {
 		return db.PaymentRecordInput{}, ErrInvalidMethod
 	}
-
-	externalReference, err := s.GenerateIdempotencyKey()
-	if err != nil {
-		return db.PaymentRecordInput{}, err
-	}
-	record.ExternalReference = "pay_" + externalReference
+	record.Provider = "manual_cash_on_delivery"
+	record.Status = db.PaymentStatusPending
 	return record, nil
 }

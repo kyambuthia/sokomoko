@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/kyambuthia/sokomoko/internal/db"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -83,7 +84,7 @@ func decodeAPIData(t *testing.T, body []byte, target any) {
 
 func TestAPI_CatalogSearchUsesJSONContract(t *testing.T) {
 	clearAllTables()
-	productID := createTestProduct(t, "API Lamp", fmt.Sprintf("api-lamp-%d", time.Now().UnixNano()), 24.5, 3)
+	productID := createTestProduct(t, "API Lamp", fmt.Sprintf("api-lamp-%d", time.Now().UnixNano()%1_000_000_000), 2450, 3)
 	if productID == 0 {
 		t.Fatal("expected product id")
 	}
@@ -94,12 +95,16 @@ func TestAPI_CatalogSearchUsesJSONContract(t *testing.T) {
 	}
 	var data struct {
 		Items []struct {
-			ID            int    `json:"id"`
-			Name          string `json:"name"`
-			StockQuantity int    `json:"stock_quantity"`
+			ID            int     `json:"id"`
+			Name          string  `json:"name"`
+			StockQuantity int     `json:"stock_quantity"`
+			Price         float64 `json:"price"`
 		} `json:"items"`
 	}
 	decodeAPIData(t, body, &data)
+	if len(data.Items) != 1 || data.Items[0].Price != 24.5 {
+		t.Fatalf("price must be major currency units: %#v", data.Items)
+	}
 	if len(data.Items) != 1 || data.Items[0].ID != int(productID) || data.Items[0].Name != "API Lamp" || data.Items[0].StockQuantity != 3 {
 		t.Fatalf("unexpected catalog response: %#v", data.Items)
 	}
@@ -107,12 +112,12 @@ func TestAPI_CatalogSearchUsesJSONContract(t *testing.T) {
 
 func TestAPI_ProtectedMutationRequiresJSONCSRF(t *testing.T) {
 	clearAllTables()
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("api_cart_%d", suffix)
 	password := "strongpass123"
 	createTestUser(t, username, fmt.Sprintf("%s@example.com", username), password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
-	productID := createTestProduct(t, "API Cart Product", fmt.Sprintf("api-cart-%d", suffix), 9, 5)
+	productID := createTestProduct(t, "API Cart Product", fmt.Sprintf("api-cart-%d", suffix), 900, 5)
 
 	resp, body := makeAPIRequest(t, http.MethodPost, "/api/v1/cart/items", map[string]any{"product_id": productID, "quantity": 1}, []*http.Cookie{cookie}, false, nil)
 	if resp.StatusCode != http.StatusForbidden {
@@ -141,12 +146,12 @@ func TestAPI_ProtectedMutationRequiresJSONCSRF(t *testing.T) {
 
 func TestAPI_CheckoutPlacementIsIdempotent(t *testing.T) {
 	clearAllTables()
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("api_checkout_%d", suffix)
 	password := "strongpass123"
 	createTestUser(t, username, fmt.Sprintf("%s@example.com", username), password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
-	productID := createTestProduct(t, "API Checkout Product", fmt.Sprintf("api-checkout-%d", suffix), 10, 5)
+	productID := createTestProduct(t, "API Checkout Product", fmt.Sprintf("api-checkout-%d", suffix), 1000, 5)
 
 	resp, body := makeAPIRequest(t, http.MethodPost, "/api/v1/cart/items", map[string]any{"product_id": productID, "quantity": 2}, []*http.Cookie{cookie}, true, nil)
 	if resp.StatusCode != http.StatusOK {
@@ -183,29 +188,46 @@ func TestAPI_CheckoutPlacementIsIdempotent(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("expected one order after replay, got %d", len(orders))
 	}
+	if orders[0].TotalAmount != 2810 {
+		t.Fatalf("order total=%v, want 28.10", orders[0].TotalAmount)
+	}
+	resp, body = makeAPIRequest(t, http.MethodGet, "/api/v1/account/orders", nil, []*http.Cookie{cookie}, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("account orders status=%d body=%s", resp.StatusCode, body)
+	}
+	var account struct {
+		Items []struct {
+			TotalAmount float64 `json:"total_amount"`
+		} `json:"items"`
+	}
+	decodeAPIData(t, body, &account)
+	if len(account.Items) != 1 || account.Items[0].TotalAmount != 28.10 {
+		t.Fatalf("account amounts must be major units: %#v", account.Items)
+	}
 }
 
 func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	clearAllTables()
+	createTestUser(t, "api_admin", "api_admin@example.com", "strongpass123", "admin")
 	if _, err := testStore.DB.Exec(`INSERT INTO store_settings (id, store_name, store_slug, description, contact_email) VALUES (1, 'API Store', 'api-store', 'API test store', 'store@example.com')`); err != nil {
 		t.Fatalf("create store settings: %v", err)
 	}
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	partnerA := fmt.Sprintf("partner_a_%d", suffix)
 	partnerB := fmt.Sprintf("partner_b_%d", suffix)
 	password := "strongpass123"
 	createTestUser(t, partnerA, partnerA+"@example.com", password, "partner")
 	createTestUser(t, partnerB, partnerB+"@example.com", password, "partner")
-	partnerAID := mustUserID(t, partnerA)
-	partnerBID := mustUserID(t, partnerB)
+	partnerAID := createAPITestPartner(t, partnerA)
+	partnerBID := createAPITestPartner(t, partnerB)
 
-	productA := createTestProduct(t, "Partner A Product", fmt.Sprintf("partner-a-%d", suffix), 10, 5)
-	productB := createTestProduct(t, "Partner B Product", fmt.Sprintf("partner-b-%d", suffix), 12, 5)
-	if _, err := testStore.DB.Exec("UPDATE products SET partner_id = ? WHERE id IN (?, ?)", partnerAID, productA, productB); err != nil {
+	productA := createTestProduct(t, "Partner A Product", fmt.Sprintf("partner-a-%d", suffix), 1000, 5)
+	productB := createTestProduct(t, "Partner B Product", fmt.Sprintf("partner-b-%d", suffix), 1200, 5)
+	if _, err := testStore.DB.Exec("UPDATE products SET partner_id = $1 WHERE id IN ($2, $3)", partnerAID, productA, productB); err != nil {
 		t.Fatalf("assign products: %v", err)
 	}
-	if _, err := testStore.DB.Exec("UPDATE products SET partner_id = ? WHERE id = ?", partnerBID, productB); err != nil {
+	if _, err := testStore.DB.Exec("UPDATE products SET partner_id = $1 WHERE id = $2", partnerBID, productB); err != nil {
 		t.Fatalf("assign partner B product: %v", err)
 	}
 
@@ -267,6 +289,32 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-partner update status=%d body=%s", resp.StatusCode, body)
 	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/orders", nil, []*http.Cookie{cookie}, false, nil)
+	var hiddenOrders struct {
+		Items []json.RawMessage `json:"items"`
+	}
+	decodeAPIData(t, body, &hiddenOrders)
+	if len(hiddenOrders.Items) != 0 {
+		t.Fatalf("partner A saw another partner's order: %s", body)
+	}
+	// The owning partner can read and update the same order.
+	cookieB := loginAndGetSessionCookie(t, "partner.localhost", partnerB, password)
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, fmt.Sprintf("/api/v1/partner/orders/%d", orderID), map[string]any{
+		"partner_status": "accepted", "delivery_status": "processing", "delivery_notice": "owner update",
+	}, []*http.Cookie{cookieB}, true, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("own order update status=%d body=%s", resp.StatusCode, body)
+	}
+	// A partner login without explicit membership must not inherit a record
+	// simply because its user ID happens to match a partner ID.
+	if _, err := testStore.DB.Exec("DELETE FROM partner_users WHERE user_id = $1", mustUserID(t, partnerA)); err != nil {
+		t.Fatal(err)
+	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/products", nil, []*http.Cookie{cookie}, false, nil)
+	decodeAPIData(t, body, &products)
+	if len(products.Items) != 0 {
+		t.Fatalf("unassigned partner saw catalog: %s", body)
+	}
 }
 
 func mustUserID(t *testing.T, username string) int64 {
@@ -276,4 +324,16 @@ func mustUserID(t *testing.T, username string) int64 {
 		t.Fatalf("find user: %v", err)
 	}
 	return int64(user.ID)
+}
+
+func createAPITestPartner(t *testing.T, username string) int64 {
+	t.Helper()
+	id, err := testStore.UpsertPartner(db.Partner{Name: username, Slug: username, ContactEmail: username + "@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testStore.DB.Exec("INSERT INTO partner_users (user_id, partner_id) VALUES ($1, $2)", mustUserID(t, username), id); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

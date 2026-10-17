@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/money"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 )
 
@@ -23,7 +24,8 @@ type AdminPageData struct {
 	Orders         []adminsvc.Order
 	AuditLogs      []adminsvc.AuditLog
 	OrderCount     int
-	RevenueTotal   float64
+	CancelledCount int
+	RevenueTotal   money.Cents
 	PendingCount   int
 	ShippedCount   int
 	DeliveredCount int
@@ -33,9 +35,9 @@ type AdminPageData struct {
 	OrderMessage   string
 }
 
-func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, data AdminPageData) {
+func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, status int, data AdminPageData) {
 	data.CSRFToken = a.Auth.CSRFToken(r)
-	a.Render(w, a.Templates.Admin, data)
+	a.RenderStatus(w, a.Templates.Admin, status, data)
 }
 
 func loadAdminMetrics(svc app.AdminService) (adminsvc.Metrics, error) {
@@ -57,7 +59,7 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		renderAdminPage(a, w, r, adminDashboardPage(metrics, adminRoleFromContext(r)))
+		renderAdminPage(a, w, r, http.StatusOK, adminDashboardPage(metrics, adminRoleFromContext(r)))
 	}
 }
 
@@ -83,7 +85,7 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		renderAdminPage(a, w, r, adminProductsPage(metrics, adminRoleFromContext(r), products))
+		renderAdminPage(a, w, r, http.StatusOK, adminProductsPage(metrics, adminRoleFromContext(r), products))
 	}
 }
 
@@ -130,8 +132,11 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 				page.OrderError = "Unable to update order state"
 				responseStatus = http.StatusBadRequest
 			default:
-				page.OrderMessage = "Order updated"
+				redirectWithFlash(w, r, "/orders", "success", "Order updated")
+				return
 			}
+		} else if flash := popFlash(w, r); flash.Message != "" {
+			page.OrderMessage = flash.Message
 		}
 
 		orders, err := svc.Orders()
@@ -141,10 +146,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 		}
 
 		page.Orders = orders
-		if responseStatus != http.StatusOK {
-			w.WriteHeader(responseStatus)
-		}
-		renderAdminPage(a, w, r, page)
+		renderAdminPage(a, w, r, responseStatus, page)
 	}
 }
 
@@ -170,7 +172,7 @@ func AdminReports(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		renderAdminPage(a, w, r, adminReportsPage(metrics, adminRoleFromContext(r), report))
+		renderAdminPage(a, w, r, http.StatusOK, adminReportsPage(metrics, adminRoleFromContext(r), report))
 	}
 }
 
@@ -189,7 +191,7 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		renderAdminPage(a, w, r, adminDeliveriesPage(metrics, adminRoleFromContext(r)))
+		renderAdminPage(a, w, r, http.StatusOK, adminDeliveriesPage(metrics, adminRoleFromContext(r)))
 	}
 }
 
@@ -225,8 +227,11 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			case err != nil:
 				page.TeamError = "Unable to deactivate user"
 			default:
-				page.TeamMessage = "User account deactivated"
+				redirectWithFlash(w, r, "/team", "success", "User account deactivated")
+				return
 			}
+		} else if flash := popFlash(w, r); flash.Message != "" {
+			page.TeamMessage = flash.Message
 		}
 
 		teamMembers, err := svc.TeamMembers()
@@ -235,7 +240,7 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			return
 		}
 		page.TeamMembers = teamMembers
-		renderAdminPage(a, w, r, page)
+		renderAdminPage(a, w, r, http.StatusOK, page)
 	}
 }
 
@@ -260,6 +265,6 @@ func AdminAudit(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		renderAdminPage(a, w, r, adminAuditPage(metrics, adminRoleFromContext(r), logs))
+		renderAdminPage(a, w, r, http.StatusOK, adminAuditPage(metrics, adminRoleFromContext(r), logs))
 	}
 }

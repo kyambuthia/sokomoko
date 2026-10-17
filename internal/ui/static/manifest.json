@@ -1,10 +1,15 @@
 {
-    "name": "sokomoko",
+    "name": "Sokomoko",
+    "short_name": "Sokomoko",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f7f4ee",
+    "theme_color": "#111111",
     "icons": [
         {
             "src": "/static/icons/sokomoko.svg",
-            "type": "image/svg",
-            "sizes": "80x80"
+            "type": "image/svg+xml",
+            "sizes": "any"
         }
     ]
 }

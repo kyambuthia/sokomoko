@@ -11,7 +11,7 @@ Authentication is implemented in
 | user | customer signup | customer login and customer reset |
 | staff | admin/staff signup | admin login and operational reset |
 | admin | admin setup or admin seed | admin login and operational reset |
-| partner | seed workflow | partner host login and partner operations |
+| partner | provisioned account with explicit partner_users membership | partner host login and partner operations |
 
 The partner host is an operational surface for admin, staff, and partner users.
 Partner users are scoped to their own catalog and order operations.
@@ -56,7 +56,7 @@ On localhost:
 
 1. GET|POST /signup validates the username, email, and password.
 2. Passwords must be at least ten non-whitespace characters.
-3. Passwords are hashed with bcrypt after appending a random per-user salt.
+3. Passwords are hashed with bcrypt, which embeds its own salt. Passwords over 72 bytes are rejected.
 4. The account is created with role user.
 5. GET|POST /login accepts only role user.
 6. POST /logout deletes the current session and expires the cookie.
@@ -99,3 +99,7 @@ method-filtering defect.
 - [CSRF implementation](../internal/auth/csrf.go)
 - [session persistence](../internal/db/sessions.go)
 - [auth route registration](../internal/routes/register.go)
+
+Partner identities use explicit `partner_users` membership; user IDs and partner
+record IDs are independent. Only wholly owned orders are exposed to partners;
+mixed-partner orders require admin/staff operations.

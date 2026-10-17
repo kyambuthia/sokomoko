@@ -93,7 +93,7 @@
           <tr>
             <td>{{.Username}}</td>
             <td>{{.Email}}</td>
-            <td><code>{{.TempPassword}}</code></td>
+            <td><code>{{.TempPassword}}</code> <ui-copy text="{{.TempPassword}}" label="Copy password for {{.Username}}"></ui-copy></td>
           </tr>
           {{end}}
         </tbody>

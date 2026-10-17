@@ -63,7 +63,7 @@
               <p class="eyebrow">Order #{{.ID}}</p>
               <h3>{{.CustomerName}}</h3>
             </div>
-            <strong>${{printf "%.2f" .TotalAmount}}</strong>
+            <strong>${{.TotalAmount}}</strong>
           </div>
           <div class="order-card__body">
             <div class="order-card__details">
@@ -73,10 +73,11 @@
             <p class="order-card__items-label"><strong>Items</strong></p>
             <ul>
               {{range .Items}}
-              <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
+              <li>{{.ProductName}} × {{.Quantity}} - ${{.LineTotal}}</li>
               {{end}}
             </ul>
             <form action="/orders" method="POST" class="form order-card__form" data-api-partner-order>
+            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
               <input type="hidden" name="order_id" value="{{.ID}}">
               <div class="form__group form-group">
                 <label class="form__label" for="partner_status_{{.ID}}">Partner status</label>

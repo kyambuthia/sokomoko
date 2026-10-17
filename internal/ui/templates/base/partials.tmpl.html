@@ -1,0 +1,56 @@
+{{/* product-card renders one catalog tile. Call with
+     dict "Product" <catalog.Product> "CSRFToken" <string>. */}}
+{{ define "product-card" }}
+{{ $p := .Product }}
+<article class="product-tile product-card">
+  <a href="/products/{{ $p.Slug }}" aria-label="View {{ $p.Name }} details">
+    <img src="{{ $p.ImageURL }}" alt="{{ $p.ImageAlt }}" class="product-tile__image product-card__image" width="200" height="200" loading="lazy" decoding="async">
+  </a>
+  <div class="product-tile__body product-card__content">
+    <h3 class="product-tile__name product-card__title"><a href="/products/{{ $p.Slug }}">{{ $p.Name }}</a></h3>
+    <p class="product-tile__description product-card__description">{{ $p.Description }}</p>
+    <div class="product-card__meta">
+      <ui-price amount="{{ $p.Price }}" class="product-card__price">${{ $p.Price }}</ui-price>
+      {{ if $p.InStock }}
+      <ui-badge variant="success" label="In stock">In stock</ui-badge>
+      {{ else }}
+      <ui-badge variant="danger" label="Out of stock">Out of stock</ui-badge>
+      {{ end }}
+    </div>
+    <div class="product-tile__footer product-card__footer">
+      {{ if $p.InStock }}
+      <ui-add-to-cart product-name="{{ $p.Name }}">
+        <form action="/cart/add" method="POST">
+          {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+          <input type="hidden" name="product_id" value="{{ $p.ID }}">
+          <input type="hidden" name="quantity" value="1">
+          <button type="submit" class="btn btn--full product-card__button">Add to cart</button>
+        </form>
+      </ui-add-to-cart>
+      {{ else }}
+      <button class="btn btn--full product-card__button" type="button" disabled>Unavailable</button>
+      {{ end }}
+    </div>
+  </div>
+</article>
+{{ end }}
+
+{{/* flash renders a one-time message set by the previous request. */}}
+{{ define "flash" }}
+{{ if .Message }}
+<ui-alert variant="{{ if eq .Kind "danger" }}danger{{ else }}success{{ end }}"><p>{{ .Message }}</p></ui-alert>
+{{ end }}
+{{ end }}
+
+{{/* order-status renders the live order tracker for a customer order. */}}
+{{ define "order-status" }}
+<ui-order-status
+  order-id="{{ .ID }}"
+  status="{{ .Status }}"
+  partner-status="{{ .PartnerStatus }}"
+  delivery-status="{{ .DeliveryStatus }}"
+  endpoint="/api/orders/status?id={{ .ID }}"
+>
+  <p class="order-status__summary">{{ .Status }} &middot; fulfillment {{ .PartnerStatus }} &middot; delivery {{ .DeliveryStatus }}</p>
+</ui-order-status>
+{{ end }}

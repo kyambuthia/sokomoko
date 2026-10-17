@@ -1,110 +1,145 @@
-# Architecture
+# Architecture Overview
 
-Sokomoko is a single Go binary with one SQLite store and server-rendered HTML.
-The runtime is composed in
-[internal/app/compose.go](../internal/app/compose.go).
+Last updated: October 17, 2026
 
-## Runtime sequence
+## What Sokomoko is
 
-runServe in [cmd/sokomoko/serve.go](../cmd/sokomoko/serve.go):
+Sokomoko is a host-routed, server-rendered marketplace built with Go,
+`net/http`, `html/template`, embedded static assets, and PostgreSQL.
 
-1. Configures the optional password-reset email sender.
-2. Parses the templates.
-3. Opens SQLite.
-4. Applies the embedded schema and optionally runs seed workflows.
-5. Composes the application services.
-6. Registers public, admin, and partner muxes.
-7. Wraps the host router in shared middleware.
-8. Starts the HTTP server and background cleanup loop.
+It is one binary, one database, and three host surfaces:
 
-migrate applies the schema and exits. seed applies the schema, runs all seed
-workflows, and exits.
+- `localhost`: customer storefront, cart, checkout, and account
+- `admin.localhost`: first-run admin setup, reporting, team management, order operations, audit log
+- `partner.localhost`: store setup, catalog entry, and fulfillment
 
-## Request path
+## Runtime composition
 
-    HTTP request
-      → trusted-host check
-      → recovery, request ID, security headers, body limit
-      → CSRF token validation for cookie-authenticated unsafe methods
-      → optional in-memory IP limiter
-      → request logging
-      → public/admin/partner mux
-      → route handler
-      → feature service
-      → SQLite query or transaction
-      → HTML template or redirect
+Startup lives in `cmd/sokomoko`. `serve`:
 
-Host routing is implemented in
-[cmd/sokomoko/server.go](../cmd/sokomoko/server.go). Hosts beginning with
-admin. use the admin mux; hosts beginning with partner. use the partner mux;
-all other allowed hosts use the public mux.
+1. Loads and validates configuration (production refuses unsafe or missing settings).
+2. Configures `slog` (JSON in production); the standard `log` package routes through it.
+3. Parses templates and opens a pooled PostgreSQL connection.
+4. In production verifies the complete migration history after a separate
+   `migrate` release task. Development auto-migrates and permits `--seed`.
+5. Composes the app (`internal/app/compose.go`) and registers the three host muxes and the shared `/api/v1` mux.
+6. Starts background jobs: reservation expiry (every minute) and session/reset-token pruning (every five minutes).
+7. Delegates serving and maintenance to `internal/lifecycle`. On SIGINT/SIGTERM,
+   marks readiness unavailable, cancels maintenance queries, drains HTTP for up
+   to 30 seconds, and waits for maintenance before closing the pool.
 
-## Package responsibilities
+## Request flow
 
-| Package | Responsibility |
+1. `cmd/sokomoko/server.go` validates the `Host` header and picks the host mux.
+2. Middleware in order: request ID (inbound IDs validated), structured access
+   log, panic recovery, security headers (CSP, HSTS over trusted TLS), 1 MB body
+   limit, CSRF token check, optional POST rate limit (proxy-aware client IP).
+   This order logs rejected requests and recovered panics. Dynamic responses
+   default to `Cache-Control: no-store`; public assets set their own cache rules.
+3. `internal/routes` handles transport: parsing, flash messages, status codes, JSON vs HTML responses.
+4. `internal/service/*` enforces feature rules and maps store data into view models.
+5. `internal/db` runs SQL inside bounded-timeout contexts and transactions.
+6. `internal/ui` renders templates; `App.Render` buffers output so a template error yields a clean 500 page.
+
+Keep transport concerns in routes, domain rules in services, and SQL in the DB layer.
+
+The partner workspace authorizes admins, staff, and partner users. Explicit
+`partner_users` membership connects login accounts to partner records. Partner
+catalog access and wholly owned orders are scoped to that membership. Mixed-partner
+orders require admin/staff fulfillment. Store settings remain platform-wide.
+
+## Deployment boundary
+
+The production reference runs Caddy and one private app container against an
+external PostgreSQL database. A separate release container owns schema changes.
+Runtime credentials need DML and migration-history SELECT, with no schema DDL.
+The Go 1.26.9 image includes a shell-free readiness command. Production startup
+requires trusted hosts, an HTTPS reset origin, SMTP with STARTTLS, and explicit
+database configuration. See [DEPLOYMENT.md](DEPLOYMENT.md) for release, restore,
+and rollback procedures and [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) for decisions.
+
+Only cash on delivery can be selected or submitted. It creates a pending payment
+record. Historical placeholder methods can still be displayed but cannot create
+new orders or simulated captured payments.
+
+## Frontend model
+
+Pages are fully server-rendered and work without JavaScript. Custom elements in
+`internal/ui/static/scripts/components.js` enhance server markup in place:
+
+| Element | Enhances |
 | --- | --- |
-| cmd/sokomoko | CLI commands, startup, host routing, shutdown |
-| internal/app | dependency container, composition, middleware, shared errors |
-| internal/auth | users, passwords, sessions, CSRF, reset flows, role guards |
-| internal/routes | route registration, method checks, page handlers |
-| internal/service/catalog | product and category reads |
-| internal/service/commerce | cart reads and mutations |
-| internal/service/checkout | checkout snapshots, inventory reservation, totals, placement |
-| internal/service/payment | supported methods and payment record construction |
-| internal/service/account | customer account and order history |
-| internal/service/admin | metrics, products, orders, reports, teams, audit |
-| internal/service/partner | store settings, catalog operations, fulfillment |
-| internal/db | embedded schema, queries, transactions, models, seed data |
-| internal/ui | embedded templates, static files, asset URLs |
-| internal/notify | SMTP password-reset delivery |
+| `ui-cart-count` | Header cart badge from `GET /api/cart`, updated live on cart events |
+| `ui-add-to-cart` | `/cart/add` forms: add without a page reload, toast feedback |
+| `ui-cart-line` | Cart quantity inputs: debounced updates of line totals and subtotal |
+| `ui-confirm` | Destructive forms: confirmation prompt |
+| `ui-countdown` | Checkout stock-hold countdown |
+| `ui-relative-time` | Timestamps rendered as "5 minutes ago" |
+| `ui-order-status` | Order progress tracker polling `GET /api/orders/status` |
+| `ui-table-filter` | Client-side filtering of admin and partner tables |
+| `ui-copy` | Copy-to-clipboard for one-time credentials |
+| `ui-char-counter` | Remaining characters for length-limited fields |
+| `ui-category-nav` | Department menu from `GET /api/categories` |
 
-## Data and transaction boundaries
+`main.js` holds the earlier presentational components (alerts, badges, price,
+quantity stepper, header search, toasts, dialogs). Cart endpoints return JSON when
+the request sends `Accept: application/json`, and redirect with a flash message
+otherwise. JavaScript sends the CSRF token from the enhanced form in the
+`X-CSRF-Token` header.
 
-SQLite is opened with foreign keys enabled, a five-second busy timeout, and a
-maximum pool size of ten connections. Checkout inventory reservation uses a
-pinned connection and BEGIN IMMEDIATE. Final order placement creates the order,
-order lines, payment, payment attempt, inventory allocation, checkout
-completion, idempotency record, and cart clear inside one transaction.
+## Data model
 
-The checkout flow is:
+All tables are defined in `internal/db/migrations`. Conventions: `BIGINT`
+identity keys, `TIMESTAMPTZ` timestamps, money in `*_cents` `BIGINT` columns
+(`internal/money.Cents` in Go), and `updated_at` maintained by triggers.
 
-1. Read the current cart.
-2. Reserve stock for fifteen minutes.
-3. Persist checkout lines and a totals snapshot.
-4. Accept an address, payment method, and idempotency key.
-5. Reuse an existing placement for a repeated key.
-6. Place the order transactionally.
+- Identity: `users` (case-insensitive unique username and email, soft delete), `sessions` (SHA-256 of the cookie token plus a CSRF token), `password_reset_tokens` (hashed, single use).
+- Marketplace: `store_settings` (singleton), `partners` (vendors).
+- Catalog: `categories`, `products` (full-text `search_vector` with a GIN index, partial unique slug), `product_images`.
+- Inventory: `warehouses`, `inventory_stocks` (single source of truth; `CHECK reserved + allocated <= on_hand`), `stock_reservations` (checkout holds with expiry), `stock_movements` (append-only ledger).
+- Shopping: `carts`, `cart_items`, `checkouts` and `checkout_lines` (priced snapshot of the cart).
+- Orders: `orders` (status, partner fulfillment status, delivery status, `inventory_state`, totals that must add up), `order_items` (price and partner snapshot, generated line totals).
+- Payments: `payments`, `payment_attempts`, `idempotency_keys`.
+- Audit: `audit_logs`.
 
-Current totals are defined in
-[internal/service/checkout/checkout.go](../internal/service/checkout/checkout.go):
-$6.50 shipping below $80, free shipping at or above $80, and estimated tax
-of 8%.
+### Stock lifecycle
 
-## Schema authority
+```text
+available = on_hand - reserved - allocated
 
-The runtime schema is the embedded
-[internal/db/schema.sql](../internal/db/schema.sql), loaded by
-[internal/db/store.go](../internal/db/store.go). The separate
-[db/schema.sql](../db/schema.sql) file is an older, incomplete snapshot and
-is not read by the application. Do not treat the two files as interchangeable.
+checkout prepared   reserved  += qty                (stock_reservations active)
+hold expires        reserved  -= qty                (background job)
+cart changes        reserved  -= qty, checkout cancelled
+order placed        reserved  -= qty, allocated += qty   (inventory_state = allocated)
+order dispatched    allocated -= qty, on_hand -= qty     (inventory_state = shipped)
+order cancelled     allocated -= qty                     (inventory_state = released)
+```
 
-Schema version 2 is recorded in schema_version, but incremental migration steps
-are not implemented. Existing databases receive a compatibility migration for
-the sessions.csrf_token column.
+Each transition writes a `stock_movements` row. Inventory rows are locked
+`FOR UPDATE` in product-id order to avoid deadlocks, and transactions retry on
+serialization failures and deadlocks.
 
-## Templates and assets
+### Checkout and idempotency
 
-Templates are parsed explicitly in
-[internal/ui/templates.go](../internal/ui/templates.go). Shared base
-templates are combined with page templates at startup. Static requests try
-internal/ui/static on disk first and then fall back to the embedded asset
-filesystem. Asset URLs receive a modification-time or content-hash query
-parameter.
+The checkout token doubles as the idempotency key. Submitting the same token
+again returns the original order. Changing the cart cancels the open checkout
+and releases its holds, so an order is never placed for a stale snapshot.
 
-## Design constraints
+## Testing
 
-- Keep transport logic in internal/routes.
-- Keep business rules in internal/service.
-- Keep SQL and transaction details in internal/db.
-- Add template data fields at the route/view boundary.
-- Preserve host routing unless changing the public surface deliberately.
+- Unit tests sit next to the code. DB-backed tests use `internal/db/dbtest`, which creates a fresh PostgreSQL schema per package from `SOKOMOKO_TEST_DATABASE_URL`.
+- `cmd/sokomoko` integration tests drive the full HTTP stack, including CSRF, host routing, and role checks.
+- `internal/db/orders_test.go` includes a concurrent oversell test; run it under `-race`.
+
+## Working rules
+
+- Change one layer at a time and keep interfaces explicit (each service declares the `store` interface it needs).
+- Add tests in the layer where the rule lives.
+- Schema changes go in a new numbered migration. Never edit an applied one.
+- Every state-changing form needs a `csrf_token` field. Page data structs carry `CSRFToken`.
+- New dynamic behavior should enhance server-rendered markup, not replace it.
+- Preserve the host-based architecture unless there is a deliberate routing redesign.
+
+The versioned JSON API and `api.js`/`dynamic.js` enhance the redesigned pages;
+see [the API contract](11-api.md). Monetary JSON values remain numeric major
+currency units; stored and calculated amounts use integer cents.

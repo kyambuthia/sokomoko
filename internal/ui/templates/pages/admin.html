@@ -71,7 +71,7 @@
               <tr>
                 <td>{{.Name}}</td>
                 <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
-                <td>${{printf "%.2f" .Price}}</td>
+                <td>${{.Price}}</td>
                 <td>{{.StockQuantity}}</td>
                 <td>{{if gt .StockQuantity 0}}Active{{else}}Out of stock{{end}}</td>
               </tr>
@@ -98,7 +98,7 @@
       <article class="order-card">
         <div class="order-card__header">
           <div><p class="eyebrow">Order #{{.ID}}</p><h3>{{.CustomerName}}</h3></div>
-          <strong>${{printf "%.2f" .TotalAmount}}</strong>
+          <strong>${{.TotalAmount}}</strong>
         </div>
         <div class="order-card__body">
           <div class="order-card__details">
@@ -108,11 +108,12 @@
           <p class="order-card__items-label"><strong>Items</strong></p>
           <ul>
             {{range .Items}}
-            <li>{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}</li>
+            <li>{{.ProductName}} × {{.Quantity}} - ${{.LineTotal}}</li>
             {{end}}
           </ul>
           {{if eq $.Role "admin"}}
           <form action="/orders" method="POST" class="form order-card__form" data-api-admin-order>
+            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
             <input type="hidden" name="order_id" value="{{.ID}}">
             <div class="form__group form-group">
               <label class="form__label" for="status_{{.ID}}">Order status</label>
@@ -165,7 +166,7 @@
 
   {{if eq .Title "Sales Reports"}}
   <section class="workspace-metrics admin-metrics" aria-label="Sales overview">
-    <ui-metric-card label="Total Revenue" value="${{printf "%.2f" .RevenueTotal}}" note="Non-cancelled orders"></ui-metric-card>
+    <ui-metric-card label="Total Revenue" value="${{.RevenueTotal}}" note="Non-cancelled orders"></ui-metric-card>
     <ui-metric-card label="Total Orders" value="{{.OrderCount}}" note="All statuses"></ui-metric-card>
     <ui-metric-card label="Active Users" value="{{.SessionCount}}" note="Current sessions"></ui-metric-card>
   </section>
@@ -206,6 +207,7 @@
                 <td>
                   {{if ne .Role "admin"}}
                   <form method="POST" action="/team" class="table-action-form">
+            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
                     <input type="hidden" name="user_id" value="{{.ID}}">
                     <button type="submit" class="btn btn--secondary btn--small">Deactivate</button>
                   </form>

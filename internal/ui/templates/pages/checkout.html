@@ -6,15 +6,14 @@
     <p class="eyebrow">Final step</p>
     <h1 class="page-intro__title">Almost there.</h1>
     <p class="page-intro__lead">Confirm your delivery details and payment method, then we’ll take care of the rest.</p>
+  </header>
 
-  {{if .Message}}
-  <ui-alert variant="success"><p>{{.Message}}</p></ui-alert>
-  {{end}}
   {{if .Error}}
   <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
   {{if .CanCheckout}}
+  {{if .ExpiresAt}}<ui-countdown deadline="{{.ExpiresAt}}" expired-message="Your reserved items were released. Reload this page to reserve them again."><p>Items are reserved for 15 minutes.</p></ui-countdown>{{end}}
   <div class="checkout-layout">
     <section class="checkout-card checkout-summary" aria-labelledby="checkout-summary-title">
       <div class="checkout-card__header">
@@ -23,20 +22,20 @@
       </div>
       <div class="checkout-items">
         {{range .Items}}
-        <div class="checkout-item" aria-label="{{.ProductName}} × {{.Quantity}} - ${{printf "%.2f" .LineTotal}}">
+        <div class="checkout-item" aria-label="{{.ProductName}} × {{.Quantity}} - ${{.LineTotal}}">
           <div>
             <strong class="checkout-item__name">{{.ProductName}}</strong>
-            <span class="checkout-item__meta">Qty {{.Quantity}} · ${{printf "%.2f" .UnitPrice}} each</span>
+            <span class="checkout-item__meta">Qty {{.Quantity}} · ${{.UnitPrice}} each</span>
           </div>
-          <strong>${{printf "%.2f" .LineTotal}}</strong>
+          <strong>${{.LineTotal}}</strong>
         </div>
         {{end}}
       </div>
       <div class="checkout-totals">
-        <div class="checkout-total"><span>Subtotal</span><span>${{printf "%.2f" .Subtotal}}</span></div>
-        <div class="checkout-total"><span>Shipping</span><span>${{printf "%.2f" .ShippingFee}}</span></div>
-        <div class="checkout-total"><span>Estimated tax</span><span>${{printf "%.2f" .TaxAmount}}</span></div>
-        <div class="checkout-total checkout-total--grand"><strong>Total</strong><strong>${{printf "%.2f" .TotalAmount}}</strong></div>
+        <div class="checkout-total"><span>Subtotal</span><span>${{.Subtotal}}</span></div>
+        <div class="checkout-total"><span>Shipping</span><span>${{.ShippingFee}}</span></div>
+        <div class="checkout-total"><span>Estimated tax</span><span>${{.TaxAmount}}</span></div>
+        <div class="checkout-total checkout-total--grand"><strong>Total</strong><strong>${{.TotalAmount}}</strong></div>
       </div>
     </section>
 
@@ -50,7 +49,7 @@
         <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
         <div class="form__group form-group">
           <label class="form__label" for="delivery_address">Delivery address</label>
-          <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="5" required>{{.DeliveryAddress}}</textarea>
+          <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="5" maxlength="500" autocomplete="street-address" required>{{.DeliveryAddress}}</textarea>
         </div>
         <div class="form__group form-group">
           <label class="form__label" for="payment_method">Payment method</label>

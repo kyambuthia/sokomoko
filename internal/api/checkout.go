@@ -132,7 +132,7 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Idempotency-Key", token)
 		writeData(w, http.StatusCreated, placedOrderDTO{
 			OrderID:     orderID,
-			Summary:     checkoutSummaryDTO{Subtotal: summary.Subtotal, ShippingFee: summary.ShippingFee, TaxAmount: summary.TaxAmount, Total: summary.Total},
+			Summary:     checkoutSummaryDTO{Subtotal: summary.Subtotal.Float64(), ShippingFee: summary.ShippingFee.Float64(), TaxAmount: summary.TaxAmount.Float64(), Total: summary.Total.Float64()},
 			Idempotency: token,
 		})
 		return

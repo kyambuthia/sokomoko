@@ -12,27 +12,27 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/lifecycle"
 )
 
 type httpServer struct {
 	*http.Server
+	Drain func()
 }
 
 func runHTTPServer(server *httpServer, store *db.Store) error {
-	idleConnsClosed := make(chan struct{})
-	cleanupDone := make(chan struct{})
-	go runBackgroundCleanup(store, cleanupDone)
-	go shutdownOnSignal(server.Server, cleanupDone, idleConnsClosed)
-
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return err
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := lifecycle.Run(ctx, server.Server, server.Drain, func(ctx context.Context) {
+		lifecycle.Maintain(ctx, store)
+	})
+	if err == nil {
+		log.Println("[shutdown] server stopped gracefully")
 	}
-
-	<-idleConnsClosed
-	log.Println("[shutdown] server stopped gracefully")
-	return nil
+	return err
 }
 
 func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux, apiMux *http.ServeMux) http.Handler {
@@ -59,24 +59,6 @@ func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partne
 	})
 }
 
-func shutdownOnSignal(server *http.Server, cleanupDone chan struct{}, idleConnsClosed chan struct{}) {
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
-	sig := <-sigint
-
-	log.Printf("[shutdown] signal=%s received, shutting down server", sig.String())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("[shutdown] graceful shutdown failed: %v", err)
-	}
-
-	close(cleanupDone)
-	close(idleConnsClosed)
-}
-
 func parseAllowedHosts(raw string) map[string]struct{} {
 	hosts := map[string]struct{}{}
 	for _, part := range strings.Split(raw, ",") {
@@ -90,19 +72,20 @@ func parseAllowedHosts(raw string) map[string]struct{} {
 
 func buildMiddlewares(cfg config.Config, application *app.App) []app.Middleware {
 	middlewares := []app.Middleware{
-		app.Recoverer(),
 		app.RequestID(),
-		app.SecurityHeaders(),
+		app.RequestLogger(),
+		app.Recoverer(),
+		app.SecurityHeadersWithProxy(cfg.TrustProxyHeaders),
 		app.BodyLimit(1 << 20),
 		application.Auth.CSRFMiddleware,
 	}
 
 	if cfg.PostRateLimitMax > 0 {
 		window := time.Duration(cfg.PostRateLimitWindow) * time.Second
-		middlewares = append(middlewares, app.RateLimitByIP(cfg.PostRateLimitMax, window, http.MethodPost))
+		clientIP := func(r *http.Request) string { return auth.ClientIP(r, cfg.TrustProxyHeaders) }
+		middlewares = append(middlewares, app.RateLimitByKey(cfg.PostRateLimitMax, window, clientIP, http.MethodPost))
 	}
 
-	middlewares = append(middlewares, app.RequestLogger())
 	return middlewares
 }
 
@@ -115,34 +98,9 @@ func sortedHostList(hosts map[string]struct{}) string {
 	return strings.Join(list, ",")
 }
 
-func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	run := func() {
-		if err := store.CleanupSessions(); err != nil {
-			log.Printf("session cleanup failed: %v", err)
-		}
-		if err := store.CleanupPasswordResetTokens(); err != nil {
-			log.Printf("password reset token cleanup failed: %v", err)
-		}
-	}
-
-	run()
-	for {
-		select {
-		case <-done:
-			log.Println("[cleanup] background cleanup stopped")
-			return
-		case <-ticker.C:
-			run()
-		}
-	}
-}
-
 func printStartupSummary(cfg config.Config, server *httpServer, allowedHosts map[string]struct{}, seedOnServe bool) {
-	log.Printf("[startup] sokomoko booting")
-	log.Printf("[startup] env=%s port=%s db=%s", cfg.Environment, cfg.Port, cfg.DBPath)
+	log.Printf("[startup] sokomoko %s booting", version)
+	log.Printf("[startup] env=%s port=%s schema_version=%d", cfg.Environment, cfg.Port, db.LatestSchemaVersion())
 	log.Printf("[startup] seed_on_startup=%t", seedOnServe)
 	if cfg.SessionCookieDomain != "" {
 		log.Printf("[startup] session_cookie_domain=%s", cfg.SessionCookieDomain)

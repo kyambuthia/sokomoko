@@ -2,8 +2,6 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"html/template"
@@ -16,10 +14,9 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 	"golang.org/x/crypto/bcrypt"
 )
-
-const testDBPath = "./test_auth.db"
 
 var testStore *db.Store
 
@@ -28,28 +25,23 @@ func newTestService(cfg Config) *Service {
 }
 
 func TestMain(m *testing.M) {
-	setupTestDB()
-	code := m.Run()
-	teardownTestDB()
-	os.Exit(code)
-}
-
-func setupTestDB() {
+	dsn, cleanup, ok := dbtest.MainDSN()
+	if !ok {
+		fmt.Println("skipping auth tests: " + dbtest.EnvDatabaseURL + " is not set")
+		os.Exit(0)
+	}
 	var err error
-	testStore, err = db.OpenStore(testDBPath)
+	testStore, err = db.OpenStore(dsn)
 	if err != nil {
 		panic(err)
 	}
 	if err := testStore.ApplySchema(); err != nil {
 		panic(err)
 	}
-}
-
-func teardownTestDB() {
-	if testStore != nil {
-		_ = testStore.Close()
-	}
-	os.Remove(testDBPath)
+	code := m.Run()
+	_ = testStore.Close()
+	cleanup()
+	os.Exit(code)
 }
 
 func clearUsersTable() {
@@ -74,14 +66,9 @@ func createTestUser(username, email, password, role string) *db.User {
 		Username: username,
 		Email:    email,
 		Role:     role,
-		Slug:     username,
 	}
 
-	saltBytes := make([]byte, 16)
-	rand.Read(saltBytes)
-	user.Salt = base64.URLEncoding.EncodeToString(saltBytes)
-
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+user.Salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	user.PasswordHash = string(hashedPassword)
 
 	id, err := testStore.CreateUser(user)
@@ -573,12 +560,12 @@ func TestLogin_SetsConfiguredSessionCookieDomain(t *testing.T) {
 }
 
 func TestMapAccountCreationError(t *testing.T) {
-	status, _ := mapAccountCreationError(errors.New("sqlite3: constraint failed: UNIQUE constraint failed: users.username"), "conflict")
+	status, _ := mapAccountCreationError(fmt.Errorf("%w: duplicate username", db.ErrUniqueConstraint), "conflict")
 	if status != http.StatusConflict {
 		t.Fatalf("unique constraint status=%d want=%d", status, http.StatusConflict)
 	}
 
-	status, _ = mapAccountCreationError(errors.New("sqlite3: database is locked"), "conflict")
+	status, _ = mapAccountCreationError(fmt.Errorf("%w: connection reset", db.ErrTransient), "conflict")
 	if status != http.StatusServiceUnavailable {
 		t.Fatalf("locked db status=%d want=%d", status, http.StatusServiceUnavailable)
 	}
@@ -622,7 +609,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test access with valid session
 	sessionToken := "valid_session_token"
-	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour)})
+	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
@@ -645,13 +632,13 @@ func TestAuthMiddleware(t *testing.T) {
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code for no session: got %v want %v", status, http.StatusFound)
 	}
-	if location := rr.Header().Get("Location"); location != "/login" {
-		t.Errorf("handler returned wrong redirect location: got %v want %v", location, "/login")
+	if location := rr.Header().Get("Location"); location != "/login?next=%2Fprotected" {
+		t.Errorf("handler returned wrong redirect location: got %v want %v", location, "/login?next=%2Fprotected")
 	}
 
 	// Test access with expired session
 	sessionToken = "expired_session_token"
-	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, ExpiresAt: time.Now().Add(-time.Hour)})
+	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, CSRFToken: "csrf", ExpiresAt: time.Now().Add(-time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
@@ -661,8 +648,8 @@ func TestAuthMiddleware(t *testing.T) {
 	if status := rr.Code; status != http.StatusFound {
 		t.Errorf("handler returned wrong status code for expired session: got %v want %v", status, http.StatusFound)
 	}
-	if location := rr.Header().Get("Location"); location != "/login" {
-		t.Errorf("handler returned wrong redirect location: got %v want %v", location, "/login")
+	if location := rr.Header().Get("Location"); location != "/login?next=%2Fprotected" {
+		t.Errorf("handler returned wrong redirect location: got %v want %v", location, "/login?next=%2Fprotected")
 	}
 }
 

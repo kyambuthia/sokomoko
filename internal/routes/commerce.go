@@ -3,12 +3,15 @@ package routes
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/auth"
+	"github.com/kyambuthia/sokomoko/internal/money"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
@@ -17,26 +20,27 @@ import (
 type CartPageData struct {
 	Title     string
 	Items     []commerceSvc.CartItem
-	Subtotal  float64
-	Error     string
-	Message   string
+	Subtotal  money.Cents
+	ItemCount int
+	Flash     Flash
 	CSRFToken string
+	MaxQty    int
 }
 
 type CheckoutPageData struct {
 	Title           string
 	Items           []checkoutsvc.Item
-	Subtotal        float64
-	ShippingFee     float64
-	TaxAmount       float64
-	TotalAmount     float64
+	Subtotal        money.Cents
+	ShippingFee     money.Cents
+	TaxAmount       money.Cents
+	TotalAmount     money.Cents
 	DeliveryAddress string
 	PaymentMethod   string
 	PaymentMethods  []PaymentMethodOption
 	IdempotencyKey  string
 	FormAction      string
+	ExpiresAt       string
 	Error           string
-	Message         string
 	CanCheckout     bool
 	CSRFToken       string
 }
@@ -46,269 +50,302 @@ type PaymentMethodOption struct {
 	Label string
 }
 
-func checkoutPaymentOptions(paymentOptions []paymentsvc.MethodOption) []PaymentMethodOption {
-	options := make([]PaymentMethodOption, 0, len(paymentOptions))
-	for _, option := range paymentOptions {
-		options = append(options, PaymentMethodOption{
-			Value: option.Value,
-			Label: option.Label,
+// cartJSON is returned by cart endpoints to JSON clients.
+type cartJSON struct {
+	OK        bool          `json:"ok"`
+	Message   string        `json:"message,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	ItemCount int           `json:"itemCount"`
+	Subtotal  string        `json:"subtotal"`
+	Lines     []cartLineDTO `json:"lines"`
+}
+
+type cartLineDTO struct {
+	ProductID int    `json:"productId"`
+	Quantity  int    `json:"quantity"`
+	LineTotal string `json:"lineTotal"`
+	Available int    `json:"available"`
+}
+
+func newCartJSON(cart commerceSvc.Cart) cartJSON {
+	out := cartJSON{OK: true, ItemCount: cart.ItemCount, Subtotal: cart.Subtotal.String(), Lines: []cartLineDTO{}}
+	for _, item := range cart.Items {
+		out.Lines = append(out.Lines, cartLineDTO{
+			ProductID: item.ProductID, Quantity: item.Quantity, LineTotal: item.LineTotal.String(), Available: item.StockQuantity,
 		})
 	}
-	return options
+	return out
 }
 
 func CartPage(a *app.App) http.HandlerFunc {
-	svc := a.Commerce
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			methodNotAllowed(w, http.MethodGet, http.MethodHead)
+			return
+		}
+		userID, _ := requestUserID(r)
+		cart, err := a.Commerce.Cart(userID)
+		if err != nil {
+			log.Printf("cart page: %v", err)
+			serverError(w, r)
+			return
+		}
+		a.Render(w, a.Templates.Cart, CartPageData{
+			Title:     "Cart",
+			Items:     cart.Items,
+			Subtotal:  cart.Subtotal,
+			ItemCount: cart.ItemCount,
+			Flash:     popFlash(w, r),
+			CSRFToken: a.Auth.CSRFToken(r),
+			MaxQty:    commerceSvc.MaxLineQuantity,
+		})
+	}
+}
 
+// CartSummaryAPI serves GET /api/cart for the header cart badge.
+func CartSummaryAPI(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet)
 			return
 		}
-
-		userID, ok := requestUserID(r)
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		items, subtotal, err := svc.GetCart(userID)
+		userID, _ := requestUserID(r)
+		cart, err := a.Commerce.Cart(userID)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			log.Printf("cart api: %v", err)
+			app.JSON(w, http.StatusInternalServerError, cartJSON{Error: "cart unavailable"})
+			return
+		}
+		app.JSON(w, http.StatusOK, newCartJSON(cart))
+	}
+}
+
+type cartMutation func(userID, productID, quantity int) error
+
+// cartAction handles the add/update/remove form posts. Browsers get a redirect
+// with a flash message; JSON clients get the updated cart.
+func cartAction(a *app.App, mutate cartMutation, successMessage string, quantityRequired bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		userID, _ := requestUserID(r)
+
+		productID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("product_id")))
+		if err != nil || productID <= 0 {
+			respondCartError(a, w, r, userID, http.StatusBadRequest, "Invalid product")
+			return
+		}
+		quantity := 1
+		if raw := strings.TrimSpace(r.FormValue("quantity")); raw != "" {
+			if quantity, err = strconv.Atoi(raw); err != nil {
+				respondCartError(a, w, r, userID, http.StatusBadRequest, "Invalid quantity")
+				return
+			}
+		} else if quantityRequired {
+			respondCartError(a, w, r, userID, http.StatusBadRequest, "Invalid quantity")
 			return
 		}
 
-		a.Render(w, a.Templates.Cart, cartPage(r, items, subtotal, a.Auth.CSRFToken(r)))
+		if err := mutate(userID, productID, quantity); err != nil {
+			status, message := cartErrorMessage(err)
+			if status == http.StatusInternalServerError {
+				log.Printf("cart mutation: %v", err)
+			}
+			respondCartError(a, w, r, userID, status, message)
+			return
+		}
+
+		if auth.WantsJSON(r) {
+			cart, err := a.Commerce.Cart(userID)
+			if err != nil {
+				app.JSON(w, http.StatusInternalServerError, cartJSON{Error: "cart unavailable"})
+				return
+			}
+			body := newCartJSON(cart)
+			body.Message = successMessage
+			app.JSON(w, http.StatusOK, body)
+			return
+		}
+		redirectWithFlash(w, r, "/cart", "success", successMessage)
+	}
+}
+
+func respondCartError(a *app.App, w http.ResponseWriter, r *http.Request, userID, status int, message string) {
+	if auth.WantsJSON(r) {
+		body := cartJSON{Error: message, Lines: []cartLineDTO{}}
+		if cart, err := a.Commerce.Cart(userID); err == nil {
+			body = newCartJSON(cart)
+			body.OK = false
+			body.Error = message
+		}
+		app.JSON(w, status, body)
+		return
+	}
+	redirectWithFlash(w, r, "/cart", "danger", message)
+}
+
+func cartErrorMessage(err error) (int, string) {
+	switch {
+	case errors.Is(err, commerceSvc.ErrInvalidProduct):
+		return http.StatusBadRequest, "Invalid product"
+	case errors.Is(err, commerceSvc.ErrInvalidQuantity):
+		return http.StatusBadRequest, fmt.Sprintf("Quantity must be between 1 and %d", commerceSvc.MaxLineQuantity)
+	case errors.Is(err, commerceSvc.ErrProductNotFound):
+		return http.StatusNotFound, "Product not found"
+	case errors.Is(err, commerceSvc.ErrOutOfStock):
+		return http.StatusConflict, "Product is out of stock"
+	case errors.Is(err, commerceSvc.ErrInsufficientStock):
+		return http.StatusConflict, "Requested quantity exceeds available stock"
+	default:
+		return http.StatusInternalServerError, "Unable to update your cart right now"
 	}
 }
 
 func CartAdd(a *app.App) http.HandlerFunc {
-	svc := a.Commerce
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		userID, ok := requestUserID(r)
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		productID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("product_id")))
-		if err != nil {
-			http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
-			return
-		}
-		qty := 1
-		if qRaw := strings.TrimSpace(r.FormValue("quantity")); qRaw != "" {
-			if parsed, parseErr := strconv.Atoi(qRaw); parseErr == nil && parsed > 0 {
-				qty = parsed
-			}
-		}
-
-		if err := svc.AddToCart(userID, productID, qty); err != nil {
-			switch {
-			case errors.Is(err, commerceSvc.ErrInvalidProduct):
-				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
-			case errors.Is(err, commerceSvc.ErrInvalidQuantity):
-				http.Redirect(w, r, "/cart?error=Invalid+quantity", http.StatusFound)
-			case errors.Is(err, commerceSvc.ErrProductNotFound):
-				http.Redirect(w, r, "/cart?error=Product+not+found", http.StatusFound)
-			case errors.Is(err, commerceSvc.ErrOutOfStock):
-				http.Redirect(w, r, "/cart?error=Product+is+out+of+stock", http.StatusFound)
-			case errors.Is(err, commerceSvc.ErrInsufficientStock):
-				http.Redirect(w, r, "/cart?error=Requested+quantity+exceeds+available+stock", http.StatusFound)
-			default:
-				http.Redirect(w, r, "/cart?error=Unable+to+add+item", http.StatusFound)
-			}
-			return
-		}
-
-		http.Redirect(w, r, "/cart?message=Item+added+to+cart", http.StatusFound)
-	}
+	return cartAction(a, a.Commerce.AddToCart, "Item added to cart", false)
 }
 
 func CartUpdate(a *app.App) http.HandlerFunc {
-	svc := a.Commerce
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		userID, ok := requestUserID(r)
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		productID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("product_id")))
-		if err != nil {
-			http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
-			return
-		}
-		qty, err := strconv.Atoi(strings.TrimSpace(r.FormValue("quantity")))
-		if err != nil {
-			http.Redirect(w, r, "/cart?error=Invalid+quantity", http.StatusFound)
-			return
-		}
-
-		if err := svc.UpdateCartItem(userID, productID, qty); err != nil {
-			if errors.Is(err, commerceSvc.ErrInvalidProduct) {
-				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
-				return
-			}
-			if errors.Is(err, commerceSvc.ErrInvalidQuantity) {
-				http.Redirect(w, r, "/cart?error=Invalid+quantity", http.StatusFound)
-				return
-			}
-			if errors.Is(err, commerceSvc.ErrOutOfStock) || errors.Is(err, commerceSvc.ErrInsufficientStock) {
-				http.Redirect(w, r, "/cart?error=Requested+quantity+exceeds+available+stock", http.StatusFound)
-				return
-			}
-			http.Redirect(w, r, "/cart?error=Unable+to+update+item", http.StatusFound)
-			return
-		}
-		http.Redirect(w, r, "/cart?message=Cart+updated", http.StatusFound)
-	}
+	return cartAction(a, a.Commerce.UpdateCartItem, "Cart updated", true)
 }
 
 func CartRemove(a *app.App) http.HandlerFunc {
-	svc := a.Commerce
+	return cartAction(a, func(userID, productID, _ int) error {
+		return a.Commerce.RemoveFromCart(userID, productID)
+	}, "Item removed", false)
+}
 
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+func checkoutPaymentOptions(paymentOptions []paymentsvc.MethodOption) []PaymentMethodOption {
+	options := make([]PaymentMethodOption, 0, len(paymentOptions))
+	for _, option := range paymentOptions {
+		options = append(options, PaymentMethodOption{Value: option.Value, Label: option.Label})
+	}
+	return options
+}
 
-		userID, ok := requestUserID(r)
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+func checkoutPage(a *app.App, r *http.Request, state checkoutsvc.PageState, paymentMethod string) CheckoutPageData {
+	selected := strings.TrimSpace(paymentMethod)
+	if selected == "" {
+		selected = state.PaymentMethod
+	}
+	if selected == "" {
+		selected = paymentsvc.MethodCashOnDelivery
+	}
+	expires := ""
+	if !state.ExpiresAt.IsZero() {
+		expires = state.ExpiresAt.UTC().Format(time.RFC3339)
+	}
+	return CheckoutPageData{
+		Title:           "Checkout",
+		Items:           state.Items,
+		Subtotal:        state.Summary.Subtotal,
+		ShippingFee:     state.Summary.ShippingFee,
+		TaxAmount:       state.Summary.TaxAmount,
+		TotalAmount:     state.Summary.Total,
+		DeliveryAddress: state.DeliveryAddress,
+		PaymentMethod:   selected,
+		PaymentMethods:  checkoutPaymentOptions(a.Payment.SupportedMethodOptions()),
+		IdempotencyKey:  state.Token,
+		FormAction:      checkoutFormAction(state.Token),
+		ExpiresAt:       expires,
+		CanCheckout:     state.CanCheckout,
+		CSRFToken:       a.Auth.CSRFToken(r),
+	}
+}
 
-		productID, err := strconv.Atoi(strings.TrimSpace(r.FormValue("product_id")))
-		if err != nil {
-			http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
-			return
-		}
+func checkoutFormAction(token string) string {
+	key := strings.TrimSpace(token)
+	if key == "" {
+		return "/checkout"
+	}
+	return "/checkout?checkout=" + urlQueryEscape(key)
+}
 
-		if err := svc.RemoveFromCart(userID, productID); err != nil {
-			if errors.Is(err, commerceSvc.ErrInvalidProduct) {
-				http.Redirect(w, r, "/cart?error=Invalid+product", http.StatusFound)
-				return
-			}
-			http.Redirect(w, r, "/cart?error=Unable+to+remove+item", http.StatusFound)
-			return
-		}
-		http.Redirect(w, r, "/cart?message=Item+removed", http.StatusFound)
+func checkoutErrorMessage(err error) (string, bool) {
+	switch {
+	case errors.Is(err, checkoutsvc.ErrDeliveryAddress):
+		return "Delivery address is required", true
+	case errors.Is(err, checkoutsvc.ErrCartEmpty):
+		return "Your cart is empty", true
+	case errors.Is(err, checkoutsvc.ErrInvalidPaymentMethod):
+		return "Choose a supported payment method", true
+	case errors.Is(err, checkoutsvc.ErrInsufficientStock):
+		return "One or more cart items exceed available stock. Review your cart quantities.", true
+	default:
+		return "", false
 	}
 }
 
 func Checkout(a *app.App) http.HandlerFunc {
-	checkoutSvc := a.Checkout
-
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := requestUserID(r)
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		csrfToken := a.Auth.CSRFToken(r)
+		userID, _ := requestUserID(r)
 		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
-		if r.Method == http.MethodGet {
-			resumeToken := strings.TrimSpace(r.URL.Query().Get("checkout"))
-			state, err := checkoutSvc.PreparedCheckout(userID, resumeToken)
-			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()), csrfToken)
+
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+			state, err := a.Checkout.PreparedCheckout(userID, r.URL.Query().Get("checkout"))
+			data := checkoutPage(a, r, state, paymentMethod)
 			if err != nil {
-				switch {
-				case errors.Is(err, checkoutsvc.ErrCartEmpty):
-					data.Error = "Cart is empty"
-				case errors.Is(err, checkoutsvc.ErrInsufficientStock):
-					data.Error = "One or more cart items exceed available stock. Review your cart quantities."
-				default:
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+				message, known := checkoutErrorMessage(err)
+				if !known {
+					log.Printf("checkout prepare: %v", err)
+					serverError(w, r)
 					return
 				}
+				data.Error = message
+				data.CanCheckout = false
 			}
 			a.Render(w, a.Templates.Checkout, data)
 			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		case http.MethodPost:
+		default:
+			methodNotAllowed(w, http.MethodGet, http.MethodHead, http.MethodPost)
 			return
 		}
 
 		address := strings.TrimSpace(r.FormValue("delivery_address"))
-		idempotencyKey := strings.TrimSpace(r.FormValue("idempotency_key"))
-		if idempotencyKey == "" {
-			idempotencyKey = strings.TrimSpace(r.URL.Query().Get("checkout"))
-		}
-		if idempotencyKey == "" {
-			state, prepErr := checkoutSvc.PreparedCheckout(userID, "")
-			if prepErr != nil {
-				data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()), csrfToken)
-				if errors.Is(prepErr, checkoutsvc.ErrCartEmpty) {
-					data.Error = "Cart is empty"
-					a.Render(w, a.Templates.Checkout, data)
-					return
-				}
-				if errors.Is(prepErr, checkoutsvc.ErrInsufficientStock) {
-					data.Error = "One or more cart items exceed available stock. Review your cart quantities."
-					a.Render(w, a.Templates.Checkout, data)
-					return
-				}
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-			idempotencyKey = state.Token
+		key := strings.TrimSpace(r.FormValue("idempotency_key"))
+		if key == "" {
+			key = strings.TrimSpace(r.URL.Query().Get("checkout"))
 		}
 
-		orderID, finalSummary, err := checkoutSvc.CheckoutWithPayment(userID, address, paymentMethod, idempotencyKey)
+		orderID, summary, err := a.Checkout.CheckoutWithPayment(userID, address, paymentMethod, key)
 		if err != nil {
-			state, stateErr := checkoutSvc.SaveDraft(userID, idempotencyKey, address, paymentMethod)
-			if stateErr != nil && !errors.Is(stateErr, checkoutsvc.ErrCartEmpty) && !errors.Is(stateErr, checkoutsvc.ErrInsufficientStock) {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
+			message, known := checkoutErrorMessage(err)
+			if !known {
+				log.Printf("checkout place order: %v", err)
+				message = "We could not place your order. Please try again."
 			}
-			data := checkoutPage(state, paymentMethod, checkoutPaymentOptions(a.Payment.SupportedMethodOptions()), csrfToken)
-			if strings.TrimSpace(state.Token) != "" {
-				idempotencyKey = state.Token
+			state, stateErr := a.Checkout.SaveDraft(userID, key, address, paymentMethod)
+			if stateErr != nil {
+				if _, known := checkoutErrorMessage(stateErr); !known {
+					log.Printf("checkout save draft: %v", stateErr)
+					serverError(w, r)
+					return
+				}
 			}
-			data.IdempotencyKey = idempotencyKey
-			switch {
-			case errors.Is(err, checkoutsvc.ErrDeliveryAddress):
-				data.Error = "Delivery address is required"
-			case errors.Is(err, checkoutsvc.ErrCartEmpty):
-				data.Error = "Cart is empty"
-			case errors.Is(err, checkoutsvc.ErrInvalidPaymentMethod):
-				data.Error = "Choose a supported payment method"
-			case errors.Is(err, checkoutsvc.ErrInsufficientStock):
-				data.Error = "One or more cart items exceed available stock. Review your cart quantities."
-			default:
-				data.Error = fmt.Sprintf("Checkout failed: %s", err.Error())
+			data := checkoutPage(a, r, state, paymentMethod)
+			if strings.TrimSpace(state.Token) == "" {
+				data.IdempotencyKey = key
+				data.FormAction = checkoutFormAction(key)
 			}
-			a.Render(w, a.Templates.Checkout, data)
+			if stateErr != nil {
+				data.CanCheckout = false
+			}
+			data.Error = message
+			a.RenderStatus(w, a.Templates.Checkout, http.StatusUnprocessableEntity, data)
 			return
 		}
 
-		successMethod := strings.TrimSpace(paymentMethod)
-		if successMethod == "" {
-			successMethod = paymentsvc.MethodCashOnDelivery
+		method := paymentMethod
+		if method == "" {
+			method = paymentsvc.MethodCashOnDelivery
 		}
-
-		msg := fmt.Sprintf(
-			"Order %d placed successfully. Total $%.2f using %s. Delivery notice will update as partner fulfills.",
-			orderID,
-			finalSummary.Total,
-			a.Payment.MethodLabel(successMethod),
-		)
-		http.Redirect(w, r, "/account?message="+url.QueryEscape(msg), http.StatusFound)
+		redirectWithFlash(w, r, fmt.Sprintf("/account#order-%d", orderID), "success", fmt.Sprintf(
+			"Order #%d placed. Total $%s using %s. We'll update the delivery notice as your order is fulfilled.",
+			orderID, summary.Total, a.Payment.MethodLabel(method),
+		))
 	}
 }

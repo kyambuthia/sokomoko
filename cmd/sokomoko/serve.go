@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/bootstrap"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/lifecycle"
 	"github.com/kyambuthia/sokomoko/internal/notify"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
@@ -19,7 +21,23 @@ import (
 
 var runHTTPServerFunc = runHTTPServer
 
+// openStore connects to PostgreSQL with the configured pool settings.
+func openStore(cfg config.Config) (*db.Store, error) {
+	return db.Open(context.Background(), cfg.DatabaseURL, db.PoolOptions{
+		MaxOpenConns:    cfg.DBMaxOpenConns,
+		MaxIdleConns:    cfg.DBMaxIdleConns,
+		ConnMaxLifetime: time.Duration(cfg.DBConnMaxLifetime) * time.Second,
+		QueryTimeout:    time.Duration(cfg.DBQueryTimeout) * time.Second,
+	})
+}
+
 func runServe(cfg config.Config, seedOnServe bool) error {
+	if err := cfg.Validate(); err != nil {
+		return wrapCommandError(commandServe, "validate config", err)
+	}
+	if cfg.IsProduction() && seedOnServe {
+		return wrapCommandError(commandServe, "prepare store", fmt.Errorf("demo seeding is disabled in production"))
+	}
 	resetEmailSender, err := buildPasswordResetEmailSender(cfg)
 	if err != nil {
 		return wrapCommandError(commandServe, "configure password reset email", err)
@@ -30,14 +48,13 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 		return wrapCommandError(commandServe, "parse templates", fmt.Errorf("parse templates: %w", err))
 	}
 
-	store, err := db.OpenStore(cfg.DBPath)
+	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandServe, "open store", err)
 	}
 	defer store.Close()
 
-	bootstrapService := bootstrap.New(store)
-	if err := bootstrapService.Prepare(seedOnServe); err != nil {
+	if err := prepareStore(cfg, store, seedOnServe); err != nil {
 		return wrapCommandError(commandServe, "prepare store", err)
 	}
 
@@ -54,6 +71,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 			AuthAbuseBackoffMax:      time.Duration(cfg.AuthAbuseBackoffMax) * time.Second,
 			PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
 			PasswordResetEmailSender: resetEmailSender,
+			TrustProxyHeaders:        cfg.TrustProxyHeaders,
 		},
 	})
 	server, allowedHosts := buildServer(cfg, application)
@@ -62,8 +80,20 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	return wrapCommandError(commandServe, "serve http", runHTTPServerFunc(server, store))
 }
 
+func prepareStore(cfg config.Config, store *db.Store, seed bool) error {
+	if cfg.IsProduction() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return store.CheckSchema(ctx)
+	}
+	return bootstrap.New(store).Prepare(seed)
+}
+
 func runMigrate(cfg config.Config) error {
-	store, err := db.OpenStore(cfg.DBPath)
+	if err := cfg.ValidateDatabase(); err != nil {
+		return wrapCommandError(commandMigrate, "validate database config", err)
+	}
+	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandMigrate, "open store", err)
 	}
@@ -73,12 +103,18 @@ func runMigrate(cfg config.Config) error {
 		return wrapCommandError(commandMigrate, "apply schema", err)
 	}
 
-	log.Printf("[startup] schema applied db=%s", cfg.DBPath)
+	log.Printf("[startup] schema applied version=%d", db.LatestSchemaVersion())
 	return nil
 }
 
 func runSeed(cfg config.Config) error {
-	store, err := db.OpenStore(cfg.DBPath)
+	if cfg.IsProduction() {
+		return wrapCommandError(commandSeed, "prepare store", fmt.Errorf("demo seeding is disabled in production; provision the administrator through /setup"))
+	}
+	if err := cfg.ValidateDatabase(); err != nil {
+		return wrapCommandError(commandSeed, "validate database config", err)
+	}
+	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandSeed, "open store", err)
 	}
@@ -88,7 +124,7 @@ func runSeed(cfg config.Config) error {
 		return wrapCommandError(commandSeed, "prepare store", err)
 	}
 
-	log.Printf("[startup] seed completed db=%s", cfg.DBPath)
+	log.Printf("[startup] seed completed")
 	return nil
 }
 
@@ -99,16 +135,16 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 	}
 
 	emailSender, err := notify.NewSMTPSender(notify.SMTPConfig{
-		Host:     cfg.SMTPHost,
-		Port:     cfg.SMTPPort,
-		Username: cfg.SMTPUsername,
-		Password: cfg.SMTPPassword,
-		From:     cfg.SMTPFrom,
-		AppName:  "Sokomoko",
+		Host:       cfg.SMTPHost,
+		Port:       cfg.SMTPPort,
+		Username:   cfg.SMTPUsername,
+		Password:   cfg.SMTPPassword,
+		From:       cfg.SMTPFrom,
+		AppName:    "Sokomoko",
+		RequireTLS: cfg.IsProduction(),
 	})
 	if err != nil {
-		log.Printf("[startup] password_reset_email=disabled err=%v", err)
-		return nil, nil
+		return nil, fmt.Errorf("invalid SMTP configuration: %w", err)
 	}
 
 	resetEmailSender = emailSender.SendPasswordResetEmail
@@ -117,6 +153,8 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 }
 
 func buildServer(cfg config.Config, application *app.App) (*httpServer, map[string]struct{}) {
+	readiness := &lifecycle.Readiness{Check: application.Readiness.PingContext}
+	application.Readiness = readiness
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()
 	partnerMux := http.NewServeMux()
@@ -144,6 +182,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	)
 
 	return &httpServer{
+		Drain: readiness.Drain,
 		Server: &http.Server{
 			Addr:              ":" + cfg.Port,
 			Handler:           handler,

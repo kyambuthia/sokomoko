@@ -199,7 +199,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeData(w, http.StatusOK, salesReportDTO{
-			RevenueTotal: report.RevenueTotal, OrderCount: report.OrderCount,
+			RevenueTotal: report.RevenueTotal.Float64(), OrderCount: report.OrderCount,
 			PendingCount: report.PendingCount, ShippedCount: report.ShippedCount, DeliveredCount: report.DeliveredCount,
 		})
 	case "team":

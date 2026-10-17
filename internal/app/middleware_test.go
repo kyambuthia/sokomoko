@@ -1,12 +1,61 @@
 package app
 
 import (
+	"crypto/tls"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestSecurityHeaders_RespectsProxyTrust(t *testing.T) {
+	for _, tc := range []struct {
+		name                 string
+		trust, tls, wantHSTS bool
+	}{
+		{"untrusted header", false, false, false},
+		{"trusted proxy", true, false, true},
+		{"direct TLS", false, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://shop.example.com/", nil)
+			req.Header.Set("X-Forwarded-Proto", "https")
+			if tc.tls {
+				req.TLS = &tls.ConnectionState{}
+			}
+			rec := httptest.NewRecorder()
+			SecurityHeadersWithProxy(tc.trust)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(rec, req)
+			if got := rec.Header().Get("Strict-Transport-Security") != ""; got != tc.wantHSTS {
+				t.Fatalf("HSTS present=%t, want %t", got, tc.wantHSTS)
+			}
+			if rec.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("dynamic response can be cached")
+			}
+		})
+	}
+}
+
+func TestStatusRecorder_TracksTheStatusActuallySent(t *testing.T) {
+	rec := &statusRecorder{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+	_, _ = rec.Write([]byte("ok"))
+	rec.WriteHeader(http.StatusInternalServerError)
+	if rec.status != http.StatusOK {
+		t.Fatalf("status=%d, want 200 after implicit header", rec.status)
+	}
+	if rec.Unwrap() == nil {
+		t.Fatal("missing underlying response writer")
+	}
+}
+
+func TestCanonicalHost_IPv6(t *testing.T) {
+	if got := CanonicalHost("[::1]:8080"); got != "::1" {
+		t.Fatalf("host=%q, want ::1", got)
+	}
+	if got := CanonicalHost("::1"); got != "::1" {
+		t.Fatalf("bare host=%q, want ::1", got)
+	}
+}
 
 func TestCanonicalHost(t *testing.T) {
 	if got := CanonicalHost("Admin.Localhost:6969"); got != "admin.localhost" {

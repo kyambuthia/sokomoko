@@ -1,22 +1,142 @@
 # Sokomoko
 
-Sokomoko is a single-process e-commerce application written in Go. It serves
-server-rendered HTML, stores application state in SQLite, and exposes separate
-storefront, admin, and partner host surfaces.
+A multi-vendor marketplace built with Go, PostgreSQL, and server-rendered HTML
+enhanced by small custom web components.
 
-The executable source is the authority for behavior. The most useful starting
-points are:
+## Stack
 
-- [server startup](cmd/sokomoko/serve.go)
-- [host and middleware routing](cmd/sokomoko/server.go)
-- [route registration](internal/routes/register.go)
-- [service composition](internal/app/compose.go)
-- [embedded schema](internal/db/schema.sql)
-- [template parsing](internal/ui/templates.go)
+- Go 1.26.9 (`net/http`, `html/template`, `log/slog`)
+- PostgreSQL 15+ via `pgx` (`database/sql` driver), versioned embedded migrations
+- Server-side rendered templates and static assets embedded in the binary
+- Progressive-enhancement web components (`internal/ui/static/scripts/components.js`)
 
-## Documentation order
+## Repo layout
 
-Read the maintained documentation in this order:
+```text
+cmd/sokomoko/              CLI: serve, migrate, seed; host routing and middleware
+internal/app/              App composition, rendering, middleware, rate limiting
+internal/auth/             Sessions, login, signup, password reset, CSRF, throttling
+internal/config/           Environment configuration and validation
+internal/lifecycle/        HTTP draining and cancellable maintenance jobs
+internal/db/               PostgreSQL store, queries, transactions
+internal/db/migrations/    Versioned SQL migrations (embedded)
+internal/db/dbtest/        Isolated per-test PostgreSQL schemas
+internal/money/            Integer-cent money type
+internal/routes/           HTTP handlers, JSON endpoints, page view models
+internal/service/          Feature services (catalog, commerce, checkout, ...)
+internal/ui/               Templates, static assets, template helpers
+docs/                      Architecture, roadmap, design notes
+deploy/                    Production Compose, TLS proxy, configuration example
+```
+
+## Quick start
+
+With Docker (PostgreSQL and the app):
+
+```bash
+docker compose up --build
+```
+
+Or run PostgreSQL in Docker and the app with Go:
+
+```bash
+make db-up            # PostgreSQL on localhost:5432 (user/password: sokomoko)
+make run              # migrate, seed demo data, serve on :6969
+```
+
+Add these host entries so the three surfaces resolve locally:
+
+```text
+127.0.0.1 localhost admin.localhost partner.localhost
+```
+
+| Host | Purpose |
+| --- | --- |
+| `http://localhost:6969` | Storefront: browse, cart, checkout, account |
+| `http://admin.localhost:6969` | Platform admin: first-run `/setup`, orders, reports, team, audit |
+| `http://partner.localhost:6969` | Partner workspace: store setup, products, fulfillment |
+
+First-run admin setup happens at `admin.localhost/setup` (loopback only, or with
+`ADMIN_SETUP_TOKEN`), or seed an admin with `ADMIN_PASSWORD` when running `seed`.
+
+## Configuration
+
+All settings are environment variables; see [`.env.example`](.env.example) for
+the full list with comments. The important ones:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | `postgres://sokomoko@localhost:5432/sokomoko?sslmode=disable` | Required in production |
+| `ENV` | `development` | `production` enables secure cookies, JSON logs, strict validation |
+| `PORT` | `6969` | |
+| `ALLOWED_HOSTS` | local hosts | Required in production |
+| `PASSWORD_RESET_BASE_URL` | | Required in production |
+| `SMTP_HOST` / `SMTP_FROM` | | Required in production; STARTTLS required |
+| `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For`/`-Proto`; only behind a proxy that overwrites them |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `20` / `10` | Pool sizing |
+| `DB_QUERY_TIMEOUT_SECONDS` | `10` | Upper bound on any single store call |
+| `LOG_FORMAT` / `LOG_LEVEL` | `text` (`json` in production) / `info` | |
+| `POST_RATE_LIMIT_MAX` | `0` (off) | POSTs per client IP per window |
+| `AUTH_ABUSE_MAX_FAILURES` | `0` (off) | Login/reset failures before backoff |
+| `SMTP_HOST`, `SMTP_FROM`, ... | | Password reset email delivery |
+
+The server refuses to start in production when required settings are missing.
+
+## Development
+
+```bash
+make help        # list targets
+make migrate     # apply migrations
+make seed        # migrations + demo partners and catalog
+make test        # full test suite (needs PostgreSQL)
+make test-race   # with the race detector
+make lint        # gofmt, go vet, JavaScript syntax check
+make docker      # build the production image
+make vuln        # scan reachable Go vulnerabilities
+```
+
+Tests that need a database read `SOKOMOKO_TEST_DATABASE_URL` and create a
+throwaway schema per package, so they can share one database and run in
+parallel. Without the variable they are skipped; CI sets
+`SOKOMOKO_REQUIRE_DB_TESTS=1` so a missing database fails the build instead.
+
+```bash
+make db-up && make db-test-create
+SOKOMOKO_TEST_DATABASE_URL=postgres://sokomoko:sokomoko@localhost:5432/sokomoko_test?sslmode=disable make test
+```
+
+## Database migrations
+
+Migrations live in `internal/db/migrations/NNNN_description.sql`, are embedded in
+the binary, and run in order inside transactions. A PostgreSQL advisory lock
+stops two instances from migrating at once. In development, `serve` applies
+pending migrations. In production, run `migrate` as a separate release task;
+`serve` only verifies the complete migration history and refuses an incompatible
+schema. Demo seeding is disabled in production. Never edit an applied migration;
+add a new one.
+
+## Deployment
+
+The `Dockerfile` builds a static binary into a distroless, non-root image that
+defaults to `ENV=production` and port 8080. Its built-in `healthcheck` command
+probes HTTP and database readiness without requiring a shell. Use the
+[deployment runbook](docs/DEPLOYMENT.md) and
+[production Compose file](deploy/compose.production.yml) for a TLS proxy,
+separate migration credentials, and a private app listener. Health endpoints on every host:
+
+- `/healthz` liveness
+- `/readyz` database readiness
+
+A background job releases expired checkout stock holds every minute and prunes
+expired sessions and reset tokens every five minutes.
+
+Checkout supports **cash on delivery**, recorded as a pending payment. Card and
+mobile-money providers require an actual integration before they can be offered.
+The partner host supports admins, staff, and explicitly assigned partner accounts.
+Partner catalog and wholly owned orders are scoped through `partner_users`;
+store settings remain platform-wide, and mixed-partner fulfillment requires staff. See the [architecture decision](docs/DEPLOYMENT_PLAN.md) for launch scope.
+
+## Docs
 
 1. [Getting started](docs/01-getting-started.md)
 2. [Architecture](docs/02-architecture.md)
@@ -24,84 +144,8 @@ Read the maintained documentation in this order:
 4. [Authentication](docs/04-authentication.md)
 5. [Database and commerce](docs/05-database.md)
 6. [UI and assets](docs/06-ui.md)
-7. [Operations and configuration](docs/07-operations.md)
+7. [Operations](docs/07-operations.md)
 8. [Known issues](docs/08-known-issues.md)
 9. [Roadmap](docs/09-roadmap.md)
-10. [Contributor rules](docs/10-contributing.md)
+10. [Contributing](docs/10-contributing.md)
 11. [Dynamic JSON API](docs/11-api.md)
-
-## Stack
-
-- Go, net/http, and html/template
-- SQLite through github.com/ncruces/go-sqlite3
-- Embedded templates and static assets through embed.FS
-- Vanilla CSS and JavaScript
-
-## Run locally
-
-Add the hostnames used by the host router:
-
-    127.0.0.1 localhost
-    127.0.0.1 admin.localhost
-    127.0.0.1 partner.localhost
-
-Apply the schema and start without seed data:
-
-    go run ./cmd/sokomoko migrate
-    go run ./cmd/sokomoko serve
-
-For a local database with bootstrap catalog data:
-
-    go run ./cmd/sokomoko serve --seed
-
-The default server address is http://localhost:6969.
-
-Use these host surfaces:
-
-- http://localhost:6969 — customer storefront, cart, checkout, and account
-- http://admin.localhost:6969 — admin bootstrap and admin/staff operations
-- http://partner.localhost:6969 — partner-facing setup, catalog, and fulfillment views
-
-## Configuration
-
-The application reads environment variables in
-[internal/config/config.go](internal/config/config.go).
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| ENV | development | Enables production cookie behavior when set to production |
-| PORT | 6969 | HTTP listen port |
-| DB_PATH | ./db/t.db | SQLite database path |
-| ALLOWED_HOSTS | built-in local hosts | Comma-separated trusted hosts |
-| ADMIN_SETUP_TOKEN | empty | Required for non-loopback admin setup requests |
-| SESSION_COOKIE_DOMAIN | empty | Optional shared cookie domain |
-| POST_RATE_LIMIT_MAX | 0 | Enables the in-memory IP limiter when greater than zero |
-| POST_RATE_LIMIT_WINDOW_SECONDS | 60 | Rate-limit window |
-| AUTH_ABUSE_MAX_FAILURES | 0 | Enables auth failure backoff when greater than zero |
-| AUTH_ABUSE_BACKOFF_BASE_SECONDS | 1 | Initial auth backoff |
-| AUTH_ABUSE_BACKOFF_MAX_SECONDS | 300 | Maximum auth backoff |
-| PASSWORD_RESET_BASE_URL | empty | Optional absolute base URL for reset links |
-| SMTP_HOST | empty | SMTP host for reset email |
-| SMTP_PORT | 587 | SMTP port |
-| SMTP_USERNAME | empty | SMTP username |
-| SMTP_PASSWORD | empty | SMTP password |
-| SMTP_FROM | empty | Reset-email sender address |
-
-Admin seed data additionally reads ADMIN_USERNAME, ADMIN_EMAIL, and
-ADMIN_PASSWORD from the environment. Do not use the built-in partner seed
-credentials outside a disposable development database; see
-[known issues](docs/08-known-issues.md).
-
-## Development commands
-
-    go run ./cmd/sokomoko migrate
-    go run ./cmd/sokomoko seed
-    go run ./cmd/sokomoko serve
-    go run ./cmd/sokomoko serve --seed
-    go build ./cmd/sokomoko
-    go test ./...
-    go vet ./internal/... ./cmd/...
-    gofmt -w ./cmd ./internal
-
-seed applies the schema and runs the seed workflows before exiting.
-serve --seed does the same during server startup.

@@ -15,11 +15,12 @@
     <fieldset class="form__fieldset">
       <legend class="form__legend">Account Access</legend>
       {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+      {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
 
       <div class="form__group form-group">
-        <label class="form__label" for="username">Username</label>
+        <label class="form__label" for="username">Username or email</label>
         <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="your username" required autofocus>
-        <small class="form__hint">Use the username you created during signup.</small>
+
       </div>
 
       <div class="form__group form-group">

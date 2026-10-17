@@ -1,10 +1,13 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
-	"time"
+
+	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 const checkoutCompleteOperation = "checkout.complete"
@@ -14,42 +17,49 @@ type PaymentRecordInput struct {
 	Provider          string
 	Status            string
 	Currency          string
-	Amount            float64
+	Amount            money.Cents
 	ExternalReference string
 }
 
-func (s *Store) GetCheckoutPlacementByIdempotency(userID int, idempotencyKey string) (*CheckoutPlacement, error) {
-	key := strings.TrimSpace(idempotencyKey)
-	if key == "" {
-		return nil, nil
-	}
-
-	row := s.DB.QueryRow(
-		`SELECT ik.order_id, ik.payment_id, o.total_amount
+func checkoutPlacementTx(ctx context.Context, q querier, userID int, key string) (*CheckoutPlacement, error) {
+	var placement CheckoutPlacement
+	err := q.QueryRowContext(ctx,
+		`SELECT ik.order_id, ik.payment_id, o.total_cents
 		 FROM idempotency_keys ik
 		 JOIN orders o ON o.id = ik.order_id
-		 WHERE ik.user_id = ? AND ik.operation = ? AND ik.idempotency_key = ? AND ik.completed_at IS NOT NULL`,
+		 WHERE ik.user_id = $1 AND ik.operation = $2 AND ik.idempotency_key = $3 AND ik.completed_at IS NOT NULL`,
 		userID, checkoutCompleteOperation, key,
-	)
-
-	var placement CheckoutPlacement
-	err := row.Scan(&placement.OrderID, &placement.PaymentID, &placement.TotalAmount)
-	if err == sql.ErrNoRows {
+	).Scan(&placement.OrderID, &placement.PaymentID, &placement.TotalAmount)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	placement.TotalAmount = RoundMoney(placement.TotalAmount)
 	placement.Reused = true
 	return &placement, nil
 }
 
+// GetCheckoutPlacementByIdempotency returns a previously completed placement for
+// the key, or nil.
+func (s *Store) GetCheckoutPlacementByIdempotency(userID int, idempotencyKey string) (*CheckoutPlacement, error) {
+	key := strings.TrimSpace(idempotencyKey)
+	if key == "" {
+		return nil, nil
+	}
+	ctx, cancel := s.ctx()
+	defer cancel()
+	return checkoutPlacementTx(ctx, s.DB, userID, key)
+}
+
 func (s *Store) ListPaymentsByOrderID(orderID int) ([]Payment, error) {
-	rows, err := s.DB.Query(
-		`SELECT id, order_id, user_id, method, provider, status, currency, amount, external_reference, created_at, updated_at
+	ctx, cancel := s.ctx()
+	defer cancel()
+
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id, order_id, user_id, method, provider, status, currency, amount_cents, external_reference, created_at, updated_at
 		 FROM payments
-		 WHERE order_id = ?
+		 WHERE order_id = $1
 		 ORDER BY id`,
 		orderID,
 	)
@@ -60,346 +70,178 @@ func (s *Store) ListPaymentsByOrderID(orderID int) ([]Payment, error) {
 
 	payments := []Payment{}
 	for rows.Next() {
-		payment := Payment{}
-		if err := rows.Scan(
-			&payment.ID,
-			&payment.OrderID,
-			&payment.UserID,
-			&payment.Method,
-			&payment.Provider,
-			&payment.Status,
-			&payment.Currency,
-			&payment.Amount,
-			&payment.ExternalReference,
-			&payment.CreatedAt,
-			&payment.UpdatedAt,
-		); err != nil {
+		var p Payment
+		if err := rows.Scan(&p.ID, &p.OrderID, &p.UserID, &p.Method, &p.Provider, &p.Status, &p.Currency, &p.Amount, &p.ExternalReference, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
-		payment.Amount = RoundMoney(payment.Amount)
-		payments = append(payments, payment)
+		payments = append(payments, p)
 	}
 	return payments, rows.Err()
 }
 
-func (s *Store) PlaceOrderFromCartWithPricingAndPayment(userID int, deliveryAddress string, totalAmount float64, deliveryNotice string, payment PaymentRecordInput, idempotencyKey string) (CheckoutPlacement, error) {
-	address := strings.TrimSpace(deliveryAddress)
-	if address == "" {
-		return CheckoutPlacement{}, ErrDeliveryAddressRequired
-	}
-	if totalAmount < 0 {
-		return CheckoutPlacement{}, ErrNegativeTotalAmount
-	}
-	totalAmount = RoundMoney(totalAmount)
-	payment.Amount = RoundMoney(payment.Amount)
-
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return CheckoutPlacement{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	if err = expireActiveStockReservationsTx(tx, time.Now().UTC()); err != nil {
-		return CheckoutPlacement{}, err
-	}
-
-	key := strings.TrimSpace(idempotencyKey)
-	if key != "" {
-		placement, placementErr := getCheckoutPlacementTx(tx, userID, key)
-		if placementErr != nil {
-			return CheckoutPlacement{}, placementErr
-		}
-		if placement != nil {
-			return *placement, nil
-		}
-
-		if _, err = tx.Exec(
-			`INSERT INTO idempotency_keys (user_id, operation, idempotency_key)
-			 VALUES (?, ?, ?)`,
-			userID, checkoutCompleteOperation, key,
-		); err != nil {
-			placement, placementErr = getCheckoutPlacementTx(tx, userID, key)
-			if placementErr != nil {
-				return CheckoutPlacement{}, placementErr
-			}
-			if placement != nil {
-				return *placement, nil
-			}
-			return CheckoutPlacement{}, err
-		}
-	}
-
-	orderID, orderErr := placeOrderFromCartTx(tx, userID, address, totalAmount, strings.TrimSpace(deliveryNotice), true, key)
-	if orderErr != nil {
-		return CheckoutPlacement{}, orderErr
-	}
-
-	paymentID, paymentErr := createPaymentTx(tx, orderID, userID, payment)
-	if paymentErr != nil {
-		return CheckoutPlacement{}, paymentErr
-	}
-
-	if key != "" {
-		if _, err = tx.Exec(
-			`UPDATE idempotency_keys
-			 SET order_id = ?, payment_id = ?, completed_at = CURRENT_TIMESTAMP
-			 WHERE user_id = ? AND operation = ? AND idempotency_key = ?`,
-			orderID, paymentID, userID, checkoutCompleteOperation, key,
-		); err != nil {
-			return CheckoutPlacement{}, err
-		}
-	}
-
-	if err = tx.Commit(); err != nil {
-		return CheckoutPlacement{}, err
-	}
-
-	return CheckoutPlacement{
-		OrderID:     orderID,
-		PaymentID:   paymentID,
-		TotalAmount: RoundMoney(payment.Amount),
-	}, nil
-}
-
+// PlaceOrderFromCheckoutWithPayment converts an open checkout into an order,
+// turning its stock reservations into allocations and recording the payment.
+// The checkout token doubles as the idempotency key: repeating the call after
+// success returns the original placement with Reused set.
 func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken string, deliveryAddress string, deliveryNotice string, payment PaymentRecordInput) (CheckoutPlacement, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
 		return CheckoutPlacement{}, ErrDeliveryAddressRequired
 	}
-
 	key := strings.TrimSpace(checkoutToken)
 	if key == "" {
 		return CheckoutPlacement{}, ErrCheckoutNotFound
 	}
-
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return CheckoutPlacement{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	now := time.Now().UTC()
-	if err = expireActiveStockReservationsTx(tx, now); err != nil {
-		return CheckoutPlacement{}, err
-	}
-	if err = expireOpenCheckoutsTx(tx, now); err != nil {
-		return CheckoutPlacement{}, err
-	}
-
-	if placement, placementErr := getCheckoutPlacementTx(tx, userID, key); placementErr != nil {
-		return CheckoutPlacement{}, placementErr
-	} else if placement != nil {
-		return *placement, nil
-	}
-
-	if _, err = tx.Exec(
-		`INSERT INTO idempotency_keys (user_id, operation, idempotency_key)
-		 VALUES (?, ?, ?)`,
-		userID, checkoutCompleteOperation, key,
-	); err != nil {
-		placement, placementErr := getCheckoutPlacementTx(tx, userID, key)
-		if placementErr != nil {
-			return CheckoutPlacement{}, placementErr
-		}
-		if placement != nil {
-			return *placement, nil
-		}
-		return CheckoutPlacement{}, err
-	}
-
-	checkout, err := getCheckoutByTokenQuerier(tx, userID, key)
-	if err != nil {
-		return CheckoutPlacement{}, err
-	}
-	if checkout == nil {
-		return CheckoutPlacement{}, ErrCheckoutNotFound
-	}
-	if checkout.Status != CheckoutStatusOpen {
-		if checkout.Status == CheckoutStatusExpired {
-			return CheckoutPlacement{}, ErrCheckoutExpired
-		}
-		return CheckoutPlacement{}, ErrCheckoutNotFound
-	}
-	if checkout.ExpiresAt.Valid && !checkout.ExpiresAt.Time.After(now) {
-		if _, err := tx.Exec(
-			`UPDATE checkouts
-			 SET status = ?, updated_at = CURRENT_TIMESTAMP
-			 WHERE id = ?`,
-			CheckoutStatusExpired,
-			checkout.ID,
-		); err != nil {
-			return CheckoutPlacement{}, err
-		}
-		return CheckoutPlacement{}, ErrCheckoutExpired
-	}
-
-	lines, err := listCheckoutLinesByCheckoutIDQuerier(tx, checkout.ID)
-	if err != nil {
-		return CheckoutPlacement{}, err
-	}
-	if len(lines) == 0 {
-		return CheckoutPlacement{}, ErrCartEmpty
-	}
-
-	orderLines := make([]orderPlacementLine, 0, len(lines))
-	for _, line := range lines {
-		orderLines = append(orderLines, orderPlacementLine{
-			ProductID:     line.ProductID,
-			ProductName:   line.ProductName,
-			Quantity:      line.Quantity,
-			UnitPrice:     line.UnitPrice,
-			StockQuantity: line.Quantity,
-		})
-	}
-
-	notice := strings.TrimSpace(deliveryNotice)
-	if notice == "" {
-		notice = "Order received. Awaiting partner acceptance."
-	}
-
-	payment.Method = strings.TrimSpace(payment.Method)
-	payment.Amount = RoundMoney(checkout.TotalAmount)
-	if strings.TrimSpace(payment.Currency) == "" {
-		payment.Currency = checkout.Currency
-	}
-
-	orderID, orderErr := createOrderWithLinesTx(tx, userID, address, RoundMoney(checkout.TotalAmount), notice, key, orderLines)
-	if orderErr != nil {
-		return CheckoutPlacement{}, orderErr
-	}
-
-	paymentID, paymentErr := createPaymentTx(tx, orderID, userID, payment)
-	if paymentErr != nil {
-		return CheckoutPlacement{}, paymentErr
-	}
-
-	if _, err = tx.Exec(
-		`UPDATE checkouts
-		 SET status = ?, payment_method = ?, delivery_address = ?, order_id = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-		 WHERE id = ?`,
-		CheckoutStatusCompleted,
-		payment.Method,
-		address,
-		orderID,
-		checkout.ID,
-	); err != nil {
-		return CheckoutPlacement{}, err
-	}
-
-	if _, err = tx.Exec(
-		`UPDATE idempotency_keys
-		 SET order_id = ?, payment_id = ?, completed_at = CURRENT_TIMESTAMP
-		 WHERE user_id = ? AND operation = ? AND idempotency_key = ?`,
-		orderID, paymentID, userID, checkoutCompleteOperation, key,
-	); err != nil {
-		return CheckoutPlacement{}, err
-	}
-
-	var cartID int64
-	cartErr := tx.QueryRow("SELECT id FROM carts WHERE user_id = ?", userID).Scan(&cartID)
-	if cartErr != nil && cartErr != sql.ErrNoRows {
-		return CheckoutPlacement{}, cartErr
-	}
-	if cartErr == nil {
-		if _, err = tx.Exec("DELETE FROM cart_items WHERE cart_id = ?", cartID); err != nil {
-			return CheckoutPlacement{}, err
-		}
-	}
-
-	if err = tx.Commit(); err != nil {
-		return CheckoutPlacement{}, err
-	}
-
-	return CheckoutPlacement{
-		OrderID:     orderID,
-		PaymentID:   paymentID,
-		TotalAmount: RoundMoney(payment.Amount),
-	}, nil
-}
-
-func getCheckoutPlacementTx(tx *sql.Tx, userID int, idempotencyKey string) (*CheckoutPlacement, error) {
-	row := tx.QueryRow(
-		`SELECT ik.order_id, ik.payment_id, o.total_amount
-		 FROM idempotency_keys ik
-		 JOIN orders o ON o.id = ik.order_id
-		 WHERE ik.user_id = ? AND ik.operation = ? AND ik.idempotency_key = ? AND ik.completed_at IS NOT NULL`,
-		userID, checkoutCompleteOperation, idempotencyKey,
-	)
+	ctx, cancel := s.ctx()
+	defer cancel()
 
 	var placement CheckoutPlacement
-	err := row.Scan(&placement.OrderID, &placement.PaymentID, &placement.TotalAmount)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		// Concurrent submissions of the same key serialize on this insert; the
+		// loser sees the winner's completed placement below.
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO idempotency_keys (user_id, operation, idempotency_key)
+			 VALUES ($1, $2, $3)
+			 ON CONFLICT (user_id, operation, idempotency_key) DO NOTHING`,
+			userID, checkoutCompleteOperation, key,
+		); err != nil {
+			return err
+		}
+		if existing, err := checkoutPlacementTx(ctx, tx, userID, key); err != nil {
+			return err
+		} else if existing != nil {
+			placement = *existing
+			return nil
+		}
+
+		checkout, err := scanCheckout(tx.QueryRowContext(ctx,
+			"SELECT "+checkoutColumns+" FROM checkouts WHERE user_id = $1 AND token = $2 FOR UPDATE",
+			userID, key,
+		))
+		if err != nil {
+			return err
+		}
+		if checkout == nil {
+			return ErrCheckoutNotFound
+		}
+		switch {
+		case checkout.Status == CheckoutStatusExpired:
+			return ErrCheckoutExpired
+		case checkout.Status != CheckoutStatusOpen:
+			return ErrCheckoutNotFound
+		case !checkout.ExpiresAt.After(timeNow()):
+			return ErrCheckoutExpired
+		}
+
+		lines, err := checkoutOrderLinesTx(ctx, tx, checkout.ID)
+		if err != nil {
+			return err
+		}
+		if len(lines) == 0 {
+			return ErrCartEmpty
+		}
+
+		totals := OrderTotals{
+			Subtotal:    checkout.SubtotalAmount,
+			ShippingFee: checkout.ShippingFee,
+			TaxAmount:   checkout.TaxAmount,
+			Total:       checkout.TotalAmount,
+		}
+		orderID, err := createOrderTx(ctx, tx, userID, address, deliveryNotice, totals, lines,
+			allocation{userID: userID, reservationKey: key})
+		if err != nil {
+			return err
+		}
+
+		payment.Method = strings.TrimSpace(payment.Method)
+		payment.Amount = checkout.TotalAmount
+		if strings.TrimSpace(payment.Currency) == "" {
+			payment.Currency = checkout.Currency
+		}
+		paymentID, err := createPaymentTx(ctx, tx, orderID, userID, payment)
+		if err != nil {
+			return err
+		}
+
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE checkouts
+			 SET status = 'completed', payment_method = COALESCE(NULLIF($1, ''), payment_method),
+			     delivery_address = $2, order_id = $3, completed_at = now()
+			 WHERE id = $4`,
+			payment.Method, address, orderID, checkout.ID,
+		); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE idempotency_keys
+			 SET order_id = $1, payment_id = $2, completed_at = now()
+			 WHERE user_id = $3 AND operation = $4 AND idempotency_key = $5`,
+			orderID, paymentID, userID, checkoutCompleteOperation, key,
+		); err != nil {
+			return err
+		}
+		if err := clearCartTx(ctx, tx, userID); err != nil {
+			return err
+		}
+
+		placement = CheckoutPlacement{OrderID: orderID, PaymentID: paymentID, TotalAmount: checkout.TotalAmount}
+		return nil
+	})
+	return placement, err
+}
+
+func checkoutOrderLinesTx(ctx context.Context, tx *sql.Tx, checkoutID int) ([]orderLine, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT cl.product_id, p.partner_id, cl.product_name, cl.quantity, cl.unit_price_cents
+		 FROM checkout_lines cl
+		 JOIN products p ON p.id = cl.product_id
+		 WHERE cl.checkout_id = $1
+		 ORDER BY cl.product_id`,
+		checkoutID,
+	)
 	if err != nil {
 		return nil, err
 	}
-	placement.TotalAmount = RoundMoney(placement.TotalAmount)
-	placement.Reused = true
-	return &placement, nil
+	defer rows.Close()
+
+	lines := []orderLine{}
+	for rows.Next() {
+		var line orderLine
+		if err := rows.Scan(&line.ProductID, &line.PartnerID, &line.ProductName, &line.Quantity, &line.UnitPrice); err != nil {
+			return nil, err
+		}
+		lines = append(lines, line)
+	}
+	return lines, rows.Err()
 }
 
-func createPaymentTx(tx *sql.Tx, orderID int64, userID int, payment PaymentRecordInput) (int64, error) {
-	payment.Amount = RoundMoney(payment.Amount)
-
-	paymentStmt, err := tx.Prepare(
-		`INSERT INTO payments (order_id, user_id, method, provider, status, currency, amount, external_reference)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-	)
-	if err != nil {
-		return 0, err
-	}
-	defer paymentStmt.Close()
-
-	res, err := paymentStmt.Exec(
+func createPaymentTx(ctx context.Context, tx *sql.Tx, orderID int64, userID int, payment PaymentRecordInput) (int64, error) {
+	var paymentID int64
+	if err := tx.QueryRowContext(ctx,
+		`INSERT INTO payments (order_id, user_id, method, provider, status, currency, amount_cents, external_reference)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id`,
 		orderID,
 		userID,
 		strings.TrimSpace(payment.Method),
 		strings.TrimSpace(payment.Provider),
 		strings.TrimSpace(payment.Status),
 		strings.TrimSpace(payment.Currency),
-		payment.Amount,
+		int64(payment.Amount),
 		nullIfEmpty(payment.ExternalReference),
-	)
-	if err != nil {
-		return 0, err
-	}
-	paymentID, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
+	).Scan(&paymentID); err != nil {
+		return 0, wrapDBError(err)
 	}
 
-	attemptStmt, err := tx.Prepare(
-		`INSERT INTO payment_attempts (payment_id, status, request_reference, external_reference, error_message)
-		 VALUES (?, ?, ?, ?, ?)`,
-	)
-	if err != nil {
-		return 0, err
-	}
-	defer attemptStmt.Close()
-
-	requestReference := fmt.Sprintf("payment:%d", paymentID)
-	if _, err := attemptStmt.Exec(
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO payment_attempts (payment_id, status, request_reference, external_reference)
+		 VALUES ($1, $2, $3, $4)`,
 		paymentID,
 		PaymentAttemptStatusCompleted,
-		requestReference,
+		fmt.Sprintf("payment:%d", paymentID),
 		nullIfEmpty(payment.ExternalReference),
-		nil,
 	); err != nil {
 		return 0, err
 	}
-
 	return paymentID, nil
-}
-
-func nullIfEmpty(value string) any {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
-	return value
 }

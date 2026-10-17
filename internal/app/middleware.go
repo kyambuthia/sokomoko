@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"log"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,13 +17,30 @@ type Middleware func(http.Handler) http.Handler
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status      int
+	wroteHeader bool
 }
 
 func (r *statusRecorder) WriteHeader(code int) {
-	r.status = code
+	if r.wroteHeader {
+		return
+	}
+	if code >= 200 {
+		r.wroteHeader = true
+		r.status = code
+	}
 	r.ResponseWriter.WriteHeader(code)
 }
+
+func (r *statusRecorder) Write(body []byte) (int, error) {
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
+	return r.ResponseWriter.Write(body)
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
@@ -29,26 +49,58 @@ func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	return h
 }
 
+type requestIDKey struct{}
+
+// RequestID propagates a well-formed inbound X-Request-Id or generates one. IDs
+// from clients are only accepted when short and alphanumeric so they cannot be
+// used to forge log lines.
 func RequestID() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
-			if requestID == "" {
+			if !validRequestID(requestID) {
 				requestID = generateRequestID()
 			}
 			w.Header().Set("X-Request-Id", requestID)
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestIDKey{}, requestID)))
 		})
 	}
 }
 
+// RequestIDFromContext returns the request ID set by RequestID.
+func RequestIDFromContext(ctx context.Context) string {
+	id, _ := ctx.Value(requestIDKey{}).(string)
+	return id
+}
+
+func validRequestID(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, r := range id {
+		isAlnum := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if !isAlnum && r != '-' && r != '_' && r != '.' {
+			return false
+		}
+	}
+	return true
+}
+
+// RequestLogger emits one structured access log line per request.
 func RequestLogger() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
-			log.Printf("%s %s host=%s status=%d duration=%s", r.Method, r.URL.Path, r.Host, rec.status, time.Since(start).Round(time.Millisecond))
+			slog.LogAttrs(r.Context(), slog.LevelInfo, "http request",
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.String("host", r.Host),
+				slog.Int("status", rec.status),
+				slog.Duration("duration", time.Since(start)),
+				slog.String("request_id", RequestIDFromContext(r.Context())),
+			)
 		})
 	}
 }
@@ -68,6 +120,12 @@ func Recoverer() Middleware {
 }
 
 func SecurityHeaders() Middleware {
+	return SecurityHeadersWithProxy(false)
+}
+
+// SecurityHeadersWithProxy trusts forwarded protocol only when the application
+// is reachable exclusively through a proxy that overwrites that header.
+func SecurityHeadersWithProxy(trustProxy bool) Middleware {
 	csp := "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +134,8 @@ func SecurityHeaders() Middleware {
 			h.Set("X-Frame-Options", "DENY")
 			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 			h.Set("Content-Security-Policy", csp)
-			if isHTTPS(r) {
+			h.Set("Cache-Control", "no-store")
+			if r.TLS != nil || (trustProxy && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")) {
 				h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 			}
 			next.ServeHTTP(w, r)
@@ -88,7 +147,7 @@ func BodyLimit(maxBytes int64) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
-			case http.MethodPost, http.MethodPut, http.MethodPatch:
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			}
 			next.ServeHTTP(w, r)
@@ -213,10 +272,15 @@ func generateRequestID() string {
 }
 
 func canonicalHost(host string) string {
-	if idx := strings.Index(host, ":"); idx >= 0 {
-		return strings.ToLower(strings.TrimSpace(host[:idx]))
+	host = strings.ToLower(strings.TrimSpace(host))
+	if net.ParseIP(host) != nil {
+		return host
 	}
-	return strings.ToLower(strings.TrimSpace(host))
+	parsed, err := url.Parse("//" + host)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
 }
 
 func CanonicalHost(host string) string {

@@ -4,13 +4,13 @@
 
 | Command | Behavior |
 | --- | --- |
-| go run ./cmd/sokomoko serve | Apply schema and run the HTTP server |
+| go run ./cmd/sokomoko serve | Verify schema in production; migrate in development; run server |
 | go run ./cmd/sokomoko serve --seed | Apply schema, seed, then run the server |
 | go run ./cmd/sokomoko migrate | Apply schema and exit |
 | go run ./cmd/sokomoko seed | Apply schema, seed, and exit |
 
-The server listens on PORT, default 6969. SQLite uses DB_PATH, default
-./db/t.db.
+The server listens on PORT, default 6969. PostgreSQL uses DATABASE_URL;
+production requires an explicit connection string. See [.env.example](../.env.example).
 
 ## Trusted hosts
 
@@ -42,7 +42,8 @@ timeout, and a 60-second idle timeout. Shutdown waits up to 30 seconds.
 ## Cookies and HTTPS
 
 Sessions use Secure cookies when the request is TLS, when
-X-Forwarded-Proto is https, or when ENV=production. If a reverse proxy
+trusted X-Forwarded-Proto is https, or when ENV=production. Set
+TRUST_PROXY_HEADERS only behind a proxy that overwrites forwarding headers. If a reverse proxy
 terminates TLS, it must pass the correct X-Forwarded-Proto value.
 
 SESSION_COOKIE_DOMAIN can be set for a shared parent domain. Use it only when
@@ -51,19 +52,15 @@ partner subdomains.
 
 ## Password-reset email
 
-SMTP is optional. SMTP_HOST and SMTP_FROM enable an SMTP sender; SMTP_PORT
-defaults to 587. If the sender cannot be constructed, startup logs that email
-delivery is disabled and the server continues running.
-
-PASSWORD_RESET_BASE_URL controls the base used to build reset links. Verify
-SMTP and reset-link configuration before treating password reset as a
-production capability.
+SMTP is optional in development and required in production. Invalid configured
+SMTP fails startup. Production requires STARTTLS, an HTTPS reset origin, and
+trusted hosts. Delivery uses a bounded SMTP operation.
 
 ## Background work
 
-The server runs cleanup immediately at startup and every five minutes after
-that. Cleanup removes expired sessions and password-reset tokens. There is no
-separate worker process.
+Maintenance releases expired reservations every minute and prunes expired
+sessions/reset tokens every five minutes. Shutdown drains HTTP and cancels
+maintenance before closing the database pool.
 
 ## Health checks
 
@@ -72,22 +69,17 @@ separate worker process.
 
 Both endpoints are registered on each host mux.
 
-## Seed and deployment cautions
+## Releases and recovery
 
-- serve --seed is intended for disposable development data.
-- Admin seed credentials come from ADMIN_PASSWORD and optional admin identity
-  variables.
-- Partner seed passwords are hardcoded in the current source.
-- There is no built-in backup, restore, metrics, or structured-log pipeline.
-- Incremental schema migrations are not implemented.
+Production rejects demo seeding. Use the [deployment runbook](DEPLOYMENT.md)
+for TLS, separate migration credentials, backup, restore, and rollback.
+Structured logs and production image smoke tests are included; live deployment
+validation and external service checks remain environment-specific.
 
 ## Verification
 
-Before deployment:
+With a disposable PostgreSQL test database configured:
 
-    go test ./...
-    go vet ./internal/... ./cmd/...
+    SOKOMOKO_REQUIRE_DB_TESTS=1 go test -race ./...
+    go vet ./...
     go build ./cmd/sokomoko
-
-Also verify trusted hosts, HTTPS forwarding, session cookie behavior, database
-backups, SMTP delivery, and the real payment integration status.

@@ -4,14 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
 
 	"github.com/kyambuthia/sokomoko/internal/config"
 )
 
 const (
-	commandServe   = "serve"
-	commandMigrate = "migrate"
-	commandSeed    = "seed"
+	commandServe       = "serve"
+	commandMigrate     = "migrate"
+	commandSeed        = "seed"
+	commandHealthcheck = "healthcheck"
 )
 
 var ErrUsage = errors.New("invalid command usage")
@@ -34,11 +37,14 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	cfg := config.LoadFromEnv()
+	configureLogging(cfg)
 	switch cmd.Name {
 	case commandMigrate:
 		return runMigrate(cfg)
 	case commandSeed:
 		return runSeed(cfg)
+	case commandHealthcheck:
+		return runHealthcheck(cfg)
 	default:
 		return runServe(cfg, cmd.SeedOnServe)
 	}
@@ -62,7 +68,7 @@ func parseCommand(args []string) (commandConfig, error) {
 			return commandConfig{}, fmt.Errorf("%w: unsupported serve option %q", ErrUsage, arg)
 		}
 		return cmd, nil
-	case commandMigrate, commandSeed:
+	case commandMigrate, commandSeed, commandHealthcheck:
 		if len(args) > 1 {
 			return commandConfig{}, fmt.Errorf("%w: %s does not accept extra arguments", ErrUsage, args[0])
 		}
@@ -77,9 +83,31 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  sokomoko serve [--seed]")
 	_, _ = fmt.Fprintln(w, "  sokomoko migrate")
 	_, _ = fmt.Fprintln(w, "  sokomoko seed")
+	_, _ = fmt.Fprintln(w, "  sokomoko healthcheck")
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Commands:")
-	_, _ = fmt.Fprintln(w, "  serve      Apply schema and start the HTTP server.")
+	_, _ = fmt.Fprintln(w, "  serve      Start HTTP (production requires a migrated database; development auto-migrates).")
 	_, _ = fmt.Fprintln(w, "  migrate    Apply schema changes and exit.")
-	_, _ = fmt.Fprintln(w, "  seed       Apply schema, run bootstrap seed workflows, and exit.")
+	_, _ = fmt.Fprintln(w, "  seed       Apply schema and seed development demo data (disabled in production).")
+	_, _ = fmt.Fprintln(w, "  healthcheck Check local HTTP and database readiness (for container probes).")
+}
+
+// configureLogging installs a slog default handler. The standard log package
+// routes through it, so every log line shares the configured format.
+func configureLogging(cfg config.Config) {
+	level := slog.LevelInfo
+	switch cfg.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler = slog.NewTextHandler(os.Stderr, opts)
+	if cfg.LogFormat == "json" {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(handler))
 }

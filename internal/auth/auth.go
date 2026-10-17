@@ -32,11 +32,6 @@ const (
 
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
 
-var (
-	errNoSession      = errors.New("no authenticated session")
-	errInvalidSession = errors.New("invalid authenticated session")
-)
-
 type PasswordResetEmailSender func(ctx context.Context, recipientEmail string, resetLink string) error
 
 type store interface {
@@ -51,7 +46,8 @@ type store interface {
 	GetUserByUsername(username string) (*db.User, error)
 	GetValidPasswordResetToken(token string) (*db.PasswordResetToken, error)
 	HasAdminUser() (bool, error)
-	UsePasswordResetToken(token, passwordHash, salt string) (bool, error)
+	BootstrapAdmin(admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
+	UsePasswordResetToken(token, passwordHash string) (bool, error)
 }
 
 type Config struct {
@@ -63,6 +59,9 @@ type Config struct {
 	AuthAbuseBackoffMax      time.Duration
 	PasswordResetBaseURL     string
 	PasswordResetEmailSender PasswordResetEmailSender
+	// TrustProxyHeaders makes X-Forwarded-For and X-Forwarded-Proto authoritative.
+	// Enable it only behind a reverse proxy that overwrites those headers.
+	TrustProxyHeaders bool
 }
 
 type Service struct {
@@ -73,6 +72,7 @@ type Service struct {
 	abuseLimiter             *authAbuseLimiter
 	passwordResetBaseURL     string
 	passwordResetEmailSender PasswordResetEmailSender
+	trustProxyHeaders        bool
 }
 
 func NewService(store store, cfg Config) *Service {
@@ -89,6 +89,7 @@ func NewService(store store, cfg Config) *Service {
 		abuseLimiter:             newAuthAbuseLimiter(cfg.AuthAbuseMaxFailures, cfg.AuthAbuseBackoffBase, cfg.AuthAbuseBackoffMax),
 		passwordResetBaseURL:     strings.TrimSpace(cfg.PasswordResetBaseURL),
 		passwordResetEmailSender: cfg.PasswordResetEmailSender,
+		trustProxyHeaders:        cfg.TrustProxyHeaders,
 	}
 }
 
@@ -100,21 +101,21 @@ func normalizeIdentifierForAbuse(identifier string, preserveCase bool) string {
 	return strings.ToLower(normalized)
 }
 
-func clientIPFromRequest(r *http.Request) string {
+// ClientIP returns the client address for rate limiting. X-Forwarded-For is
+// only honoured when trustProxy is set, otherwise any client could spoof it to
+// dodge throttling.
+func ClientIP(r *http.Request, trustProxy bool) string {
 	if r == nil {
 		return "unknown"
 	}
-	forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
-	if forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		if len(parts) > 0 {
-			candidate := strings.TrimSpace(parts[0])
-			if candidate != "" {
+	if trustProxy {
+		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+			first, _, _ := strings.Cut(forwarded, ",")
+			if candidate := strings.TrimSpace(first); candidate != "" {
 				return candidate
 			}
 		}
 	}
-
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	if err != nil {
 		host = strings.TrimSpace(r.RemoteAddr)
@@ -123,6 +124,10 @@ func clientIPFromRequest(r *http.Request) string {
 		return "unknown"
 	}
 	return host
+}
+
+func (s *Service) clientIP(r *http.Request) string {
+	return ClientIP(r, s.trustProxyHeaders)
 }
 
 func abuseScopeKey(scope, ip, identifier string) string {
@@ -147,7 +152,7 @@ func (s *Service) checkAbuseLock(w http.ResponseWriter, scope, identifier string
 	if s.abuseLimiter == nil {
 		return false
 	}
-	ip := clientIPFromRequest(r)
+	ip := s.clientIP(r)
 	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
 	locked, retryAfter := s.abuseLimiter.IsLocked(key, time.Now())
 	if !locked {
@@ -161,7 +166,7 @@ func (s *Service) markAbuseFailure(scope, identifier string, preserveCase bool, 
 	if s.abuseLimiter == nil {
 		return
 	}
-	ip := clientIPFromRequest(r)
+	ip := s.clientIP(r)
 	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
 	s.abuseLimiter.RecordFailure(key, time.Now())
 }
@@ -170,7 +175,7 @@ func (s *Service) clearAbuseFailures(scope, identifier string, preserveCase bool
 	if s.abuseLimiter == nil {
 		return
 	}
-	ip := clientIPFromRequest(r)
+	ip := s.clientIP(r)
 	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
 	s.abuseLimiter.RecordSuccess(key)
 }
@@ -214,14 +219,17 @@ type LoginPageData struct {
 	Title     string
 	Username  string
 	Error     string
+	Next      string
 	CSRFToken string
 }
 
 type AdminLoginPageData struct {
-	Title     string
-	Username  string
-	Error     string
-	CSRFToken string
+	Title         string
+	Username      string
+	Error         string
+	Next          string
+	SetupRequired bool
+	CSRFToken     string
 }
 
 type PasswordResetRequestData struct {
@@ -250,7 +258,7 @@ func (s *Service) shouldUseSecureCookies(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+	if s.trustProxyHeaders && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		return true
 	}
 	return s.environment == "production"
@@ -268,28 +276,35 @@ func generateOpaqueToken(lengthBytes int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func hashPassword(password string) (string, string, error) {
-	salt, err := dbGenerateSalt()
-	if err != nil {
-		return "", "", err
-	}
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
-	if err != nil {
-		return "", "", err
-	}
-	return string(hashedPassword), salt, nil
-}
+// maxPasswordBytes is bcrypt's input limit; longer inputs are rejected rather
+// than silently truncated.
+const maxPasswordBytes = 72
 
-func dbGenerateSalt() (string, error) {
-	saltBytes := make([]byte, 16)
-	if _, err := rand.Read(saltBytes); err != nil {
+func hashPassword(password string) (string, error) {
+	if len(password) > maxPasswordBytes {
+		return "", bcrypt.ErrPasswordTooLong
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(saltBytes), nil
+	return string(hashed), nil
+}
+
+// dummyPasswordHash is compared against when a login names an unknown user so
+// that response timing does not reveal which usernames exist.
+var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("sokomoko-timing-equalizer"), bcrypt.DefaultCost)
+
+func checkPassword(user *db.User, password string) bool {
+	if user == nil {
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
+		return false
+	}
+	return bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) == nil
 }
 
 func createUserWithPassword(store store, username, email, password, role string) (int64, error) {
-	passwordHash, salt, err := hashPassword(password)
+	passwordHash, err := hashPassword(password)
 	if err != nil {
 		return 0, err
 	}
@@ -297,14 +312,18 @@ func createUserWithPassword(store store, username, email, password, role string)
 		Username:     username,
 		Email:        email,
 		PasswordHash: passwordHash,
-		Salt:         salt,
 		Role:         role,
-		Slug:         username,
 	}
 	return store.CreateUser(user)
 }
 
+// startSession issues a fresh session, revoking any session the request
+// already carried so a pre-login session ID can never be promoted (session
+// fixation).
 func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int) error {
+	if existing, err := r.Cookie(sessionCookieName); err == nil && existing.Value != "" {
+		_ = s.store.DeleteSession(existing.Value)
+	}
 	sessionToken, err := generateOpaqueToken(32)
 	if err != nil {
 		return err
@@ -340,7 +359,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID in
 }
 
 func isStrongEnoughPassword(password string) bool {
-	return len(strings.TrimSpace(password)) >= 10
+	return len(strings.TrimSpace(password)) >= 10 && len(password) <= maxPasswordBytes
 }
 
 func isValidUsername(username string) bool {
@@ -375,17 +394,6 @@ func isLoopbackRequest(r *http.Request) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-func isPartnerHost(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	host := strings.TrimSpace(strings.ToLower(r.Host))
-	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
-		host = parsedHost
-	}
-	return strings.HasPrefix(host, "partner.")
 }
 
 func (s *Service) validAdminSetupToken(r *http.Request) bool {
@@ -556,7 +564,7 @@ func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if !isStrongEnoughPassword(password) {
-			data.Error = "Password must be at least 10 characters"
+			data.Error = "Password must be 10 to 72 characters"
 			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
@@ -614,7 +622,7 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if !isStrongEnoughPassword(password) {
-			data.Error = "Password must be at least 10 characters"
+			data.Error = "Password must be 10 to 72 characters"
 			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
@@ -632,136 +640,133 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-// Login handles normal user authentication.
+type loginConfig struct {
+	title        string
+	abuseScope   string
+	allowedRoles []string
+	tmpl         *template.Template
+}
+
+// Login handles customer authentication.
 func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
+	cfg := loginConfig{title: "Login", abuseScope: "login:user", allowedRoles: []string{db.RoleUser}, tmpl: tmpl}
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := LoginPageData{
-			Title:     "Login",
-			CSRFToken: s.CSRFTokenForSession(r),
-		}
-
-		if r.Method == http.MethodGet {
-			renderWithStatus(w, tmpl, 0, data)
-			return
-		}
-
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		username := strings.TrimSpace(r.FormValue("username"))
-		password := r.FormValue("password")
-		data.Username = username
-
-		if username == "" || password == "" {
-			data.Error = "Username and password are required"
-			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
-			return
-		}
-
-		if s.checkAbuseLock(w, "login:user", username, true, r) {
-			data.Error = "Too many attempts. Please wait and try again."
-			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
-			return
-		}
-
-		user, err := s.store.GetUserByUsername(username)
-		if err != nil || user == nil || user.Role != "user" {
-			s.markAbuseFailure("login:user", username, true, r)
-			log.Printf("Login failed for user %s: %v", username, err)
-			data.Error = "Invalid credentials"
-			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
-			return
-		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password+user.Salt)); err != nil {
-			s.markAbuseFailure("login:user", username, true, r)
-			log.Printf("Password mismatch for user %s: %v", username, err)
-			data.Error = "Invalid credentials"
-			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
-			return
-		}
-		s.clearAbuseFailures("login:user", username, true, r)
-
-		if err := s.startSession(w, r, user.ID); err != nil {
-			log.Printf("Error creating session in DB: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		http.Redirect(w, r, "/", http.StatusFound)
+		s.handleLogin(w, r, cfg, func(username string) any {
+			return LoginPageData{Title: cfg.title, Username: username, CSRFToken: s.CSRFTokenForSession(r), Next: safeNextPath(r.FormValue("next"))}
+		}, func(data any, msg string) any {
+			d := data.(LoginPageData)
+			d.Error = msg
+			return d
+		})
 	}
 }
 
-// AdminLogin handles admin/staff authentication.
+// AdminLogin handles admin and staff authentication on the admin host. When no
+// admin exists yet it redirects to the first-run /setup flow.
 func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		data := AdminLoginPageData{
-			Title:     "Admin Login",
-			CSRFToken: s.CSRFTokenForSession(r),
-		}
+	return s.workspaceLogin(tmpl, "/setup")
+}
 
+// WorkspaceLogin is AdminLogin for hosts without a setup flow (the partner
+// host). Before an admin exists it explains that setup must be completed on
+// the admin host instead of redirecting into a loop.
+func (s *Service) WorkspaceLogin(tmpl *template.Template) http.HandlerFunc {
+	return s.workspaceLogin(tmpl, "")
+}
+
+func (s *Service) workspaceLogin(tmpl *template.Template, setupPath string) http.HandlerFunc {
+	cfg := loginConfig{title: "Admin Login", abuseScope: "login:admin", allowedRoles: []string{db.RoleAdmin, db.RoleStaff}, tmpl: tmpl}
+	if setupPath == "" {
+		cfg.allowedRoles = append(cfg.allowedRoles, db.RolePartner)
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
 		hasAdmin, err := s.store.HasAdminUser()
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		if !hasAdmin && !isPartnerHost(r) {
-			http.Redirect(w, r, "/setup", http.StatusFound)
+		if !hasAdmin {
+			if setupPath != "" {
+				http.Redirect(w, r, setupPath, http.StatusFound)
+				return
+			}
+			renderWithStatus(w, tmpl, http.StatusServiceUnavailable, AdminLoginPageData{
+				Title:         cfg.title,
+				SetupRequired: true,
+				Error:         "Platform setup is not complete. Create the first admin account on the admin host, then sign in here.",
+			})
 			return
 		}
-
-		if r.Method == http.MethodGet {
-			renderWithStatus(w, tmpl, 0, data)
-			return
-		}
-
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		username := strings.TrimSpace(r.FormValue("username"))
-		password := r.FormValue("password")
-		data.Username = username
-		if username == "" || password == "" {
-			data.Error = "Username and password are required"
-			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
-			return
-		}
-
-		if s.checkAbuseLock(w, "login:admin", username, true, r) {
-			data.Error = "Too many attempts. Please wait and try again."
-			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
-			return
-		}
-
-		user, err := s.store.GetUserByUsername(username)
-		if err != nil || user == nil || !containsRole([]string{"admin", "staff", "partner"}, user.Role) {
-			s.markAbuseFailure("login:admin", username, true, r)
-			log.Printf("Admin/staff login failed for user %s: %v", username, err)
-			data.Error = "Invalid credentials"
-			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
-			return
-		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password+user.Salt)); err != nil {
-			s.markAbuseFailure("login:admin", username, true, r)
-			data.Error = "Invalid credentials"
-			renderWithStatus(w, tmpl, http.StatusUnauthorized, data)
-			return
-		}
-		s.clearAbuseFailures("login:admin", username, true, r)
-
-		if err := s.startSession(w, r, user.ID); err != nil {
-			log.Printf("Error creating admin session in DB: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		http.Redirect(w, r, "/", http.StatusFound)
+		s.handleLogin(w, r, cfg, func(username string) any {
+			return AdminLoginPageData{Title: cfg.title, Username: username, CSRFToken: s.CSRFTokenForSession(r), Next: safeNextPath(r.FormValue("next"))}
+		}, func(data any, msg string) any {
+			d := data.(AdminLoginPageData)
+			d.Error = msg
+			return d
+		})
 	}
+}
+
+func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginConfig, page func(username string) any, withError func(data any, msg string) any) {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		renderWithStatus(w, cfg.tmpl, 0, page(""))
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := r.FormValue("password")
+	data := page(username)
+
+	if username == "" || password == "" {
+		renderWithStatus(w, cfg.tmpl, http.StatusBadRequest, withError(data, "Username and password are required"))
+		return
+	}
+	if s.checkAbuseLock(w, cfg.abuseScope, username, false, r) {
+		renderWithStatus(w, cfg.tmpl, http.StatusTooManyRequests, withError(data, "Too many attempts. Please wait and try again."))
+		return
+	}
+
+	user, err := s.findUserByIdentifier(username)
+	if err != nil {
+		log.Printf("login lookup failed: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if user != nil && !containsRole(cfg.allowedRoles, user.Role) {
+		user = nil
+	}
+	if !checkPassword(user, password) {
+		s.markAbuseFailure(cfg.abuseScope, username, false, r)
+		renderWithStatus(w, cfg.tmpl, http.StatusUnauthorized, withError(data, "Invalid credentials"))
+		return
+	}
+
+	s.clearAbuseFailures(cfg.abuseScope, username, false, r)
+	if err := s.startSession(w, r, user.ID); err != nil {
+		log.Printf("create session failed: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, safeNextPath(r.FormValue("next")), http.StatusFound)
+}
+
+// safeNextPath only allows same-site relative paths as post-login redirects,
+// which prevents open redirects such as next=//evil.example.
+func safeNextPath(raw string) string {
+	next := strings.TrimSpace(raw)
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") ||
+		strings.ContainsAny(next, "\\\r\n") || len(next) > 512 {
+		return "/"
+	}
+	parsed, err := url.Parse(next)
+	if err != nil || parsed.Host != "" || parsed.Scheme != "" {
+		return "/"
+	}
+	return next
 }
 
 // AdminSetup is the first-run bootstrap flow that creates the root admin and optional staff accounts.
@@ -833,7 +838,7 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if !isStrongEnoughPassword(adminPassword) {
-			data.Error = "Admin password must be at least 10 characters"
+			data.Error = "Admin password must be 10 to 72 characters"
 			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
@@ -849,52 +854,56 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			staffCount = parsed
 		}
 
-		if _, err := createUserWithPassword(s.store, adminUsername, adminEmail, adminPassword, "admin"); err != nil {
+		adminHash, err := hashPassword(adminPassword)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		tempPasswords := make([]string, staffCount)
+		staffHashes := make([]string, staffCount)
+		for i := range tempPasswords {
+			token, tokenErr := generateOpaqueToken(12)
+			if tokenErr != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			tempPasswords[i] = token
+			if staffHashes[i], err = hashPassword(token); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		staffUsers, err := s.store.BootstrapAdmin(
+			db.User{Username: adminUsername, Email: adminEmail, PasswordHash: adminHash},
+			staffHashes,
+			func(i, attempt int) (string, string) {
+				username := fmt.Sprintf("staff%02d", i)
+				if attempt > 0 {
+					username = fmt.Sprintf("staff%02d_%d", i, attempt)
+				}
+				return username, username + "@sokomoko.local"
+			},
+		)
+		if errors.Is(err, db.ErrAdminExists) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		if err != nil {
+			log.Printf("admin bootstrap failed: %v", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create admin account. Username or email may already exist.")
 			data.Error = message
 			renderWithStatus(w, tmpl, statusCode, data)
 			return
 		}
 
-		staffCredentials := make([]StaffCredential, 0, staffCount)
-		for i := 1; i <= staffCount; i++ {
-			created := false
-			for attempt := 0; attempt < 10; attempt++ {
-				suffix := ""
-				if attempt > 0 {
-					suffix = fmt.Sprintf("_%d", attempt)
-				}
-				username := fmt.Sprintf("staff%02d%s", i, suffix)
-				email := fmt.Sprintf("%s@sokomoko.local", username)
-				tempPassword, tokenErr := generateOpaqueToken(9)
-				if tokenErr != nil {
-					data.Error = "Failed to generate staff credentials"
-					renderWithStatus(w, tmpl, 0, data)
-					return
-				}
-				tempPassword += "Aa1!"
-
-				if _, err := createUserWithPassword(s.store, username, email, tempPassword, "staff"); err != nil {
-					if !isUniqueConstraintErr(err) {
-						data.Error = "Failed to provision staff accounts."
-						renderWithStatus(w, tmpl, 0, data)
-						return
-					}
-					continue
-				}
-				staffCredentials = append(staffCredentials, StaffCredential{
-					Username:     username,
-					Email:        email,
-					TempPassword: tempPassword,
-				})
-				created = true
-				break
-			}
-			if !created {
-				data.Error = "Failed to provision all staff accounts."
-				renderWithStatus(w, tmpl, 0, data)
-				return
-			}
+		staffCredentials := make([]StaffCredential, 0, len(staffUsers))
+		for i, user := range staffUsers {
+			staffCredentials = append(staffCredentials, StaffCredential{
+				Username:     user.Username,
+				Email:        user.Email,
+				TempPassword: tempPasswords[i],
+			})
 		}
 
 		data.ShowForm = false
@@ -1053,7 +1062,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 		if !isStrongEnoughPassword(password) {
-			data.Error = "Password must be at least 10 characters"
+			data.Error = "Password must be 10 to 72 characters"
 			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
@@ -1078,13 +1087,13 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 
-		passwordHash, salt, err := hashPassword(password)
+		passwordHash, err := hashPassword(password)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		used, err := s.store.UsePasswordResetToken(token, passwordHash, salt)
+		used, err := s.store.UsePasswordResetToken(token, passwordHash)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -1103,32 +1112,33 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 	}
 }
 
-// Logout handles user logout
+// Logout revokes the session and clears the cookie.
 func (s *Service) Logout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		cookie, err := r.Cookie(sessionCookieName)
-		if err == nil {
+		if cookie, err := r.Cookie(sessionCookieName); err == nil {
 			_ = s.store.DeleteSession(cookie.Value)
 		}
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName,
-			Value:    "",
-			Expires:  time.Unix(0, 0),
-			MaxAge:   -1,
-			Domain:   s.sessionCookieDomain,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   s.shouldUseSecureCookies(r),
-			SameSite: http.SameSiteLaxMode,
-		})
+		s.clearSessionCookie(w, r)
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
+}
+
+func (s *Service) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		Domain:   s.sessionCookieDomain,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   s.shouldUseSecureCookies(r),
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // contextKey is a custom type for context keys to avoid collisions.
@@ -1136,75 +1146,77 @@ type contextKey string
 
 const userContextKey contextKey = "user"
 
-// AuthMiddleware provides authentication middleware for protected routes
+// WantsJSON reports whether the client asked for a JSON response, as the
+// storefront's web components do.
+func WantsJSON(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
+}
+
+// AuthMiddleware requires a valid session. Browsers are redirected to /login
+// with a next parameter; JSON clients get a 401.
 func (s *Service) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, err := s.authenticatedUser(r)
-		if err != nil {
-			if errors.Is(err, errNoSession) {
-				http.Redirect(w, r, "/login", http.StatusFound)
+		user := GetUserFromContext(r.Context())
+		if user == nil {
+			user = s.sessionUser(r)
+		}
+		if user == nil {
+			if _, err := r.Cookie(sessionCookieName); err == nil {
+				s.clearSessionCookie(w, r)
+			}
+			if WantsJSON(r) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"authentication required","login":"/login"}`))
 				return
 			}
-			if errors.Is(err, errInvalidSession) {
-				http.Redirect(w, r, "/login", http.StatusFound)
-				return
+			target := "/login"
+			if r.Method == http.MethodGet && r.URL.Path != "/" {
+				target += "?next=" + url.QueryEscape(r.URL.RequestURI())
 			}
-			http.Error(w, "Bad request", http.StatusBadRequest)
+			http.Redirect(w, r, target, http.StatusFound)
 			return
 		}
-
 		ctx := context.WithValue(r.Context(), userContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// APIAuthMiddleware authenticates the current session without redirecting an
-// API client to an HTML page. It is intended for same-origin JSON requests
-// made by the progressive-enhancement layer.
-func (s *Service) APIAuthMiddleware(next http.Handler) http.Handler {
+// OptionalUser attaches the session user to the context when one is present
+// but never blocks the request. Public pages use it to personalise rendering.
+func (s *Service) OptionalUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, err := s.authenticatedUser(r)
-		if err != nil {
-			writeAPIAuthError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
-			return
+		if GetUserFromContext(r.Context()) == nil {
+			if user := s.sessionUser(r); user != nil {
+				r = r.WithContext(context.WithValue(r.Context(), userContextKey, user))
+			}
 		}
-
-		ctx := context.WithValue(r.Context(), userContextKey, user)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r)
 	})
 }
 
-func (s *Service) authenticatedUser(r *http.Request) (*db.User, error) {
+func (s *Service) sessionUser(r *http.Request) *db.User {
 	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil {
-		if errors.Is(err, http.ErrNoCookie) {
-			return nil, errNoSession
-		}
-		return nil, err
+	if err != nil || cookie.Value == "" {
+		return nil
 	}
-
 	sess, err := s.store.GetSession(cookie.Value)
-	if err != nil || sess == nil || sess.ExpiresAt.Before(time.Now()) {
-		if sess != nil {
-			_ = s.store.DeleteSession(cookie.Value)
-		}
-		return nil, errInvalidSession
+	if err != nil {
+		log.Printf("session lookup failed: %v", err)
+		return nil
 	}
-
+	if sess == nil || !sess.ExpiresAt.After(time.Now()) {
+		return nil
+	}
 	user, err := s.store.GetUserByID(sess.UserID)
-	if err != nil || user == nil {
-		log.Printf("Error retrieving user from DB for session %d: %v", sess.UserID, err)
-		_ = s.store.DeleteSession(cookie.Value)
-		return nil, errInvalidSession
+	if err != nil {
+		log.Printf("session user lookup failed for user_id=%d: %v", sess.UserID, err)
+		return nil
 	}
-	return user, nil
-}
-
-func writeAPIAuthError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + message + `"}}`))
+	if user == nil {
+		_ = s.store.DeleteSession(cookie.Value)
+	}
+	return user
 }
 
 // GetUserFromContext retrieves the user from the request context
@@ -1237,5 +1249,17 @@ func RequireAnyRole(roles []string, next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// APIAuthMiddleware preserves the versioned API error contract without redirects.
+func (s *Service) APIAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := s.sessionUser(r)
+		if user == nil {
+			writeAPIJSONError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, user)))
 	})
 }

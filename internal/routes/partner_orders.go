@@ -2,6 +2,7 @@ package routes
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -45,18 +46,28 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 				data.Error = "Invalid order id"
 				responseStatus = http.StatusBadRequest
 			case errors.Is(err, partnersvc.ErrOrderNotFound):
-				data.Error = "Unable to update order"
-				responseStatus = http.StatusBadRequest
+				data.Error = "Order does not exist"
+				responseStatus = http.StatusNotFound
 			case errors.Is(err, partnersvc.ErrInvalidOrderTransition):
-				data.Error = "Unable to update order"
+				data.Error = "That status change is not allowed from the order's current state"
 				responseStatus = http.StatusBadRequest
 			case err != nil:
+				log.Printf("partner order update: %v", err)
 				data.Error = "Unable to update order"
-				responseStatus = http.StatusBadRequest
+				responseStatus = http.StatusInternalServerError
 			default:
-				data.Message = "Order fulfillment updated"
+				target := "/orders"
+				if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
+					target += "?status=" + urlQueryEscape(status)
+				}
+				redirectWithFlash(w, r, target, "success", "Order fulfillment updated")
+				return
 			}
-		} else if r.Method != http.MethodGet {
+		} else if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			if flash := popFlash(w, r); flash.Message != "" {
+				data.Message = flash.Message
+			}
+		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -67,13 +78,9 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 		page := partnerOrdersPage(view)
-		page.CSRFToken = a.Auth.CSRFToken(r)
 		page.Message = data.Message
 		page.Error = data.Error
-
-		if responseStatus != http.StatusOK {
-			w.WriteHeader(responseStatus)
-		}
-		a.Render(w, a.Templates.PartnerOrders, page)
+		page.CSRFToken = a.Auth.CSRFToken(r)
+		a.RenderStatus(w, a.Templates.PartnerOrders, responseStatus, page)
 	}
 }

@@ -1,19 +1,26 @@
+// Package partner backs the partner workspace: store setup, catalog entry, and
+// order fulfillment.
 package partner
 
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"net/mail"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 var (
 	ErrStoreNotConfigured        = errors.New("store not configured")
 	ErrMissingStoreFields        = errors.New("missing store fields")
+	ErrInvalidStoreSlug          = errors.New("invalid store slug")
+	ErrInvalidContactEmail       = errors.New("invalid contact email")
 	ErrForbiddenOrderUpdate      = errors.New("forbidden order update")
 	ErrInvalidOrderID            = errors.New("invalid order id")
 	ErrOrderNotFound             = errors.New("order not found")
@@ -24,6 +31,17 @@ var (
 	ErrUnableToCreateProduct     = errors.New("unable to create product")
 	ErrUnableToCreateProductSlug = errors.New("unable to create product slug")
 )
+
+const (
+	maxProductPrice  money.Cents = 10_000_000 // 100,000.00
+	maxProductStock              = 1_000_000
+	maxProductName               = 200
+	maxSlugLength                = 80
+	maxNoticeLength              = 500
+	maxDescriptionLn             = 5000
+)
+
+var storeSlugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 type Service struct {
 	store store
@@ -54,8 +72,10 @@ type Summary struct {
 type Product struct {
 	ID            int
 	Name          string
+	Slug          string
 	Category      string
-	Price         float64
+	PartnerName   string
+	Price         money.Cents
 	StockQuantity int
 	PartnerID     int
 }
@@ -65,11 +85,16 @@ type Category struct {
 	Name string
 }
 
+type PartnerOption struct {
+	ID   int
+	Name string
+}
+
 type OrderItem struct {
 	ProductID   int
 	ProductName string
 	Quantity    int
-	LineTotal   float64
+	LineTotal   money.Cents
 }
 
 type Order struct {
@@ -80,7 +105,7 @@ type Order struct {
 	DeliveryStatus  string
 	DeliveryNotice  string
 	DeliveryAddress string
-	TotalAmount     float64
+	TotalAmount     money.Cents
 	CreatedAt       time.Time
 	Items           []OrderItem
 }
@@ -100,6 +125,7 @@ type ProductsData struct {
 	Settings   StoreSettings
 	Products   []Product
 	Categories []Category
+	Partners   []PartnerOption
 }
 
 type OrdersData struct {
@@ -114,6 +140,7 @@ type CreateProductInput struct {
 	Price       string
 	Stock       string
 	CategoryID  string
+	PartnerID   string
 }
 
 type UpdateOrderInput struct {
@@ -124,7 +151,7 @@ type UpdateOrderInput struct {
 }
 
 func New(store *db.Store) *Service {
-	return &Service{store: newDBStore(store)}
+	return &Service{store: store}
 }
 
 func newWithStore(store store) *Service {
@@ -132,7 +159,12 @@ func newWithStore(store store) *Service {
 }
 
 func (s *Service) StoreSettings() (*StoreSettings, error) {
-	return s.store.GetStoreSettings()
+	settings, err := s.store.GetStoreSettings()
+	if err != nil || settings == nil {
+		return nil, err
+	}
+	mapped := mapStoreSettings(*settings)
+	return &mapped, nil
 }
 
 func (s *Service) SaveStoreSettings(input StoreSettingsInput) (StoreSettings, error) {
@@ -142,16 +174,22 @@ func (s *Service) SaveStoreSettings(input StoreSettingsInput) (StoreSettings, er
 		Description:  strings.TrimSpace(input.Description),
 		ContactEmail: strings.ToLower(strings.TrimSpace(input.ContactEmail)),
 	}
-
 	if settings.StoreName == "" || settings.StoreSlug == "" || settings.ContactEmail == "" {
 		return settings, ErrMissingStoreFields
 	}
-
-	if err := s.store.SaveStoreSettings(settings); err != nil {
-		return settings, err
+	if !storeSlugPattern.MatchString(settings.StoreSlug) || len(settings.StoreSlug) > maxSlugLength {
+		return settings, ErrInvalidStoreSlug
 	}
-
-	return settings, nil
+	if addr, err := mail.ParseAddress(settings.ContactEmail); err != nil || addr.Address != settings.ContactEmail {
+		return settings, ErrInvalidContactEmail
+	}
+	err := s.store.UpsertStoreSettings(db.StoreSettings{
+		StoreName:    settings.StoreName,
+		StoreSlug:    settings.StoreSlug,
+		Description:  settings.Description,
+		ContactEmail: settings.ContactEmail,
+	})
+	return settings, err
 }
 
 func (s *Service) Dashboard() (DashboardData, error) {
@@ -172,7 +210,6 @@ func (s *Service) DashboardForActor(actor *Actor) (DashboardData, error) {
 	if err != nil {
 		return DashboardData{}, err
 	}
-
 	return DashboardData{
 		Settings:     *settings,
 		ProductCount: len(products.Products),
@@ -189,30 +226,46 @@ func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
 	if err != nil {
 		return ProductsData{}, err
 	}
-
-	products, err := s.store.GetProducts()
+	filter := db.ProductFilter{}
+	if actorIsPartner(actor) {
+		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		if err != nil {
+			return ProductsData{}, err
+		}
+		if partnerID == 0 {
+			return ProductsData{Settings: *settings}, nil
+		}
+		filter.PartnerID = partnerID
+	}
+	products, err := s.store.ListProducts(filter)
 	if err != nil {
 		return ProductsData{}, err
 	}
-	if actorIsPartner(actor) {
-		filtered := products[:0]
-		for _, product := range products {
-			if product.PartnerID == actor.ID {
-				filtered = append(filtered, product)
-			}
-		}
-		products = filtered
-	}
-	categories, err := s.store.GetCategories()
+	categories, err := s.store.GetAllCategories()
 	if err != nil {
-		categories = nil
+		return ProductsData{}, err
+	}
+	partners, err := s.store.ListPartners()
+	if err != nil {
+		return ProductsData{}, err
 	}
 
-	return ProductsData{
-		Settings:   *settings,
-		Products:   products,
-		Categories: categories,
-	}, nil
+	data := ProductsData{Settings: *settings}
+	for _, p := range products {
+		data.Products = append(data.Products, Product{
+			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
+			Price: p.Price, StockQuantity: p.StockQuantity, PartnerID: int(p.PartnerID.Int64),
+		})
+	}
+	for _, c := range categories {
+		data.Categories = append(data.Categories, Category{ID: c.ID, Name: c.Name})
+	}
+	for _, p := range partners {
+		if p.Status == "active" && (!actorIsPartner(actor) || p.ID == filter.PartnerID) {
+			data.Partners = append(data.Partners, PartnerOption{ID: p.ID, Name: p.Name})
+		}
+	}
+	return data, nil
 }
 
 func (s *Service) CreateProduct(input CreateProductInput) error {
@@ -228,58 +281,58 @@ func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) 
 	description := strings.TrimSpace(input.Description)
 	priceRaw := strings.TrimSpace(input.Price)
 	stockRaw := strings.TrimSpace(input.Stock)
-	categoryIDRaw := strings.TrimSpace(input.CategoryID)
-
 	if name == "" || priceRaw == "" || stockRaw == "" {
 		return ErrMissingProductFields
 	}
+	if len([]rune(name)) > maxProductName || len([]rune(description)) > maxDescriptionLn {
+		return ErrMissingProductFields
+	}
 
-	price, err := strconv.ParseFloat(priceRaw, 64)
-	if err != nil || price < 0 {
+	price, err := money.Parse(priceRaw)
+	if err != nil || price > maxProductPrice {
 		return ErrInvalidProductPrice
 	}
 	stock, err := strconv.Atoi(stockRaw)
-	if err != nil || stock < 0 {
+	if err != nil || stock < 0 || stock > maxProductStock {
 		return ErrInvalidProductStock
 	}
 
+	product := db.Product{
+		Name:          name,
+		Description:   description,
+		Price:         price,
+		StockQuantity: stock,
+		CategoryID:    parseOptionalID(input.CategoryID),
+		PartnerID:     parseOptionalID(input.PartnerID),
+	}
+
+	if actorIsPartner(actor) {
+		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		if err != nil {
+			return err
+		}
+		if partnerID == 0 {
+			return ErrUnableToCreateProduct
+		}
+		product.PartnerID = sql.NullInt64{Int64: int64(partnerID), Valid: true}
+	}
 	slugBase := slugify(name)
 	if slugBase == "" {
 		slugBase = "product"
 	}
-
-	product := productDraft{
-		Name:          name,
-		Slug:          slugBase,
-		Description:   description,
-		Price:         price,
-		StockQuantity: stock,
-	}
-	if actorIsPartner(actor) {
-		product.PartnerID = sql.NullInt64{Int64: int64(actor.ID), Valid: true}
-	}
-
-	if categoryIDRaw != "" {
-		categoryID, parseErr := strconv.Atoi(categoryIDRaw)
-		if parseErr == nil && categoryID > 0 {
-			product.CategoryID.Int64 = int64(categoryID)
-			product.CategoryID.Valid = true
-		}
-	}
-
 	for attempt := 0; attempt < 10; attempt++ {
+		product.Slug = slugBase
 		if attempt > 0 {
-			product.Slug = slugBase + "-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" + strconv.Itoa(attempt)
+			product.Slug = fmt.Sprintf("%s-%d-%d", slugBase, time.Now().Unix(), attempt)
 		}
-		if err := s.store.CreateProduct(product); err != nil {
-			if errors.Is(err, db.ErrProductSlugConflict) {
-				continue
-			}
-			return ErrUnableToCreateProduct
+		_, err := s.store.CreateProduct(product)
+		if err == nil {
+			return nil
 		}
-		return nil
+		if !errors.Is(err, db.ErrProductSlugConflict) {
+			return fmt.Errorf("%w: %w", ErrUnableToCreateProduct, err)
+		}
 	}
-
 	return ErrUnableToCreateProductSlug
 }
 
@@ -292,53 +345,47 @@ func (s *Service) OrdersForActor(actor *Actor, filter string) (OrdersData, error
 	if cleanFilter == "" {
 		cleanFilter = "all"
 	}
-
 	orders, err := s.store.ListOrdersForFulfillment()
 	if err != nil {
 		return OrdersData{}, err
 	}
 	if actorIsPartner(actor) {
-		products, productErr := s.store.GetProducts()
-		if productErr != nil {
-			return OrdersData{}, productErr
+		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		if err != nil {
+			return OrdersData{}, err
 		}
-		owners := make(map[int]int, len(products))
-		for _, product := range products {
-			owners[product.ID] = product.PartnerID
-		}
-		owned := orders[:0]
+		owned := make([]db.Order, 0)
 		for _, order := range orders {
-			for _, item := range order.Items {
-				if owners[item.ProductID] == actor.ID {
-					owned = append(owned, order)
-					break
-				}
+			if orderOwnedByPartner(order, partnerID) {
+				owned = append(owned, order)
 			}
 		}
 		orders = owned
 	}
-
-	summary := summaryForOrders(orders)
-
 	filtered := make([]Order, 0, len(orders))
 	for _, order := range orders {
 		if cleanFilter == "all" || order.PartnerStatus == cleanFilter {
-			filtered = append(filtered, order)
+			filtered = append(filtered, mapOrder(order))
 		}
 	}
-
-	return OrdersData{
-		Filter:  cleanFilter,
-		Orders:  filtered,
-		Summary: summary,
-	}, nil
+	if actorIsPartner(actor) {
+		mapped := make([]Order, 0, len(orders))
+		for _, order := range orders {
+			mapped = append(mapped, mapOrder(order))
+		}
+		return OrdersData{Filter: cleanFilter, Orders: filtered, Summary: summaryForOrders(mapped)}, nil
+	}
+	summary, err := s.store.GetPartnerOrderSummary()
+	if err != nil {
+		return OrdersData{}, err
+	}
+	return OrdersData{Filter: cleanFilter, Orders: filtered, Summary: Summary(summary)}, nil
 }
 
 func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
-	if actor == nil || (actor.Role != "admin" && actor.Role != "staff" && actor.Role != "partner") {
+	if actor == nil || (actor.Role != db.RoleAdmin && actor.Role != db.RoleStaff && actor.Role != db.RolePartner) {
 		return ErrForbiddenOrderUpdate
 	}
-
 	orderID, err := strconv.Atoi(strings.TrimSpace(input.OrderID))
 	if err != nil || orderID <= 0 {
 		return ErrInvalidOrderID
@@ -349,28 +396,32 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 
 	partnerStatus := strings.TrimSpace(input.PartnerStatus)
 	deliveryStatus := strings.TrimSpace(input.DeliveryStatus)
-	note := strings.TrimSpace(input.DeliveryNotice)
+	notice := strings.TrimSpace(input.DeliveryNotice)
+	if runes := []rune(notice); len(runes) > maxNoticeLength {
+		notice = string(runes[:maxNoticeLength])
+	}
 
-	if err := s.store.UpdateOrderFulfillment(orderID, partnerStatus, deliveryStatus, note); err != nil {
+	if err := s.store.UpdateOrderFulfillment(orderID, partnerStatus, deliveryStatus, notice); err != nil {
 		switch {
 		case errors.Is(err, db.ErrOrderNotFound):
 			return ErrOrderNotFound
 		case errors.Is(err, db.ErrInvalidPartnerTransition),
 			errors.Is(err, db.ErrInvalidDeliveryTransition),
 			errors.Is(err, db.ErrInvalidPartnerStatus),
-			errors.Is(err, db.ErrInvalidDeliveryStatus):
+			errors.Is(err, db.ErrInvalidDeliveryStatus),
+			errors.Is(err, db.ErrInsufficientStock):
 			return ErrInvalidOrderTransition
 		default:
 			return err
 		}
 	}
-
-	_ = s.store.CreateAuditLog(actor.ID, "partner.fulfillment.update", "order", orderID, "partner="+partnerStatus+",delivery="+deliveryStatus)
+	_ = s.store.CreateAuditLog(actor.ID, "partner.fulfillment.update", "order", orderID,
+		"partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }
 
 func (s *Service) requireStoreSettings() (*StoreSettings, error) {
-	settings, err := s.store.GetStoreSettings()
+	settings, err := s.StoreSettings()
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +429,14 @@ func (s *Service) requireStoreSettings() (*StoreSettings, error) {
 		return nil, ErrStoreNotConfigured
 	}
 	return settings, nil
+}
+
+func parseOptionalID(raw string) sql.NullInt64 {
+	id, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || id <= 0 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(id), Valid: true}
 }
 
 func mapStoreSettings(settings db.StoreSettings) StoreSettings {
@@ -389,45 +448,11 @@ func mapStoreSettings(settings db.StoreSettings) StoreSettings {
 	}
 }
 
-func mapProduct(product db.Product) Product {
-	return Product{
-		ID:            product.ID,
-		Name:          product.Name,
-		Category:      product.Category,
-		Price:         product.Price,
-		StockQuantity: product.StockQuantity,
-		PartnerID:     int(product.PartnerID.Int64),
-	}
-}
-
-func mapCategory(category db.Category) Category {
-	return Category{
-		ID:   int(category.ID),
-		Name: category.Name,
-	}
-}
-
-func mapSummary(summary db.PartnerOrderSummary) Summary {
-	return Summary{
-		NewCount:        summary.NewCount,
-		InProgressCount: summary.InProgressCount,
-		DispatchedCount: summary.DispatchedCount,
-		CompletedCount:  summary.CompletedCount,
-		OverdueCount:    summary.OverdueCount,
-	}
-}
-
-func mapOrder(order db.FulfillmentOrder) Order {
+func mapOrder(order db.Order) Order {
 	items := make([]OrderItem, 0, len(order.Items))
 	for _, item := range order.Items {
-		items = append(items, OrderItem{
-			ProductID:   item.ProductID,
-			ProductName: item.ProductName,
-			Quantity:    item.Quantity,
-			LineTotal:   item.LineTotal,
-		})
+		items = append(items, OrderItem{ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
 	}
-
 	return Order{
 		ID:              order.ID,
 		CustomerName:    order.CustomerName,
@@ -470,59 +495,54 @@ func summaryForOrders(orders []Order) Summary {
 	return summary
 }
 
-func (s *Service) orderBelongsToPartner(orderID, partnerID int) bool {
+// Only wholly owned orders can be exposed or updated through a partner account.
+// Mixed-partner fulfillment remains an admin/staff operation.
+func orderOwnedByPartner(order db.Order, partnerID int) bool {
+	if partnerID <= 0 || len(order.Items) == 0 {
+		return false
+	}
+	for _, item := range order.Items {
+		if !item.PartnerID.Valid || item.PartnerID.Int64 != int64(partnerID) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) orderBelongsToPartner(orderID, userID int) bool {
+	partnerID, err := s.store.PartnerIDForUser(userID)
+	if err != nil || partnerID == 0 {
+		return false
+	}
 	orders, err := s.store.ListOrdersForFulfillment()
 	if err != nil {
 		return false
 	}
-	products, err := s.store.GetProducts()
-	if err != nil {
-		return false
-	}
-	owners := make(map[int]int, len(products))
-	for _, product := range products {
-		owners[product.ID] = product.PartnerID
-	}
 	for _, order := range orders {
-		if order.ID != orderID {
-			continue
+		if order.ID == orderID {
+			return orderOwnedByPartner(order, partnerID)
 		}
-		for _, item := range order.Items {
-			if owners[item.ProductID] == partnerID {
-				return true
-			}
-		}
-		return false
 	}
 	return false
 }
 
 func slugify(value string) string {
-	value = strings.TrimSpace(strings.ToLower(value))
-	if value == "" {
-		return ""
-	}
-
 	var b strings.Builder
-	prevDash := false
-	for _, r := range value {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-			prevDash = false
+	pendingDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
+		isAlnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if !isAlnum {
+			pendingDash = b.Len() > 0
 			continue
 		}
-		if !prevDash {
+		if pendingDash {
 			b.WriteByte('-')
-			prevDash = true
+			pendingDash = false
+		}
+		b.WriteRune(r)
+		if b.Len() >= maxSlugLength {
+			break
 		}
 	}
-
-	return strings.Trim(b.String(), "-")
-}
-
-func isProductSlugConflict(err error) bool {
-	if err == nil {
-		return false
-	}
-	return errors.Is(err, db.ErrProductSlugConflict)
+	return strings.TrimRight(b.String(), "-")
 }

@@ -1,3 +1,4 @@
+// Package admin backs the platform administration workspace.
 package admin
 
 import (
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 var (
@@ -34,24 +36,28 @@ type Metrics struct {
 }
 
 type SalesReport struct {
-	RevenueTotal   float64
+	RevenueTotal   money.Cents
 	OrderCount     int
 	PendingCount   int
 	ShippedCount   int
 	DeliveredCount int
+	CancelledCount int
 }
 
 type Product struct {
+	ID            int
 	Name          string
+	Slug          string
 	Category      string
-	Price         float64
+	PartnerName   string
+	Price         money.Cents
 	StockQuantity int
 }
 
 type OrderItem struct {
 	ProductName string
 	Quantity    int
-	LineTotal   float64
+	LineTotal   money.Cents
 }
 
 type Order struct {
@@ -62,20 +68,23 @@ type Order struct {
 	DeliveryStatus  string
 	DeliveryNotice  string
 	DeliveryAddress string
-	TotalAmount     float64
+	TotalAmount     money.Cents
+	CreatedAt       time.Time
 	Items           []OrderItem
 }
 
 type TeamMember struct {
-	ID       int
-	Username string
-	Email    string
-	Role     string
+	ID        int
+	Username  string
+	Email     string
+	Role      string
+	CreatedAt time.Time
 }
 
 type AuditLog struct {
 	CreatedAt   time.Time
 	ActorUserID sql.NullInt64
+	ActorName   string
 	Action      string
 	TargetType  string
 	TargetID    sql.NullInt64
@@ -96,7 +105,7 @@ type UpdateOrderInput struct {
 }
 
 func New(store *db.Store) *Service {
-	return &Service{store: newDBStore(store)}
+	return &Service{store: store}
 }
 
 func newWithStore(store store) *Service {
@@ -104,77 +113,100 @@ func newWithStore(store store) *Service {
 }
 
 func (s *Service) Metrics() (Metrics, error) {
-	productCount, err := s.store.CountProducts()
-	if err != nil {
+	var (
+		m   Metrics
+		err error
+	)
+	if m.ProductCount, err = s.store.CountProducts(); err != nil {
 		return Metrics{}, err
 	}
-	sessionCount, err := s.store.CountActiveSessions()
-	if err != nil {
+	if m.SessionCount, err = s.store.CountActiveSessions(); err != nil {
 		return Metrics{}, err
 	}
-	adminCount, err := s.store.CountUsersByRole("admin")
-	if err != nil {
+	if m.AdminCount, err = s.store.CountUsersByRole(db.RoleAdmin); err != nil {
 		return Metrics{}, err
 	}
-	staffCount, err := s.store.CountUsersByRole("staff")
-	if err != nil {
+	if m.StaffCount, err = s.store.CountUsersByRole(db.RoleStaff); err != nil {
 		return Metrics{}, err
 	}
-	userCount, err := s.store.CountUsersByRole("user")
-	if err != nil {
+	if m.UserCount, err = s.store.CountUsersByRole(db.RoleUser); err != nil {
 		return Metrics{}, err
 	}
-
-	return Metrics{
-		ProductCount: productCount,
-		SessionCount: sessionCount,
-		AdminCount:   adminCount,
-		StaffCount:   staffCount,
-		UserCount:    userCount,
-	}, nil
+	return m, nil
 }
 
 func (s *Service) Products() ([]Product, error) {
-	return s.store.ListProducts()
+	products, err := s.store.GetAllProducts()
+	if err != nil {
+		return nil, err
+	}
+	mapped := make([]Product, 0, len(products))
+	for _, p := range products {
+		mapped = append(mapped, Product{
+			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
+			Price: p.Price, StockQuantity: p.StockQuantity,
+		})
+	}
+	return mapped, nil
 }
 
 func (s *Service) Orders() ([]Order, error) {
-	return s.store.ListOrders()
+	orders, err := s.store.ListAllOrders()
+	if err != nil {
+		return nil, err
+	}
+	mapped := make([]Order, 0, len(orders))
+	for _, order := range orders {
+		items := make([]OrderItem, 0, len(order.Items))
+		for _, item := range order.Items {
+			items = append(items, OrderItem{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
+		}
+		mapped = append(mapped, Order{
+			ID:              order.ID,
+			CustomerName:    order.CustomerName,
+			Status:          order.Status,
+			PartnerStatus:   order.PartnerStatus,
+			DeliveryStatus:  order.DeliveryStatus,
+			DeliveryNotice:  order.DeliveryNotice,
+			DeliveryAddress: order.DeliveryAddress,
+			TotalAmount:     order.TotalAmount,
+			CreatedAt:       order.CreatedAt,
+			Items:           items,
+		})
+	}
+	return mapped, nil
 }
 
 func (s *Service) Reports() (SalesReport, error) {
-	revenueTotal, err := s.store.SumOrderRevenue()
+	revenue, err := s.store.SumOrderRevenue()
 	if err != nil {
 		return SalesReport{}, err
 	}
-	statusCounts, err := s.store.GetOrderStatusCounts()
+	counts, err := s.store.GetOrderStatusCounts()
 	if err != nil {
 		return SalesReport{}, err
 	}
-
-	pendingCount := statusCounts["pending"] + statusCounts["processing"]
-	shippedCount := statusCounts["shipped"]
-	deliveredCount := statusCounts["delivered"]
-
-	return SalesReport{
-		RevenueTotal:   revenueTotal,
-		PendingCount:   pendingCount,
-		ShippedCount:   shippedCount,
-		DeliveredCount: deliveredCount,
-		OrderCount:     pendingCount + shippedCount + deliveredCount + statusCounts["cancelled"],
-	}, nil
+	report := SalesReport{
+		RevenueTotal:   revenue,
+		PendingCount:   counts[db.OrderStatusPending] + counts[db.OrderStatusProcessing],
+		ShippedCount:   counts[db.OrderStatusShipped],
+		DeliveredCount: counts[db.OrderStatusDelivered],
+		CancelledCount: counts[db.OrderStatusCancelled],
+	}
+	for _, count := range counts {
+		report.OrderCount += count
+	}
+	return report, nil
 }
 
 func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
-	if actor == nil || actor.Role != "admin" {
+	if actor == nil || actor.Role != db.RoleAdmin {
 		return ErrForbiddenOrderUpdate
 	}
-
 	orderID, err := parsePositiveInt(input.OrderID)
 	if err != nil {
 		return ErrInvalidOrderID
 	}
-
 	status := strings.TrimSpace(input.Status)
 	partnerStatus := strings.TrimSpace(input.PartnerStatus)
 	deliveryStatus := strings.TrimSpace(input.DeliveryStatus)
@@ -184,52 +216,75 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 		switch {
 		case errors.Is(err, db.ErrOrderNotFound):
 			return ErrOrderNotFound
-		case errors.Is(err, db.ErrInvalidOrderState):
+		case errors.Is(err, db.ErrInvalidOrderState), errors.Is(err, db.ErrInsufficientStock):
 			return ErrInvalidOrderState
 		default:
 			return err
 		}
 	}
-
-	_ = s.store.CreateAuditLog(actor.ID, "order.update", "order", orderID, "status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
+	_ = s.store.CreateAuditLog(actor.ID, "order.update", "order", orderID,
+		"status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }
 
 func (s *Service) TeamMembers() ([]TeamMember, error) {
-	return s.store.ListTeamMembers()
+	users, err := s.store.ListUsersByRoles([]string{db.RoleAdmin, db.RoleStaff, db.RoleUser})
+	if err != nil {
+		return nil, err
+	}
+	members := make([]TeamMember, 0, len(users))
+	for _, u := range users {
+		members = append(members, TeamMember{ID: u.ID, Username: u.Username, Email: u.Email, Role: u.Role, CreatedAt: u.CreatedAt})
+	}
+	return members, nil
 }
 
 func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
-	if actor == nil || actor.Role != "admin" {
+	if actor == nil || actor.Role != db.RoleAdmin {
 		return ErrForbiddenUserAction
 	}
-
 	userID, err := parsePositiveInt(userIDRaw)
 	if err != nil {
 		return ErrInvalidUserID
 	}
-
-	targetUser, err := s.store.GetTeamMember(userID)
+	if userID == actor.ID {
+		return ErrProtectedUser
+	}
+	target, err := s.store.GetUserByID(userID)
 	if err != nil {
 		return err
 	}
-	if targetUser == nil {
+	if target == nil {
 		return ErrUserNotFound
 	}
-	if targetUser.Role == "admin" {
+	if target.Role == db.RoleAdmin {
 		return ErrProtectedUser
 	}
-
 	if err := s.store.DeleteUser(userID); err != nil {
 		return err
 	}
-
 	_ = s.store.CreateAuditLog(actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
 	return nil
 }
 
 func (s *Service) AuditLogs(limit int) ([]AuditLog, error) {
-	return s.store.ListAuditEntries(limit)
+	logs, err := s.store.ListAuditLogs(limit)
+	if err != nil {
+		return nil, err
+	}
+	mapped := make([]AuditLog, 0, len(logs))
+	for _, entry := range logs {
+		mapped = append(mapped, AuditLog{
+			CreatedAt:   entry.CreatedAt,
+			ActorUserID: entry.ActorUserID,
+			ActorName:   entry.ActorName,
+			Action:      entry.Action,
+			TargetType:  entry.TargetType,
+			TargetID:    entry.TargetID,
+			Details:     entry.Details,
+		})
+	}
+	return mapped, nil
 }
 
 func parsePositiveInt(raw string) (int, error) {

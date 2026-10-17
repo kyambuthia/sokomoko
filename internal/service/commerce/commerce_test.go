@@ -2,19 +2,17 @@ package commerce
 
 import (
 	"database/sql"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 )
 
 func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 	t.Helper()
 
-	path := "./test_commerce_service.db"
-	_ = os.Remove(path)
-
-	store, err := db.OpenStore(path)
+	store, err := db.OpenStore(dbtest.DSN(t))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -22,10 +20,7 @@ func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 		t.Fatalf("apply schema: %v", err)
 	}
 
-	cleanup := func() {
-		_ = store.Close()
-		_ = os.Remove(path)
-	}
+	cleanup := func() { _ = store.Close() }
 
 	return New(store), store, cleanup
 }
@@ -37,9 +32,7 @@ func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 		Username:     "u_test",
 		Email:        "u_test@example.com",
 		PasswordHash: "hash",
-		Salt:         "salt",
 		Role:         "user",
-		Slug:         "u-test",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -57,7 +50,7 @@ func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 		Name:          "Product A",
 		Slug:          "product-a",
 		Description:   "desc",
-		Price:         10.0,
+		Price:         1000,
 		StockQuantity: stock,
 		CategoryID:    sql.NullInt64{Int64: catID, Valid: true},
 	})
@@ -117,5 +110,25 @@ func TestUpdateCartItem_InsufficientStock(t *testing.T) {
 	err := svc.UpdateCartItem(userID, productID, 5)
 	if err != ErrInsufficientStock {
 		t.Fatalf("error = %v, want %v", err, ErrInsufficientStock)
+	}
+}
+
+func TestAddToCart_OwnCheckoutHoldCountsAsAvailable(t *testing.T) {
+	svc, store, cleanup := newTestService(t)
+	defer cleanup()
+
+	userID, productID := createUserAndProduct(t, store, 3)
+	if err := svc.AddToCart(userID, productID, 2); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if err := store.ReserveCartForCheckout(userID, "hold", time.Now().Add(time.Minute)); err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	if err := svc.AddToCart(userID, productID, 1); err != nil {
+		t.Fatalf("adding the last unit while holding the rest: %v", err)
+	}
+	cart, err := svc.Cart(userID)
+	if err != nil || cart.ItemCount != 3 || cart.Subtotal != 3000 {
+		t.Fatalf("cart = %+v, %v", cart, err)
 	}
 }

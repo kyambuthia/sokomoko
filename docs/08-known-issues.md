@@ -1,71 +1,17 @@
-# Known issues and source-backed backlog
+# Known issues
 
-This list describes current behavior found in the executable source. It is
-ordered by impact, not by historical implementation phase.
+The merged implementation includes PostgreSQL migrations, integer-cent money,
+atomic admin bootstrap, CSRF integration, method-aware throttling, strict
+production configuration, graceful draining, and deployment recovery guidance.
 
-## 1. Fix incomplete CSRF integration
+Remaining limitations:
 
-The live middleware requires a session CSRF token for every unsafe request with
-a session cookie. Several live forms do not render one:
+- Cash on delivery is the only implemented payment method and stays pending.
+  Online providers need verified callbacks, reconciliation, and refund support.
+- Partner accounts require explicit `partner_users` membership. Store settings
+  remain platform-wide, and mixed-partner orders require staff fulfillment.
+- Shipping and tax are fixed estimates and need business-specific policies.
+- Durable email delivery, production monitoring, and external SMTP/TLS validation
+  require deployment work beyond the local test suite.
 
-- storefront add-to-cart forms in index, product, and search pages
-- logout in account.html
-- admin order updates and team deactivation
-- partner store setup
-- partner fulfillment updates
-
-The API client now sends `X-CSRF-Token`, and live dynamic forms have fallback
-paths. Remaining work is to audit any newly added unsafe forms against the
-helpers in internal/auth/csrf.go.
-
-## 2. Make the request rate limiter honor its method argument
-
-RateLimitByIP now honors the configured method list, so startup's POST limit no
-longer throttles GET, static, or health traffic.
-
-Source: [internal/app/rate_limit.go](../internal/app/rate_limit.go).
-
-## 3. Make admin bootstrap transactional
-
-Admin setup creates the root admin and staff users through sequential writes.
-A partial failure can leave an admin present while staff provisioning is
-incomplete, which prevents the setup page from being used again.
-
-Source: AdminSetup in [internal/auth/auth.go](../internal/auth/auth.go).
-
-## 4. Replace placeholder payment behavior
-
-The checkout flow already has idempotency keys and transactional order
-placement. Card and mobile-money methods are still placeholders that create
-captured records without a provider. Cash on delivery remains pending.
-
-Implement provider state transitions, callbacks, retries, reconciliation, and
-refund behavior before production payment use.
-
-## 5. Remove or reconcile stale source artifacts
-
-- db/schema.sql is an incomplete duplicate of internal/db/schema.sql.
-- Several page templates are not parsed by internal/ui/templates.go.
-- Generated SQLite journal files should not be committed.
-
-Either remove these artifacts or clearly mark them as intentionally retained.
-
-## 6. Improve production operations
-
-Remaining operational gaps include startup validation, database backup and
-restore procedures, structured logs, metrics, dependency auditing, and a
-production smoke test.
-
-## Verified foundations
-
-The source already contains:
-
-- hashed session IDs and password-reset tokens
-- per-session CSRF tokens
-- role middleware
-- host allowlisting
-- panic recovery and security headers
-- request IDs and body limits
-- inventory reservations and transactional order placement
-- checkout idempotency records
-- periodic cleanup for expired sessions and reset tokens
+See [the roadmap](roadmap/ROADMAP.md) and [deployment runbook](DEPLOYMENT.md).

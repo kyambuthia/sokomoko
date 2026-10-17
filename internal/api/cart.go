@@ -87,12 +87,12 @@ func (h *Handler) writeCart(w http.ResponseWriter, r *http.Request, status int) 
 		writeError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	items, subtotal, err := h.app.Commerce.GetCart(uid)
+	cart, err := h.app.Commerce.Cart(uid)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "cart_unavailable", "Unable to load cart")
 		return
 	}
-	writeData(w, status, mapCart(items, subtotal))
+	writeData(w, status, mapCart(cart.Items, cart.Subtotal))
 }
 
 func writeCommerceError(w http.ResponseWriter, err error) {

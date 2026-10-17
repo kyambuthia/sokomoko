@@ -1,24 +1,18 @@
 package bootstrap
 
 import (
-	"fmt"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 )
 
 func TestService_MigrateAndSeedAreIdempotent(t *testing.T) {
-	path := fmt.Sprintf("./test_bootstrap_%d.db", time.Now().UnixNano())
-	store, err := db.OpenStore(path)
+	store, err := db.OpenStore(dbtest.DSN(t))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = store.Close()
-		_ = os.Remove(path)
-	})
+	t.Cleanup(func() { _ = store.Close() })
 
 	svc := New(store)
 

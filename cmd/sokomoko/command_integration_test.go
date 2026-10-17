@@ -4,15 +4,42 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 )
+
+func TestProductionStartup_RequiresReleaseMigrationWithoutSeeding(t *testing.T) {
+	store := openExistingStore(t, dbtest.DSN(t))
+	cfg := config.Config{Environment: "production"}
+	if err := prepareStore(cfg, store, false); err == nil || !strings.Contains(err.Error(), "migrate") {
+		t.Fatalf("unmigrated startup error = %v", err)
+	}
+	version, err := store.SchemaVersion()
+	if err != nil || version != 0 {
+		t.Fatalf("startup mutated schema: version=%d error=%v", version, err)
+	}
+	if err := store.ApplySchema(); err != nil {
+		t.Fatal(err)
+	}
+	if err := prepareStore(cfg, store, false); err != nil {
+		t.Fatal(err)
+	}
+	count, err := store.CountProducts()
+	if err != nil || count != 0 {
+		t.Fatalf("production startup seeded data: products=%d error=%v", count, err)
+	}
+	if err := runSeed(cfg); err == nil {
+		t.Fatal("production accepted demo seed command")
+	}
+}
 
 func TestCLI_MigrateCommand_AppliesSchemaAndIsIdempotent(t *testing.T) {
 	binaryPath := buildCLIBinary(t)
-	dbPath := tempDBPath(t, "cli-migrate")
+	dbPath := dbtest.DSN(t)
 
 	runCLICommand(t, binaryPath, dbPath, "", "migrate")
 	assertSchemaApplied(t, dbPath)
@@ -23,7 +50,7 @@ func TestCLI_MigrateCommand_AppliesSchemaAndIsIdempotent(t *testing.T) {
 
 func TestCLI_SeedCommand_BootstrapsCatalogAndIsIdempotent(t *testing.T) {
 	binaryPath := buildCLIBinary(t)
-	dbPath := tempDBPath(t, "cli-seed")
+	dbPath := dbtest.DSN(t)
 
 	runCLICommand(t, binaryPath, dbPath, "", "seed")
 	firstCount := countProducts(t, dbPath)
@@ -39,7 +66,7 @@ func TestCLI_SeedCommand_BootstrapsCatalogAndIsIdempotent(t *testing.T) {
 }
 
 func TestRunServe_SeedOption_PreparesStoreBeforeHTTPServe(t *testing.T) {
-	dbPath := tempDBPath(t, "run-serve-seed")
+	dbPath := dbtest.DSN(t)
 
 	originalRunner := runHTTPServerFunc
 	t.Cleanup(func() {
@@ -54,8 +81,9 @@ func TestRunServe_SeedOption_PreparesStoreBeforeHTTPServe(t *testing.T) {
 	}
 
 	err := runServe(config.Config{
-		DBPath:          dbPath,
+		DatabaseURL:     dbPath,
 		Port:            "6969",
+		LogFormat:       "text",
 		AllowedHostsRaw: "localhost,127.0.0.1,admin.localhost,partner.localhost",
 	}, true)
 	if err != nil {
@@ -92,23 +120,23 @@ func runCLICommand(t *testing.T, binaryPath, dbPath, port string, args ...string
 
 func cliEnv(dbPath, port string) []string {
 	env := append([]string{}, os.Environ()...)
-	env = append(env, "DB_PATH="+dbPath)
+	env = append(env, "DATABASE_URL="+dbPath)
 	if port != "" {
 		env = append(env, "PORT="+port)
 	}
 	return env
 }
 
-func assertSchemaApplied(t *testing.T, dbPath string) {
+func assertSchemaApplied(t *testing.T, dsn string) {
 	t.Helper()
 
-	store := openExistingStore(t, dbPath)
-	var count int
-	if err := store.DB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'").Scan(&count); err != nil {
-		t.Fatalf("query schema: %v", err)
+	store := openExistingStore(t, dsn)
+	version, err := store.SchemaVersion()
+	if err != nil {
+		t.Fatalf("schema version: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("expected users table to exist, got count=%d", count)
+	if version != db.LatestSchemaVersion() {
+		t.Fatalf("schema version = %d, want %d", version, db.LatestSchemaVersion())
 	}
 }
 

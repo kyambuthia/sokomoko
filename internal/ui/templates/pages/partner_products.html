@@ -43,7 +43,7 @@
           <tr>
             <td>{{.Name}}</td>
             <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
-            <td>${{printf "%.2f" .Price}}</td>
+            <td>${{.Price}}</td>
             <td>{{.StockQuantity}}</td>
           </tr>
           {{end}}

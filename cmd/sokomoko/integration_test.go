@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,26 +17,33 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
+	"github.com/kyambuthia/sokomoko/internal/money"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var testDBPath string
 var testStore *db.Store
 var testTemplates *ui.Templates
 var testHandler http.Handler
 
 func TestMain(m *testing.M) {
-	setupTestServer()
+	dsn, cleanup, ok := dbtest.MainDSN()
+	if !ok {
+		fmt.Println("skipping cmd/sokomoko integration tests: " + dbtest.EnvDatabaseURL + " is not set")
+		os.Exit(0)
+	}
+	setupTestServer(dsn)
 	code := m.Run()
 	teardownTestServer()
+	cleanup()
 	os.Exit(code)
 }
 
-func setupTestServer() {
+func setupTestServer(dsn string) {
 	var err error
-	testDBPath = filepath.Join(os.TempDir(), fmt.Sprintf("sokomoko_integration_%d.db", time.Now().UnixNano()))
-	testStore, err = db.OpenStore(testDBPath)
+	testDatabaseURL = dsn
+	testStore, err = db.OpenStore(dsn)
 	if err != nil {
 		panic(err)
 	}
@@ -66,45 +71,33 @@ func setupTestServer() {
 	testHandler = server.Handler
 }
 
+// testDatabaseURL is the schema-scoped DSN shared by the CLI tests.
+var testDatabaseURL string
+
 func teardownTestServer() {
 	if testStore != nil {
 		testStore.Close()
 	}
 	testHandler = nil
-	os.Remove(testDBPath)
 }
 
 func clearUsersTable() {
-	if testStore != nil {
-		testStore.DB.Exec("DELETE FROM users")
-	}
+	clearAllTables()
 }
 
+// clearAllTables empties every table except the seeded default warehouse.
 func clearAllTables() {
 	if testStore == nil || testStore.DB == nil {
 		return
 	}
-	testStore.DB.Exec("DELETE FROM payment_attempts")
-	testStore.DB.Exec("DELETE FROM idempotency_keys")
-	testStore.DB.Exec("DELETE FROM payments")
-	testStore.DB.Exec("DELETE FROM checkout_lines")
-	testStore.DB.Exec("DELETE FROM checkouts")
-	testStore.DB.Exec("DELETE FROM order_items")
-	testStore.DB.Exec("DELETE FROM orders")
-	testStore.DB.Exec("DELETE FROM cart_items")
-	testStore.DB.Exec("DELETE FROM carts")
-	testStore.DB.Exec("DELETE FROM stock_reservations")
-	testStore.DB.Exec("DELETE FROM stock_movements")
-	testStore.DB.Exec("DELETE FROM inventory_stocks")
-	testStore.DB.Exec("DELETE FROM warehouses")
-	testStore.DB.Exec("DELETE FROM product_images")
-	testStore.DB.Exec("DELETE FROM products")
-	testStore.DB.Exec("DELETE FROM categories")
-	testStore.DB.Exec("DELETE FROM audit_logs")
-	testStore.DB.Exec("DELETE FROM password_reset_tokens")
-	testStore.DB.Exec("DELETE FROM sessions")
-	testStore.DB.Exec("DELETE FROM users")
-	testStore.DB.Exec("DELETE FROM store_settings")
+	if _, err := testStore.DB.Exec(`TRUNCATE
+		payment_attempts, idempotency_keys, payments, checkout_lines, checkouts,
+		order_items, orders, cart_items, carts, stock_reservations, stock_movements,
+		inventory_stocks, product_images, products, categories, partners, audit_logs,
+		password_reset_tokens, sessions, users, store_settings
+		RESTART IDENTITY CASCADE`); err != nil {
+		panic(err)
+	}
 }
 
 func checkoutIdempotencyKey(t *testing.T, cookies []*http.Cookie) string {
@@ -214,18 +207,13 @@ func getSessionCookie(resp *http.Response) *http.Cookie {
 func createTestUser(t *testing.T, username, email, password, role string) int64 {
 	t.Helper()
 
-	saltBytes := make([]byte, 16)
-	_, _ = rand.Read(saltBytes)
-	salt := base64.URLEncoding.EncodeToString(saltBytes)
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	user := db.User{
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hashedPassword),
-		Salt:         salt,
 		Role:         role,
-		Slug:         username,
 	}
 
 	userID, err := testStore.CreateUser(user)
@@ -255,7 +243,7 @@ func loginAndGetSessionCookie(t *testing.T, host, username, password string) *ht
 	return cookie
 }
 
-func createTestProduct(t *testing.T, name, slug string, price float64, stock int) int64 {
+func createTestProduct(t *testing.T, name, slug string, price money.Cents, stock int) int64 {
 	t.Helper()
 	categoryID, err := testStore.CreateCategory(db.Category{
 		Name:        "Test Category " + slug,
@@ -377,18 +365,13 @@ func TestIntegration_Login(t *testing.T) {
 	email := fmt.Sprintf("login_%d@example.com", timestamp)
 	password := "loginpass123"
 
-	saltBytes := make([]byte, 16)
-	_, _ = rand.Read(saltBytes)
-	salt := base64.URLEncoding.EncodeToString(saltBytes)
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	user := db.User{
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hashedPassword),
-		Salt:         salt,
 		Role:         "user",
-		Slug:         username,
 	}
 
 	testStore.CreateUser(user)
@@ -436,18 +419,13 @@ func TestIntegration_Login_WrongPassword(t *testing.T) {
 	email := fmt.Sprintf("wrongpass_%d@example.com", timestamp)
 	password := "correctpass"
 
-	saltBytes := make([]byte, 16)
-	_, _ = rand.Read(saltBytes)
-	salt := base64.URLEncoding.EncodeToString(saltBytes)
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	user := db.User{
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hashedPassword),
-		Salt:         salt,
 		Role:         "user",
-		Slug:         username,
 	}
 
 	testStore.CreateUser(user)
@@ -483,18 +461,13 @@ func TestIntegration_Logout(t *testing.T) {
 	email := fmt.Sprintf("logout_%d@example.com", timestamp)
 	password := "logoutpass"
 
-	saltBytes := make([]byte, 16)
-	_, _ = rand.Read(saltBytes)
-	salt := base64.URLEncoding.EncodeToString(saltBytes)
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	user := db.User{
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hashedPassword),
-		Salt:         salt,
 		Role:         "user",
-		Slug:         username,
 	}
 
 	testStore.CreateUser(user)
@@ -531,18 +504,13 @@ func TestIntegration_AdminLogin_Success(t *testing.T) {
 	email := fmt.Sprintf("admin_%d@example.com", timestamp)
 	password := "adminpass"
 
-	saltBytes := make([]byte, 16)
-	_, _ = rand.Read(saltBytes)
-	salt := base64.URLEncoding.EncodeToString(saltBytes)
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	user := db.User{
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hashedPassword),
-		Salt:         salt,
 		Role:         "admin",
-		Slug:         username,
 	}
 
 	testStore.CreateUser(user)
@@ -574,33 +542,23 @@ func TestIntegration_AdminLogin_RegularUser(t *testing.T) {
 	password := "userpass"
 	adminPassword := "adminpass"
 
-	adminSaltBytes := make([]byte, 16)
-	_, _ = rand.Read(adminSaltBytes)
-	adminSalt := base64.URLEncoding.EncodeToString(adminSaltBytes)
-	adminHashedPassword, _ := bcrypt.GenerateFromPassword([]byte(adminPassword+adminSalt), bcrypt.DefaultCost)
+	adminHashedPassword, _ := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.MinCost)
 
 	adminUser := db.User{
 		Username:     adminUsername,
 		Email:        adminEmail,
 		PasswordHash: string(adminHashedPassword),
-		Salt:         adminSalt,
 		Role:         "admin",
-		Slug:         adminUsername,
 	}
 	testStore.CreateUser(adminUser)
 
-	saltBytes := make([]byte, 16)
-	_, _ = rand.Read(saltBytes)
-	salt := base64.URLEncoding.EncodeToString(saltBytes)
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	user := db.User{
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hashedPassword),
-		Salt:         salt,
 		Role:         "user",
-		Slug:         username,
 	}
 
 	testStore.CreateUser(user)
@@ -619,18 +577,13 @@ func TestIntegration_AdminLogin_RegularUser(t *testing.T) {
 func TestIntegration_AdminDashboard_WithAdminSession(t *testing.T) {
 	clearUsersTable()
 
-	saltBytes := make([]byte, 16)
-	_, _ = rand.Read(saltBytes)
-	salt := base64.URLEncoding.EncodeToString(saltBytes)
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("adminpass"+salt), bcrypt.DefaultCost)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("adminpass"), bcrypt.MinCost)
 
 	adminUser := db.User{
 		Username:     "testadmin",
 		Email:        "testadmin@example.com",
 		PasswordHash: string(hashedPassword),
-		Salt:         salt,
 		Role:         "admin",
-		Slug:         "testadmin",
 	}
 
 	userID, _ := testStore.CreateUser(adminUser)
@@ -639,6 +592,7 @@ func TestIntegration_AdminDashboard_WithAdminSession(t *testing.T) {
 	_ = testStore.CreateSession(db.Session{
 		ID:        sessionToken,
 		UserID:    int(userID),
+		CSRFToken: "test-csrf",
 		ExpiresAt: time.Now().Add(time.Hour),
 	})
 
@@ -720,22 +674,22 @@ func TestIntegration_CartRequiresAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("GET /cart status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
-	if got := resp.Header.Get("Location"); got != "/login" {
-		t.Fatalf("expected redirect /login, got %s", got)
+	if got := resp.Header.Get("Location"); got != "/login?next=%2Fcart" {
+		t.Fatalf("expected redirect /login?next=%%2Fcart, got %s", got)
 	}
 }
 
 func TestIntegration_CartCheckoutFlow(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	username := fmt.Sprintf("buyer_%d", suffix)
 	email := fmt.Sprintf("buyer_%d@example.com", suffix)
 	password := "strongpass123"
 	userID := createTestUser(t, username, email, password, "user")
 	cookie := loginAndGetSessionCookie(t, "", username, password)
 
-	productID := createTestProduct(t, "Checkout Product", fmt.Sprintf("checkout-product-%d", suffix), 15.5, 8)
+	productID := createTestProduct(t, "Checkout Product", fmt.Sprintf("checkout-product-%d", suffix), 1550, 8)
 
 	addData := url.Values{}
 	addData.Set("product_id", fmt.Sprintf("%d", productID))
@@ -776,12 +730,12 @@ func TestIntegration_CartCheckoutFlow(t *testing.T) {
 func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	createTestUser(t, fmt.Sprintf("admin_%d", suffix), fmt.Sprintf("admin_%d@example.com", suffix), "adminpass123", "admin")
 	userID := createTestUser(t, fmt.Sprintf("cust_%d", suffix), fmt.Sprintf("cust_%d@example.com", suffix), "userpass123", "user")
 	createTestUser(t, fmt.Sprintf("staff_%d", suffix), fmt.Sprintf("staff_%d@example.com", suffix), "staffpass123", "staff")
 
-	productID := createTestProduct(t, "Partner Queue Product", fmt.Sprintf("partner-queue-%d", suffix), 9.0, 5)
+	productID := createTestProduct(t, "Partner Queue Product", fmt.Sprintf("partner-queue-%d", suffix), 900, 5)
 	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
 		t.Fatalf("add cart failed: %v", err)
 	}
@@ -794,7 +748,7 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	}
 
 	userSessionToken := fmt.Sprintf("user_session_%d", suffix)
-	if err := testStore.CreateSession(db.Session{ID: userSessionToken, UserID: int(userID), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+	if err := testStore.CreateSession(db.Session{ID: userSessionToken, UserID: int(userID), CSRFToken: "test-csrf", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatalf("create user session failed: %v", err)
 	}
 
@@ -818,7 +772,7 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid transition update status=%d expected=%d", resp.StatusCode, http.StatusBadRequest)
 	}
-	if !strings.Contains(body, "Unable to update order") {
+	if !strings.Contains(body, "That status change is not allowed") {
 		t.Fatal("expected invalid transition error in response body")
 	}
 
@@ -828,9 +782,7 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	goodUpdate.Set("delivery_status", "processing")
 	goodUpdate.Set("delivery_notice", "Order accepted")
 	resp, _ = makeRequest(http.MethodPost, "/orders", goodUpdate, []*http.Cookie{staffCookie}, "partner.localhost")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("valid transition update status=%d expected=%d", resp.StatusCode, http.StatusOK)
-	}
+	assertFlashRedirect(t, resp, "/orders", "Order fulfillment updated")
 
 	orders, err := testStore.ListOrdersForFulfillment()
 	if err != nil {
@@ -845,7 +797,7 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 func TestIntegration_AdminAudit_ForbiddenForStaff(t *testing.T) {
 	clearAllTables()
 
-	suffix := time.Now().UnixNano()
+	suffix := time.Now().UnixNano() % 1_000_000_000
 	createTestUser(t, fmt.Sprintf("admin_%d", suffix), fmt.Sprintf("admin_%d@example.com", suffix), "adminpass123", "admin")
 	createTestUser(t, fmt.Sprintf("staff_%d", suffix), fmt.Sprintf("staff_%d@example.com", suffix), "staffpass123", "staff")
 
@@ -860,4 +812,29 @@ func TestIntegration_AdminAudit_ForbiddenForStaff(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin access to /audit status=%d expected=%d", resp.StatusCode, http.StatusOK)
 	}
+}
+
+// assertFlashRedirect checks a redirect to location carrying a flash message.
+func assertFlashRedirect(t *testing.T, resp *http.Response, location, message string) {
+	t.Helper()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("status=%d expected redirect", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Location"); got != location {
+		t.Fatalf("redirect location=%q expected=%q", got, location)
+	}
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name != "flash" {
+			continue
+		}
+		raw, err := base64.RawURLEncoding.DecodeString(cookie.Value)
+		if err != nil {
+			t.Fatalf("decode flash: %v", err)
+		}
+		if !strings.Contains(string(raw), message) {
+			t.Fatalf("flash=%s expected message %q", raw, message)
+		}
+		return
+	}
+	t.Fatalf("no flash cookie set; expected %q", message)
 }

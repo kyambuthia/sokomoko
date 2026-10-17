@@ -8,14 +8,14 @@
 
   <section class="product-detail">
     <div class="product-detail__media">
-      <img src="{{.Product.GetPrimaryImageURL}}" alt="{{.Product.Name}}" class="product-detail__image" width="720" height="540">
+      <img src="{{.Product.ImageURL}}" alt="{{.Product.Name}}" class="product-detail__image" width="720" height="540">
     </div>
 
     <div class="product-detail__content">
       <p class="eyebrow">{{if .Product.Category}}{{.Product.Category}}{{else}}General merchandise{{end}}</p>
       <h1 class="product-detail__title">{{.Product.Name}}</h1>
       <div class="product-detail__price">
-        <ui-price amount="{{printf "%.2f" .Product.Price}}"></ui-price>
+        <ui-price amount="{{.Product.Price}}"></ui-price>
       </div>
 
       {{if gt .Product.StockQuantity 0}}

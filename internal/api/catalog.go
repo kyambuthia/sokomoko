@@ -56,7 +56,7 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 		writeData(w, http.StatusOK, catalogListDTO{Items: []productDTO{}, Page: 1, Limit: defaultPageSize, Total: 0})
 		return
 	}
-	products, err := h.app.Catalog.Search(query)
+	products, err := h.app.Catalog.SearchInCategory(query, r.URL.Query().Get("category"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search_unavailable", "Unable to search products")
 		return
