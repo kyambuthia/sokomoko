@@ -65,6 +65,7 @@ address as a draft and re-renders the form with `422`.
 | `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` |
 | `/reports` | GET | admin, staff | `AdminReports` |
 | `/deliveries` | GET | admin, staff | `AdminDeliveries` (delivery board) |
+| `/categories` | GET, POST | admin, staff | `AdminCategories` (list, create, delete) |
 | `/team` | GET, POST | admin | `AdminTeam` (POST deactivates a user) |
 | `/audit` | GET | admin | `AdminAudit` |
 

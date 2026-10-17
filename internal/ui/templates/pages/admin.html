@@ -223,6 +223,71 @@
   </section>
   {{end}}
 
+  {{if eq .Title "Categories"}}
+  {{if .FormMessage}}<ui-alert variant="success"><p>{{.FormMessage}}</p></ui-alert>{{end}}
+  {{if .FormError}}<ui-alert variant="danger"><p>{{.FormError}}</p></ui-alert>{{end}}
+
+  <section class="workspace-card">
+    <div class="workspace-card__header"><p class="eyebrow">Catalog</p><h2>Add a category</h2></div>
+    <div class="workspace-card__body">
+      <form method="POST" action="/categories" class="form" data-submit-once>
+        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+        <input type="hidden" name="action" value="create">
+        <div class="form__group form-group">
+          <label class="form__label" for="category_name">Name</label>
+          <input class="form__input" type="text" id="category_name" name="name" value="{{.CategoryForm.Name}}" maxlength="80" required>
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="category_slug">Slug</label>
+          <input class="form__input" type="text" id="category_slug" name="slug" value="{{.CategoryForm.Slug}}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="category_slug_hint">
+          <small class="form__hint" id="category_slug_hint">Optional. Generated from the name when left blank.</small>
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="category_description">Description</label>
+          <textarea class="form__textarea" id="category_description" name="description" rows="2" maxlength="500">{{.CategoryForm.Description}}</textarea>
+        </div>
+        <button class="btn" type="submit">Add Category</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="workspace-card">
+    <div class="workspace-card__header"><p class="eyebrow">Catalog</p><h2>Categories</h2></div>
+    <div class="workspace-card__body">
+      {{if .Categories}}
+      <ui-table-filter for="admin-categories-table" placeholder="Filter categories"></ui-table-filter>
+      <div class="table-wrap">
+        <table class="data-table data-table--admin" id="admin-categories-table">
+          <thead><tr><th>Name</th><th>Slug</th><th>Description</th><th>Products</th><th>Action</th></tr></thead>
+          <tbody>
+          {{range .Categories}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{.Slug}}</td>
+            <td>{{.Description}}</td>
+            <td>{{.ProductCount}}</td>
+            <td>
+              <ui-confirm message="Delete {{.Name}}? Its {{.ProductCount}} products will become uncategorised.">
+              <form method="POST" action="/categories" class="table-action-form">
+                {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="category_id" value="{{.ID}}">
+                <button type="submit" class="btn btn--secondary btn--small">Delete</button>
+              </form>
+              </ui-confirm>
+            </td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <p class="text-muted">No categories yet. Products can still be listed without one.</p>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
   {{if eq .Title "Team Management"}}
   {{if .TeamMessage}}<ui-alert variant="success"><p>{{.TeamMessage}}</p></ui-alert>{{end}}
   {{if .TeamError}}<ui-alert variant="danger"><p>{{.TeamError}}</p></ui-alert>{{end}}

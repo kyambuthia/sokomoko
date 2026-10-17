@@ -28,6 +28,7 @@ The process routes each request by its `Host` header (see
 - Order list with full status editing (admin only)
 - Sales report: revenue and order counts by status
 - Deliveries board: open orders counted by delivery stage and listed oldest first
+- Categories: create and delete (admin and staff)
 - Team list with user deactivation (admin only)
 - Audit log (admin only)
 - Staff account creation (admin only)

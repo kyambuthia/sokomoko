@@ -57,3 +57,43 @@ func TestDeliveries_CountsOpenOrdersAndListsOldestFirst(t *testing.T) {
 		t.Fatalf("pending ids = %v, want [1 2 5]", ids)
 	}
 }
+
+// categoryStore records category writes.
+type categoryStore struct {
+	store
+	created []db.Category
+	err     error
+}
+
+func (s *categoryStore) CreateCategory(c db.Category) (int64, error) {
+	s.created = append(s.created, c)
+	return 1, s.err
+}
+
+func (s *categoryStore) CreateAuditLog(int, string, string, int, string) error { return nil }
+
+func TestCreateCategory(t *testing.T) {
+	staff := &Actor{ID: 2, Role: "staff"}
+	fake := &categoryStore{}
+	svc := newWithStore(fake)
+
+	if err := svc.CreateCategory(&Actor{ID: 3, Role: "partner"}, CategoryInput{Name: "X"}); !errors.Is(err, ErrForbiddenCatalogAction) {
+		t.Fatalf("partner create = %v", err)
+	}
+	for _, input := range []CategoryInput{{}, {Name: "Ok", Slug: "Not Valid"}, {Name: "!!!"}} {
+		if err := svc.CreateCategory(staff, input); !errors.Is(err, ErrInvalidCategory) {
+			t.Errorf("CreateCategory(%+v) = %v, want ErrInvalidCategory", input, err)
+		}
+	}
+	if err := svc.CreateCategory(staff, CategoryInput{Name: " Home & Garden "}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.created) != 1 || fake.created[0].Slug != "home-garden" || fake.created[0].Name != "Home & Garden" {
+		t.Fatalf("created = %+v", fake.created)
+	}
+
+	fake.err = db.ErrUniqueConstraint
+	if err := svc.CreateCategory(staff, CategoryInput{Name: "Again"}); !errors.Is(err, ErrDuplicateCategory) {
+		t.Fatalf("duplicate = %v", err)
+	}
+}

@@ -61,6 +61,9 @@ type PaymentService interface {
 
 type AdminService interface {
 	AuditLogs(limit int) ([]adminsvc.AuditLog, error)
+	Categories() ([]adminsvc.Category, error)
+	CreateCategory(actor *adminsvc.Actor, input adminsvc.CategoryInput) error
+	DeleteCategory(actor *adminsvc.Actor, idRaw string) error
 	DeactivateUser(actor *adminsvc.Actor, userIDRaw string) error
 	Deliveries() (adminsvc.DeliveryBoard, error)
 	Metrics() (adminsvc.Metrics, error)

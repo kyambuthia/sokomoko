@@ -87,6 +87,29 @@ func (s *Store) DeleteCategory(id int) error {
 	return err
 }
 
+// CountProductsByCategory returns the number of active products in each
+// category, keyed by category id.
+func (s *Store) CountProductsByCategory() (map[int]int, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	rows, err := s.DB.QueryContext(ctx,
+		"SELECT category_id, count(*) FROM products WHERE deleted_at IS NULL AND category_id IS NOT NULL GROUP BY category_id",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := map[int]int{}
+	for rows.Next() {
+		var id, count int
+		if err := rows.Scan(&id, &count); err != nil {
+			return nil, err
+		}
+		counts[id] = count
+	}
+	return counts, rows.Err()
+}
+
 func (s *Store) GetAllCategories() ([]Category, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()

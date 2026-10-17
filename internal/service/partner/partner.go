@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
+	"github.com/kyambuthia/sokomoko/internal/slug"
 )
 
 var (
@@ -37,12 +37,9 @@ const (
 	maxProductPrice  money.Cents = 10_000_000 // 100,000.00
 	maxProductStock              = 1_000_000
 	maxProductName               = 200
-	maxSlugLength                = 80
 	maxNoticeLength              = 500
 	maxDescriptionLn             = 5000
 )
-
-var storeSlugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 type Service struct {
 	store store
@@ -187,7 +184,7 @@ func (s *Service) SaveStoreSettings(actor *Actor, input StoreSettingsInput) (Sto
 	if settings.StoreName == "" || settings.StoreSlug == "" || settings.ContactEmail == "" {
 		return settings, ErrMissingStoreFields
 	}
-	if !storeSlugPattern.MatchString(settings.StoreSlug) || len(settings.StoreSlug) > maxSlugLength {
+	if !slug.Valid(settings.StoreSlug) {
 		return settings, ErrInvalidStoreSlug
 	}
 	if addr, err := mail.ParseAddress(settings.ContactEmail); err != nil || addr.Address != settings.ContactEmail {
@@ -326,7 +323,7 @@ func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) 
 		}
 		product.PartnerID = sql.NullInt64{Int64: int64(partnerID), Valid: true}
 	}
-	slugBase := slugify(name)
+	slugBase := slug.Make(name)
 	if slugBase == "" {
 		slugBase = "product"
 	}
@@ -513,25 +510,4 @@ func (s *Service) orderBelongsToPartner(orderID, userID int) bool {
 	}
 	owned, err := s.store.PartnerOwnsOrder(partnerID, orderID)
 	return err == nil && owned
-}
-
-func slugify(value string) string {
-	var b strings.Builder
-	pendingDash := false
-	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
-		isAlnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
-		if !isAlnum {
-			pendingDash = b.Len() > 0
-			continue
-		}
-		if pendingDash {
-			b.WriteByte('-')
-			pendingDash = false
-		}
-		b.WriteRune(r)
-		if b.Len() >= maxSlugLength {
-			break
-		}
-	}
-	return strings.TrimRight(b.String(), "-")
 }

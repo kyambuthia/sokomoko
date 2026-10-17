@@ -34,6 +34,10 @@ type AdminPageData struct {
 	TeamMessage    string
 	OrderError     string
 	OrderMessage   string
+	FormError      string
+	FormMessage    string
+	Categories     []adminsvc.Category
+	CategoryForm   adminsvc.CategoryInput
 }
 
 func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, status int, data AdminPageData) {

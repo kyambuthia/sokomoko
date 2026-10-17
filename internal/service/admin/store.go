@@ -7,6 +7,11 @@ import (
 
 type store interface {
 	CountActiveSessions() (int, error)
+	CountProductsByCategory() (map[int]int, error)
+	CreateCategory(category db.Category) (int64, error)
+	DeleteCategory(id int) error
+	GetAllCategories() ([]db.Category, error)
+	GetCategoryByID(id int) (*db.Category, error)
 	CountProducts() (int, error)
 	CountUsersByRole(role string) (int, error)
 	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error

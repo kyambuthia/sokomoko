@@ -19,7 +19,7 @@ internal/db             *db.Store: SQL, transactions, migrations
 PostgreSQL
 ```
 
-Supporting packages with no upward dependencies: `money`, `config`,
+Supporting packages with no upward dependencies: `money`, `slug`, `config`,
 `lifecycle`, `bootstrap`, `notify`, `ui`.
 
 ## Packages
@@ -40,6 +40,7 @@ Supporting packages with no upward dependencies: `money`, `config`,
 | `internal/service/partner` | Store settings, product creation, fulfillment, per-partner scoping. |
 | `internal/db` | `Store`, connection pool, `withTx` retry helper, migrations, seed data, typed errors. `dbtest/` provisions isolated schemas for tests. |
 | `internal/money` | `Cents` (int64) with parsing, formatting, and basis-point multiplication. |
+| `internal/slug` | `Make` and `Valid` for URL slugs, matching the database CHECK constraints. |
 | `internal/lifecycle` | `Run` (listen, serve, drain, shut down), `Readiness` (drain-aware ping), `Maintain` (background jobs). |
 | `internal/bootstrap` | `Migrate`, `Seed`, `Prepare(seed bool)` over a small store interface. |
 | `internal/config` | Reads environment variables into `Config` and validates them. |
