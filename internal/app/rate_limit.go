@@ -2,7 +2,6 @@ package app
 
 import (
 	"math"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -70,14 +69,6 @@ func (l *ipRateLimiter) cleanupLocked(now time.Time) {
 	l.lastCleanup = now
 }
 
-// RateLimitByIP limits requests per remote address. When methods are given,
-// only requests with those methods are counted and limited.
-func RateLimitByIP(max int, window time.Duration, methods ...string) Middleware {
-	return RateLimitByKey(max, window, func(r *http.Request) string {
-		return clientIPFromRemoteAddr(r.RemoteAddr)
-	}, methods...)
-}
-
 // RateLimitByKey limits requests per key, for example a proxy-aware client IP.
 func RateLimitByKey(max int, window time.Duration, keyFunc func(*http.Request) string, methods ...string) Middleware {
 	if max <= 0 || window <= 0 {
@@ -109,15 +100,4 @@ func RateLimitByKey(max int, window time.Duration, keyFunc func(*http.Request) s
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-func clientIPFromRemoteAddr(remoteAddr string) string {
-	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddr))
-	if err != nil {
-		host = strings.TrimSpace(remoteAddr)
-	}
-	if host == "" {
-		return "unknown"
-	}
-	return host
 }

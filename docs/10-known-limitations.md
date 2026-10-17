@@ -52,21 +52,6 @@ where to look.
 
 - Admin and partner lists are not paginated.
 
-## Unused or unfinished code
+## Unfinished pages
 
-- Templates not parsed by `ui.ParseTemplates`: `pages/add_product.html`,
-  `pages/delivery.html`, `pages/partner_signup.html`.
-- Partials `product-card`, `flash`, and `order-status` are defined but not
-  called by any page.
-- Web components defined but not placed in rendered pages: `ui-add-to-cart`,
-  `ui-order-status`, `ui-cart-count`, `ui-cart-line`, `ui-confirm`,
-  `ui-relative-time`, `ui-table-filter`, `ui-header-banner`, `ui-switch`,
-  `ui-dialog`.
-- `static/scripts/search.js` is not loaded and only logs to the console.
-- `/api/search` has no caller in the current frontend.
-- `app.CSRFSameOrigin`, `app.RateLimitByIP`, and `app.SecurityHeaders` are not
-  used by the server (it uses `auth.CSRFMiddleware`, `RateLimitByKey`, and
-  `SecurityHeadersWithProxy`).
 - The admin `/deliveries` page renders only the shared metrics.
-- `checkout.Service.Checkout` and `db.Store.PlaceOrderFromCart` (one-step
-  ordering without a prepared checkout) are not used by any route.

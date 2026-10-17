@@ -98,12 +98,6 @@ func CalculateSummary(subtotal money.Cents) Summary {
 	}
 }
 
-// Checkout places a cash-on-delivery order for the cart in one step.
-func (s *Service) Checkout(userID int, deliveryAddress string) (int64, error) {
-	orderID, _, err := s.CheckoutWithPayment(userID, deliveryAddress, defaultPaymentMethod, "")
-	return orderID, err
-}
-
 // PreparedCheckout returns the open checkout for checkoutToken, creating (and
 // reserving stock for) one when the token is empty, unknown, or no longer open.
 // With an empty token the user's latest open checkout is resumed.

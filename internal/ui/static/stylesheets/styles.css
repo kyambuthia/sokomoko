@@ -2999,6 +2999,20 @@ ui-quantity {
   display: inline-block;
 }
 
+ui-confirm {
+  display: contents;
+}
+
+.table-filter {
+  display: block;
+  max-width: 24rem;
+  margin-bottom: var(--space-3);
+}
+
+.table-filter__status {
+  margin-top: var(--space-1);
+}
+
 /* ==========================================================================
    Breadcrumb
    ========================================================================== */
@@ -4156,7 +4170,8 @@ ui-quantity {
   width: auto;
 }
 
-.sr-only {
+.sr-only,
+.visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;

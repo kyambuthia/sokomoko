@@ -38,7 +38,6 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/", public(Root(a)))
 	mux.Handle("/products/", public(ProductDetail(a)))
 	mux.Handle("/search", public(Search(a)))
-	mux.HandleFunc("/api/search", SearchAPI(a))
 	mux.HandleFunc("/api/categories", CategoriesAPI(a))
 
 	mux.HandleFunc("/login", a.Auth.Login(a.Templates.Login))
@@ -70,8 +69,6 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/cart/remove", customer(CartRemove(a)))
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
-	mux.Handle("/api/cart", customer(CartSummaryAPI(a)))
-	mux.Handle("/api/orders/status", customer(OrderStatusAPI(a)))
 }
 
 // RegisterAdmin wires the platform administration host.

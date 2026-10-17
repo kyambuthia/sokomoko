@@ -19,7 +19,6 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/` | GET | public | `Root` | Home page and catalog |
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
 | `/search` | GET | public | `Search` | `q`, `category` |
-| `/api/search` | GET | public | `SearchAPI` | JSON `{query, results}`; no current page script calls it |
 | `/api/categories` | GET | public | `CategoriesAPI` | JSON `{categories}` for the header category nav |
 | `/login` | GET, POST | public | `auth.Login` | `user` role only; honours a safe `next` |
 | `/signup` | GET, POST | public | `auth.SignUp` | Creates a `user` and signs in |
@@ -32,11 +31,9 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/cart/remove` | POST | signed in | `CartRemove` | |
 | `/checkout` | GET, POST | signed in | `Checkout` | See below |
 | `/account` | GET | signed in | `Account` | Order history |
-| `/api/cart` | GET | signed in | `CartSummaryAPI` | Cart JSON (used by the `ui-cart-count` component) |
-| `/api/orders/status` | GET | signed in | `OrderStatusAPI` | `id`; used by the `ui-order-status` tracker |
 
-The four unversioned `/api/...` routes above are older storefront helpers.
-New client code should use `/api/v1`.
+`/api/categories` is the one unversioned JSON route left. New client code
+should use `/api/v1`.
 
 Cart actions redirect back with a flash message. When the request has
 `Accept: application/json` they return the updated cart as JSON instead.

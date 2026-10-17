@@ -12,7 +12,7 @@ internal/ui/
   assets.go             AssetURL cache-busting
   product_images.go     ProductImageURL and bundled image fallback
   templates/
-    base/               layout and shared partials
+    base/               layout, headers, navigation, footer
     pages/              one file per page
   static/
     stylesheets/styles.css
@@ -36,12 +36,6 @@ Handlers render the `root_template` entry point.
 | `nav-area` | storefront nav | workspace pages pick `admin-nav-area` or `partner-nav-area` |
 | `main-area` | empty | every page |
 | `footer-area` | site footer | |
-
-**Shared partials** (`base/partials.tmpl.html`) define `product-card`, `flash`,
-and `order-status`, meant to be called with `dict`, for example
-`{{ template "product-card" dict "Product" . "CSRFToken" $.CSRFToken }}`.
-No page calls them yet; pages such as `search.html` still inline their own
-product markup.
 
 **Page data.** Every page struct carries `CSRFToken`, which the layout writes to
 `<meta name="csrf-token">` and forms include as a hidden `csrf_token` field.
@@ -100,12 +94,10 @@ CSP forbids inline scripts.
 | `components.js` | `defer` | Behavioural components that enhance server-rendered forms (below); `data-submit-once` double-submit guard |
 | `dynamic.js` | `defer`, end of `<body>` | Turns cart, checkout, and workspace order forms into `/api/v1` calls and refreshes metrics in place |
 
-`static/scripts/search.js` exists but is not loaded by any template.
-
 ### Web components
 
 All components are custom elements. Light-DOM components let the site
-stylesheet apply; `ui-toast` and `ui-dialog` use shadow DOM.
+stylesheet apply; `ui-toast` uses shadow DOM.
 
 Defined in `main.js`:
 
@@ -118,28 +110,21 @@ Defined in `main.js`:
 | `ui-quantity` | Quantity stepper that still submits as a normal form field |
 | `ui-badge` | Status badges |
 | `ui-breadcrumb` | Breadcrumbs from a JSON `items` attribute |
-| `ui-header-banner`, `ui-switch`, `ui-toast`, `ui-dialog` | Banner, toggle switch, toast notifications, modal dialog |
+| `ui-toast` | Toast notifications, created through `window.UIToast` |
 
 Defined in `components.js`:
 
 | Element | Used for |
 | --- | --- |
-| `ui-add-to-cart` | Wraps a `/cart/add` form and adds without a reload |
-| `ui-cart-line` | Wraps a `/cart/update` form; updates line totals in place |
-| `ui-cart-count` | Live header cart badge from `/api/cart` |
 | `ui-countdown` | Countdown for the checkout stock hold |
-| `ui-order-status` | Fulfillment tracker that polls `/api/orders/status` until delivered or cancelled |
 | `ui-category-nav` | Replaces static department links with `/api/categories` |
 | `ui-char-counter` | Remaining characters for a textarea |
-| `ui-copy` | Copy text to the clipboard |
-| `ui-confirm`, `ui-relative-time`, `ui-table-filter` | Confirm before submit, relative timestamps, client-side table filter |
+| `ui-copy` | Copy text to the clipboard (setup credentials) |
+| `ui-confirm` | Asks before a destructive form submits (team deactivation) |
+| `ui-table-filter` | Client-side row filter above admin and partner tables |
 
-Several components are defined but not placed in any rendered page:
-`ui-add-to-cart` and `ui-order-status` appear only in the unused partials, and
-`ui-cart-count`, `ui-cart-line`, `ui-confirm`, `ui-relative-time`,
-`ui-table-filter`, `ui-header-banner`, `ui-switch`, and `ui-dialog` appear in
-no template. Toasts are created from script. Cart and checkout forms are
-enhanced by `dynamic.js` instead.
+Cart, checkout, account, and workspace order forms are enhanced by
+`dynamic.js` rather than by components.
 
 ### Progressive enhancement rule
 

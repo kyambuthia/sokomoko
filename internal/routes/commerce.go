@@ -102,24 +102,6 @@ func CartPage(a *app.App) http.HandlerFunc {
 	}
 }
 
-// CartSummaryAPI serves GET /api/cart for the header cart badge.
-func CartSummaryAPI(a *app.App) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w, http.MethodGet)
-			return
-		}
-		userID, _ := requestUserID(r)
-		cart, err := a.Commerce.Cart(userID)
-		if err != nil {
-			log.Printf("cart api: %v", err)
-			app.JSON(w, http.StatusInternalServerError, cartJSON{Error: "cart unavailable"})
-			return
-		}
-		app.JSON(w, http.StatusOK, newCartJSON(cart))
-	}
-}
-
 type cartMutation func(userID, productID, quantity int) error
 
 // cartAction handles the add/update/remove form posts. Browsers get a redirect

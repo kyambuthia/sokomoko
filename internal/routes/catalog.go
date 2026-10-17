@@ -162,38 +162,6 @@ type searchResultJSON struct {
 	Category string `json:"category,omitempty"`
 }
 
-// SearchAPI serves GET /api/search?q=&category= for the header quick-find.
-// It is a safe GET so it needs no CSRF token and can be cached briefly.
-func SearchAPI(a *app.App) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w, http.MethodGet)
-			return
-		}
-		query := strings.TrimSpace(r.URL.Query().Get("q"))
-		results := []searchResultJSON{}
-		if len([]rune(query)) >= 2 {
-			products, err := a.Catalog.SearchInCategory(query, r.URL.Query().Get("category"))
-			if err != nil {
-				log.Printf("api search %q: %v", query, err)
-				app.JSON(w, http.StatusInternalServerError, map[string]string{"error": "search unavailable"})
-				return
-			}
-			for i, p := range products {
-				if i == 8 {
-					break
-				}
-				results = append(results, searchResultJSON{
-					ID: p.ID, Name: p.Name, Slug: p.Slug, URL: "/products/" + p.Slug,
-					Price: p.Price.String(), Currency: "USD", InStock: p.InStock(),
-					ImageURL: p.ImageURL, Category: p.Category,
-				})
-			}
-		}
-		app.JSON(w, http.StatusOK, map[string]any{"query": query, "results": results})
-	}
-}
-
 // CategoriesAPI serves GET /api/categories for the header department menus.
 func CategoriesAPI(a *app.App) http.HandlerFunc {
 	type categoryJSON struct {

@@ -36,7 +36,6 @@ func ParseTemplates() (*Templates, error) {
 		"templates/base/nav.tmpl.html",
 		"templates/base/main.tmpl.html",
 		"templates/base/footer.tmpl.html",
-		"templates/base/partials.tmpl.html",
 	}
 
 	base, err := template.New("base").Funcs(funcMap).ParseFS(TmplData, baseTemplateFiles...)

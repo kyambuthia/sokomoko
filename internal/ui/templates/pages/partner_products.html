@@ -28,8 +28,9 @@
     </div>
     <div class="workspace-card__body">
       {{if .Products}}
+      <ui-table-filter for="partner-products-table" placeholder="Filter products"></ui-table-filter>
       <div class="table-wrap">
-      <table class="data-table data-table--partner">
+      <table class="data-table data-table--partner" id="partner-products-table">
         <thead>
           <tr>
             <th>Name</th>

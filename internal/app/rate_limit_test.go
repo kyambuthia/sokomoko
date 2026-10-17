@@ -1,16 +1,17 @@
 package app
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 )
 
-func TestRateLimitByIP_AllowsWithinLimit(t *testing.T) {
+func TestRateLimitByKey_AllowsWithinLimit(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}), RateLimitByIP(2, time.Minute, http.MethodPost))
+	}), RateLimitByKey(2, time.Minute, remoteHost, http.MethodPost))
 
 	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest(http.MethodPost, "http://localhost/login", nil)
@@ -25,10 +26,10 @@ func TestRateLimitByIP_AllowsWithinLimit(t *testing.T) {
 	}
 }
 
-func TestRateLimitByIP_BlocksWhenExceeded(t *testing.T) {
+func TestRateLimitByKey_BlocksWhenExceeded(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}), RateLimitByIP(2, time.Minute, http.MethodPost))
+	}), RateLimitByKey(2, time.Minute, remoteHost, http.MethodPost))
 
 	for i := 0; i < 3; i++ {
 		req := httptest.NewRequest(http.MethodPost, "http://localhost/login", nil)
@@ -51,10 +52,10 @@ func TestRateLimitByIP_BlocksWhenExceeded(t *testing.T) {
 	}
 }
 
-func TestRateLimitByIP_IgnoresNonConfiguredMethod(t *testing.T) {
+func TestRateLimitByKey_IgnoresNonConfiguredMethod(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}), RateLimitByIP(1, time.Minute, http.MethodPost))
+	}), RateLimitByKey(1, time.Minute, remoteHost, http.MethodPost))
 
 	req := httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
 	req.RemoteAddr = "203.0.113.12:12345"
@@ -98,10 +99,10 @@ func TestIPRateLimiter_CleansUpExpiredEntriesPeriodically(t *testing.T) {
 	}
 }
 
-func TestRateLimitByIP_TracksPerIP(t *testing.T) {
+func TestRateLimitByKey_TracksPerIP(t *testing.T) {
 	h := Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}), RateLimitByIP(1, time.Minute, http.MethodPost))
+	}), RateLimitByKey(1, time.Minute, remoteHost, http.MethodPost))
 
 	reqA := httptest.NewRequest(http.MethodPost, "http://localhost/login", nil)
 	reqA.RemoteAddr = "203.0.113.20:1111"
@@ -118,4 +119,13 @@ func TestRateLimitByIP_TracksPerIP(t *testing.T) {
 	if recB.Code != http.StatusNoContent {
 		t.Fatalf("second ip status=%d want=%d", recB.Code, http.StatusNoContent)
 	}
+}
+
+// remoteHost keys requests by the host part of RemoteAddr.
+func remoteHost(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

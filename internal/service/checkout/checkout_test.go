@@ -68,11 +68,11 @@ func TestCheckout_ValidationErrors(t *testing.T) {
 
 	userID, _ := createUserAndProduct(t, store, 3)
 
-	if _, err := svc.Checkout(userID, " "); err != ErrDeliveryAddress {
+	if _, _, err := svc.CheckoutWithPayment(userID, " ", "", ""); err != ErrDeliveryAddress {
 		t.Fatalf("delivery error = %v, want %v", err, ErrDeliveryAddress)
 	}
 
-	if _, err := svc.Checkout(userID, "Nairobi"); err != ErrCartEmpty {
+	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "", ""); err != ErrCartEmpty {
 		t.Fatalf("cart error = %v, want %v", err, ErrCartEmpty)
 	}
 }

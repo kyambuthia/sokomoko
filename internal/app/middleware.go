@@ -119,10 +119,6 @@ func Recoverer() Middleware {
 	}
 }
 
-func SecurityHeaders() Middleware {
-	return SecurityHeadersWithProxy(false)
-}
-
 // SecurityHeadersWithProxy trusts forwarded protocol only when the application
 // is reachable exclusively through a proxy that overwrites that header.
 func SecurityHeadersWithProxy(trustProxy bool) Middleware {
@@ -153,114 +149,6 @@ func BodyLimit(maxBytes int64) Middleware {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-func CSRFSameOrigin(sessionCookieName string) Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
-				next.ServeHTTP(w, r)
-				return
-			}
-			if isCSRFBypassPath(r.URL.Path) {
-				next.ServeHTTP(w, r)
-				return
-			}
-			if _, err := r.Cookie(sessionCookieName); err != nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			origin := strings.TrimSpace(r.Header.Get("Origin"))
-			referer := strings.TrimSpace(r.Header.Get("Referer"))
-
-			if origin == "" && referer == "" {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-			if origin != "" && !sameHost(origin, r) {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-			if origin == "" && referer != "" && !sameHost(referer, r) {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func isCSRFBypassPath(path string) bool {
-	switch strings.TrimSpace(path) {
-	case "/login", "/signup", "/password-reset/request", "/password-reset/confirm":
-		return true
-	default:
-		return false
-	}
-}
-
-func sameHost(raw string, r *http.Request) bool {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return false
-	}
-	if u.Host == "" {
-		return false
-	}
-
-	requestScheme := "http"
-	if isHTTPS(r) {
-		requestScheme = "https"
-	}
-
-	candidateScheme := strings.ToLower(strings.TrimSpace(u.Scheme))
-	if candidateScheme == "" {
-		candidateScheme = requestScheme
-	}
-	if candidateScheme != requestScheme {
-		return false
-	}
-
-	requestHost, requestPort := hostAndPort(r.Host, requestScheme)
-	if requestHost == "" {
-		return false
-	}
-
-	candidateHost := strings.ToLower(strings.TrimSpace(u.Hostname()))
-	candidatePort := normalizePort(u.Port(), candidateScheme)
-
-	return candidateHost == requestHost && candidatePort == requestPort
-}
-
-func hostAndPort(rawHost, scheme string) (string, string) {
-	parsed, err := url.Parse("http://" + strings.TrimSpace(rawHost))
-	if err != nil {
-		return "", normalizePort("", scheme)
-	}
-	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
-	return host, normalizePort(parsed.Port(), scheme)
-}
-
-func normalizePort(port, scheme string) string {
-	cleanScheme := strings.ToLower(strings.TrimSpace(scheme))
-	if cleanScheme != "https" {
-		cleanScheme = "http"
-	}
-	if strings.TrimSpace(port) != "" {
-		return strings.TrimSpace(port)
-	}
-	if cleanScheme == "https" {
-		return "443"
-	}
-	return "80"
-}
-
-func isHTTPS(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
-	}
-	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 func generateRequestID() string {
