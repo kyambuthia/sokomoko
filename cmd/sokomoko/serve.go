@@ -77,6 +77,9 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 }
 
 func runMigrate(cfg config.Config) error {
+	if err := cfg.ValidateDatabase(); err != nil {
+		return wrapCommandError(commandMigrate, "validate database config", err)
+	}
 	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandMigrate, "open store", err)
@@ -92,6 +95,9 @@ func runMigrate(cfg config.Config) error {
 }
 
 func runSeed(cfg config.Config) error {
+	if err := cfg.ValidateDatabase(); err != nil {
+		return wrapCommandError(commandSeed, "validate database config", err)
+	}
 	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandSeed, "open store", err)
@@ -121,8 +127,7 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 		AppName:  "Sokomoko",
 	})
 	if err != nil {
-		log.Printf("[startup] password_reset_email=disabled err=%v", err)
-		return nil, nil
+		return nil, fmt.Errorf("invalid SMTP configuration: %w", err)
 	}
 
 	resetEmailSender = emailSender.SendPasswordResetEmail
