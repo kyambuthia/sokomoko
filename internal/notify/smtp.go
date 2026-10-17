@@ -47,7 +47,10 @@ func NewSMTPSender(cfg SMTPConfig) (*SMTPSender, error) {
 	if cfg.From == "" {
 		return nil, fmt.Errorf("smtp from address is required")
 	}
-	if _, err := mail.ParseAddress(cfg.From); err != nil || strings.ContainsAny(cfg.From, "\r\n") {
+	if strings.ContainsAny(cfg.From, "\r\n") {
+		return nil, fmt.Errorf("invalid smtp from address")
+	}
+	if _, err := mail.ParseAddress(cfg.From); err != nil {
 		return nil, fmt.Errorf("invalid smtp from address: %w", err)
 	}
 
@@ -64,7 +67,10 @@ func (s *SMTPSender) SendPasswordResetEmail(ctx context.Context, recipientEmail 
 		return fmt.Errorf("recipient email is required")
 	}
 	to, err := mail.ParseAddress(recipient)
-	if err != nil || strings.ContainsAny(recipient, "\r\n") {
+	if strings.ContainsAny(recipient, "\r\n") {
+		return fmt.Errorf("invalid recipient email")
+	}
+	if err != nil {
 		return fmt.Errorf("invalid recipient email: %w", err)
 	}
 	if strings.TrimSpace(resetLink) == "" {

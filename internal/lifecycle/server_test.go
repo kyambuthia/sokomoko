@@ -92,6 +92,67 @@ func TestRun_BindFailureDoesNotStartMaintenance(t *testing.T) {
 	}
 }
 
+func TestServe_ListenerFailureStillDrainsAcceptedRequests(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	draining := make(chan struct{})
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-release
+		_, _ = io.WriteString(w, "finished")
+	})}
+	done := make(chan error, 1)
+	go func() {
+		done <- serve(context.Background(), server, listener, func() { close(draining) }, nil, time.Second)
+	}()
+	response := make(chan string, 1)
+	go func() {
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get("http://" + listener.Addr().String())
+		if err != nil {
+			response <- err.Error()
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		response <- string(body)
+	}()
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("request never started")
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-draining:
+	case <-time.After(3 * time.Second):
+		t.Fatal("listener failure did not drain")
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("returned before request drained: %v", err)
+	default:
+	}
+	close(release)
+	select {
+	case err := <-done:
+		if !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("error=%v, want closed listener", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("server did not finish")
+	}
+	if body := <-response; body != "finished" {
+		t.Fatalf("response=%q", body)
+	}
+}
+
 func TestServe_ShutdownDeadlineClosesActiveConnections(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

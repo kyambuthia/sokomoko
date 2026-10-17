@@ -52,6 +52,9 @@ func TestCanonicalHost_IPv6(t *testing.T) {
 	if got := CanonicalHost("[::1]:8080"); got != "::1" {
 		t.Fatalf("host=%q, want ::1", got)
 	}
+	if got := CanonicalHost("::1"); got != "::1" {
+		t.Fatalf("bare host=%q, want ::1", got)
+	}
 }
 
 func TestCanonicalHost(t *testing.T) {

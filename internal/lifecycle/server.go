@@ -50,32 +50,31 @@ func serve(ctx context.Context, server *http.Server, listener net.Listener, drai
 	defer func() { stopWorker(); <-workerDone }()
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.Serve(listener) }()
+	var serveErr error
+	served := false
 	select {
-	case err := <-serveDone:
-		if drain != nil {
-			drain()
-		}
-		if !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
+	case serveErr = <-serveDone:
+		served = true
 	case <-ctx.Done():
-		if drain != nil {
-			drain()
-		}
-		stopWorker()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		err := server.Shutdown(shutdownCtx)
-		if err != nil {
-			// Shutdown leaves active connections open when its deadline expires.
-			// Force-close them before the caller closes the database pool.
-			err = errors.Join(err, server.Close())
-		}
-		serveErr := <-serveDone
-		if !errors.Is(serveErr, http.ErrServerClosed) {
-			err = errors.Join(err, serveErr)
-		}
-		return err
 	}
+	if drain != nil {
+		drain()
+	}
+	stopWorker()
+	// Drain on listener failure as well as cancellation: Serve can return while
+	// previously accepted requests are still using the database.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	err := server.Shutdown(shutdownCtx)
+	if err != nil {
+		// Shutdown leaves active connections open when its deadline expires.
+		err = errors.Join(err, server.Close())
+	}
+	if !served {
+		serveErr = <-serveDone
+	}
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		serveErr = nil
+	}
+	return errors.Join(err, serveErr)
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -271,7 +272,11 @@ func generateRequestID() string {
 }
 
 func canonicalHost(host string) string {
-	parsed, err := url.Parse("//" + strings.ToLower(strings.TrimSpace(host)))
+	host = strings.ToLower(strings.TrimSpace(host))
+	if net.ParseIP(host) != nil {
+		return host
+	}
+	parsed, err := url.Parse("//" + host)
 	if err != nil {
 		return ""
 	}
