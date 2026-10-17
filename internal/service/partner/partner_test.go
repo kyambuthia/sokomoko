@@ -42,9 +42,20 @@ func TestSaveStoreSettings_Validation(t *testing.T) {
 		{StoreSettingsInput{StoreName: "S", StoreSlug: "bad slug", ContactEmail: "a@b.co"}, ErrInvalidStoreSlug},
 		{StoreSettingsInput{StoreName: "S", StoreSlug: "good", ContactEmail: "not-an-email"}, ErrInvalidContactEmail},
 	}
+	staff := &Actor{ID: 1, Role: "staff"}
 	for _, tc := range cases {
-		if _, err := svc.SaveStoreSettings(tc.input); !errors.Is(err, tc.want) {
+		if _, err := svc.SaveStoreSettings(staff, tc.input); !errors.Is(err, tc.want) {
 			t.Errorf("SaveStoreSettings(%+v) = %v, want %v", tc.input, err, tc.want)
+		}
+	}
+}
+
+func TestSaveStoreSettings_RequiresPlatformRole(t *testing.T) {
+	svc := newWithStore(nil)
+	valid := StoreSettingsInput{StoreName: "S", StoreSlug: "good", ContactEmail: "a@b.co"}
+	for _, actor := range []*Actor{nil, {ID: 7, Role: "partner"}, {ID: 8, Role: "user"}} {
+		if _, err := svc.SaveStoreSettings(actor, valid); !errors.Is(err, ErrForbiddenSettingsUpdate) {
+			t.Errorf("SaveStoreSettings(%+v) = %v, want ErrForbiddenSettingsUpdate", actor, err)
 		}
 	}
 }

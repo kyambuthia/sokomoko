@@ -78,7 +78,7 @@ type PartnerService interface {
 	OrdersForActor(actor *partnersvc.Actor, filter string) (partnersvc.OrdersData, error)
 	Products() (partnersvc.ProductsData, error)
 	ProductsForActor(actor *partnersvc.Actor) (partnersvc.ProductsData, error)
-	SaveStoreSettings(input partnersvc.StoreSettingsInput) (partnersvc.StoreSettings, error)
+	SaveStoreSettings(actor *partnersvc.Actor, input partnersvc.StoreSettingsInput) (partnersvc.StoreSettings, error)
 	StoreSettings() (*partnersvc.StoreSettings, error)
 	UpdateOrder(actor *partnersvc.Actor, input partnersvc.UpdateOrderInput) error
 }

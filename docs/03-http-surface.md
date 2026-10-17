@@ -74,7 +74,7 @@ address as a draft and re-renders the form with `422`.
 | `/password-reset/request`, `/password-reset/confirm` | GET, POST | public | admin, staff, partner accounts |
 | `/signup` | GET, POST | admin | `auth.StaffSignUp` (creates staff) |
 | `/` | GET | admin, staff, partner | `PartnerRoot`: redirects to `/setup` or `/dashboard` |
-| `/setup` | GET, POST | admin, staff, partner | `PartnerSetup` (store settings) |
+| `/setup` | GET, POST | admin, staff, partner (POST needs admin or staff) | `PartnerSetup` (store settings; read-only for partners) |
 | `/dashboard` | GET | admin, staff, partner | `PartnerDashboard` |
 | `/products` | GET | admin, staff, partner | `PartnerProducts` |
 | `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` |
@@ -132,7 +132,7 @@ there are no API keys or bearer tokens.
 | `GET /partner/orders?status=` | admin, staff, partner | Orders and summary |
 | `PATCH /partner/orders/<id>` | admin, staff, partner | Update `{partner_status, delivery_status, delivery_notice}` |
 | `GET /partner/settings` | admin, staff, partner | Store settings (`404 store_not_configured` if unset) |
-| `PATCH /partner/settings` | admin, staff, partner | Save store settings |
+| `PATCH /partner/settings` | admin, staff | Save store settings |
 
 Partner-role callers are scoped exactly as in the partner HTML workspace.
 Money fields are JSON numbers in dollars (for example `12.5`), converted from

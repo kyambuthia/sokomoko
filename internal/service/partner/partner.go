@@ -22,6 +22,7 @@ var (
 	ErrInvalidStoreSlug          = errors.New("invalid store slug")
 	ErrInvalidContactEmail       = errors.New("invalid contact email")
 	ErrForbiddenOrderUpdate      = errors.New("forbidden order update")
+	ErrForbiddenSettingsUpdate   = errors.New("forbidden store settings update")
 	ErrInvalidOrderID            = errors.New("invalid order id")
 	ErrOrderNotFound             = errors.New("order not found")
 	ErrInvalidOrderTransition    = errors.New("invalid order transition")
@@ -167,7 +168,16 @@ func (s *Service) StoreSettings() (*StoreSettings, error) {
 	return &mapped, nil
 }
 
-func (s *Service) SaveStoreSettings(input StoreSettingsInput) (StoreSettings, error) {
+// CanEditStoreSettings reports whether actor may change the marketplace-wide
+// store settings. Partner accounts manage only their own catalog and orders.
+func CanEditStoreSettings(actor *Actor) bool {
+	return actor != nil && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff)
+}
+
+func (s *Service) SaveStoreSettings(actor *Actor, input StoreSettingsInput) (StoreSettings, error) {
+	if !CanEditStoreSettings(actor) {
+		return StoreSettings{}, ErrForbiddenSettingsUpdate
+	}
 	settings := StoreSettings{
 		StoreName:    strings.TrimSpace(input.StoreName),
 		StoreSlug:    strings.ToLower(strings.TrimSpace(input.StoreSlug)),

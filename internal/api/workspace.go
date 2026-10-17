@@ -449,7 +449,8 @@ func (h *Handler) partnerSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 			return
 		}
-		settings, err := h.app.Partner.SaveStoreSettings(partnersvc.StoreSettingsInput{
+		actor := partnerActor(r)
+		settings, err := h.app.Partner.SaveStoreSettings(actor, partnersvc.StoreSettingsInput{
 			StoreName: input.StoreName, StoreSlug: input.StoreSlug,
 			Description: input.Description, ContactEmail: input.ContactEmail,
 		})
@@ -465,9 +466,10 @@ func (h *Handler) partnerSettings(w http.ResponseWriter, r *http.Request) {
 
 func writePartnerError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, partnersvc.ErrForbiddenOrderUpdate):
+	case errors.Is(err, partnersvc.ErrForbiddenOrderUpdate), errors.Is(err, partnersvc.ErrForbiddenSettingsUpdate):
 		writeError(w, http.StatusForbidden, "forbidden", "Action is not allowed")
-	case errors.Is(err, partnersvc.ErrInvalidOrderID), errors.Is(err, partnersvc.ErrMissingProductFields), errors.Is(err, partnersvc.ErrInvalidProductPrice), errors.Is(err, partnersvc.ErrInvalidProductStock), errors.Is(err, partnersvc.ErrMissingStoreFields):
+	case errors.Is(err, partnersvc.ErrInvalidOrderID), errors.Is(err, partnersvc.ErrMissingProductFields), errors.Is(err, partnersvc.ErrInvalidProductPrice), errors.Is(err, partnersvc.ErrInvalidProductStock), errors.Is(err, partnersvc.ErrMissingStoreFields),
+		errors.Is(err, partnersvc.ErrInvalidStoreSlug), errors.Is(err, partnersvc.ErrInvalidContactEmail):
 		writeError(w, http.StatusBadRequest, "invalid_input", "Request data is invalid")
 	case errors.Is(err, partnersvc.ErrOrderNotFound), errors.Is(err, partnersvc.ErrStoreNotConfigured):
 		writeError(w, http.StatusNotFound, "resource_not_found", "Resource not found")

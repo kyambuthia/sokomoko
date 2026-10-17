@@ -17,6 +17,7 @@ type PartnerSetupData struct {
 	Error     string
 	Settings  partnersvc.StoreSettings
 	CSRFToken string
+	CanEdit   bool
 }
 
 type PartnerDashboardData struct {
@@ -97,6 +98,7 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 			Title:     "Store Setup",
 			Heading:   "Partner Store Setup",
 			CSRFToken: a.Auth.CSRFToken(r),
+			CanEdit:   partnersvc.CanEditStoreSettings(partnerActorFromContext(r)),
 		}
 		if existing != nil {
 			data.Settings = *existing
@@ -111,13 +113,17 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		settings, err := svc.SaveStoreSettings(partnersvc.StoreSettingsInput{
+		settings, err := svc.SaveStoreSettings(partnerActorFromContext(r), partnersvc.StoreSettingsInput{
 			StoreName:    r.FormValue("store_name"),
 			StoreSlug:    r.FormValue("store_slug"),
 			Description:  r.FormValue("description"),
 			ContactEmail: r.FormValue("contact_email"),
 		})
 		switch {
+		case errors.Is(err, partnersvc.ErrForbiddenSettingsUpdate):
+			data.Error = "Only platform admins and staff can change store settings."
+			a.RenderStatus(w, a.Templates.PartnerSetup, http.StatusForbidden, data)
+			return
 		case errors.Is(err, partnersvc.ErrMissingStoreFields):
 			data.Error = "Store name, slug, and contact email are required."
 			data.Settings = settings

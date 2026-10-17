@@ -28,9 +28,6 @@ where to look.
   fallback image.
 - **No way to create partner logins.** Nothing in the app creates a user with
   the `partner` role or a `partner_users` link. Provision them with SQL.
-- **Store settings are global.** `store_settings` is a single row, and any user
-  who can reach the partner workspace, including a `partner` user, can edit it
-  through `/setup` or `PATCH /api/v1/partner/settings`.
 
 ## Identity
 

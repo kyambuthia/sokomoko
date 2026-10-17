@@ -271,12 +271,19 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 		t.Fatalf("unexpected partner settings: %#v", settings)
 	}
 
-	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, "/api/v1/partner/settings", map[string]any{
+	settingsUpdate := map[string]any{
 		"store_name": "Updated API Store", "store_slug": "updated-api-store",
 		"description": "Updated API description", "contact_email": "updated@example.com",
-	}, []*http.Cookie{cookie}, true, nil)
+	}
+	// Store settings are marketplace-wide, so a partner account cannot change them.
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, "/api/v1/partner/settings", settingsUpdate, []*http.Cookie{cookie}, true, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("partner settings update status=%d body=%s, want 403", resp.StatusCode, body)
+	}
+	adminCookie := loginAndGetSessionCookie(t, "partner.localhost", "api_admin", "strongpass123")
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, "/api/v1/partner/settings", settingsUpdate, []*http.Cookie{adminCookie}, true, nil)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("partner settings update status=%d body=%s", resp.StatusCode, body)
+		t.Fatalf("admin settings update status=%d body=%s", resp.StatusCode, body)
 	}
 	decodeAPIData(t, body, &settings)
 	if settings.StoreName != "Updated API Store" || settings.StoreSlug != "updated-api-store" || settings.ContactEmail != "updated@example.com" {

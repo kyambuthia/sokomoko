@@ -46,6 +46,8 @@ Roles are `user`, `staff`, `admin`, `partner` (see
      only update orders where every line belongs to their partner.
    - Partner product listing and creation are restricted to the caller's
      partner.
+   - `partner.SaveStoreSettings` requires admin or staff, because the store
+     settings are marketplace-wide. Partner users see them read-only.
 
 A `partner` user is linked to a vendor through the `partner_users` table.
 `PartnerIDForUser` returns a partner only when the link exists, the partner is

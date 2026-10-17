@@ -28,6 +28,7 @@
   <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
   {{end}}
 
+  {{if .CanEdit}}
   <form class="workspace-card workspace-form-card form" action="/setup" method="POST">
     <fieldset class="form__fieldset">
       {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
@@ -57,6 +58,22 @@
       <button class="btn btn--full" type="submit">Save Setup</button>
     </fieldset>
   </form>
+  {{else}}
+  <section class="workspace-card workspace-form-card">
+    <h2 class="form__legend">Store Identity</h2>
+    {{if .Settings.StoreName}}
+    <dl>
+      <dt>Store Name</dt><dd>{{.Settings.StoreName}}</dd>
+      <dt>Store Slug</dt><dd>{{.Settings.StoreSlug}}</dd>
+      <dt>Contact Email</dt><dd>{{.Settings.ContactEmail}}</dd>
+      {{if .Settings.Description}}<dt>Description</dt><dd>{{.Settings.Description}}</dd>{{end}}
+    </dl>
+    {{else}}
+    <p>The marketplace has not been set up yet. A platform admin or staff member needs to complete store setup.</p>
+    {{end}}
+    <p class="form__hint">Store settings are managed by platform admins and staff.</p>
+  </section>
+  {{end}}
 
   <p class="auth-panel__links"><a href="/dashboard">Go to partner dashboard</a></p>
 </main>
