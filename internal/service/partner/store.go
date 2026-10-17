@@ -11,6 +11,8 @@ type store interface {
 	GetPartnerOrderSummary() (db.PartnerOrderSummary, error)
 	GetStoreSettings() (*db.StoreSettings, error)
 	ListOrdersForFulfillment() ([]db.Order, error)
+	ListOrdersForPartner(partnerID int) ([]db.Order, error)
+	PartnerOwnsOrder(partnerID, orderID int) (bool, error)
 	ListPartners() ([]db.Partner, error)
 	ListProducts(filter db.ProductFilter) ([]db.Product, error)
 	UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error

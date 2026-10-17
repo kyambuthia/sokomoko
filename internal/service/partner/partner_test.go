@@ -1,35 +1,9 @@
 package partner
 
 import (
-	"database/sql"
 	"errors"
 	"testing"
-
-	"github.com/kyambuthia/sokomoko/internal/db"
 )
-
-func TestOrderOwnershipRequiresEverySnapshotLine(t *testing.T) {
-	owned := db.OrderItem{PartnerID: sql.NullInt64{Int64: 7, Valid: true}}
-	other := db.OrderItem{PartnerID: sql.NullInt64{Int64: 8, Valid: true}}
-	for _, tc := range []struct {
-		name      string
-		items     []db.OrderItem
-		partnerID int
-		want      bool
-	}{
-		{"owned", []db.OrderItem{owned, owned}, 7, true},
-		{"mixed", []db.OrderItem{owned, other}, 7, false},
-		{"unassigned line", []db.OrderItem{owned, {}}, 7, false},
-		{"empty", nil, 7, false},
-		{"no membership", []db.OrderItem{owned}, 0, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := orderOwnedByPartner(db.Order{Items: tc.items}, tc.partnerID); got != tc.want {
-				t.Fatalf("ownership=%v, want %v", got, tc.want)
-			}
-		})
-	}
-}
 
 func TestSaveStoreSettings_Validation(t *testing.T) {
 	svc := newWithStore(nil)

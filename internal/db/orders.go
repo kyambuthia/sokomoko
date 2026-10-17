@@ -305,6 +305,39 @@ func (s *Store) ListOrdersForFulfillment() ([]Order, error) {
 	return s.listOrders(ctx, "WHERE o.status <> 'cancelled' ORDER BY o.created_at DESC, o.id DESC")
 }
 
+// partnerOwnsOrderSQL matches open orders with at least one line where every
+// line belongs to the partner in parameter $1.
+const partnerOwnsOrderSQL = `o.status <> 'cancelled'
+	AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id)
+	AND NOT EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.partner_id IS DISTINCT FROM $1)`
+
+// ListOrdersForPartner returns the open orders wholly owned by one partner.
+// Orders that mix partners stay with admins and staff.
+func (s *Store) ListOrdersForPartner(partnerID int) ([]Order, error) {
+	if partnerID <= 0 {
+		return []Order{}, nil
+	}
+	ctx, cancel := s.ctx()
+	defer cancel()
+	return s.listOrders(ctx, "WHERE "+partnerOwnsOrderSQL+" ORDER BY o.created_at DESC, o.id DESC", partnerID)
+}
+
+// PartnerOwnsOrder reports whether orderID is an open order wholly owned by
+// partnerID.
+func (s *Store) PartnerOwnsOrder(partnerID, orderID int) (bool, error) {
+	if partnerID <= 0 || orderID <= 0 {
+		return false, nil
+	}
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var owned bool
+	err := s.DB.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM orders o WHERE o.id = $2 AND "+partnerOwnsOrderSQL+")",
+		partnerID, orderID,
+	).Scan(&owned)
+	return owned, err
+}
+
 func (s *Store) ListAllOrders() ([]Order, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()

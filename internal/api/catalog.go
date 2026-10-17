@@ -22,27 +22,19 @@ func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	products, err := h.app.Catalog.AllProducts()
+	page, limit := pageParams(r)
+	products, total, err := h.app.Catalog.Page(page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load products")
 		return
 	}
-	page, limit := pageParams(r)
-	start := (page - 1) * limit
-	if start > len(products) {
-		start = len(products)
-	}
-	end := start + limit
-	if end > len(products) {
-		end = len(products)
-	}
-	items := make([]productDTO, 0, end-start)
-	for _, product := range products[start:end] {
+	items := make([]productDTO, 0, len(products))
+	for _, product := range products {
 		items = append(items, mapProduct(product))
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=30")
-	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: len(products)})
+	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: total})
 }
 
 func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {

@@ -355,22 +355,20 @@ func (s *Service) OrdersForActor(actor *Actor, filter string) (OrdersData, error
 	if cleanFilter == "" {
 		cleanFilter = "all"
 	}
-	orders, err := s.store.ListOrdersForFulfillment()
-	if err != nil {
-		return OrdersData{}, err
-	}
+	var orders []db.Order
 	if actorIsPartner(actor) {
 		partnerID, err := s.store.PartnerIDForUser(actor.ID)
 		if err != nil {
 			return OrdersData{}, err
 		}
-		owned := make([]db.Order, 0)
-		for _, order := range orders {
-			if orderOwnedByPartner(order, partnerID) {
-				owned = append(owned, order)
-			}
+		if orders, err = s.store.ListOrdersForPartner(partnerID); err != nil {
+			return OrdersData{}, err
 		}
-		orders = owned
+	} else {
+		var err error
+		if orders, err = s.store.ListOrdersForFulfillment(); err != nil {
+			return OrdersData{}, err
+		}
 	}
 	filtered := make([]Order, 0, len(orders))
 	for _, order := range orders {
@@ -505,35 +503,16 @@ func summaryForOrders(orders []Order) Summary {
 	return summary
 }
 
-// Only wholly owned orders can be exposed or updated through a partner account.
-// Mixed-partner fulfillment remains an admin/staff operation.
-func orderOwnedByPartner(order db.Order, partnerID int) bool {
-	if partnerID <= 0 || len(order.Items) == 0 {
-		return false
-	}
-	for _, item := range order.Items {
-		if !item.PartnerID.Valid || item.PartnerID.Int64 != int64(partnerID) {
-			return false
-		}
-	}
-	return true
-}
-
+// orderBelongsToPartner reports whether the partner user may update orderID.
+// Only wholly owned orders can be updated through a partner account; orders
+// that mix partners remain an admin/staff operation.
 func (s *Service) orderBelongsToPartner(orderID, userID int) bool {
 	partnerID, err := s.store.PartnerIDForUser(userID)
 	if err != nil || partnerID == 0 {
 		return false
 	}
-	orders, err := s.store.ListOrdersForFulfillment()
-	if err != nil {
-		return false
-	}
-	for _, order := range orders {
-		if order.ID == orderID {
-			return orderOwnedByPartner(order, partnerID)
-		}
-	}
-	return false
+	owned, err := s.store.PartnerOwnsOrder(partnerID, orderID)
+	return err == nil && owned
 }
 
 func slugify(value string) string {

@@ -27,6 +27,7 @@ type CatalogService interface {
 	AllProducts() ([]catalogsvc.Product, error)
 	Browse(filter catalogsvc.Filter) ([]catalogsvc.Product, error)
 	Categories() ([]catalogsvc.Category, error)
+	Page(page, limit int) ([]catalogsvc.Product, int, error)
 	ProductBySlug(slug string) (*catalogsvc.Product, error)
 	Search(query string) ([]catalogsvc.Product, error)
 	SearchInCategory(query, category string) ([]catalogsvc.Product, error)

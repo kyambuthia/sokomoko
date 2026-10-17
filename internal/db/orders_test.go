@@ -377,3 +377,70 @@ func TestSeed_IsIdempotent(t *testing.T) {
 		t.Fatalf("seeded product = %+v", product)
 	}
 }
+
+func TestPartnerOrderOwnershipRequiresEveryLine(t *testing.T) {
+	s := newTestStore(t)
+	partnerA, err := s.UpsertPartner(Partner{Name: "Owner A", Slug: "owner_a_" + nextSuffix()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	partnerB, err := s.UpsertPartner(Partner{Name: "Owner B", Slug: "owner_b_" + nextSuffix()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	productFor := func(partnerID int64) int {
+		id := mustCreateProduct(t, s, 1000, 10)
+		if partnerID > 0 {
+			if _, err := s.DB.Exec("UPDATE products SET partner_id = $1 WHERE id = $2", partnerID, id); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return id
+	}
+	placeOrder := func(products ...int) int {
+		userID := mustCreateUser(t, s, RoleUser)
+		for _, productID := range products {
+			if err := s.AddToCart(userID, productID, 1); err != nil {
+				t.Fatal(err)
+			}
+		}
+		orderID, err := s.PlaceOrderFromCart(userID, "1 Owner Lane")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return int(orderID)
+	}
+	owned := placeOrder(productFor(partnerA), productFor(partnerA))
+	mixed := placeOrder(productFor(partnerA), productFor(partnerB))
+	unassigned := placeOrder(productFor(partnerA), productFor(0))
+
+	for _, tc := range []struct {
+		name      string
+		partnerID int
+		orderID   int
+		want      bool
+	}{
+		{"owned", int(partnerA), owned, true},
+		{"other partner", int(partnerB), owned, false},
+		{"mixed", int(partnerA), mixed, false},
+		{"unassigned line", int(partnerA), unassigned, false},
+		{"no membership", 0, owned, false},
+	} {
+		got, err := s.PartnerOwnsOrder(tc.partnerID, tc.orderID)
+		if err != nil || got != tc.want {
+			t.Errorf("%s: PartnerOwnsOrder = %v, %v; want %v", tc.name, got, err, tc.want)
+		}
+	}
+
+	orders, err := s.ListOrdersForPartner(int(partnerA))
+	if err != nil || len(orders) != 1 || orders[0].ID != owned {
+		t.Fatalf("ListOrdersForPartner = %+v, %v; want only order %d", orders, err, owned)
+	}
+
+	if err := s.UpdateOrderFulfillment(owned, "cancelled", "queued", "cancelled"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.PartnerOwnsOrder(int(partnerA), owned); got {
+		t.Fatal("cancelled orders must not be partner fulfillment work")
+	}
+}

@@ -43,7 +43,8 @@ Roles are `user`, `staff`, `admin`, `partner` (see
    - `admin.UpdateOrder` and `admin.DeactivateUser` require `admin`. Admins
      cannot deactivate themselves or other admins.
    - `partner.UpdateOrder` requires admin, staff, or partner. A partner may
-     only update orders where every line belongs to their partner.
+     only update orders where every line belongs to their partner. Ownership is
+     checked in SQL (`Store.PartnerOwnsOrder`, `Store.ListOrdersForPartner`).
    - Partner product listing and creation are restricted to the caller's
      partner.
    - `partner.SaveStoreSettings` requires admin or staff, because the store

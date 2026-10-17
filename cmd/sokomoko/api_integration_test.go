@@ -344,3 +344,33 @@ func createAPITestPartner(t *testing.T, username string) int64 {
 	}
 	return id
 }
+
+func TestAPI_CatalogProductsPaginatesInDatabase(t *testing.T) {
+	clearAllTables()
+	suffix := time.Now().UnixNano() % 1_000_000_000
+	for i := 0; i < 5; i++ {
+		createTestProduct(t, fmt.Sprintf("Paged Product %d", i), fmt.Sprintf("paged-%d-%d", suffix, i), 1000, 3)
+	}
+	resp, body := makeAPIRequest(t, http.MethodGet, "/api/v1/catalog/products?page=2&limit=2", nil, nil, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("catalog status=%d body=%s", resp.StatusCode, body)
+	}
+	var page struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+		Page  int `json:"page"`
+		Limit int `json:"limit"`
+		Total int `json:"total"`
+	}
+	decodeAPIData(t, body, &page)
+	if page.Total != 5 || page.Page != 2 || page.Limit != 2 || len(page.Items) != 2 ||
+		page.Items[0].Name != "Paged Product 2" || page.Items[1].Name != "Paged Product 3" {
+		t.Fatalf("unexpected page: %+v", page)
+	}
+	_, body = makeAPIRequest(t, http.MethodGet, "/api/v1/catalog/products?page=9&limit=2", nil, nil, false, nil)
+	decodeAPIData(t, body, &page)
+	if page.Total != 5 || len(page.Items) != 0 {
+		t.Fatalf("past-the-end page: %+v", page)
+	}
+}

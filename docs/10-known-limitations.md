@@ -50,10 +50,6 @@ where to look.
 
 ## Performance
 
-- `GET /api/v1/catalog/products` loads every product, then slices the page in
-  memory.
-- `partner.orderBelongsToPartner` loads every fulfillment order to check
-  ownership of one.
 - Admin and partner lists are not paginated.
 
 ## Unused or unfinished code

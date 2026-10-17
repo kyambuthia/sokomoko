@@ -45,6 +45,7 @@ type Filter struct {
 	Query    string
 	Category string
 	Limit    int
+	Offset   int
 }
 
 type Service struct {
@@ -63,6 +64,26 @@ func (s *Service) AllProducts() ([]Product, error) {
 	return s.Browse(Filter{})
 }
 
+// Page returns one page of the catalog in name order and the total number of
+// active products. page starts at 1.
+func (s *Service) Page(page, limit int) ([]Product, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	total, err := s.store.CountProducts()
+	if err != nil {
+		return nil, 0, err
+	}
+	products, err := s.Browse(Filter{Limit: limit, Offset: (page - 1) * limit})
+	if err != nil {
+		return nil, 0, err
+	}
+	return products, total, nil
+}
+
 // Browse lists products, optionally filtered by a search query and category.
 func (s *Service) Browse(filter Filter) ([]Product, error) {
 	query := normalizeQuery(filter.Query)
@@ -74,6 +95,7 @@ func (s *Service) Browse(filter Filter) ([]Product, error) {
 		Query:    query,
 		Category: category,
 		Limit:    filter.Limit,
+		Offset:   filter.Offset,
 	})
 	if err != nil {
 		return nil, err
