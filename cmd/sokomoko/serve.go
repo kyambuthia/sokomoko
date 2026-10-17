@@ -12,6 +12,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/bootstrap"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/lifecycle"
 	"github.com/kyambuthia/sokomoko/internal/notify"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/ui"
@@ -133,12 +134,13 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 	}
 
 	emailSender, err := notify.NewSMTPSender(notify.SMTPConfig{
-		Host:     cfg.SMTPHost,
-		Port:     cfg.SMTPPort,
-		Username: cfg.SMTPUsername,
-		Password: cfg.SMTPPassword,
-		From:     cfg.SMTPFrom,
-		AppName:  "Sokomoko",
+		Host:       cfg.SMTPHost,
+		Port:       cfg.SMTPPort,
+		Username:   cfg.SMTPUsername,
+		Password:   cfg.SMTPPassword,
+		From:       cfg.SMTPFrom,
+		AppName:    "Sokomoko",
+		RequireTLS: cfg.IsProduction(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("invalid SMTP configuration: %w", err)
@@ -150,6 +152,8 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 }
 
 func buildServer(cfg config.Config, application *app.App) (*httpServer, map[string]struct{}) {
+	readiness := &lifecycle.Readiness{Check: application.Readiness.PingContext}
+	application.Readiness = readiness
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()
 	partnerMux := http.NewServeMux()
@@ -175,6 +179,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	)
 
 	return &httpServer{
+		Drain: readiness.Drain,
 		Server: &http.Server{
 			Addr:              ":" + cfg.Port,
 			Handler:           handler,

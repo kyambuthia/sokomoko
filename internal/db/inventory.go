@@ -193,7 +193,11 @@ func (s *Store) ReserveCartForCheckout(userID int, reservationKey string, expire
 // ReleaseExpiredReservations returns expired reservation holds to available
 // stock and expires their open checkouts. It is run periodically.
 func (s *Store) ReleaseExpiredReservations() (int, error) {
-	ctx, cancel := s.ctx()
+	return s.ReleaseExpiredReservationsContext(context.Background())
+}
+
+func (s *Store) ReleaseExpiredReservationsContext(parent context.Context) (int, error) {
+	ctx, cancel := s.queryContext(parent)
 	defer cancel()
 
 	released := 0

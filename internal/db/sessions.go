@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -52,7 +53,11 @@ func (s *Store) DeleteSessionsByUserID(userID int) error {
 }
 
 func (s *Store) CleanupSessions() error {
-	ctx, cancel := s.ctx()
+	return s.CleanupSessionsContext(context.Background())
+}
+
+func (s *Store) CleanupSessionsContext(parent context.Context) error {
+	ctx, cancel := s.queryContext(parent)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at <= now()")
 	return err
@@ -67,7 +72,11 @@ func (s *Store) CountActiveSessions() (int, error) {
 }
 
 func (s *Store) CleanupPasswordResetTokens() error {
-	ctx, cancel := s.ctx()
+	return s.CleanupPasswordResetTokensContext(context.Background())
+}
+
+func (s *Store) CleanupPasswordResetTokensContext(parent context.Context) error {
+	ctx, cancel := s.queryContext(parent)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		"DELETE FROM password_reset_tokens WHERE used_at IS NOT NULL OR expires_at <= now()",

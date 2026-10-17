@@ -112,11 +112,15 @@ func (s *Store) PingContext(ctx context.Context) error {
 // not take a caller context yet, so this keeps a slow query from pinning a
 // connection forever.
 func (s *Store) ctx() (context.Context, context.CancelFunc) {
+	return s.queryContext(context.Background())
+}
+
+func (s *Store) queryContext(parent context.Context) (context.Context, context.CancelFunc) {
 	timeout := s.queryTimeout
 	if timeout <= 0 {
 		timeout = defaultQueryTimeout
 	}
-	return context.WithTimeout(context.Background(), timeout)
+	return context.WithTimeout(parent, timeout)
 }
 
 // withTx runs fn inside a transaction, retrying on serialization failures and

@@ -16,13 +16,30 @@ type Middleware func(http.Handler) http.Handler
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status      int
+	wroteHeader bool
 }
 
 func (r *statusRecorder) WriteHeader(code int) {
-	r.status = code
+	if r.wroteHeader {
+		return
+	}
+	if code >= 200 {
+		r.wroteHeader = true
+		r.status = code
+	}
 	r.ResponseWriter.WriteHeader(code)
 }
+
+func (r *statusRecorder) Write(body []byte) (int, error) {
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
+	return r.ResponseWriter.Write(body)
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
@@ -102,6 +119,12 @@ func Recoverer() Middleware {
 }
 
 func SecurityHeaders() Middleware {
+	return SecurityHeadersWithProxy(false)
+}
+
+// SecurityHeadersWithProxy trusts forwarded protocol only when the application
+// is reachable exclusively through a proxy that overwrites that header.
+func SecurityHeadersWithProxy(trustProxy bool) Middleware {
 	csp := "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +133,8 @@ func SecurityHeaders() Middleware {
 			h.Set("X-Frame-Options", "DENY")
 			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 			h.Set("Content-Security-Policy", csp)
-			if isHTTPS(r) {
+			h.Set("Cache-Control", "no-store")
+			if r.TLS != nil || (trustProxy && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")) {
 				h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 			}
 			next.ServeHTTP(w, r)
@@ -122,7 +146,7 @@ func BodyLimit(maxBytes int64) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
-			case http.MethodPost, http.MethodPut, http.MethodPatch:
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			}
 			next.ServeHTTP(w, r)
@@ -247,10 +271,11 @@ func generateRequestID() string {
 }
 
 func canonicalHost(host string) string {
-	if idx := strings.Index(host, ":"); idx >= 0 {
-		return strings.ToLower(strings.TrimSpace(host[:idx]))
+	parsed, err := url.Parse("//" + strings.ToLower(strings.TrimSpace(host)))
+	if err != nil {
+		return ""
 	}
-	return strings.ToLower(strings.TrimSpace(host))
+	return parsed.Hostname()
 }
 
 func CanonicalHost(host string) string {

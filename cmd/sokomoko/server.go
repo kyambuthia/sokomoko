@@ -15,25 +15,24 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/lifecycle"
 )
 
 type httpServer struct {
 	*http.Server
+	Drain func()
 }
 
 func runHTTPServer(server *httpServer, store *db.Store) error {
-	idleConnsClosed := make(chan struct{})
-	cleanupDone := make(chan struct{})
-	go runBackgroundCleanup(store, cleanupDone)
-	go shutdownOnSignal(server.Server, cleanupDone, idleConnsClosed)
-
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return err
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := lifecycle.Run(ctx, server.Server, server.Drain, func(ctx context.Context) {
+		lifecycle.Maintain(ctx, store)
+	})
+	if err == nil {
+		log.Println("[shutdown] server stopped gracefully")
 	}
-
-	<-idleConnsClosed
-	log.Println("[shutdown] server stopped gracefully")
-	return nil
+	return err
 }
 
 func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux *http.ServeMux) http.Handler {
@@ -56,24 +55,6 @@ func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partne
 	})
 }
 
-func shutdownOnSignal(server *http.Server, cleanupDone chan struct{}, idleConnsClosed chan struct{}) {
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
-	sig := <-sigint
-
-	log.Printf("[shutdown] signal=%s received, shutting down server", sig.String())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("[shutdown] graceful shutdown failed: %v", err)
-	}
-
-	close(cleanupDone)
-	close(idleConnsClosed)
-}
-
 func parseAllowedHosts(raw string) map[string]struct{} {
 	hosts := map[string]struct{}{}
 	for _, part := range strings.Split(raw, ",") {
@@ -87,9 +68,10 @@ func parseAllowedHosts(raw string) map[string]struct{} {
 
 func buildMiddlewares(cfg config.Config, application *app.App) []app.Middleware {
 	middlewares := []app.Middleware{
-		app.Recoverer(),
 		app.RequestID(),
-		app.SecurityHeaders(),
+		app.RequestLogger(),
+		app.Recoverer(),
+		app.SecurityHeadersWithProxy(cfg.TrustProxyHeaders),
 		app.BodyLimit(1 << 20),
 		application.Auth.CSRFMiddleware,
 	}
@@ -100,7 +82,6 @@ func buildMiddlewares(cfg config.Config, application *app.App) []app.Middleware 
 		middlewares = append(middlewares, app.RateLimitByKey(cfg.PostRateLimitMax, window, clientIP, http.MethodPost))
 	}
 
-	middlewares = append(middlewares, app.RequestLogger())
 	return middlewares
 }
 
@@ -111,48 +92,6 @@ func sortedHostList(hosts map[string]struct{}) string {
 	}
 	sort.Strings(list)
 	return strings.Join(list, ",")
-}
-
-// runBackgroundCleanup expires stale reservations every minute and prunes
-// sessions and reset tokens every five minutes until done is closed.
-func runBackgroundCleanup(store *db.Store, done <-chan struct{}) {
-	reservations := time.NewTicker(time.Minute)
-	defer reservations.Stop()
-	housekeeping := time.NewTicker(5 * time.Minute)
-	defer housekeeping.Stop()
-
-	releaseReservations := func() {
-		released, err := store.ReleaseExpiredReservations()
-		if err != nil {
-			log.Printf("reservation expiry failed: %v", err)
-			return
-		}
-		if released > 0 {
-			log.Printf("[cleanup] released %d expired stock reservations", released)
-		}
-	}
-	prune := func() {
-		if err := store.CleanupSessions(); err != nil {
-			log.Printf("session cleanup failed: %v", err)
-		}
-		if err := store.CleanupPasswordResetTokens(); err != nil {
-			log.Printf("password reset token cleanup failed: %v", err)
-		}
-	}
-
-	releaseReservations()
-	prune()
-	for {
-		select {
-		case <-done:
-			log.Println("[cleanup] background cleanup stopped")
-			return
-		case <-reservations.C:
-			releaseReservations()
-		case <-housekeeping.C:
-			prune()
-		}
-	}
 }
 
 func printStartupSummary(cfg config.Config, server *httpServer, allowedHosts map[string]struct{}, seedOnServe bool) {
