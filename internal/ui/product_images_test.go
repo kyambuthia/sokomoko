@@ -32,3 +32,17 @@ func TestProductImageURL_RejectsTraversal(t *testing.T) {
 		t.Fatalf("expected fallback for traversal path, got %q", got)
 	}
 }
+
+func TestIconReferencesSpriteSymbol(t *testing.T) {
+	got := string(Icon("cart"))
+	if !strings.Contains(got, `icons/sprite.svg`) || !strings.Contains(got, `#i-cart"`) || !strings.Contains(got, `aria-hidden="true"`) {
+		t.Fatalf("Icon(cart) = %s", got)
+	}
+	sprite, err := StaticFS.ReadFile("static/icons/sprite.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sprite), `<symbol id="i-cart"`) {
+		t.Fatal("sprite lacks the cart symbol")
+	}
+}

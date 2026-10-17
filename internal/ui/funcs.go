@@ -10,6 +10,7 @@ import (
 func templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"asset":   AssetURL,
+		"icon":    Icon,
 		"dict":    dict,
 		"json":    toJSON,
 		"rfc3339": rfc3339,
@@ -38,6 +39,14 @@ func dict(pairs ...any) (map[string]any, error) {
 func toJSON(v any) (string, error) {
 	b, err := json.Marshal(v)
 	return string(b), err
+}
+
+// Icon renders a decorative icon from the sprite. Names are the template
+// names listed in scripts/iconsprite. Pair an icon with visible text or an
+// aria-label on its parent; the SVG itself is hidden from assistive tech.
+func Icon(name string) template.HTML {
+	href := AssetURL("icons/sprite.svg") + "#i-" + template.HTMLEscapeString(name)
+	return template.HTML(`<svg class="icon" aria-hidden="true" focusable="false"><use href="` + href + `"></use></svg>`)
 }
 
 func rfc3339(t time.Time) string {
