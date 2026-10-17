@@ -48,6 +48,7 @@ node_modules/
 # Environment and config files (if used)
 .env
 .env.*
+!.env.example
 
 # Temporary files
 *.tmp

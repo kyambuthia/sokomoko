@@ -54,7 +54,7 @@ before a public launch. The repository cannot supply those decisions.
 
 ## Primary references
 
-- [Go 1.25 HTTP shutdown contract](https://pkg.go.dev/net/http@go1.25.0#Server.Shutdown)
+- [Go 1.26 HTTP shutdown contract](https://pkg.go.dev/net/http@go1.26.9#Server.Shutdown)
 - [Docker Compose dependency conditions](https://docs.docker.com/compose/how-tos/startup-order/)
 - [Caddy reverse proxy and forwarded headers](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
 - [PostgreSQL 17 backup format and restore](https://www.postgresql.org/docs/17/app-pgdump.html)

@@ -5,7 +5,7 @@ enhanced by small custom web components.
 
 ## Stack
 
-- Go 1.25 (`net/http`, `html/template`, `log/slog`)
+- Go 1.26.9 (`net/http`, `html/template`, `log/slog`)
 - PostgreSQL 15+ via `pgx` (`database/sql` driver), versioned embedded migrations
 - Server-side rendered templates and static assets embedded in the binary
 - Progressive-enhancement web components (`internal/ui/static/scripts/components.js`)
@@ -17,6 +17,7 @@ cmd/sokomoko/              CLI: serve, migrate, seed; host routing and middlewar
 internal/app/              App composition, rendering, middleware, rate limiting
 internal/auth/             Sessions, login, signup, password reset, CSRF, throttling
 internal/config/           Environment configuration and validation
+internal/lifecycle/        HTTP draining and cancellable maintenance jobs
 internal/db/               PostgreSQL store, queries, transactions
 internal/db/migrations/    Versioned SQL migrations (embedded)
 internal/db/dbtest/        Isolated per-test PostgreSQL schemas
@@ -25,6 +26,7 @@ internal/routes/           HTTP handlers, JSON endpoints, page view models
 internal/service/          Feature services (catalog, commerce, checkout, ...)
 internal/ui/               Templates, static assets, template helpers
 docs/                      Architecture, roadmap, design notes
+deploy/                    Production Compose, TLS proxy, configuration example
 ```
 
 ## Quick start
@@ -69,6 +71,7 @@ the full list with comments. The important ones:
 | `PORT` | `6969` | |
 | `ALLOWED_HOSTS` | local hosts | Required in production |
 | `PASSWORD_RESET_BASE_URL` | | Required in production |
+| `SMTP_HOST` / `SMTP_FROM` | | Required in production; STARTTLS required |
 | `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For`/`-Proto`; only behind a proxy that overwrites them |
 | `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `20` / `10` | Pool sizing |
 | `DB_QUERY_TIMEOUT_SECONDS` | `10` | Upper bound on any single store call |
@@ -89,6 +92,7 @@ make test        # full test suite (needs PostgreSQL)
 make test-race   # with the race detector
 make lint        # gofmt, go vet, JavaScript syntax check
 make docker      # build the production image
+make vuln        # scan reachable Go vulnerabilities
 ```
 
 Tests that need a database read `SOKOMOKO_TEST_DATABASE_URL` and create a
@@ -105,21 +109,32 @@ SOKOMOKO_TEST_DATABASE_URL=postgres://sokomoko:sokomoko@localhost:5432/sokomoko_
 
 Migrations live in `internal/db/migrations/NNNN_description.sql`, are embedded in
 the binary, and run in order inside transactions. A PostgreSQL advisory lock
-stops two instances from migrating at once. `serve` applies pending migrations
-on startup; `migrate` applies them and exits. Never edit an applied migration;
+stops two instances from migrating at once. In development, `serve` applies
+pending migrations. In production, run `migrate` as a separate release task;
+`serve` only verifies the complete migration history and refuses an incompatible
+schema. Demo seeding is disabled in production. Never edit an applied migration;
 add a new one.
 
 ## Deployment
 
-The `Dockerfile` builds a static binary into a distroless, non-root image
-(about 60 MB) that defaults to `ENV=production` and port 8080. Behind a TLS
-terminating proxy set `TRUST_PROXY_HEADERS=true`. Health endpoints on every host:
+The `Dockerfile` builds a static binary into a distroless, non-root image that
+defaults to `ENV=production` and port 8080. Its built-in `healthcheck` command
+probes HTTP and database readiness without requiring a shell. Use the
+[deployment runbook](docs/DEPLOYMENT.md) and
+[production Compose file](deploy/compose.production.yml) for a TLS proxy,
+separate migration credentials, and a private app listener. Health endpoints on every host:
 
 - `/healthz` liveness
 - `/readyz` database readiness
 
 A background job releases expired checkout stock holds every minute and prunes
 expired sessions and reset tokens every five minutes.
+
+Checkout supports **cash on delivery**, recorded as a pending payment. Card and
+mobile-money providers require an actual integration before they can be offered.
+The partner host is currently an internal operations workspace for platform
+admins and staff; independent vendor accounts and tenant isolation remain future
+work. See the [architecture decision](docs/DEPLOYMENT_PLAN.md) for launch scope.
 
 ## Docs
 

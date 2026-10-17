@@ -1,6 +1,6 @@
 # Architecture Overview
 
-Last updated: October 5, 2026
+Last updated: October 17, 2026
 
 ## What Sokomoko is
 
@@ -20,21 +20,46 @@ Startup lives in `cmd/sokomoko`. `serve`:
 1. Loads and validates configuration (production refuses unsafe or missing settings).
 2. Configures `slog` (JSON in production); the standard `log` package routes through it.
 3. Parses templates and opens a pooled PostgreSQL connection.
-4. Applies pending migrations, and seeds demo data with `--seed`.
+4. In production verifies the complete migration history after a separate
+   `migrate` release task. Development auto-migrates and permits `--seed`.
 5. Composes the app (`internal/app/compose.go`) and registers the three host muxes.
 6. Starts background jobs: reservation expiry (every minute) and session/reset-token pruning (every five minutes).
-7. Serves until SIGINT/SIGTERM, then shuts down gracefully.
+7. Delegates serving and maintenance to `internal/lifecycle`. On SIGINT/SIGTERM,
+   marks readiness unavailable, cancels maintenance queries, drains HTTP for up
+   to 30 seconds, and waits for maintenance before closing the pool.
 
 ## Request flow
 
 1. `cmd/sokomoko/server.go` validates the `Host` header and picks the host mux.
-2. Middleware in order: panic recovery, request ID (inbound IDs validated), security headers (CSP, HSTS over TLS), 1 MB body limit, CSRF token check, optional POST rate limit (proxy-aware client IP), structured access log.
+2. Middleware in order: request ID (inbound IDs validated), structured access
+   log, panic recovery, security headers (CSP, HSTS over trusted TLS), 1 MB body
+   limit, CSRF token check, optional POST rate limit (proxy-aware client IP).
+   This order logs rejected requests and recovered panics. Dynamic responses
+   default to `Cache-Control: no-store`; public assets set their own cache rules.
 3. `internal/routes` handles transport: parsing, flash messages, status codes, JSON vs HTML responses.
 4. `internal/service/*` enforces feature rules and maps store data into view models.
 5. `internal/db` runs SQL inside bounded-timeout contexts and transactions.
 6. `internal/ui` renders templates; `App.Render` buffers output so a template error yields a clean 500 page.
 
 Keep transport concerns in routes, domain rules in services, and SQL in the DB layer.
+
+The partner workspace currently authorizes platform admins and staff. It is
+not an isolated vendor tenancy boundary. External vendor access needs scoped
+membership, queries, and fulfillment before it can be enabled.
+
+## Deployment boundary
+
+The production reference runs Caddy and one private app container against an
+external PostgreSQL database. A separate release container owns schema changes.
+Runtime credentials need DML and migration-history SELECT, with no schema DDL.
+The Go 1.26.9 image includes a shell-free readiness command. Production startup
+requires trusted hosts, an HTTPS reset origin, SMTP with STARTTLS, and explicit
+database configuration. See [DEPLOYMENT.md](DEPLOYMENT.md) for release, restore,
+and rollback procedures and [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) for decisions.
+
+Only cash on delivery can be selected or submitted. It creates a pending payment
+record. Historical placeholder methods can still be displayed but cannot create
+new orders or simulated captured payments.
 
 ## Frontend model
 

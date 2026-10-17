@@ -33,24 +33,31 @@ race detector against PostgreSQL.
 - [x] Dockerfile (static, non-root, distroless), docker-compose, Makefile, `.env.example`
 - [x] CI: gofmt, `go mod tidy` check, vet, JS syntax, `go test -race` on PostgreSQL, image build
 - [x] Web components for live cart, add-to-cart, checkout countdown, order tracking, table filters and more
+- [x] Reject simulated card/mobile-money captures; cash-on-delivery payments stay pending
+- [x] Production migration release task and read-only startup schema-history verification
+- [x] Separate lifecycle package: readiness draining, HTTP shutdown, cancellable maintenance SQL
+- [x] Bounded SMTP connections with cancellation and mandatory STARTTLS in production
+- [x] Strict configuration parsing, trusted HTTPS recovery origin, SMTP startup validation
+- [x] Production Caddy/Compose reference, migration/runtime credential separation, backup/restore runbook
+- [x] Supported Go 1.26.9 baseline, patched text/crypto dependencies, pinned vulnerability scan in CI
 
 ## Phase 0: Before the first real customer
 
 These block a public launch.
 
-1. **Real payments.** Replace `card_placeholder` and `mobile_money_placeholder`
-   with a provider such as Stripe, or M-Pesa via Daraja for the local market.
+1. **Online payments.** Select and integrate a real provider if required for
+   launch. Cash on delivery is currently the only available method.
    Add a payment intent flow, signed webhook handling (`/webhooks/payments`
    outside CSRF, verified by signature), and statuses `authorized`, `captured`,
    `failed`, `refunded`. Tables: `payments`, `payment_attempts`; new
    `payment_events` for webhook idempotency.
-2. **Backups and restore runbook.** Daily `pg_dump` or managed point-in-time
-   recovery, restore drills, and documented RPO and RTO.
+2. **Operate backups and recovery.** Follow `docs/DEPLOYMENT.md`, configure
+   managed point-in-time recovery or scheduled encrypted backups, and demonstrate
+   the business's RPO and RTO with a restore drill.
 3. **Secrets handling.** Load SMTP and payment secrets from the platform secret
    store; never from committed files. Document rotation.
-4. **TLS and proxy deployment guide.** A reference reverse proxy config (Caddy or
-   nginx) with HSTS, `TRUST_PROXY_HEADERS=true`, `SESSION_COOKIE_DOMAIN`, and
-   host mapping for the three surfaces.
+4. **Provision the production environment.** Apply the TLS/proxy reference in
+   `deploy/`, configure real DNS, database roles and SMTP, and verify recovery.
 5. **Legal pages.** Terms, privacy, and returns pages, and real footer links
    (the footer links are currently `#`).
 
@@ -122,8 +129,9 @@ The schema already records `partner_id` on products and order items.
    request rate, latency, error rate, checkout outcomes, auth failures,
    reservation expiries, and DB pool saturation.
 2. **Tracing.** OpenTelemetry spans across the routes, service, and db layers.
-   Thread `context.Context` from requests into services and the store; store
-   calls currently use bounded internal contexts.
+   Thread `context.Context` from requests into services and the store; request
+   calls currently use bounded internal contexts. Maintenance queries already
+   inherit cancellation from the process lifecycle.
 3. **Shared rate-limit and abuse state** (Redis or PostgreSQL) so limits hold
    across replicas. Today they are per process.
 4. **Background job runner** with leader election (an advisory lock) so the
@@ -131,8 +139,8 @@ The schema already records `partner_id` on products and order items.
    They are safe to run concurrently today, just redundant.
 5. **Load testing** with k6 scripts for browse, search, and checkout, plus SLOs
    (for example p95 under 300 ms for catalog pages).
-6. **Supply chain:** `govulncheck` and dependency review in CI, SBOM generation,
-   and image signing.
+6. **Supply chain:** add SBOM generation, image signing, and dependency review.
+   Pinned `govulncheck`, weekly scanning, and Dependabot are already configured.
 7. **Read replicas** for catalog and search queries once traffic warrants.
 
 ## Phase 6: UX polish
@@ -152,4 +160,7 @@ The schema already records `partner_id` on products and order items.
 - All stock is sourced from the default warehouse.
 - Rate limits and auth throttling are in memory, so each replica limits independently.
 - The admin "Deliveries" page is a placeholder.
-- Payment methods other than cash on delivery are placeholders that record a captured payment without charging anyone.
+- Online payment providers are not implemented. Placeholder methods are rejected;
+  cash on delivery creates pending payments.
+- Tax, shipping, currency, policy pages, and durable email delivery need business
+  configuration and implementation before public trade.
