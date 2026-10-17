@@ -33,7 +33,7 @@ var icons = [][2]string{
 	{"audit", "shield-check"},
 	{"box", "box"},
 	{"cart", "shopping-bag"},
-	{"category", "category"},
+	{"category", "tags"},
 	{"chart", "chart-bar"},
 	{"check", "check"},
 	{"chevron-down", "chevron-down"},

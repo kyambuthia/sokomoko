@@ -13,7 +13,8 @@
     {{ $f := .Filter }}
     <a class="chip" href="/orders" {{ if eq $f "all" }}aria-current="page"{{ end }}>All</a>
     <a class="chip" href="/orders?status=new" {{ if eq $f "new" }}aria-current="page"{{ end }}>New · {{ .NewCount }}</a>
-    {{ range $v := list "accepted" "packing" }}<a class="chip" href="/orders?status={{ $v }}" {{ if eq $f $v }}aria-current="page"{{ end }}>{{ $v }}</a>{{ end }}
+    <a class="chip" href="/orders?status=accepted" {{ if eq $f "accepted" }}aria-current="page"{{ end }}>Accepted</a>
+    <a class="chip" href="/orders?status=packing" {{ if eq $f "packing" }}aria-current="page"{{ end }}>Packing</a>
     <a class="chip" href="/orders?status=dispatched" {{ if eq $f "dispatched" }}aria-current="page"{{ end }}>Dispatched · {{ .DispatchedCount }}</a>
     <a class="chip" href="/orders?status=completed" {{ if eq $f "completed" }}aria-current="page"{{ end }}>Completed</a>
   </nav>

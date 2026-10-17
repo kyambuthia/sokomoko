@@ -138,6 +138,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Icons ----------------------------------------------------------------- */
 
 .icon {
+  display: inline-block;
+  vertical-align: -0.25em;
   width: 1.25em;
   height: 1.25em;
   flex: none;
@@ -553,7 +555,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .list { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .list > * + * { border-top: 1px solid var(--line); }
 .list-item { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); min-height: var(--tap); }
-.list-item > :first-child { flex: 1; min-width: 0; }
+.list-item > :first-child:not(.icon), .list-item > .icon:first-child + * { flex: 1; min-width: 0; }
+a.list-item { text-decoration: none; }
+a.list-item:hover { background: var(--fill); }
+.list-item > .icon:last-child { color: var(--fg-3); }
 
 /* Key/value rows */
 .kv { display: grid; gap: var(--s2); }
