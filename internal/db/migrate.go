@@ -126,6 +126,10 @@ func (s *Store) Migrate(ctx context.Context) error {
 		}
 		applied[version] = true
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
 	if err := rows.Close(); err != nil {
 		return err
 	}
@@ -151,6 +155,48 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit migration %s: %w", m.Name, err)
 		}
+	}
+	return nil
+}
+
+// CheckSchema verifies the complete migration history without executing DDL.
+// Production web processes call this after the release migration has finished.
+// Unknown versions are rejected too: rolling back a binary across an incompatible
+// migration requires an explicit compatibility decision by the operator.
+func (s *Store) CheckSchema(ctx context.Context) error {
+	migrations, err := loadMigrations()
+	if err != nil {
+		return fmt.Errorf("load migrations: %w", err)
+	}
+	var exists bool
+	if err := s.DB.QueryRowContext(ctx, "SELECT to_regclass('schema_migrations') IS NOT NULL").Scan(&exists); err != nil {
+		return fmt.Errorf("read migration history: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("database schema is missing; run sokomoko migrate before serving")
+	}
+	rows, err := s.DB.QueryContext(ctx, "SELECT version, name FROM schema_migrations ORDER BY version")
+	if err != nil {
+		return fmt.Errorf("read migration history: %w", err)
+	}
+	defer rows.Close()
+	index := 0
+	for rows.Next() {
+		var version int64
+		var name string
+		if err := rows.Scan(&version, &name); err != nil {
+			return err
+		}
+		if index >= len(migrations) || migrations[index].Version != version || migrations[index].Name != name {
+			return fmt.Errorf("database migration history differs from this binary at version %d; review the release before serving", version)
+		}
+		index++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if index != len(migrations) {
+		return fmt.Errorf("database has pending migrations; run sokomoko migrate before serving")
 	}
 	return nil
 }

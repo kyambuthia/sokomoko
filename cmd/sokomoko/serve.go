@@ -33,6 +33,9 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	if err := cfg.Validate(); err != nil {
 		return wrapCommandError(commandServe, "validate config", err)
 	}
+	if cfg.IsProduction() && seedOnServe {
+		return wrapCommandError(commandServe, "prepare store", fmt.Errorf("demo seeding is disabled in production"))
+	}
 	resetEmailSender, err := buildPasswordResetEmailSender(cfg)
 	if err != nil {
 		return wrapCommandError(commandServe, "configure password reset email", err)
@@ -49,8 +52,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	}
 	defer store.Close()
 
-	bootstrapService := bootstrap.New(store)
-	if err := bootstrapService.Prepare(seedOnServe); err != nil {
+	if err := prepareStore(cfg, store, seedOnServe); err != nil {
 		return wrapCommandError(commandServe, "prepare store", err)
 	}
 
@@ -76,6 +78,15 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	return wrapCommandError(commandServe, "serve http", runHTTPServerFunc(server, store))
 }
 
+func prepareStore(cfg config.Config, store *db.Store, seed bool) error {
+	if cfg.IsProduction() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return store.CheckSchema(ctx)
+	}
+	return bootstrap.New(store).Prepare(seed)
+}
+
 func runMigrate(cfg config.Config) error {
 	if err := cfg.ValidateDatabase(); err != nil {
 		return wrapCommandError(commandMigrate, "validate database config", err)
@@ -95,6 +106,9 @@ func runMigrate(cfg config.Config) error {
 }
 
 func runSeed(cfg config.Config) error {
+	if cfg.IsProduction() {
+		return wrapCommandError(commandSeed, "prepare store", fmt.Errorf("demo seeding is disabled in production; provision the administrator through /setup"))
+	}
 	if err := cfg.ValidateDatabase(); err != nil {
 		return wrapCommandError(commandSeed, "validate database config", err)
 	}

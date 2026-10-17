@@ -82,9 +82,9 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  sokomoko seed")
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Commands:")
-	_, _ = fmt.Fprintln(w, "  serve      Apply schema and start the HTTP server.")
+	_, _ = fmt.Fprintln(w, "  serve      Start HTTP (production requires a migrated database; development auto-migrates).")
 	_, _ = fmt.Fprintln(w, "  migrate    Apply schema changes and exit.")
-	_, _ = fmt.Fprintln(w, "  seed       Apply schema, run bootstrap seed workflows, and exit.")
+	_, _ = fmt.Fprintln(w, "  seed       Apply schema and seed development demo data (disabled in production).")
 }
 
 // configureLogging installs a slog default handler. The standard log package

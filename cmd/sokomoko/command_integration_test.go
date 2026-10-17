@@ -4,12 +4,38 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 )
+
+func TestProductionStartup_RequiresReleaseMigrationWithoutSeeding(t *testing.T) {
+	store := openExistingStore(t, dbtest.DSN(t))
+	cfg := config.Config{Environment: "production"}
+	if err := prepareStore(cfg, store, false); err == nil || !strings.Contains(err.Error(), "migrate") {
+		t.Fatalf("unmigrated startup error = %v", err)
+	}
+	version, err := store.SchemaVersion()
+	if err != nil || version != 0 {
+		t.Fatalf("startup mutated schema: version=%d error=%v", version, err)
+	}
+	if err := store.ApplySchema(); err != nil {
+		t.Fatal(err)
+	}
+	if err := prepareStore(cfg, store, false); err != nil {
+		t.Fatal(err)
+	}
+	count, err := store.CountProducts()
+	if err != nil || count != 0 {
+		t.Fatalf("production startup seeded data: products=%d error=%v", count, err)
+	}
+	if err := runSeed(cfg); err == nil {
+		t.Fatal("production accepted demo seed command")
+	}
+}
 
 func TestCLI_MigrateCommand_AppliesSchemaAndIsIdempotent(t *testing.T) {
 	binaryPath := buildCLIBinary(t)
