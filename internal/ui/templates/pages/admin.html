@@ -288,6 +288,132 @@
   </section>
   {{end}}
 
+  {{if eq .Title "Partners"}}
+  {{if .FormMessage}}<ui-alert variant="success"><p>{{.FormMessage}}</p></ui-alert>{{end}}
+  {{if .FormError}}<ui-alert variant="danger"><p>{{.FormError}}</p></ui-alert>{{end}}
+
+  <section class="workspace-card">
+    <div class="workspace-card__header"><p class="eyebrow">Vendors</p><h2>Partners</h2></div>
+    <div class="workspace-card__body">
+      {{if .Partners}}
+      <ui-table-filter for="admin-partners-table" placeholder="Filter partners"></ui-table-filter>
+      <div class="table-wrap">
+        <table class="data-table data-table--admin" id="admin-partners-table">
+          <thead><tr><th>Name</th><th>Slug</th><th>Contact</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>
+          {{range .Partners}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{.Slug}}</td>
+            <td>{{.ContactEmail}}</td>
+            <td>{{.Status}}</td>
+            <td>
+              {{if eq .Status "active"}}
+              <ui-confirm message="Suspend {{.Name}}? Their products will be hidden from customers and their logins will see no partner data.">
+              <form method="POST" action="/partners" class="table-action-form">
+                {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+                <input type="hidden" name="action" value="status">
+                <input type="hidden" name="status" value="suspended">
+                <input type="hidden" name="partner_id" value="{{.ID}}">
+                <button type="submit" class="btn btn--secondary btn--small">Suspend</button>
+              </form>
+              </ui-confirm>
+              {{else}}
+              <form method="POST" action="/partners" class="table-action-form">
+                {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+                <input type="hidden" name="action" value="status">
+                <input type="hidden" name="status" value="active">
+                <input type="hidden" name="partner_id" value="{{.ID}}">
+                <button type="submit" class="btn btn--small">Reactivate</button>
+              </form>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <p class="text-muted">No partners yet. Add the first vendor below.</p>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="workspace-card">
+    <div class="workspace-card__header"><p class="eyebrow">Vendors</p><h2>Add a partner</h2></div>
+    <div class="workspace-card__body">
+      <form method="POST" action="/partners" class="form" data-submit-once>
+        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+        <input type="hidden" name="action" value="create_partner">
+        <div class="form__group form-group">
+          <label class="form__label" for="partner_name">Name</label>
+          <input class="form__input" type="text" id="partner_name" name="name" value="{{.PartnerForm.Name}}" maxlength="120" required>
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="partner_slug">Slug</label>
+          <input class="form__input" type="text" id="partner_slug" name="slug" value="{{.PartnerForm.Slug}}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="partner_slug_hint">
+          <small class="form__hint" id="partner_slug_hint">Optional. Generated from the name when left blank.</small>
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="partner_contact">Contact email</label>
+          <input class="form__input" type="email" id="partner_contact" name="contact_email" value="{{.PartnerForm.ContactEmail}}">
+        </div>
+        <button class="btn" type="submit">Add Partner</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="workspace-card">
+    <div class="workspace-card__header"><p class="eyebrow">Access</p><h2>Partner logins</h2></div>
+    <div class="workspace-card__body">
+      {{if .PartnerAccounts}}
+      <div class="table-wrap">
+        <table class="data-table data-table--admin">
+          <thead><tr><th>Username</th><th>Email</th><th>Partner</th></tr></thead>
+          <tbody>
+          {{range .PartnerAccounts}}
+          <tr><td>{{.Username}}</td><td>{{.Email}}</td><td>{{.PartnerName}}</td></tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+      <p class="form__hint">Deactivate a partner login from <a href="/team">Team</a>.</p>
+      {{else}}
+      <p class="text-muted">No partner logins yet.</p>
+      {{end}}
+
+      {{if .Partners}}
+      <form method="POST" action="/partners" class="form" data-submit-once>
+        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+        <input type="hidden" name="action" value="create_account">
+        <div class="form__group form-group">
+          <label class="form__label" for="account_partner">Partner</label>
+          <select class="form__select" id="account_partner" name="partner_id" required>
+            {{range .Partners}}
+            <option value="{{.ID}}" {{if eq (printf "%d" .ID) $.AccountForm.PartnerID}}selected{{end}}>{{.Name}}{{if ne .Status "active"}} (suspended){{end}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="account_username">Username</label>
+          <input class="form__input" type="text" id="account_username" name="username" value="{{.AccountForm.Username}}" minlength="3" maxlength="32" required autocomplete="off">
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="account_email">Email</label>
+          <input class="form__input" type="email" id="account_email" name="email" value="{{.AccountForm.Email}}" required autocomplete="off">
+        </div>
+        <div class="form__group form-group">
+          <label class="form__label" for="account_password">Temporary password</label>
+          <input class="form__input" type="password" id="account_password" name="password" minlength="10" maxlength="72" required autocomplete="new-password" aria-describedby="account_password_hint">
+          <small class="form__hint" id="account_password_hint">10 to 72 characters. Share it securely; the partner can reset it from the partner login page.</small>
+        </div>
+        <button class="btn" type="submit">Create Partner Login</button>
+      </form>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
   {{if eq .Title "Team Management"}}
   {{if .TeamMessage}}<ui-alert variant="success"><p>{{.TeamMessage}}</p></ui-alert>{{end}}
   {{if .TeamError}}<ui-alert variant="danger"><p>{{.TeamError}}</p></ui-alert>{{end}}

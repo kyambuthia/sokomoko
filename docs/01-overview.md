@@ -29,6 +29,7 @@ The process routes each request by its `Host` header (see
 - Sales report: revenue and order counts by status
 - Deliveries board: open orders counted by delivery stage and listed oldest first
 - Categories: create and delete (admin and staff)
+- Partners: onboard vendors, create partner logins, suspend or reactivate (admin only). A suspended partner's products disappear from the storefront and carts.
 - Team list with user deactivation (admin only)
 - Audit log (admin only)
 - Staff account creation (admin only)

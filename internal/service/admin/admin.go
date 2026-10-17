@@ -269,7 +269,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 }
 
 func (s *Service) TeamMembers() ([]TeamMember, error) {
-	users, err := s.store.ListUsersByRoles([]string{db.RoleAdmin, db.RoleStaff, db.RoleUser})
+	users, err := s.store.ListUsersByRoles([]string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleUser})
 	if err != nil {
 		return nil, err
 	}

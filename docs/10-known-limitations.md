@@ -19,15 +19,11 @@ where to look.
 
 ## Catalog and vendor management
 
-- **No admin UI for partners or product edits.** `UpsertPartner`,
-  `UpdateProduct`, `DeleteProduct`, and `CreateProductImage` exist in
-  `internal/db` but are called only by seed code and tests. A production
-  database starts with no partners; they must be inserted with SQL.
-  Categories can be created and deleted, but not renamed.
+- **No product edits.** `UpdateProduct`, `DeleteProduct`, and
+  `CreateProductImage` exist in `internal/db` but are called only by seed code
+  and tests. Categories and partners can be created but not renamed.
 - **Partner product form has no image upload.** New products show a bundled
   fallback image.
-- **No way to create partner logins.** Nothing in the app creates a user with
-  the `partner` role or a `partner_users` link. Provision them with SQL.
 
 ## Identity
 

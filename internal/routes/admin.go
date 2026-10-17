@@ -10,34 +10,38 @@ import (
 )
 
 type AdminPageData struct {
-	Title          string
-	CSRFToken      string
-	Message        string
-	Role           string
-	ProductCount   int
-	SessionCount   int
-	AdminCount     int
-	StaffCount     int
-	UserCount      int
-	Products       []adminsvc.Product
-	TeamMembers    []adminsvc.TeamMember
-	Orders         []adminsvc.Order
-	Deliveries     adminsvc.DeliveryBoard
-	AuditLogs      []adminsvc.AuditLog
-	OrderCount     int
-	CancelledCount int
-	RevenueTotal   money.Cents
-	PendingCount   int
-	ShippedCount   int
-	DeliveredCount int
-	TeamError      string
-	TeamMessage    string
-	OrderError     string
-	OrderMessage   string
-	FormError      string
-	FormMessage    string
-	Categories     []adminsvc.Category
-	CategoryForm   adminsvc.CategoryInput
+	Title           string
+	CSRFToken       string
+	Message         string
+	Role            string
+	ProductCount    int
+	SessionCount    int
+	AdminCount      int
+	StaffCount      int
+	UserCount       int
+	Products        []adminsvc.Product
+	TeamMembers     []adminsvc.TeamMember
+	Orders          []adminsvc.Order
+	Deliveries      adminsvc.DeliveryBoard
+	AuditLogs       []adminsvc.AuditLog
+	OrderCount      int
+	CancelledCount  int
+	RevenueTotal    money.Cents
+	PendingCount    int
+	ShippedCount    int
+	DeliveredCount  int
+	TeamError       string
+	TeamMessage     string
+	OrderError      string
+	OrderMessage    string
+	FormError       string
+	FormMessage     string
+	Categories      []adminsvc.Category
+	CategoryForm    adminsvc.CategoryInput
+	Partners        []adminsvc.Partner
+	PartnerAccounts []adminsvc.PartnerAccount
+	PartnerForm     adminsvc.PartnerInput
+	AccountForm     adminsvc.PartnerAccountInput
 }
 
 func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, status int, data AdminPageData) {

@@ -133,6 +133,10 @@ func (s *Store) GetAllCategories() ([]Category, error) {
 	return categories, rows.Err()
 }
 
+// activePartnerSQL excludes products whose partner is suspended. Products
+// without a partner stay visible. It expects the products table aliased as p.
+const activePartnerSQL = "NOT EXISTS (SELECT 1 FROM partners sp WHERE sp.id = p.partner_id AND sp.status <> 'active')"
+
 // productSelect projects a product with its category, partner, and available
 // stock. The LATERAL sum is driven by the inventory_stocks primary key.
 const productSelect = `
@@ -255,6 +259,12 @@ func (s *Store) GetProductBySlug(slug string) (*Product, error) {
 	return s.getProduct("p.slug = $1", strings.TrimSpace(slug))
 }
 
+// GetPublicProductBySlug is GetProductBySlug restricted to products customers
+// may see: not deleted and not from a suspended partner.
+func (s *Store) GetPublicProductBySlug(slug string) (*Product, error) {
+	return s.getProduct("p.slug = $1 AND "+activePartnerSQL, strings.TrimSpace(slug))
+}
+
 func (s *Store) getProduct(predicate string, arg any) (*Product, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
@@ -353,6 +363,7 @@ type ProductFilter struct {
 	Category    string // category slug or case-insensitive name
 	PartnerID   int
 	InStockOnly bool
+	PublicOnly  bool // hide products of suspended partners
 	Limit       int
 	Offset      int
 }
@@ -392,6 +403,9 @@ func (s *Store) ListProducts(filter ProductFilter) ([]Product, error) {
 	}
 	if filter.InStockOnly {
 		where = append(where, "stock.available_quantity > 0")
+	}
+	if filter.PublicOnly {
+		where = append(where, activePartnerSQL)
 	}
 
 	query := productSelect + " WHERE " + strings.Join(where, " AND ") + " ORDER BY " + orderBy
@@ -443,6 +457,15 @@ func (s *Store) SearchProducts(query string) ([]Product, error) {
 		return []Product{}, nil
 	}
 	return s.ListProducts(ProductFilter{Query: query})
+}
+
+// CountPublicProducts counts products customers may see.
+func (s *Store) CountPublicProducts() (int, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var count int
+	err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM products p WHERE p.deleted_at IS NULL AND "+activePartnerSQL).Scan(&count)
+	return count, err
 }
 
 func (s *Store) CountProducts() (int, error) {

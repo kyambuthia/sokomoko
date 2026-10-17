@@ -73,7 +73,7 @@ func (s *Service) Page(page, limit int) ([]Product, int, error) {
 	if limit < 1 {
 		limit = 1
 	}
-	total, err := s.store.CountProducts()
+	total, err := s.store.CountPublicProducts()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -92,10 +92,11 @@ func (s *Service) Browse(filter Filter) ([]Product, error) {
 		category = ""
 	}
 	products, err := s.store.ListProducts(db.ProductFilter{
-		Query:    query,
-		Category: category,
-		Limit:    filter.Limit,
-		Offset:   filter.Offset,
+		Query:      query,
+		Category:   category,
+		Limit:      filter.Limit,
+		Offset:     filter.Offset,
+		PublicOnly: true,
 	})
 	if err != nil {
 		return nil, err
@@ -120,7 +121,7 @@ func (s *Service) ProductBySlug(slug string) (*Product, error) {
 	if cleanSlug == "" || strings.Contains(cleanSlug, "/") || len(cleanSlug) > 200 {
 		return nil, ErrInvalidProductSlug
 	}
-	product, err := s.store.GetProductBySlug(cleanSlug)
+	product, err := s.store.GetPublicProductBySlug(cleanSlug)
 	if err != nil || product == nil {
 		return nil, err
 	}

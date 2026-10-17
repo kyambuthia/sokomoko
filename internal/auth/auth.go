@@ -358,6 +358,29 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID in
 	return nil
 }
 
+// HashPassword hashes a password with bcrypt. Passwords over 72 bytes are
+// rejected rather than truncated.
+func HashPassword(password string) (string, error) {
+	return hashPassword(password)
+}
+
+// ValidateNewAccount applies the username, email, and password rules shared
+// by every account creation form. It returns a user-facing problem, or ""
+// when the input is acceptable.
+func ValidateNewAccount(username, email, password string) string {
+	switch {
+	case strings.TrimSpace(username) == "" || strings.TrimSpace(email) == "" || password == "":
+		return "All fields are required"
+	case !isValidUsername(username):
+		return "Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"
+	case !isValidEmail(email):
+		return "Enter a valid email address"
+	case !isStrongEnoughPassword(password):
+		return "Password must be 10 to 72 characters"
+	}
+	return ""
+}
+
 func isStrongEnoughPassword(password string) bool {
 	return len(strings.TrimSpace(password)) >= 10 && len(password) <= maxPasswordBytes
 }

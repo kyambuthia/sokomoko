@@ -9,9 +9,15 @@ type store interface {
 	CountActiveSessions() (int, error)
 	CountProductsByCategory() (map[int]int, error)
 	CreateCategory(category db.Category) (int64, error)
+	CreatePartner(partner db.Partner) (int64, error)
+	CreatePartnerUser(user db.User, partnerID int) (int64, error)
 	DeleteCategory(id int) error
 	GetAllCategories() ([]db.Category, error)
 	GetCategoryByID(id int) (*db.Category, error)
+	GetPartnerByID(id int) (*db.Partner, error)
+	ListPartnerAccounts() ([]db.PartnerAccount, error)
+	ListPartners() ([]db.Partner, error)
+	SetPartnerStatus(id int, status string) (bool, error)
 	CountProducts() (int, error)
 	CountUsersByRole(role string) (int, error)
 	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error

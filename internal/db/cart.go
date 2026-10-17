@@ -104,7 +104,7 @@ func (s *Store) CartItemCount(userID int) (int, error) {
 		`SELECT COALESCE(SUM(ci.quantity), 0)
 		 FROM carts c
 		 JOIN cart_items ci ON ci.cart_id = c.id
-		 JOIN products p ON p.id = ci.product_id AND p.deleted_at IS NULL
+		 JOIN products p ON p.id = ci.product_id AND p.deleted_at IS NULL AND `+activePartnerSQL+`
 		 WHERE c.user_id = $1`,
 		userID,
 	).Scan(&count)
@@ -133,7 +133,7 @@ func (s *Store) getCartItems(userID int, reservationKey string) ([]CartItem, mon
 		        COALESCE(img.url, '')
 		 FROM carts c
 		 JOIN cart_items ci ON ci.cart_id = c.id
-		 JOIN products p ON p.id = ci.product_id AND p.deleted_at IS NULL
+		 JOIN products p ON p.id = ci.product_id AND p.deleted_at IS NULL AND `+activePartnerSQL+`
 		 CROSS JOIN LATERAL (
 		     SELECT COALESCE(SUM(s.on_hand_quantity - s.reserved_quantity - s.allocated_quantity), 0)::INTEGER AS available_quantity
 		     FROM inventory_stocks s WHERE s.product_id = p.id
@@ -193,7 +193,7 @@ func cartLinesTx(ctx context.Context, tx *sql.Tx, userID int) ([]cartLine, error
 		`SELECT p.id, p.partner_id, p.name, ci.quantity, p.price_cents
 		 FROM carts c
 		 JOIN cart_items ci ON ci.cart_id = c.id
-		 JOIN products p ON p.id = ci.product_id AND p.deleted_at IS NULL
+		 JOIN products p ON p.id = ci.product_id AND p.deleted_at IS NULL AND `+activePartnerSQL+`
 		 WHERE c.user_id = $1
 		 ORDER BY p.id`,
 		userID,
@@ -229,7 +229,7 @@ func (s *Store) AvailableForUser(userID, productID int) (int, error) {
 		  + COALESCE((SELECT SUM(quantity) FROM stock_reservations
 		              WHERE product_id = p.id AND user_id = $1 AND status = 'active'), 0)
 		 FROM products p
-		 WHERE p.id = $2 AND p.deleted_at IS NULL`,
+		 WHERE p.id = $2 AND p.deleted_at IS NULL AND `+activePartnerSQL,
 		userID, productID,
 	).Scan(&available)
 	if err == sql.ErrNoRows {

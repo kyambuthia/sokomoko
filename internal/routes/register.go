@@ -114,6 +114,7 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 	adminHandlers.HandleFunc("/categories", AdminCategories(a))
 	adminHandlers.Handle("/audit", auth.RequireRole(db.RoleAdmin, http.HandlerFunc(AdminAudit(a))))
 	adminHandlers.Handle("/team", auth.RequireRole(db.RoleAdmin, http.HandlerFunc(AdminTeam(a))))
+	adminHandlers.Handle("/partners", auth.RequireRole(db.RoleAdmin, http.HandlerFunc(AdminPartners(a))))
 	mux.Handle("/", withAnyRole(a, roleAdminStaff, adminHandlers))
 }
 

@@ -135,3 +135,102 @@ func (s *Store) PartnerIDForUser(userID int) (int, error) {
 	}
 	return id, err
 }
+
+// CreatePartner inserts a new active partner. A taken slug returns
+// ErrUniqueConstraint.
+func (s *Store) CreatePartner(partner Partner) (int64, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var id int64
+	err := s.DB.QueryRowContext(ctx,
+		`INSERT INTO partners (name, slug, contact_email) VALUES ($1, $2, $3) RETURNING id`,
+		strings.TrimSpace(partner.Name),
+		strings.ToLower(strings.TrimSpace(partner.Slug)),
+		strings.ToLower(strings.TrimSpace(partner.ContactEmail)),
+	).Scan(&id)
+	return id, wrapDBError(err)
+}
+
+func (s *Store) GetPartnerByID(id int) (*Partner, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	partner := &Partner{}
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT id, name, slug, contact_email, status, created_at, updated_at FROM partners WHERE id = $1`, id,
+	).Scan(&partner.ID, &partner.Name, &partner.Slug, &partner.ContactEmail, &partner.Status, &partner.CreatedAt, &partner.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return partner, nil
+}
+
+// SetPartnerStatus marks a partner active or suspended. Suspending hides the
+// partner's products from customers and stops its accounts from seeing
+// partner data. It reports false when the partner does not exist.
+func (s *Store) SetPartnerStatus(id int, status string) (bool, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	result, err := s.DB.ExecContext(ctx, "UPDATE partners SET status = $1 WHERE id = $2", status, id)
+	if err != nil {
+		return false, wrapDBError(err)
+	}
+	n, err := rowsAffected(result)
+	return n > 0, err
+}
+
+// CreatePartnerUser creates a login with the partner role and links it to
+// partnerID in one transaction.
+func (s *Store) CreatePartnerUser(user User, partnerID int) (int64, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var id int64
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx,
+			`INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, 'partner') RETURNING id`,
+			strings.TrimSpace(user.Username), strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash,
+		).Scan(&id); err != nil {
+			return wrapDBError(err)
+		}
+		_, err := tx.ExecContext(ctx, "INSERT INTO partner_users (user_id, partner_id) VALUES ($1, $2)", id, partnerID)
+		return wrapDBError(err)
+	})
+	return id, err
+}
+
+// PartnerAccount is a partner login and the partner it belongs to.
+type PartnerAccount struct {
+	UserID      int
+	Username    string
+	Email       string
+	PartnerID   int
+	PartnerName string
+}
+
+// ListPartnerAccounts returns active partner logins ordered by partner name.
+func (s *Store) ListPartnerAccounts() ([]PartnerAccount, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT u.id, u.username, u.email, p.id, p.name
+		 FROM partner_users pu
+		 JOIN users u ON u.id = pu.user_id AND u.deleted_at IS NULL
+		 JOIN partners p ON p.id = pu.partner_id
+		 ORDER BY lower(p.name), lower(u.username)`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	accounts := []PartnerAccount{}
+	for rows.Next() {
+		var a PartnerAccount
+		if err := rows.Scan(&a.UserID, &a.Username, &a.Email, &a.PartnerID, &a.PartnerName); err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, a)
+	}
+	return accounts, rows.Err()
+}

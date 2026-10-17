@@ -63,6 +63,10 @@ type AdminService interface {
 	AuditLogs(limit int) ([]adminsvc.AuditLog, error)
 	Categories() ([]adminsvc.Category, error)
 	CreateCategory(actor *adminsvc.Actor, input adminsvc.CategoryInput) error
+	CreatePartner(actor *adminsvc.Actor, input adminsvc.PartnerInput) error
+	CreatePartnerAccount(actor *adminsvc.Actor, input adminsvc.PartnerAccountInput) error
+	Partners() ([]adminsvc.Partner, []adminsvc.PartnerAccount, error)
+	SetPartnerStatus(actor *adminsvc.Actor, idRaw, status string) error
 	DeleteCategory(actor *adminsvc.Actor, idRaw string) error
 	DeactivateUser(actor *adminsvc.Actor, userIDRaw string) error
 	Deliveries() (adminsvc.DeliveryBoard, error)
