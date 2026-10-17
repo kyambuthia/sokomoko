@@ -1,50 +1,33 @@
-{{ define "title" }}{{.Title}} – sokomoko{{ end }}
+{{ define "title" }}{{ .Product.Name }} · sokomoko{{ end }}
+{{ define "body-class" }}{{ if .Product.InStock }}has-buybar{{ end }}{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "shop" "Page" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="storefront-page product-page">
-  <header class="page-intro page-intro--compact">
-    <ui-breadcrumb items='[{"label":"Home","href":"/"},{"label":"{{.Product.Name}}"}]'></ui-breadcrumb>
-  </header>
-
-  <section class="product-detail">
-    <div class="product-detail__media">
-      <img src="{{.Product.ImageURL}}" alt="{{.Product.Name}}" class="product-detail__image" width="720" height="540">
+<div class="stack">
+  <div><a class="btn btn-plain btn-sm back" href="/">{{ icon "arrow-left" }}Shop</a></div>
+  <div class="detail">
+    <div class="detail__media">
+      <img src="{{ .Product.ImageURL }}" alt="{{ .Product.ImageAlt }}" width="720" height="720">
     </div>
-
-    <div class="product-detail__content">
-      <p class="eyebrow">{{if .Product.Category}}{{.Product.Category}}{{else}}General merchandise{{end}}</p>
-      <h1 class="product-detail__title">{{.Product.Name}}</h1>
-      <div class="product-detail__price">
-        <ui-price amount="{{.Product.Price}}"></ui-price>
+    <div class="stack">
+      <div class="stack-sm">
+        {{ if .Product.Category }}<p class="muted small">{{ .Product.Category }}</p>{{ end }}
+        <h1>{{ .Product.Name }}</h1>
+        <p class="detail__price">${{ .Product.Price }}</p>
+        <p class="small">{{ if .Product.InStock }}{{ .Product.StockQuantity }} in stock{{ else }}<span class="badge">sold out</span>{{ end }}</p>
       </div>
-
-      {{if gt .Product.StockQuantity 0}}
-      <p class="stock-line"><span class="stock-dot stock-dot--available"></span>{{.Product.StockQuantity}} available now</p>
-      {{else}}
-      <p class="stock-line"><span class="stock-dot stock-dot--unavailable"></span>Currently unavailable</p>
-      {{end}}
-
-      <p class="product-detail__description">{{.Product.Description}}</p>
-
-      {{if gt .Product.StockQuantity 0}}
-      <form action="/cart/add" method="POST" class="product-detail__form form">
-        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-        <input type="hidden" name="product_id" value="{{.Product.ID}}">
-        <div class="form__group form-group">
-          <label class="form__label" for="quantity">Quantity</label>
-          <ui-quantity name="quantity" value="1" min="1" max="{{.Product.StockQuantity}}"></ui-quantity>
-        </div>
-        <button type="submit" class="btn btn--primary btn--full">Add to cart</button>
-      </form>
-      {{else}}
-      <button class="btn btn--secondary btn--full" type="button" disabled>Currently unavailable</button>
-      {{end}}
-
-      <div class="product-detail__reassurance">
-        <div><strong>Simple checkout</strong><span>Clear totals before you place an order.</span></div>
-        <div><strong>Delivery updates</strong><span>Follow the order from your account.</span></div>
-      </div>
+      {{ if .Product.InStock }}
+      <ui-add-to-cart>
+        <form action="/cart/add" method="POST" class="buybar">
+          {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+          <input type="hidden" name="product_id" value="{{ .Product.ID }}">
+          <ui-quantity><input class="input" type="number" name="quantity" value="1" min="1" max="{{ .Product.StockQuantity }}" inputmode="numeric" aria-label="Quantity"></ui-quantity>
+          <button type="submit" class="btn">{{ icon "cart" }}Add to cart</button>
+        </form>
+      </ui-add-to-cart>
+      {{ end }}
+      {{ if .Product.Description }}<p class="detail__desc">{{ .Product.Description }}</p>{{ end }}
     </div>
-  </section>
-</main>
+  </div>
+</div>
 {{ end }}

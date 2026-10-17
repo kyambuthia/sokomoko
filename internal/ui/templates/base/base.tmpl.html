@@ -1,44 +1,75 @@
-{{ define "root_template" }}
-<!DOCTYPE html>
+{{ define "root_template" }}<!DOCTYPE html>
 <html lang="en">
-        <head>
-                <meta charset="utf-8">
-                <meta name="csrf-token" content="{{.CSRFToken}}">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <meta name="color-scheme" content="light dark">
-                <script src='{{ asset "scripts/theme-init.js" }}'></script>
-                <link rel="icon" type="image/svg+xml" href='{{ asset "icons/sokomoko.svg" }}'>
-                <link rel="manifest" href='{{ asset "manifest.json" }}'>
-                <title>{{ block "title" . }}Sokomoko{{end}}</title>
-                <link rel="stylesheet" href='{{ asset "stylesheets/styles.css" }}'>
-                <script src='{{ asset "scripts/api.js" }}' defer></script>
-                <script src='{{ asset "scripts/main.js" }}' defer></script>
-                <script src='{{ asset "scripts/components.js" }}' defer></script>
-        </head>
-        <body class="{{ block "body-class" . }}site site--storefront{{ end }}">
-                <a class="skip-link" href="#main-content">Skip to content</a>
-                <div class="site__header wrapper--header">
-                        {{ block "header-area" . }}
-                        {{ end }}
-                </div>
-
-                {{ block "nav-area" . }}
-                {{ end }}
-
-                <div class="site__main wrapper--main" id="main-content" tabindex="-1">
-                        <div class="site__container container">
-                                {{ block "main-area" . }}
-                                {{ end }}
-                        </div>
-                </div>
-
-                <div class="site__footer wrapper--footer">
-                        <div class="site__container container">
-                                {{ block "footer-area" . }}
-                                {{ end }}
-                        </div>
-                </div>
-        <script src='{{ asset "scripts/dynamic.js" }}' defer></script>
-        </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="csrf-token" content="{{.CSRFToken}}">
+  <meta name="icon-sprite" content='{{ asset "icons/sprite.svg" }}'>
+  <title>{{ block "title" . }}sokomoko{{ end }}</title>
+  <link rel="icon" type="image/svg+xml" href='{{ asset "icons/sokomoko.svg" }}'>
+  <link rel="manifest" href='{{ asset "manifest.json" }}'>
+  <link rel="preload" href="/static/fonts/jetbrains-mono-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href='{{ asset "stylesheets/app.css" }}'>
+  <script src='{{ asset "scripts/theme.js" }}'></script>
+  <script type="module" src='{{ asset "scripts/app.js" }}'></script>
+</head>
+{{ block "layout" . }}{{ template "storefront-layout" . }}{{ end }}
 </html>
 {{ end }}
+
+{{/* Storefront: top bar, content, footer, and the mobile tab bar. */}}
+{{ define "storefront-layout" }}
+<body class="has-tabbar {{ block "body-class" . }}{{ end }}">
+  <a class="skip" href="#main">Skip to content</a>
+  {{ template "storefront-header" . }}
+  <main id="main" class="container main" tabindex="-1">
+    {{ template "main-area" . }}
+  </main>
+  {{ template "storefront-footer" . }}
+  {{ block "tabbar-area" . }}{{ template "tabbar" dict "Tab" "" "Page" . }}{{ end }}
+</body>
+{{ end }}
+
+{{/* Workspaces: top bar, then a nav and content grid. */}}
+{{ define "admin-layout" }}
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  {{ template "workspace-header" dict "Tag" "admin" "Page" . }}
+  <div class="ws">
+    {{ template "admin-nav" . }}
+    <main id="main" class="container main" tabindex="-1">
+      {{ template "main-area" . }}
+    </main>
+  </div>
+</body>
+{{ end }}
+
+{{ define "partner-layout" }}
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  {{ template "workspace-header" dict "Tag" "partner" "Page" . }}
+  <div class="ws">
+    {{ template "partner-nav" . }}
+    <main id="main" class="container main" tabindex="-1">
+      {{ template "main-area" . }}
+    </main>
+  </div>
+</body>
+{{ end }}
+
+{{/* Signed-out workspace pages: login and first-run setup. */}}
+{{ define "workspace-auth-layout" }}
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  {{ template "workspace-header" dict "Tag" "workspace" "Page" . }}
+  <main id="main" class="container main" tabindex="-1">
+    {{ template "main-area" . }}
+  </main>
+</body>
+{{ end }}
+
+{{/* Pages override main-area; this empty default keeps the layouts valid. */}}
+{{ define "main-area" }}{{ end }}

@@ -42,7 +42,7 @@ test-race: ## Run all tests with the race detector
 lint: ## gofmt check, go vet, and JavaScript syntax check
 	@unformatted="$$(gofmt -l $$(git ls-files '*.go'))"; if [ -n "$$unformatted" ]; then echo "$$unformatted"; exit 1; fi
 	$(GO) vet ./...
-	@for f in internal/ui/static/scripts/*.js; do node --check "$$f" || exit 1; done
+	@for f in internal/ui/static/scripts/*.js internal/ui/static/scripts/ui/*.js; do node --check "$$f" || exit 1; done
 
 fmt: ## Format Go code
 	gofmt -w $$(git ls-files '*.go')

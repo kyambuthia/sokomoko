@@ -25,6 +25,7 @@ type CartPageData struct {
 	Flash     Flash
 	CSRFToken string
 	MaxQty    int
+	Viewer    Viewer
 }
 
 type CheckoutPageData struct {
@@ -43,6 +44,7 @@ type CheckoutPageData struct {
 	Error           string
 	CanCheckout     bool
 	CSRFToken       string
+	Viewer          Viewer
 }
 
 type PaymentMethodOption struct {
@@ -98,6 +100,7 @@ func CartPage(a *app.App) http.HandlerFunc {
 			Flash:     popFlash(w, r),
 			CSRFToken: a.Auth.CSRFToken(r),
 			MaxQty:    commerceSvc.MaxLineQuantity,
+			Viewer:    viewerFromRequest(r),
 		})
 	}
 }
@@ -220,6 +223,7 @@ func checkoutPage(a *app.App, r *http.Request, state checkoutsvc.PageState, paym
 		expires = state.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 	return CheckoutPageData{
+		Viewer:          viewerFromRequest(r),
 		Title:           "Checkout",
 		Items:           state.Items,
 		Subtotal:        state.Summary.Subtotal,
@@ -321,13 +325,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		method := paymentMethod
-		if method == "" {
-			method = paymentsvc.MethodCashOnDelivery
-		}
-		redirectWithFlash(w, r, fmt.Sprintf("/account#order-%d", orderID), "success", fmt.Sprintf(
-			"Order #%d placed. Total $%s using %s. We'll update the delivery notice as your order is fulfilled.",
-			orderID, summary.Total, a.Payment.MethodLabel(method),
-		))
+		redirectWithFlash(w, r, fmt.Sprintf("/account#order-%d", orderID), "success",
+			fmt.Sprintf("Order #%d placed · $%s", orderID, summary.Total))
 	}
 }

@@ -46,3 +46,17 @@ func TestIconReferencesSpriteSymbol(t *testing.T) {
 		t.Fatal("sprite lacks the cart symbol")
 	}
 }
+
+func TestFieldAndSignedIn(t *testing.T) {
+	type viewer struct{ SignedIn bool }
+	page := struct {
+		Query  string
+		Viewer viewer
+	}{Query: "lamp", Viewer: viewer{SignedIn: true}}
+	if field(page, "Query") != "lamp" || field(page, "Missing") != "" || field(nil, "Query") != "" {
+		t.Fatal("field lookup")
+	}
+	if !signedIn(page) || signedIn(struct{}{}) || signedIn(&page) != true {
+		t.Fatal("signedIn lookup")
+	}
+}

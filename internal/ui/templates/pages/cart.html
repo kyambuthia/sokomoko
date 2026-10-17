@@ -1,76 +1,55 @@
-{{ define "title" }}Cart{{ end }}
+{{ define "title" }}Cart · sokomoko{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "cart" "Page" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="storefront-page cart-page" data-cart-page>
-  <header class="page-intro">
-    <p class="eyebrow">Your selection</p>
-    <h1 class="page-intro__title">Ready when you are.</h1>
-    <p class="page-intro__lead">Review your products, adjust quantities, and continue when everything looks right.</p>
-  </header>
+<div class="stack">
+  <div class="page-head">
+    <h1>Cart</h1>
+    {{ if .Items }}<span class="muted small">{{ .ItemCount }} item{{ if ne .ItemCount 1 }}s{{ end }}</span>{{ end }}
+  </div>
+  {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
 
-  {{if .Flash.Message}}
-  <ui-alert variant="{{.Flash.Kind}}"><p>{{.Flash.Message}}</p></ui-alert>
-  {{end}}
-
-  {{if .Items}}
-  <div class="cart-layout">
-    <section class="cart-items" aria-labelledby="cart-items-title">
-      <div class="section-heading section-heading--results">
-        <div>
-          <p class="eyebrow">Your basket</p>
-          <h2 id="cart-items-title">Selected products</h2>
-        </div>
-        <span class="section-heading__meta">{{len .Items}} item{{if ne (len .Items) 1}}s{{end}}</span>
-      </div>
-
-      <div class="cart-items__list">
-        {{range .Items}}
-        <article class="cart-item" data-cart-item="{{.ProductID}}">
-          <div class="cart-item__details">
-            <h3 class="cart-item__name">{{.ProductName}}</h3>
-            <p class="cart-item__price">${{.UnitPrice}} each</p>
+  {{ if .Items }}
+  <div class="split">
+    <ul class="list">
+      {{ range .Items }}
+      <li>
+        <ui-cart-line product-id="{{ .ProductID }}">
+          <div class="line">
+            <img class="line__img" src="{{ .ImageURL }}" alt="" width="64" height="64" loading="lazy">
+            <div class="line__body">
+              <div class="row-between">
+                <a class="strong small" href="/products/{{ .ProductSlug }}">{{ .ProductName }}</a>
+                <span class="strong" data-line-total>${{ .LineTotal }}</span>
+              </div>
+              <span class="tiny muted">${{ .UnitPrice }} each</span>
+              <div class="line__controls">
+                <form action="/cart/update" method="POST" class="row">
+                  {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                  <input type="hidden" name="product_id" value="{{ .ProductID }}">
+                  <ui-quantity class="small" autosubmit><input class="input" type="number" name="quantity" value="{{ .Quantity }}" min="0" max="{{ .StockQuantity }}" inputmode="numeric" aria-label="Quantity for {{ .ProductName }}"></ui-quantity>
+                  <noscript><button type="submit" class="btn btn-secondary btn-sm">Update</button></noscript>
+                </form>
+                <form action="/cart/remove" method="POST">
+                  {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                  <input type="hidden" name="product_id" value="{{ .ProductID }}">
+                  <button type="submit" class="btn btn-icon btn-sm" aria-label="Remove {{ .ProductName }}">{{ icon "trash" }}</button>
+                </form>
+              </div>
+            </div>
           </div>
-          <div class="cart-item__actions">
-            <form action="/cart/update" method="POST" class="cart-item__quantity">
-              {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-              <input type="hidden" name="product_id" value="{{.ProductID}}">
-              <label class="sr-only" for="quantity-{{.ProductID}}">Quantity for {{.ProductName}}</label>
-              <input class="form__input" id="quantity-{{.ProductID}}" type="number" min="0" name="quantity" value="{{.Quantity}}">
-              <button type="submit" class="btn btn--secondary btn--small">Update</button>
-            </form>
-            <strong class="cart-item__line-total" data-cart-line-total>${{.LineTotal}}</strong>
-            <form action="/cart/remove" method="POST">
-              {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-              <input type="hidden" name="product_id" value="{{.ProductID}}">
-              <button type="submit" class="link-button">Remove</button>
-            </form>
-          </div>
-        </article>
-        {{end}}
-      </div>
-    </section>
-
-    <aside class="cart-summary" aria-labelledby="cart-summary-title">
-      <p class="eyebrow">Order total</p>
-      <h2 id="cart-summary-title">Keep it simple.</h2>
-      <div class="cart-summary__row">
-        <span>Subtotal</span>
-        <strong data-cart-subtotal>${{.Subtotal}}</strong>
-      </div>
-      <p class="cart-summary__note">Shipping and tax are calculated at checkout.</p>
-      <div class="cart-actions">
-        <a href="/checkout" class="btn btn--full">Proceed to checkout</a>
-        <a href="/" class="btn btn--secondary btn--full">Continue shopping</a>
-      </div>
+        </ui-cart-line>
+      </li>
+      {{ end }}
+    </ul>
+    <aside class="card stack sticky">
+      <dl class="kv"><div class="total"><dt>Subtotal</dt><dd data-cart-subtotal>${{ .Subtotal }}</dd></div></dl>
+      <p class="tiny muted">Shipping and tax are added at checkout.</p>
+      <a class="btn btn-block" href="/checkout">Checkout</a>
     </aside>
   </div>
-  {{else}}
-  <section class="cart-empty">
-    <p class="eyebrow">Nothing here yet</p>
-    <h2>Your cart is empty.</h2>
-    <p>Start with something useful and it will show up here.</p>
-    <a href="/" class="btn">Browse products</a>
-  </section>
-  {{end}}
-</main>
+  {{ else }}
+  {{ template "empty" dict "Icon" "cart" "Text" "Your cart is empty." "Href" "/" "Action" "Shop" }}
+  {{ end }}
+</div>
 {{ end }}

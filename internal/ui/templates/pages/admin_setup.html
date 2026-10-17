@@ -1,114 +1,53 @@
-{{ define "title" }}Initial Admin Setup{{ end }}
-
-{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
-
-{{ define "header-area" }}
-{{ template "admin-header-area" . }}
-{{ end }}
-
-{{ define "footer-area" }}
-{{ template "workspace-footer-area" . }}
-{{ end }}
-
-{{ define "nav-area" }}
-{{ template "admin-nav-area" . }}
-{{ end }}
+{{ define "title" }}Setup · sokomoko{{ end }}
+{{ define "layout" }}{{ template "workspace-auth-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<section class="auth-panel auth-sheet">
-  <header class="auth-panel__header">
-    <h1 class="auth-panel__title">Initial Admin Setup</h1>
-    <p class="auth-panel__meta">First run detected. Create the root admin account and optionally provision staff accounts.</p>
-  </header>
-
-  {{if .Message}}
-  <ui-alert variant="info"><p>{{.Message}}</p></ui-alert>
-  {{end}}
-
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
-
-  {{if .ShowForm}}
-  <div class="panel card">
-    <div class="card__body">
-      <p><strong>Staffing guidance:</strong> {{.StaffRationale}}</p>
-      <p class="mb-0">Recommended initial staff accounts: <strong>{{.RecommendedStaff}}</strong></p>
+<div class="auth stack">
+  <h1>First-run setup</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  {{ if .ShowForm }}
+  <form action="/setup" method="POST" class="form" data-submit-once>
+    {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+    <div class="field">
+      <label class="label" for="admin_username">Admin username</label>
+      <input class="input" type="text" id="admin_username" name="admin_username" required autofocus autocomplete="username" autocapitalize="none" minlength="3" maxlength="32">
     </div>
-  </div>
-
-  <form class="auth-panel__form form" action="/setup" method="POST">
-    <fieldset class="form__fieldset">
-      <legend class="form__legend">Root Admin</legend>
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-
-      <div class="form__group form-group">
-        <label class="form__label" for="admin_username">Admin username</label>
-        <input class="form__input" type="text" id="admin_username" name="admin_username" required autofocus>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="admin_email">Admin email</label>
-        <input class="form__input" type="email" id="admin_email" name="admin_email" required>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="admin_password">Root password</label>
-        <div class="form__input-wrap">
-          <input class="form__input" type="password" id="admin_password" name="admin_password" required autocomplete="new-password" data-password-input>
-          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="admin_password">Show</button>
-        </div>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="confirm_password">Confirm root password</label>
-        <div class="form__input-wrap">
-          <input class="form__input" type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" data-password-input>
-          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="confirm_password">Show</button>
-        </div>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="staff_count">Initial staff accounts</label>
-        <input class="form__input" type="number" id="staff_count" name="staff_count" min="0" max="20" value="{{.RecommendedStaff}}">
-      </div>
-
-      <button class="btn btn--full" type="submit">Create root admin</button>
-    </fieldset>
+    <div class="field">
+      <label class="label" for="admin_email">Admin email</label>
+      <input class="input" type="email" id="admin_email" name="admin_email" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label class="label" for="admin_password">Password</label>
+      <ui-password><input class="input" type="password" id="admin_password" name="admin_password" required minlength="10" maxlength="72" autocomplete="new-password" aria-describedby="admin-password-hint"></ui-password>
+      <small class="hint" id="admin-password-hint">10–72 characters</small>
+    </div>
+    <div class="field">
+      <label class="label" for="confirm_password">Confirm password</label>
+      <ui-password><input class="input" type="password" id="confirm_password" name="confirm_password" required minlength="10" maxlength="72" autocomplete="new-password"></ui-password>
+    </div>
+    <div class="field">
+      <label class="label" for="staff_count">Staff accounts to create</label>
+      <input class="input" type="number" id="staff_count" name="staff_count" min="0" max="20" value="{{ .RecommendedStaff }}" inputmode="numeric" aria-describedby="staff-hint">
+      <small class="hint" id="staff-hint">{{ .StaffRationale }}</small>
+    </div>
+    <button type="submit" class="btn btn-block">Create admin</button>
   </form>
-  {{else}}
-  <div class="panel card">
-    <div class="card__header">
-      <h3>Temporary Staff Credentials</h3>
-    </div>
-    <div class="card__body">
-      {{if .StaffCredentials}}
-      <div class="table-wrap">
-      <table class="data-table data-table--admin">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Temporary Password</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range .StaffCredentials}}
-          <tr>
-            <td>{{.Username}}</td>
-            <td>{{.Email}}</td>
-            <td><code>{{.TempPassword}}</code> <ui-copy text="{{.TempPassword}}" label="Copy password for {{.Username}}"></ui-copy></td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-      </div>
-      <p class="mb-0">Store these credentials securely. Staff can sign in at <a href="/login">admin login</a>.</p>
-      {{else}}
-      <p class="table-empty">No staff accounts were created.</p>
-      {{end}}
-    </div>
-  </div>
-  {{end}}
-</section>
+  {{ else if .StaffCredentials }}
+  <section class="section">
+    <h2 class="section-title">Staff credentials · shown once</h2>
+    <ul class="list">
+      {{ range .StaffCredentials }}
+      <li class="list-item">
+        <span class="stack-sm"><span class="strong">{{ .Username }}</span><code class="small break">{{ .TempPassword }}</code></span>
+        <ui-copy text="{{ .TempPassword }}"><button type="button" class="btn btn-icon btn-sm" aria-label="Copy password for {{ .Username }}">{{ icon "copy" }}</button></ui-copy>
+      </li>
+      {{ end }}
+    </ul>
+  </section>
+  <a class="btn btn-block" href="/login">Sign in</a>
+  {{ else }}
+  <a class="btn btn-block" href="/login">Sign in</a>
+  {{ end }}
+</div>
 {{ end }}

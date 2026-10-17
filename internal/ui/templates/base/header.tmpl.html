@@ -1,102 +1,58 @@
-{{ define "storefront-header-area" }}
-<header class="site-header site-header--storefront storefront-header">
-    <div class="storefront-header__utility" aria-label="Storefront utilities">
-        <p class="storefront-header__announcement">Curated finds, quick checkout, and local delivery.</p>
-        <nav class="storefront-header__utility-group storefront-header__utility-group--end" aria-label="Storefront shortcuts">
-            <button type="button" class="storefront-header__utility-link storefront-header__theme-toggle" data-theme-toggle aria-pressed="false">
-                Theme
-            </button>
-            <a href="/account" class="storefront-header__utility-link">Account</a>
-            <a href="/search?q=saved" class="storefront-header__utility-link">Saved</a>
-            <a href="/search?q=deals" class="storefront-header__utility-link">Deals</a>
-            <a href="/cart" class="storefront-header__utility-link storefront-header__utility-link--cart" data-cart-count>Cart</a>
-        </nav>
-    </div>
-    <div class="storefront-header__masthead">
-        <div class="storefront-header__brand">
-            <a href="/" class="site-header__brandmark storefront-header__brandmark" aria-label="Sokomoko home">SOKOMOKO</a>
-            <p class="storefront-header__tagline">A quieter marketplace for everyday goods.</p>
-        </div>
-        <ui-header-search
-            action="/search"
-            endpoint="/api/v1/catalog/search"
-            csrf-token="{{.CSRFToken}}"
-            label="Search the catalog"
-            placeholder="Search products, brands, and deals"
-            submit-label="Find"
-            variant="marketplace"
-            categories="All Departments"
-            categories-endpoint="/api/categories"
-            selected-category="All Departments"
-        >
-            <form action="/search" method="GET" role="search" class="header-search__fallback">
-                <label class="visually-hidden" for="header-search-fallback">Search the catalog</label>
-                <input id="header-search-fallback" class="form__input" type="search" name="q" placeholder="Search products" minlength="2">
-                <button type="submit" class="btn btn--primary">Find</button>
-            </form>
-        </ui-header-search>
-    </div>
-    <ui-category-nav class="storefront-header__categories" endpoint="/api/categories" aria-label="Featured departments">
-        <a href="/" class="storefront-header__category-link storefront-header__category-link--active">All</a>
-        <a href="/search?category=electronics" class="storefront-header__category-link">Electronics</a>
-    </ui-category-nav>
+{{ define "theme-toggle" }}
+<ui-theme-toggle><button type="button" class="btn btn-icon" aria-label="Toggle appearance">{{ icon "moon" }}</button></ui-theme-toggle>
+{{ end }}
+
+{{ define "search-form" }}
+<ui-search>
+  <form action="/search" method="GET" role="search" class="search">
+    {{ icon "search" }}
+    <input class="input" type="search" name="q" value="{{ field . "Query" }}" placeholder="Search products" aria-label="Search products" enterkeyhint="search">
+  </form>
+</ui-search>
+{{ end }}
+
+{{ define "storefront-header" }}
+<header class="bar">
+  <div class="container bar__inner">
+    <a class="brand" href="/">sokomoko</a>
+    <div class="bar__search">{{ template "search-form" . }}</div>
+    <nav class="bar__actions" aria-label="Account">
+      {{ template "theme-toggle" }}
+      <a class="btn btn-icon desktop-only" href="/account" aria-label="Account">{{ icon "user" }}</a>
+      <ui-cart-badge {{ if signedIn . }}signed-in{{ end }}>
+        <a class="btn btn-icon has-count desktop-only" href="/cart" aria-label="Cart">{{ icon "cart" }}<span class="count" hidden></span></a>
+      </ui-cart-badge>
+    </nav>
+  </div>
+  {{ block "header-chips" . }}{{ end }}
 </header>
 {{ end }}
 
-{{ define "admin-header-area" }}
-<header class="site-header site-header--workspace header">
-    <div class="workspace-header__bar">
-        <div class="workspace-header__brand">
-            <a href="/" class="workspace-header__brandmark">SOKOMOKO</a>
-            <div class="site-header__copy">
-                <p class="site-header__eyebrow">Operations</p>
-                <p class="site-header__title site-title">Admin Workspace</p>
-                <p class="site-header__tagline site-tagline">Platform management and order oversight.</p>
-            </div>
-        </div>
-        <span class="workspace-header__hint">Internal tools</span>
+{{/* dict: Tag (admin, partner, workspace) and Page (the page data). */}}
+{{ define "workspace-header" }}
+<header class="bar">
+  <div class="container bar__inner">
+    <a class="brand" href="/">sokomoko <span class="brand__tag">{{ .Tag }}</span></a>
+    <div class="bar__actions">
+      {{ template "theme-toggle" }}
+      {{ if and .Page.CSRFToken (ne .Tag "workspace") }}
+      <form action="/logout" method="POST" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ .Page.CSRFToken }}">
+        <button type="submit" class="btn btn-icon" aria-label="Sign out">{{ icon "logout" }}</button>
+      </form>
+      {{ end }}
     </div>
-    <div class="site-header__actions">
-        <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
-            Theme
-        </button>
-        {{ if .CSRFToken }}
-        <form action="/logout" method="POST" class="site-header__logout">
-            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            <button type="submit" class="site-header__theme-toggle">Sign out</button>
-        </form>
-        {{ end }}
-    </div>
+  </div>
 </header>
 {{ end }}
 
-{{ define "partner-header-area" }}
-<header class="site-header site-header--workspace header">
-    <div class="workspace-header__bar">
-        <div class="workspace-header__brand">
-            <a href="/" class="workspace-header__brandmark">SOKOMOKO</a>
-            <div class="site-header__copy">
-                <p class="site-header__eyebrow">Partner Workspace</p>
-                <p class="site-header__title site-title">Store operations</p>
-                <p class="site-header__tagline site-tagline">Catalog updates, fulfillment flow, and store setup.</p>
-            </div>
-        </div>
-        <span class="workspace-header__hint">Partner tools</span>
-    </div>
-    <div class="site-header__actions">
-        <button type="button" class="site-header__theme-toggle" data-theme-toggle aria-pressed="false">
-            Theme
-        </button>
-        {{ if .CSRFToken }}
-        <form action="/logout" method="POST" class="site-header__logout">
-            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-            <button type="submit" class="site-header__theme-toggle">Sign out</button>
-        </form>
-        {{ end }}
-    </div>
-</header>
-{{ end }}
-
-{{ define "header-area" }}
-    {{ template "storefront-header-area" . }}
+{{/* Category chips, shown on browse pages (shop and search). */}}
+{{ define "category-chips" }}
+<div class="container">
+  <ui-category-nav current="{{ field . "Category" }}">
+    <nav class="chips" aria-label="Categories">
+      <a class="chip" href="/" {{ if not (field . "Category") }}aria-current="page"{{ end }}>All</a>
+    </nav>
+  </ui-category-nav>
+</div>
 {{ end }}

@@ -1,80 +1,22 @@
-{{ define "title" }}Search{{ end }}
+{{ define "title" }}{{ if .Query }}{{ .Query }} · {{ end }}Search · sokomoko{{ end }}
+{{ define "header-chips" }}{{ template "category-chips" . }}{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "search" "Page" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="storefront-page search-page">
-  <header class="page-intro">
-    <p class="eyebrow">Browse the catalog</p>
-    <h1 class="page-intro__title">Find something useful.</h1>
-    <p class="page-intro__lead">Search by product name, category, or a word from the description.</p>
-  </header>
-
-  <section class="search-panel" aria-label="Product search">
-    <ui-search-form
-      action="/search"
-      value="{{.Query}}"
-      label="Search products"
-      placeholder="Try wireless, desk, or home"
-      hint=""
-      submit-label="Search"
-      clear-url="/search"
-      show-clear="{{if .Query}}true{{else}}false{{end}}"
-    ></ui-search-form>
-  </section>
-
-  {{if .Query}}
-  <section class="search-results" aria-labelledby="search-results-title">
-  <header class="section-heading section-heading--results">
-    <div>
-      <p class="eyebrow">Search results</p>
-      <h2 id="search-results-title">Matches for {{.Query}}</h2>
-      <p class="section-heading__lead">Showing products currently available in the catalog.</p>
-    </div>
-    <a href="/search" class="text-link">Clear search <span aria-hidden="true">×</span></a>
-  </header>
-
-  {{if .NoResults}}
-  <ui-alert variant="info">
-    <p>No products matched that search. Try a broader keyword.</p>
-  </ui-alert>
-  {{else}}
-  <div class="product-grid">
-    {{range .Products}}
-    <article class="product-card">
-      <a href="/products/{{.Slug}}" class="product-card__media" aria-label="View {{.Name}} details">
-        <img src="{{.ImageURL}}" alt="{{.Name}}" class="product-card__image" width="480" height="360" loading="lazy">
-      </a>
-      <div class="product-card__content">
-        <div class="product-card__heading">
-          <p class="product-card__category">{{if .Category}}{{.Category}}{{else}}Everyday goods{{end}}</p>
-          <h3 class="product-card__title"><a href="/products/{{.Slug}}">{{.Name}}</a></h3>
-        </div>
-        <p class="product-card__description">{{.Description}}</p>
-        <div class="product-card__meta">
-          <ui-price amount="{{.Price}}" class="product-card__price"></ui-price>
-          {{if .StockQuantity}}
-          <span class="stock-pill stock-pill--available">In stock</span>
-          {{else}}
-          <span class="stock-pill stock-pill--unavailable">Sold out</span>
-          {{end}}
-        </div>
-        <div class="product-card__footer">
-          {{if .StockQuantity}}
-          <form action="/cart/add" method="POST">
-            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-            <input type="hidden" name="product_id" value="{{.ID}}">
-            <input type="hidden" name="quantity" value="1">
-            <button type="submit" class="btn btn--secondary btn--full product-card__button">Add to cart</button>
-          </form>
-          {{else}}
-          <button class="btn btn--secondary btn--full product-card__button" type="button" disabled>Unavailable</button>
-          {{end}}
-        </div>
-      </div>
-    </article>
-    {{end}}
+<div class="stack">
+  <div class="mobile-only">{{ template "search-form" . }}</div>
+  {{ if or .Query .Category }}
+  <div class="page-head">
+    <h1>{{ if .Query }}“{{ .Query }}”{{ else }}{{ .Category }}{{ end }}</h1>
+    <span class="muted small">{{ len .Products }} result{{ if ne (len .Products) 1 }}s{{ end }}</span>
   </div>
-  {{end}}
-  </section>
-  {{end}}
-</main>
+  {{ if .NoResults }}
+  {{ template "empty" dict "Icon" "search" "Text" "No matches. Try a broader word." "Href" "/search" "Action" "Clear search" }}
+  {{ else }}
+  {{ template "product-grid" dict "Products" .Products "CSRFToken" .CSRFToken }}
+  {{ end }}
+  {{ else }}
+  {{ template "empty" dict "Icon" "search" "Text" "Search by name or description." }}
+  {{ end }}
+</div>
 {{ end }}

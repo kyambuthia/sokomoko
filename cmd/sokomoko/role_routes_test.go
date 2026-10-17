@@ -142,7 +142,7 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 		t.Fatalf("partner root location=%q want=/dashboard", loc)
 	}
 
-	partnerAllowed := []string{"/setup", "/dashboard", "/products", "/products/new", "/orders", "/signup"}
+	partnerAllowed := []string{"/setup", "/dashboard", "/products", "/products/new", "/orders"}
 	for _, path := range partnerAllowed {
 		expectRouteStatus(t, http.MethodGet, path, "partner.localhost", nil, []*http.Cookie{adminCookie}, http.StatusOK)
 	}
@@ -166,8 +166,8 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 	expectRouteStatus(
 		t,
 		http.MethodPost,
-		"/signup",
-		"partner.localhost",
+		"/staff/signup",
+		"admin.localhost",
 		url.Values{
 			"username": {newStaffUsername},
 			"email":    {fmt.Sprintf("staff_new_%d@example.com", suffix)},
@@ -245,12 +245,14 @@ func TestIntegration_StaffCanAccessStaffRoutesAndBlockedFromAdminOnly(t *testing
 		http.StatusFound,
 	)
 
-	expectRouteStatus(t, http.MethodGet, "/signup", "partner.localhost", nil, []*http.Cookie{staffCookie}, http.StatusForbidden)
+	// Staff accounts are created on the admin host only.
+	expectRouteStatus(t, http.MethodGet, "/signup", "partner.localhost", nil, []*http.Cookie{staffCookie}, http.StatusNotFound)
+	expectRouteStatus(t, http.MethodGet, "/staff/signup", "admin.localhost", nil, []*http.Cookie{staffCookie}, http.StatusForbidden)
 	expectRouteStatus(
 		t,
 		http.MethodPost,
-		"/signup",
-		"partner.localhost",
+		"/staff/signup",
+		"admin.localhost",
 		url.Values{
 			"username": {fmt.Sprintf("forbidden_staff_create_%d", suffix)},
 			"email":    {fmt.Sprintf("forbidden_%d@example.com", suffix)},

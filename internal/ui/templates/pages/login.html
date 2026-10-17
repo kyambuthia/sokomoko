@@ -1,43 +1,23 @@
-{{ define "title" }}Login{{ end }}
+{{ define "title" }}Sign in · sokomoko{{ end }}
+{{ define "layout" }}{{ template "auth-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="auth-page auth-panel auth-sheet">
-  <header class="auth-panel__header">
-    <h1 class="auth-panel__title auth-sheet__title">Sign In</h1>
-    <p class="auth-panel__meta auth-sheet__meta">Access your Sokomoko account.</p>
-  </header>
-
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
-
-  <form action="/login" method="POST" class="auth-panel__form form">
-    <fieldset class="form__fieldset">
-      <legend class="form__legend">Account Access</legend>
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-      {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
-
-      <div class="form__group form-group">
-        <label class="form__label" for="username">Username or email</label>
-        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="your username" required autofocus>
-
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="password">Password</label>
-        <div class="form__input-wrap">
-          <input class="form__input" type="password" id="password" name="password" required autocomplete="current-password" data-password-input>
-          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="password">Show</button>
-        </div>
-      </div>
-
-      <button type="submit" class="btn btn--full">Sign In</button>
-    </fieldset>
+<div class="auth stack">
+  <h1>Sign in</h1>
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  <form action="/login" method="POST" class="form">
+    {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+    {{ if .Next }}<input type="hidden" name="next" value="{{ .Next }}">{{ end }}
+    <div class="field">
+      <label class="label" for="username">Username or email</label>
+      <input class="input" type="text" id="username" name="username" value="{{ .Username }}" required autofocus autocomplete="username" autocapitalize="none">
+    </div>
+    <div class="field">
+      <label class="label" for="password">Password</label>
+      <ui-password><input class="input" type="password" id="password" name="password" required autocomplete="current-password"></ui-password>
+    </div>
+    <button type="submit" class="btn btn-block">Sign in</button>
   </form>
-
-  <div class="auth-panel__links-row">
-    <p class="auth-panel__alt">No account yet? <a href="/signup">Create one</a>.</p>
-    <p class="auth-panel__links"><a href="/password-reset/request">Forgot password?</a></p>
-  </div>
-</main>
+  <p class="row-between small"><a href="/signup">Create account</a><a href="/password-reset/request">Forgot password?</a></p>
+</div>
 {{ end }}

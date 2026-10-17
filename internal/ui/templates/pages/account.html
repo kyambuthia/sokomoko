@@ -1,63 +1,45 @@
-{{ define "title" }}{{.Title}}{{ end }}
+{{ define "title" }}Account · sokomoko{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "account" "Page" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="storefront-page account-page">
-  <header class="page-intro">
-    <p class="eyebrow">Your account</p>
-    <h1 class="page-intro__title">Your orders, in one place.</h1>
-    <p class="page-intro__lead">Track delivery progress and keep an eye on every order you’ve placed.</p>
-  </header>
-
-  {{if .Flash.Message}}
-  <ui-alert variant="{{.Flash.Kind}}"><p>{{.Flash.Message}}</p></ui-alert>
-  {{end}}
-
-  <section class="account-orders" aria-labelledby="account-orders-title">
-    <div class="section-heading section-heading--results">
-      <div>
-        <p class="eyebrow">Order history</p>
-        <h2 id="account-orders-title">Recent orders</h2>
-      </div>
-    </div>
-    <div class="account-orders__body" data-account-orders>
-      {{if .Orders}}
-      <div class="table-wrap">
-        <table class="data-table account-orders__table">
-          <thead>
-            <tr><th>Order</th><th>Status</th><th>Delivery</th><th>Total</th><th>Notice</th></tr>
-          </thead>
-          <tbody>
-            {{range .Orders}}
-            <tr data-order-id="{{.ID}}">
-              <td>#{{.ID}}</td>
-              <td data-order-status>{{.Status}} ({{.PartnerStatus}})</td>
-              <td data-delivery-status>{{.DeliveryStatus}}</td>
-              <td>${{.TotalAmount}}</td>
-              <td data-delivery-notice>{{if .DeliveryNotice}}{{.DeliveryNotice}}{{else}}No updates yet{{end}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
-      </div>
-      {{else}}
-      <p class="table-empty">No orders yet.</p>
-      {{end}}
-    </div>
-  </section>
-
-  <section class="account-actions">
+<div class="stack-lg">
+  <div class="page-head">
     <div>
-      <p class="eyebrow">Keep browsing</p>
-      <h2>Find your next useful thing.</h2>
+      <h1>Account</h1>
+      <p class="muted small">{{ .Viewer.Username }}</p>
     </div>
-    <div class="account-actions__links">
-      <a href="/cart" class="btn">View cart</a>
-      <a href="/" class="btn btn--secondary">Continue shopping</a>
-      <form action="/logout" method="POST" class="account-actions__form">
-        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-        <button type="submit" class="link-button">Sign out</button>
-      </form>
-    </div>
+    <form action="/logout" method="POST">
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <button type="submit" class="btn btn-secondary btn-sm">{{ icon "logout" }}Sign out</button>
+    </form>
+  </div>
+  {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
+
+  <section class="section" aria-labelledby="orders-title">
+    <h2 class="section-title" id="orders-title">Orders</h2>
+    {{ if .Orders }}
+    <ul class="stack">
+      {{ range .Orders }}
+      <li class="card stack-sm" id="order-{{ .ID }}" data-order>
+        <div class="row-between">
+          <span class="strong">#{{ .ID }}</span>
+          <span class="strong">${{ .TotalAmount }}</span>
+        </div>
+        <ui-order-progress order-id="{{ .ID }}" status="{{ .Status }}" partner-status="{{ .PartnerStatus }}" delivery-status="{{ .DeliveryStatus }}">
+          <p class="small">{{ .Status }} · {{ .DeliveryStatus }}</p>
+        </ui-order-progress>
+        {{ if and .DeliveryNotice (ne .PartnerStatus "new") }}<p class="small muted" data-order-notice>{{ .DeliveryNotice }}</p>{{ end }}
+        <p class="tiny muted">
+          <ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2 Jan 2006" }}</ui-relative-time>
+          · {{ len .Items }} item{{ if ne (len .Items) 1 }}s{{ end }}
+          · {{ .DeliveryAddress }}
+        </p>
+      </li>
+      {{ end }}
+    </ul>
+    {{ else }}
+    {{ template "empty" dict "Icon" "package" "Text" "No orders yet." "Href" "/" "Action" "Shop" }}
+    {{ end }}
   </section>
-</main>
+</div>
 {{ end }}

@@ -1,64 +1,33 @@
-{{ define "title" }}Partner Products{{ end }}
-
-{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
-
-{{ define "header-area" }}
-{{ template "partner-header-area" . }}
-{{ end }}
-
-{{ define "footer-area" }}
-{{ template "workspace-footer-area" . }}
-{{ end }}
-
-{{ define "nav-area" }}
-{{ template "partner-nav-area" . }}
-{{ end }}
+{{ define "title" }}Products · partner · sokomoko{{ end }}
+{{ define "layout" }}{{ template "partner-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="workspace-page partner-page">
-  <header class="workspace-page__header">
-    <div>
-      <p class="eyebrow">Catalog</p>
-      <h1 class="workspace-page__title">Your products.</h1>
-      <p class="workspace-page__lead">Keep pricing, categories, and stock easy to review.</p>
-    </div>
-    <a href="/products/new" class="btn">Add product</a>
-  </header>
-
-  <section class="workspace-card">
-    <div class="workspace-card__header">
-      <p class="eyebrow">{{.StoreName}}</p>
-      <h2>Catalog overview</h2>
-    </div>
-    <div class="workspace-card__body">
-      {{if .Products}}
-      <ui-table-filter for="partner-products-table" placeholder="Filter products"></ui-table-filter>
-      <div class="table-wrap">
-      <table class="data-table data-table--partner" id="partner-products-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Price</th>
-            <th>Stock</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range .Products}}
-          <tr>
-            <td>{{.Name}}</td>
-            <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
-            <td>${{.Price}}</td>
-            <td>{{.StockQuantity}}</td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-      </div>
-      {{else}}
-      <p class="table-empty">No products in catalog yet.</p>
-      {{end}}
-    </div>
-  </section>
-</main>
+<div class="stack">
+  <div class="page-head">
+    <h1>Products</h1>
+    <a class="btn btn-sm" href="/products/new">{{ icon "plus" }}Add</a>
+  </div>
+  {{ template "notice" dict "Kind" "success" "Text" .Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  {{ if .Products }}
+  <ui-table-filter for="partner-products-table" placeholder="Filter products"></ui-table-filter>
+  <div class="table-wrap">
+    <table class="table" id="partner-products-table">
+      <thead><tr><th>Product</th><th>Category</th><th class="num">Price</th><th class="num">Stock</th></tr></thead>
+      <tbody>
+        {{ range .Products }}
+        <tr>
+          <td>{{ .Name }}{{ if .PartnerName }}<div class="tiny muted">{{ .PartnerName }}</div>{{ end }}</td>
+          <td class="muted">{{ if .Category }}{{ .Category }}{{ else }}–{{ end }}</td>
+          <td class="num">${{ .Price }}</td>
+          <td class="num">{{ if gt .StockQuantity 0 }}{{ .StockQuantity }}{{ else }}<span class="badge">out</span>{{ end }}</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  {{ template "empty" dict "Icon" "box" "Text" "No products yet." "Href" "/products/new" "Action" "Add product" }}
+  {{ end }}
+</div>
 {{ end }}

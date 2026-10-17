@@ -1,492 +1,389 @@
-{{ define "title" }}Admin – {{.Title}}{{ end }}
-
-{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
-
-{{ define "header-area" }}
-{{ template "admin-header-area" . }}
-{{ end }}
-
-{{ define "footer-area" }}
-{{ template "workspace-footer-area" . }}
-{{ end }}
-
-{{ define "nav-area" }}
-{{ template "admin-nav-area" . }}
-{{ end }}
+{{ define "title" }}{{ .Title }} · admin · sokomoko{{ end }}
+{{ define "layout" }}{{ template "admin-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="workspace-page admin-page" data-admin-workspace>
-  <header class="workspace-page__header">
-    <div>
-      <p class="eyebrow">Admin workspace</p>
-      <h1 class="workspace-page__title">{{.Title}}</h1>
-      <p class="workspace-page__lead">{{.Message}}</p>
+<div class="stack">
+
+{{ if eq .Title "Admin Dashboard" }}
+  <h1>Overview</h1>
+  <dl class="stats">
+    <div class="stat"><dt>Products</dt><dd>{{ .ProductCount }}</dd></div>
+    <div class="stat"><dt>Customers</dt><dd>{{ .UserCount }}</dd></div>
+    <div class="stat"><dt>Staff</dt><dd>{{ .StaffCount }}</dd></div>
+    <div class="stat"><dt>Admins</dt><dd>{{ .AdminCount }}</dd></div>
+    <div class="stat"><dt>Sessions</dt><dd>{{ .SessionCount }}</dd></div>
+  </dl>
+  <nav class="list" aria-label="Shortcuts">
+    <a class="list-item" href="/orders"><span>{{ icon "orders" }}</span><span>Orders</span>{{ icon "chevron-right" }}</a>
+    <a class="list-item" href="/deliveries"><span>{{ icon "truck" }}</span><span>Deliveries</span>{{ icon "chevron-right" }}</a>
+    <a class="list-item" href="/reports"><span>{{ icon "chart" }}</span><span>Reports</span>{{ icon "chevron-right" }}</a>
+  </nav>
+{{ end }}
+
+{{ if eq .Title "Product Management" }}
+  <div class="page-head">
+    <h1>Products</h1>
+    <div class="row">
+      <a class="btn btn-secondary btn-sm" href="/catalog">{{ icon "pencil" }}Edit</a>
+      <a class="btn btn-sm" href="/catalog/new">{{ icon "plus" }}Add</a>
     </div>
-  </header>
+  </div>
+  {{ if .Products }}
+  <ui-table-filter for="admin-products-table" placeholder="Filter products"></ui-table-filter>
+  <div class="table-wrap">
+    <table class="table" id="admin-products-table">
+      <thead><tr><th>Product</th><th>Category</th><th>Partner</th><th class="num">Price</th><th class="num">Stock</th></tr></thead>
+      <tbody>
+        {{ range .Products }}
+        <tr>
+          <td>{{ .Name }}</td>
+          <td class="muted">{{ if .Category }}{{ .Category }}{{ else }}–{{ end }}</td>
+          <td class="muted">{{ if .PartnerName }}{{ .PartnerName }}{{ else }}–{{ end }}</td>
+          <td class="num">${{ .Price }}</td>
+          <td class="num">{{ if gt .StockQuantity 0 }}{{ .StockQuantity }}{{ else }}<span class="badge">out</span>{{ end }}</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  {{ template "empty" dict "Icon" "box" "Text" "No products yet." "Href" "/catalog/new" "Action" "Add product" }}
+  {{ end }}
+{{ end }}
 
-  {{if eq .Title "Admin Dashboard"}}
-  <section class="workspace-metrics admin-metrics" aria-label="Platform overview">
-    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog items" data-admin-metric="product_count"></ui-metric-card>
-    <ui-metric-card label="Active Sessions" value="{{.SessionCount}}" note="Signed-in users" data-admin-metric="session_count"></ui-metric-card>
-    <ui-metric-card label="Staff Accounts" value="{{.StaffCount}}" note="Admin-managed staff" data-admin-metric="staff_count"></ui-metric-card>
-  </section>
-
-  <section class="workspace-card">
-    <div class="workspace-card__body">
-      <p class="admin-summary" data-admin-users><strong>Users:</strong> {{.UserCount}} customers, {{.StaffCount}} staff, {{.AdminCount}} admins</p>
-    </div>
-  </section>
-
-  <section class="workspace-actions admin-actions" aria-label="Admin actions">
-    <a href="/products" class="btn">Manage Products</a>
-    <a href="/orders" class="btn btn--secondary">View Orders</a>
-    <a href="/reports" class="btn btn--secondary">View Reports</a>
-    <a href="/deliveries" class="btn btn--secondary">Track Deliveries</a>
-    {{if eq .Role "admin"}}
-    <a href="/team" class="btn btn--secondary">Manage Team</a>
-    <a href="/staff/signup" class="btn btn--secondary">Create Staff</a>
-    {{end}}
-  </section>
-
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Activity</p><h2>Recent activity</h2></div>
-    <div class="workspace-card__body"><p class="text-muted">No recent activity to display.</p></div>
-  </section>
-  {{end}}
-
-  {{if eq .Title "Product Management"}}
-  <section class="workspace-actions admin-actions" aria-label="Catalog actions">
-    <a href="/catalog/new" class="btn">Add New Product</a>
-    <a href="/catalog" class="btn btn--secondary">Edit Products in Partner Workspace</a>
-  </section>
-
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Inventory</p><h2>Catalog</h2></div>
-    <div class="workspace-card__body">
-      <ui-table-filter for="admin-products-table" placeholder="Filter products"></ui-table-filter>
-      <div class="table-wrap">
-        <table class="data-table data-table--admin" id="admin-products-table">
-          <thead>
-            <tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {{if .Products}}
-              {{range .Products}}
-              <tr>
-                <td>{{.Name}}</td>
-                <td>{{if .Category}}{{.Category}}{{else}}Uncategorized{{end}}</td>
-                <td>${{.Price}}</td>
-                <td>{{.StockQuantity}}</td>
-                <td>{{if gt .StockQuantity 0}}Active{{else}}Out of stock{{end}}</td>
-              </tr>
-              {{end}}
-            {{else}}
-              <tr><td colspan="5" class="table-empty">No products found. <a href="/products/new">Add your first product</a>.</td></tr>
-            {{end}}
-          </tbody>
-        </table>
+{{ if eq .Title "Order Management" }}
+  <h1>Orders</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .OrderMessage }}
+  {{ template "notice" dict "Kind" "danger" "Text" .OrderError }}
+  {{ if .Orders }}
+  <ul class="stack">
+    {{ range .Orders }}
+    <li class="card stack-sm" data-order>
+      <div class="row-between">
+        <span class="strong">#{{ .ID }} · {{ .CustomerName }}</span>
+        <span class="strong">${{ .TotalAmount }}</span>
       </div>
-    </div>
-  </section>
-  {{end}}
-
-  {{if eq .Title "Order Management"}}
-  {{if .OrderMessage}}<ui-alert variant="success"><p>{{.OrderMessage}}</p></ui-alert>{{end}}
-  {{if .OrderError}}<ui-alert variant="danger"><p>{{.OrderError}}</p></ui-alert>{{end}}
-
-  <section class="workspace-card order-queue">
-    <div class="workspace-card__header"><p class="eyebrow">Fulfillment</p><h2>Order queue</h2></div>
-    <div class="workspace-card__body">
-      {{if .Orders}}
-      {{range .Orders}}
-      <article class="order-card">
-        <div class="order-card__header">
-          <div><p class="eyebrow">Order #{{.ID}}</p><h3>{{.CustomerName}}</h3></div>
-          <strong>${{.TotalAmount}}</strong>
-        </div>
-        <div class="order-card__body">
-          <div class="order-card__details">
-            <p><strong>Delivery address</strong><span>{{.DeliveryAddress}}</span></p>
-            <p><strong>Status</strong><span>{{.Status}} / {{.PartnerStatus}} / {{.DeliveryStatus}}</span></p>
-          </div>
-          <p class="order-card__items-label"><strong>Items</strong></p>
-          <ul>
-            {{range .Items}}
-            <li>{{.ProductName}} × {{.Quantity}} - ${{.LineTotal}}</li>
-            {{end}}
-          </ul>
-          {{if eq $.Role "admin"}}
-          <form action="/orders" method="POST" class="form order-card__form" data-api-admin-order>
-            {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-            <input type="hidden" name="order_id" value="{{.ID}}">
-            <div class="form__group form-group">
-              <label class="form__label" for="status_{{.ID}}">Order status</label>
-              <select class="form__select" id="status_{{.ID}}" name="status">
-                <option value="pending" {{if eq .Status "pending"}}selected{{end}}>pending</option>
-                <option value="processing" {{if eq .Status "processing"}}selected{{end}}>processing</option>
-                <option value="shipped" {{if eq .Status "shipped"}}selected{{end}}>shipped</option>
-                <option value="delivered" {{if eq .Status "delivered"}}selected{{end}}>delivered</option>
-                <option value="cancelled" {{if eq .Status "cancelled"}}selected{{end}}>cancelled</option>
-              </select>
+      <div class="row">
+        <span class="badge {{ if eq .Status "cancelled" }}badge-muted{{ else }}badge-solid{{ end }}" data-badge="status">{{ .Status }}</span>
+        <span class="badge" data-badge="partner_status">{{ .PartnerStatus }}</span>
+        <span class="badge" data-badge="delivery_status">{{ .DeliveryStatus }}</span>
+      </div>
+      <p class="small">{{ range $i, $item := .Items }}{{ if $i }}, {{ end }}{{ $item.ProductName }} × {{ $item.Quantity }}{{ end }}</p>
+      <p class="tiny muted">{{ icon "map-pin" }} {{ .DeliveryAddress }}</p>
+      {{ if eq $.Role "admin" }}
+      <details>
+        <summary class="btn btn-secondary btn-sm">Update</summary>
+        <ui-order-form scope="admin" order-id="{{ .ID }}">
+          <form action="/orders" method="POST" class="form">
+            {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+            <input type="hidden" name="order_id" value="{{ .ID }}">
+            <div class="form-row">
+              <div class="field">
+                <label class="label" for="status_{{ .ID }}">Order</label>
+                <select class="select" id="status_{{ .ID }}" name="status">
+                  {{ $s := .Status }}{{ range $v := list "pending" "processing" "shipped" "delivered" "cancelled" }}<option value="{{ $v }}" {{ if eq $s $v }}selected{{ end }}>{{ $v }}</option>{{ end }}
+                </select>
+              </div>
+              <div class="field">
+                <label class="label" for="partner_status_{{ .ID }}">Partner</label>
+                <select class="select" id="partner_status_{{ .ID }}" name="partner_status">
+                  {{ $p := .PartnerStatus }}{{ range $v := list "new" "accepted" "packing" "dispatched" "completed" "cancelled" }}<option value="{{ $v }}" {{ if eq $p $v }}selected{{ end }}>{{ $v }}</option>{{ end }}
+                </select>
+              </div>
+              <div class="field">
+                <label class="label" for="delivery_status_{{ .ID }}">Delivery</label>
+                <select class="select" id="delivery_status_{{ .ID }}" name="delivery_status">
+                  {{ $d := .DeliveryStatus }}{{ range $v := list "queued" "processing" "shipped" "delivered" }}<option value="{{ $v }}" {{ if eq $d $v }}selected{{ end }}>{{ $v }}</option>{{ end }}
+                </select>
+              </div>
             </div>
-            <div class="form__group form-group">
-              <label class="form__label" for="partner_status_{{.ID}}">Partner status</label>
-              <select class="form__select" id="partner_status_{{.ID}}" name="partner_status">
-                <option value="new" {{if eq .PartnerStatus "new"}}selected{{end}}>new</option>
-                <option value="accepted" {{if eq .PartnerStatus "accepted"}}selected{{end}}>accepted</option>
-                <option value="packing" {{if eq .PartnerStatus "packing"}}selected{{end}}>packing</option>
-                <option value="dispatched" {{if eq .PartnerStatus "dispatched"}}selected{{end}}>dispatched</option>
-                <option value="completed" {{if eq .PartnerStatus "completed"}}selected{{end}}>completed</option>
-                <option value="cancelled" {{if eq .PartnerStatus "cancelled"}}selected{{end}}>cancelled</option>
-              </select>
+            <div class="field">
+              <label class="label" for="delivery_notice_{{ .ID }}">Customer notice</label>
+              <textarea class="textarea" id="delivery_notice_{{ .ID }}" name="delivery_notice" rows="2" maxlength="500">{{ .DeliveryNotice }}</textarea>
             </div>
-            <div class="form__group form-group">
-              <label class="form__label" for="delivery_status_{{.ID}}">Delivery status</label>
-              <select class="form__select" id="delivery_status_{{.ID}}" name="delivery_status">
-                <option value="queued" {{if eq .DeliveryStatus "queued"}}selected{{end}}>queued</option>
-                <option value="processing" {{if eq .DeliveryStatus "processing"}}selected{{end}}>processing</option>
-                <option value="shipped" {{if eq .DeliveryStatus "shipped"}}selected{{end}}>shipped</option>
-                <option value="delivered" {{if eq .DeliveryStatus "delivered"}}selected{{end}}>delivered</option>
-              </select>
-            </div>
-            <div class="form__group form-group">
-              <label class="form__label" for="delivery_notice_{{.ID}}">Delivery notice</label>
-              <textarea class="form__textarea" id="delivery_notice_{{.ID}}" name="delivery_notice" rows="2">{{.DeliveryNotice}}</textarea>
-            </div>
-            <button type="submit" class="btn">Save update</button>
+            <div><button type="submit" class="btn btn-sm">Save</button></div>
           </form>
-          {{else}}
-          <p class="text-muted">Read-only for staff. Only admins can change order state from this page.</p>
-          {{end}}
-        </div>
-      </article>
-      {{end}}
-      {{else}}
-      <p class="table-empty">No orders found.</p>
-      {{end}}
-    </div>
-  </section>
-  {{end}}
+        </ui-order-form>
+      </details>
+      {{ end }}
+    </li>
+    {{ end }}
+  </ul>
+  {{ else }}
+  {{ template "empty" dict "Icon" "orders" "Text" "No orders yet." }}
+  {{ end }}
+{{ end }}
 
-  {{if eq .Title "Sales Reports"}}
-  <section class="workspace-metrics admin-metrics" aria-label="Sales overview">
-    <ui-metric-card label="Total Revenue" value="${{.RevenueTotal}}" note="Non-cancelled orders"></ui-metric-card>
-    <ui-metric-card label="Total Orders" value="{{.OrderCount}}" note="All statuses"></ui-metric-card>
-    <ui-metric-card label="Active Users" value="{{.SessionCount}}" note="Current sessions"></ui-metric-card>
-  </section>
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Order health</p><h2>Fulfillment split</h2></div>
-    <div class="workspace-card__body">
-      <p><strong>Pending/Processing:</strong> {{.PendingCount}}</p>
-      <p><strong>Shipped:</strong> {{.ShippedCount}}</p>
-      <p class="mb-0"><strong>Delivered:</strong> {{.DeliveredCount}}</p>
-    </div>
-  </section>
-  {{end}}
+{{ if eq .Title "Sales Reports" }}
+  <h1>Reports</h1>
+  <dl class="stats">
+    <div class="stat"><dt>Revenue</dt><dd>${{ .RevenueTotal }}</dd></div>
+    <div class="stat"><dt>Orders</dt><dd>{{ .OrderCount }}</dd></div>
+    <div class="stat"><dt>Open</dt><dd>{{ .PendingCount }}</dd></div>
+    <div class="stat"><dt>Shipped</dt><dd>{{ .ShippedCount }}</dd></div>
+    <div class="stat"><dt>Delivered</dt><dd>{{ .DeliveredCount }}</dd></div>
+    <div class="stat"><dt>Cancelled</dt><dd>{{ .CancelledCount }}</dd></div>
+  </dl>
+  <p class="tiny muted">Revenue counts orders that are not cancelled.</p>
+{{ end }}
 
-  {{if eq .Title "Delivery Management"}}
-  <section class="workspace-metrics admin-metrics" aria-label="Delivery pipeline">
-    <ui-metric-card label="Queued" value="{{.Deliveries.QueuedCount}}" note="Awaiting dispatch prep"></ui-metric-card>
-    <ui-metric-card label="Processing" value="{{.Deliveries.ProcessingCount}}" note="Being prepared"></ui-metric-card>
-    <ui-metric-card label="Shipped" value="{{.Deliveries.ShippedCount}}" note="On the way"></ui-metric-card>
-    <ui-metric-card label="Delivered" value="{{.Deliveries.DeliveredCount}}" note="Completed"></ui-metric-card>
-  </section>
+{{ if eq .Title "Delivery Management" }}
+  <h1>Deliveries</h1>
+  <dl class="stats">
+    <div class="stat"><dt>Queued</dt><dd>{{ .Deliveries.QueuedCount }}</dd></div>
+    <div class="stat"><dt>Processing</dt><dd>{{ .Deliveries.ProcessingCount }}</dd></div>
+    <div class="stat"><dt>Shipped</dt><dd>{{ .Deliveries.ShippedCount }}</dd></div>
+    <div class="stat"><dt>Delivered</dt><dd>{{ .Deliveries.DeliveredCount }}</dd></div>
+  </dl>
+  {{ if .Deliveries.Pending }}
+  <ui-table-filter for="admin-deliveries-table" placeholder="Filter deliveries"></ui-table-filter>
+  <div class="table-wrap">
+    <table class="table" id="admin-deliveries-table">
+      <thead><tr><th>Order</th><th>Placed</th><th>Customer</th><th>Address</th><th>Partner</th><th>Delivery</th></tr></thead>
+      <tbody>
+        {{ range .Deliveries.Pending }}
+        <tr>
+          <td class="strong">#{{ .ID }}</td>
+          <td class="nowrap"><ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02 15:04" }}</ui-relative-time></td>
+          <td>{{ .CustomerName }}</td>
+          <td>{{ .DeliveryAddress }}</td>
+          <td><span class="badge">{{ .PartnerStatus }}</span></td>
+          <td><span class="badge">{{ .DeliveryStatus }}</span></td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  {{ template "empty" dict "Icon" "truck" "Text" "Nothing awaiting delivery." }}
+  {{ end }}
+{{ end }}
 
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Pipeline</p><h2>Awaiting delivery</h2></div>
-    <div class="workspace-card__body">
-      {{if .Deliveries.Pending}}
-      <ui-table-filter for="admin-deliveries-table" placeholder="Filter deliveries"></ui-table-filter>
-      <div class="table-wrap">
-        <table class="data-table data-table--admin" id="admin-deliveries-table">
-          <thead><tr><th>Order</th><th>Placed</th><th>Customer</th><th>Address</th><th>Partner status</th><th>Delivery</th><th>Notice</th></tr></thead>
-          <tbody>
-          {{range .Deliveries.Pending}}
-          <tr>
-            <td>#{{.ID}}</td>
-            <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
-            <td>{{.CustomerName}}</td>
-            <td>{{.DeliveryAddress}}</td>
-            <td>{{.PartnerStatus}}</td>
-            <td>{{.DeliveryStatus}}</td>
-            <td>{{.DeliveryNotice}}</td>
-          </tr>
-          {{end}}
-          </tbody>
-        </table>
-      </div>
-      <p class="form__hint">Update delivery stages from <a href="/orders">Orders</a> or the partner workspace.</p>
-      {{else}}
-      <p class="text-muted">No orders are waiting for delivery.</p>
-      {{end}}
-    </div>
-  </section>
-  {{end}}
-
-  {{if eq .Title "Categories"}}
-  {{if .FormMessage}}<ui-alert variant="success"><p>{{.FormMessage}}</p></ui-alert>{{end}}
-  {{if .FormError}}<ui-alert variant="danger"><p>{{.FormError}}</p></ui-alert>{{end}}
-
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Catalog</p><h2>Add a category</h2></div>
-    <div class="workspace-card__body">
-      <form method="POST" action="/categories" class="form" data-submit-once>
-        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-        <input type="hidden" name="action" value="create">
-        <div class="form__group form-group">
-          <label class="form__label" for="category_name">Name</label>
-          <input class="form__input" type="text" id="category_name" name="name" value="{{.CategoryForm.Name}}" maxlength="80" required>
-        </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="category_slug">Slug</label>
-          <input class="form__input" type="text" id="category_slug" name="slug" value="{{.CategoryForm.Slug}}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="category_slug_hint">
-          <small class="form__hint" id="category_slug_hint">Optional. Generated from the name when left blank.</small>
-        </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="category_description">Description</label>
-          <textarea class="form__textarea" id="category_description" name="description" rows="2" maxlength="500">{{.CategoryForm.Description}}</textarea>
-        </div>
-        <button class="btn" type="submit">Add Category</button>
-      </form>
-    </div>
-  </section>
-
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Catalog</p><h2>Categories</h2></div>
-    <div class="workspace-card__body">
-      {{if .Categories}}
-      <ui-table-filter for="admin-categories-table" placeholder="Filter categories"></ui-table-filter>
-      <div class="table-wrap">
-        <table class="data-table data-table--admin" id="admin-categories-table">
-          <thead><tr><th>Name</th><th>Slug</th><th>Description</th><th>Products</th><th>Action</th></tr></thead>
-          <tbody>
-          {{range .Categories}}
-          <tr>
-            <td>{{.Name}}</td>
-            <td>{{.Slug}}</td>
-            <td>{{.Description}}</td>
-            <td>{{.ProductCount}}</td>
-            <td>
-              <ui-confirm message="Delete {{.Name}}? Its {{.ProductCount}} products will become uncategorised.">
-              <form method="POST" action="/categories" class="table-action-form">
-                {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+{{ if eq .Title "Categories" }}
+  <h1>Categories</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .FormMessage }}
+  {{ template "notice" dict "Kind" "danger" "Text" .FormError }}
+  {{ if .Categories }}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Slug</th><th class="num">Products</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+        {{ range .Categories }}
+        <tr>
+          <td>{{ .Name }}{{ if .Description }}<div class="tiny muted">{{ .Description }}</div>{{ end }}</td>
+          <td class="muted">{{ .Slug }}</td>
+          <td class="num">{{ .ProductCount }}</td>
+          <td class="actions">
+            <ui-confirm title="Delete {{ .Name }}?" message="Its {{ .ProductCount }} products become uncategorised." confirm-label="Delete">
+              <form method="POST" action="/categories" class="inline-form">
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="action" value="delete">
-                <input type="hidden" name="category_id" value="{{.ID}}">
-                <button type="submit" class="btn btn--secondary btn--small">Delete</button>
+                <input type="hidden" name="category_id" value="{{ .ID }}">
+                <button type="submit" class="btn btn-icon btn-sm" aria-label="Delete {{ .Name }}">{{ icon "trash" }}</button>
               </form>
-              </ui-confirm>
-            </td>
-          </tr>
-          {{end}}
-          </tbody>
-        </table>
+            </ui-confirm>
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  {{ template "empty" dict "Icon" "category" "Text" "No categories yet." }}
+  {{ end }}
+  <section class="card stack" aria-labelledby="new-category">
+    <h2 id="new-category">New category</h2>
+    <form method="POST" action="/categories" class="form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <input type="hidden" name="action" value="create">
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="category_name">Name</label>
+          <input class="input" type="text" id="category_name" name="name" value="{{ .CategoryForm.Name }}" maxlength="80" required>
+        </div>
+        <div class="field">
+          <label class="label" for="category_slug">Slug <span class="muted">(optional)</span></label>
+          <input class="input" type="text" id="category_slug" name="slug" value="{{ .CategoryForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none">
+        </div>
       </div>
-      {{else}}
-      <p class="text-muted">No categories yet. Products can still be listed without one.</p>
-      {{end}}
-    </div>
+      <div class="field">
+        <label class="label" for="category_description">Description <span class="muted">(optional)</span></label>
+        <input class="input" type="text" id="category_description" name="description" value="{{ .CategoryForm.Description }}" maxlength="500">
+      </div>
+      <div><button type="submit" class="btn">{{ icon "plus" }}Add category</button></div>
+    </form>
   </section>
-  {{end}}
+{{ end }}
 
-  {{if eq .Title "Partners"}}
-  {{if .FormMessage}}<ui-alert variant="success"><p>{{.FormMessage}}</p></ui-alert>{{end}}
-  {{if .FormError}}<ui-alert variant="danger"><p>{{.FormError}}</p></ui-alert>{{end}}
-
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Vendors</p><h2>Partners</h2></div>
-    <div class="workspace-card__body">
-      {{if .Partners}}
-      <ui-table-filter for="admin-partners-table" placeholder="Filter partners"></ui-table-filter>
-      <div class="table-wrap">
-        <table class="data-table data-table--admin" id="admin-partners-table">
-          <thead><tr><th>Name</th><th>Slug</th><th>Contact</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody>
-          {{range .Partners}}
-          <tr>
-            <td>{{.Name}}</td>
-            <td>{{.Slug}}</td>
-            <td>{{.ContactEmail}}</td>
-            <td>{{.Status}}</td>
-            <td>
-              {{if eq .Status "active"}}
-              <ui-confirm message="Suspend {{.Name}}? Their products will be hidden from customers and their logins will see no partner data.">
-              <form method="POST" action="/partners" class="table-action-form">
-                {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+{{ if eq .Title "Partners" }}
+  <h1>Partners</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .FormMessage }}
+  {{ template "notice" dict "Kind" "danger" "Text" .FormError }}
+  {{ if .Partners }}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Partner</th><th>Contact</th><th>Status</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+        {{ range .Partners }}
+        <tr>
+          <td>{{ .Name }}<div class="tiny muted">{{ .Slug }}</div></td>
+          <td class="muted">{{ if .ContactEmail }}{{ .ContactEmail }}{{ else }}–{{ end }}</td>
+          <td><span class="badge {{ if eq .Status "active" }}badge-solid{{ else }}badge-muted{{ end }}">{{ .Status }}</span></td>
+          <td class="actions">
+            {{ if eq .Status "active" }}
+            <ui-confirm title="Suspend {{ .Name }}?" message="Their products are hidden from customers and their logins see no partner data." confirm-label="Suspend">
+              <form method="POST" action="/partners" class="inline-form">
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="action" value="status">
                 <input type="hidden" name="status" value="suspended">
-                <input type="hidden" name="partner_id" value="{{.ID}}">
-                <button type="submit" class="btn btn--secondary btn--small">Suspend</button>
+                <input type="hidden" name="partner_id" value="{{ .ID }}">
+                <button type="submit" class="btn btn-secondary btn-sm">Suspend</button>
               </form>
-              </ui-confirm>
-              {{else}}
-              <form method="POST" action="/partners" class="table-action-form">
-                {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-                <input type="hidden" name="action" value="status">
-                <input type="hidden" name="status" value="active">
-                <input type="hidden" name="partner_id" value="{{.ID}}">
-                <button type="submit" class="btn btn--small">Reactivate</button>
-              </form>
-              {{end}}
-            </td>
-          </tr>
-          {{end}}
-          </tbody>
-        </table>
+            </ui-confirm>
+            {{ else }}
+            <form method="POST" action="/partners" class="inline-form">
+              {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+              <input type="hidden" name="action" value="status">
+              <input type="hidden" name="status" value="active">
+              <input type="hidden" name="partner_id" value="{{ .ID }}">
+              <button type="submit" class="btn btn-sm">Reactivate</button>
+            </form>
+            {{ end }}
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  {{ template "empty" dict "Icon" "store" "Text" "No partners yet." }}
+  {{ end }}
+
+  <section class="card stack" aria-labelledby="new-partner">
+    <h2 id="new-partner">New partner</h2>
+    <form method="POST" action="/partners" class="form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <input type="hidden" name="action" value="create_partner">
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="partner_name">Name</label>
+          <input class="input" type="text" id="partner_name" name="name" value="{{ .PartnerForm.Name }}" maxlength="120" required>
+        </div>
+        <div class="field">
+          <label class="label" for="partner_slug">Slug <span class="muted">(optional)</span></label>
+          <input class="input" type="text" id="partner_slug" name="slug" value="{{ .PartnerForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none">
+        </div>
+        <div class="field">
+          <label class="label" for="partner_contact">Contact email <span class="muted">(optional)</span></label>
+          <input class="input" type="email" id="partner_contact" name="contact_email" value="{{ .PartnerForm.ContactEmail }}">
+        </div>
       </div>
-      {{else}}
-      <p class="text-muted">No partners yet. Add the first vendor below.</p>
-      {{end}}
-    </div>
+      <div><button type="submit" class="btn">{{ icon "plus" }}Add partner</button></div>
+    </form>
   </section>
 
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Vendors</p><h2>Add a partner</h2></div>
-    <div class="workspace-card__body">
-      <form method="POST" action="/partners" class="form" data-submit-once>
-        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-        <input type="hidden" name="action" value="create_partner">
-        <div class="form__group form-group">
-          <label class="form__label" for="partner_name">Name</label>
-          <input class="form__input" type="text" id="partner_name" name="name" value="{{.PartnerForm.Name}}" maxlength="120" required>
-        </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="partner_slug">Slug</label>
-          <input class="form__input" type="text" id="partner_slug" name="slug" value="{{.PartnerForm.Slug}}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="partner_slug_hint">
-          <small class="form__hint" id="partner_slug_hint">Optional. Generated from the name when left blank.</small>
-        </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="partner_contact">Contact email</label>
-          <input class="form__input" type="email" id="partner_contact" name="contact_email" value="{{.PartnerForm.ContactEmail}}">
-        </div>
-        <button class="btn" type="submit">Add Partner</button>
-      </form>
-    </div>
-  </section>
-
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Access</p><h2>Partner logins</h2></div>
-    <div class="workspace-card__body">
-      {{if .PartnerAccounts}}
-      <div class="table-wrap">
-        <table class="data-table data-table--admin">
-          <thead><tr><th>Username</th><th>Email</th><th>Partner</th></tr></thead>
-          <tbody>
-          {{range .PartnerAccounts}}
-          <tr><td>{{.Username}}</td><td>{{.Email}}</td><td>{{.PartnerName}}</td></tr>
-          {{end}}
-          </tbody>
-        </table>
-      </div>
-      <p class="form__hint">Deactivate a partner login from <a href="/team">Team</a>.</p>
-      {{else}}
-      <p class="text-muted">No partner logins yet.</p>
-      {{end}}
-
-      {{if .Partners}}
-      <form method="POST" action="/partners" class="form" data-submit-once>
-        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-        <input type="hidden" name="action" value="create_account">
-        <div class="form__group form-group">
-          <label class="form__label" for="account_partner">Partner</label>
-          <select class="form__select" id="account_partner" name="partner_id" required>
-            {{range .Partners}}
-            <option value="{{.ID}}" {{if eq (printf "%d" .ID) $.AccountForm.PartnerID}}selected{{end}}>{{.Name}}{{if ne .Status "active"}} (suspended){{end}}</option>
-            {{end}}
+  <section class="section" aria-labelledby="partner-logins">
+    <h2 class="section-title" id="partner-logins">Partner logins</h2>
+    {{ if .PartnerAccounts }}
+    <ul class="list">
+      {{ range .PartnerAccounts }}
+      <li class="list-item"><span class="truncate">{{ .Username }} <span class="muted small">{{ .Email }}</span></span><span class="badge">{{ .PartnerName }}</span></li>
+      {{ end }}
+    </ul>
+    <p class="tiny muted">Deactivate logins from <a href="/team">Team</a>.</p>
+    {{ end }}
+    {{ if .Partners }}
+    <form method="POST" action="/partners" class="card form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <input type="hidden" name="action" value="create_account">
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="account_partner">Partner</label>
+          <select class="select" id="account_partner" name="partner_id" required>
+            {{ range .Partners }}<option value="{{ .ID }}" {{ if eq (printf "%d" .ID) $.AccountForm.PartnerID }}selected{{ end }}>{{ .Name }}{{ if ne .Status "active" }} (suspended){{ end }}</option>{{ end }}
           </select>
         </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="account_username">Username</label>
-          <input class="form__input" type="text" id="account_username" name="username" value="{{.AccountForm.Username}}" minlength="3" maxlength="32" required autocomplete="off">
+        <div class="field">
+          <label class="label" for="account_username">Username</label>
+          <input class="input" type="text" id="account_username" name="username" value="{{ .AccountForm.Username }}" minlength="3" maxlength="32" required autocomplete="off" autocapitalize="none">
         </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="account_email">Email</label>
-          <input class="form__input" type="email" id="account_email" name="email" value="{{.AccountForm.Email}}" required autocomplete="off">
+        <div class="field">
+          <label class="label" for="account_email">Email</label>
+          <input class="input" type="email" id="account_email" name="email" value="{{ .AccountForm.Email }}" required autocomplete="off">
         </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="account_password">Temporary password</label>
-          <input class="form__input" type="password" id="account_password" name="password" minlength="10" maxlength="72" required autocomplete="new-password" aria-describedby="account_password_hint">
-          <small class="form__hint" id="account_password_hint">10 to 72 characters. Share it securely; the partner can reset it from the partner login page.</small>
+        <div class="field">
+          <label class="label" for="account_password">Temporary password</label>
+          <ui-password><input class="input" type="password" id="account_password" name="password" minlength="10" maxlength="72" required autocomplete="new-password"></ui-password>
         </div>
-        <button class="btn" type="submit">Create Partner Login</button>
-      </form>
-      {{end}}
-    </div>
-  </section>
-  {{end}}
-
-  {{if eq .Title "Team Management"}}
-  {{if .TeamMessage}}<ui-alert variant="success"><p>{{.TeamMessage}}</p></ui-alert>{{end}}
-  {{if .TeamError}}<ui-alert variant="danger"><p>{{.TeamError}}</p></ui-alert>{{end}}
-
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Access</p><h2>User directory</h2></div>
-    <div class="workspace-card__body">
-      <ui-table-filter for="admin-team-table" placeholder="Filter users"></ui-table-filter>
-      <div class="table-wrap">
-        <table class="data-table data-table--admin" id="admin-team-table">
-          <thead>
-            <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Action</th></tr>
-          </thead>
-          <tbody>
-            {{if .TeamMembers}}
-              {{range .TeamMembers}}
-              <tr>
-                <td>{{.ID}}</td>
-                <td>{{.Username}}</td>
-                <td>{{.Email}}</td>
-                <td>{{.Role}}</td>
-                <td>
-                  {{if ne .Role "admin"}}
-                  <ui-confirm message="Deactivate {{.Username}}? They will be signed out and cannot sign in again.">
-                  <form method="POST" action="/team" class="table-action-form">
-                    {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
-                    <input type="hidden" name="user_id" value="{{.ID}}">
-                    <button type="submit" class="btn btn--secondary btn--small">Deactivate</button>
-                  </form>
-                  </ui-confirm>
-                  {{else}}
-                  <span>Protected</span>
-                  {{end}}
-                </td>
-              </tr>
-              {{end}}
-            {{else}}
-              <tr><td colspan="5" class="table-empty">No users found.</td></tr>
-            {{end}}
-          </tbody>
-        </table>
       </div>
-    </div>
+      <div><button type="submit" class="btn">{{ icon "user-plus" }}Create login</button></div>
+    </form>
+    {{ else }}
+    <p class="small muted">Add a partner first.</p>
+    {{ end }}
   </section>
-  {{end}}
+{{ end }}
 
-  {{if eq .Title "Audit Log"}}
-  <section class="workspace-card">
-    <div class="workspace-card__header"><p class="eyebrow">Security</p><h2>Recent events</h2></div>
-    <div class="workspace-card__body">
-      {{if .AuditLogs}}
-      <ui-table-filter for="admin-audit-table" placeholder="Filter events"></ui-table-filter>
-      <div class="table-wrap">
-        <table class="data-table data-table--admin" id="admin-audit-table">
-          <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
-          <tbody>
-          {{range .AuditLogs}}
-          <tr>
-            <td>{{.CreatedAt}}</td>
-            <td>{{if .ActorUserID.Valid}}{{.ActorUserID.Int64}}{{else}}system{{end}}</td>
-            <td>{{.Action}}</td>
-            <td>{{.TargetType}} {{if .TargetID.Valid}}#{{.TargetID.Int64}}{{end}}</td>
-            <td>{{.Details}}</td>
-          </tr>
-          {{end}}
-          </tbody>
-        </table>
-      </div>
-      {{else}}
-      <p class="table-empty">No audit events yet.</p>
-      {{end}}
-    </div>
-  </section>
-  {{end}}
-</main>
+{{ if eq .Title "Team Management" }}
+  <div class="page-head">
+    <h1>Team</h1>
+    <a class="btn btn-sm" href="/staff/signup">{{ icon "user-plus" }}Add staff</a>
+  </div>
+  {{ template "notice" dict "Kind" "success" "Text" .TeamMessage }}
+  {{ template "notice" dict "Kind" "danger" "Text" .TeamError }}
+  <ui-table-filter for="admin-team-table" placeholder="Filter people"></ui-table-filter>
+  <div class="table-wrap">
+    <table class="table" id="admin-team-table">
+      <thead><tr><th>User</th><th>Role</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+        {{ range .TeamMembers }}
+        <tr>
+          <td>{{ .Username }}<div class="tiny muted">{{ .Email }}</div></td>
+          <td><span class="badge {{ if eq .Role "admin" }}badge-solid{{ end }}">{{ .Role }}</span></td>
+          <td class="actions">
+            {{ if ne .Role "admin" }}
+            <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in again." confirm-label="Deactivate">
+              <form method="POST" action="/team" class="inline-form">
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <input type="hidden" name="user_id" value="{{ .ID }}">
+                <button type="submit" class="btn btn-secondary btn-sm">Deactivate</button>
+              </form>
+            </ui-confirm>
+            {{ end }}
+          </td>
+        </tr>
+        {{ else }}
+        <tr><td colspan="3" class="muted">No users.</td></tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+{{ end }}
+
+{{ if eq .Title "Audit Log" }}
+  <h1>Audit</h1>
+  {{ if .AuditLogs }}
+  <ui-table-filter for="admin-audit-table" placeholder="Filter events"></ui-table-filter>
+  <div class="table-wrap">
+    <table class="table" id="admin-audit-table">
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+      <tbody>
+        {{ range .AuditLogs }}
+        <tr>
+          <td class="nowrap"><ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02 15:04" }}</ui-relative-time></td>
+          <td>{{ if .ActorUserID.Valid }}#{{ .ActorUserID.Int64 }}{{ else }}system{{ end }}</td>
+          <td class="strong">{{ .Action }}</td>
+          <td>{{ .TargetType }}{{ if .TargetID.Valid }} #{{ .TargetID.Int64 }}{{ end }}</td>
+          <td class="muted">{{ .Details }}</td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  {{ template "empty" dict "Icon" "audit" "Text" "No events yet." }}
+  {{ end }}
+{{ end }}
+
+</div>
 {{ end }}

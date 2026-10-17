@@ -1,54 +1,25 @@
-{{ define "title" }}Admin Login – Sokomoko{{ end }}
-
-{{ define "header-area" }}
-{{ template "admin-header-area" . }}
-{{ end }}
-
-{{ define "footer-area" }}
-{{ template "workspace-footer-area" . }}
-{{ end }}
+{{ define "title" }}Sign in · workspace · sokomoko{{ end }}
+{{ define "layout" }}{{ template "workspace-auth-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="auth-page auth-panel auth-sheet">
-  <header class="auth-panel__header">
-    <h1 class="auth-panel__title auth-sheet__title">Admin and Staff Access</h1>
-    <p class="auth-panel__meta auth-sheet__meta">Sign in with admin or staff credentials to access the dashboard.</p>
-  </header>
-
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
-
-  {{if not .SetupRequired}}
-  <form action="/login" method="POST" class="auth-panel__form form">
-    <fieldset class="form__fieldset">
-      <legend class="form__legend">Admin Credentials</legend>
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-      {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
-
-      <div class="form__group form-group">
-        <label class="form__label" for="username">Username</label>
-        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="Enter your username" required autofocus autocomplete="username">
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="password">Password</label>
-        <div class="form__input-wrap">
-          <input class="form__input" type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password" data-password-input>
-          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="password">Show</button>
-        </div>
-      </div>
-
-      <button type="submit" class="btn btn--full">Sign In</button>
-    </fieldset>
+<div class="auth stack">
+  <h1>Workspace sign in</h1>
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  {{ if not .SetupRequired }}
+  <form action="/login" method="POST" class="form">
+    {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+    {{ if .Next }}<input type="hidden" name="next" value="{{ .Next }}">{{ end }}
+    <div class="field">
+      <label class="label" for="username">Username or email</label>
+      <input class="input" type="text" id="username" name="username" value="{{ .Username }}" required autofocus autocomplete="username" autocapitalize="none">
+    </div>
+    <div class="field">
+      <label class="label" for="password">Password</label>
+      <ui-password><input class="input" type="password" id="password" name="password" required autocomplete="current-password"></ui-password>
+    </div>
+    <button type="submit" class="btn btn-block">Sign in</button>
   </form>
-
-  {{end}}
-  <ui-alert variant="info" title="Security Notice">
-    <p>Only authorized administrators can access this area.</p>
-  </ui-alert>
-
-
-  <p class="auth-panel__links"><a href="/password-reset/request">Forgot password?</a></p>
-</main>
+  <p class="small"><a href="/password-reset/request">Forgot password?</a></p>
+  {{ end }}
+</div>
 {{ end }}

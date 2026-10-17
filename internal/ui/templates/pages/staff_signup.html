@@ -1,60 +1,28 @@
-{{ define "title" }}Create Staff Account{{ end }}
-
-{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
-
-{{ define "header-area" }}
-{{ template "admin-header-area" . }}
-{{ end }}
-
-{{ define "footer-area" }}
-{{ template "workspace-footer-area" . }}
-{{ end }}
-
-{{ define "nav-area" }}
-{{ template "admin-nav-area" . }}
-{{ end }}
+{{ define "title" }}Add staff · admin · sokomoko{{ end }}
+{{ define "layout" }}{{ template "admin-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<section class="auth-panel auth-sheet">
-  <h1 class="auth-panel__title">Create Staff Account</h1>
-  <p class="auth-panel__meta">Admin-only action. Staff can access dashboard and operations routes.</p>
-
-  <ui-alert variant="info">
-    <p>Use this form only for operational staff. Do not share admin credentials.</p>
-  </ui-alert>
-
-  {{if .Message}}
-  <ui-alert variant="info"><p>{{.Message}}</p></ui-alert>
-  {{end}}
-
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
-
-  {{if .ShowForm}}
-  <form class="auth-panel__form form" action="/staff/signup" method="POST">
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-    <fieldset class="form__fieldset">
-      <legend class="form__legend">Staff Details</legend>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="username">Username</label>
-        <input class="form__input" type="text" id="username" name="username" required autofocus>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="email">Email</label>
-        <input class="form__input" type="email" id="email" name="email" required>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="password">Password</label>
-        <input class="form__input" type="password" id="password" name="password" required>
-      </div>
-
-      <button class="btn btn--full" type="submit">Create staff account</button>
-    </fieldset>
+<div class="stack narrow">
+  <h1>Add staff</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  {{ if .ShowForm }}
+  <form action="/staff/signup" method="POST" class="form" data-submit-once>
+    {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+    <div class="field">
+      <label class="label" for="username">Username</label>
+      <input class="input" type="text" id="username" name="username" required autofocus autocomplete="off" autocapitalize="none" minlength="3" maxlength="32">
+    </div>
+    <div class="field">
+      <label class="label" for="email">Email</label>
+      <input class="input" type="email" id="email" name="email" required autocomplete="off">
+    </div>
+    <div class="field">
+      <label class="label" for="password">Temporary password</label>
+      <ui-password><input class="input" type="password" id="password" name="password" required minlength="10" maxlength="72" autocomplete="new-password"></ui-password>
+    </div>
+    <div><button type="submit" class="btn">{{ icon "user-plus" }}Create staff</button></div>
   </form>
-  {{end}}
-</section>
+  {{ end }}
+</div>
 {{ end }}

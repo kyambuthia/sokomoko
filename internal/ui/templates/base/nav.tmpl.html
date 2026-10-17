@@ -1,105 +1,47 @@
-{{ define "storefront-nav-area" }}
+{{/* dict: Tab (shop, search, cart, account) and Page. */}}
+{{ define "tabbar" }}
+<nav class="tabbar" aria-label="Primary">
+  <a href="/" {{ if eq .Tab "shop" }}aria-current="page"{{ end }}>{{ icon "home" }}Shop</a>
+  <a href="/search" {{ if eq .Tab "search" }}aria-current="page"{{ end }}>{{ icon "search" }}Search</a>
+  <ui-cart-badge {{ if signedIn .Page }}signed-in{{ end }}>
+    <a href="/cart" class="has-count" {{ if eq .Tab "cart" }}aria-current="page"{{ end }}>{{ icon "cart" }}Cart<span class="count" hidden></span></a>
+  </ui-cart-badge>
+  <a href="/account" {{ if eq .Tab "account" }}aria-current="page"{{ end }}>{{ icon "user" }}Account</a>
+</nav>
 {{ end }}
 
-{{ define "admin-nav-area" }}
-<div class="nav-shell nav-shell--left nav-shell--sticky">
-    <nav
-        class="site-nav nav nav--left nav--vertical nav--rail nav--sticky"
-        data-nav
-        data-nav-placement="left"
-        data-nav-collapsible="mobile"
-    >
-        <div class="nav__bar">
-            <div class="nav__heading">
-                <a href="/" class="nav__brand">SOKOMOKO</a>
-                <p class="nav__label">Admin Workspace</p>
-                <p class="nav__context">{{.Title}}</p>
-            </div>
-            <button
-                type="button"
-                class="site-nav__toggle nav__toggle"
-                data-nav-toggle
-                aria-expanded="false"
-                aria-controls="admin-site-nav"
-            >
-                Sections
-            </button>
-        </div>
-        <div class="site-nav__menu nav__menu" id="admin-site-nav" data-nav-menu>
-            <div class="nav__section nav__section--primary">
-                <p class="nav__section-title">Operations</p>
-                <ul class="site-nav__list nav__list">
-                    <li class="site-nav__item nav__item"><a href="/" class="site-nav__link nav__link" {{if eq .Title "Admin Dashboard"}}aria-current="page"{{end}}>Dashboard</a></li>
-                    <li class="site-nav__item nav__item"><a href="/products" class="site-nav__link nav__link" {{if eq .Title "Product Management"}}aria-current="page"{{end}}>Products</a></li>
-                    <li class="site-nav__item nav__item"><a href="/orders" class="site-nav__link nav__link" {{if eq .Title "Order Management"}}aria-current="page"{{end}}>Orders</a></li>
-                    <li class="site-nav__item nav__item"><a href="/reports" class="site-nav__link nav__link" {{if eq .Title "Sales Reports"}}aria-current="page"{{end}}>Reports</a></li>
-                    <li class="site-nav__item nav__item"><a href="/deliveries" class="site-nav__link nav__link" {{if eq .Title "Delivery Management"}}aria-current="page"{{end}}>Deliveries</a></li>
-                    <li class="site-nav__item nav__item"><a href="/categories" class="site-nav__link nav__link" {{if eq .Title "Categories"}}aria-current="page"{{end}}>Categories</a></li>
-                    {{if eq .Role "admin"}}
-                    <li class="site-nav__item nav__item"><a href="/partners" class="site-nav__link nav__link" {{if eq .Title "Partners"}}aria-current="page"{{end}}>Partners</a></li>
-                    <li class="site-nav__item nav__item"><a href="/team" class="site-nav__link nav__link" {{if eq .Title "Team Management"}}aria-current="page"{{end}}>Team</a></li>
-                    <li class="site-nav__item nav__item"><a href="/audit" class="site-nav__link nav__link" {{if eq .Title "Audit Log"}}aria-current="page"{{end}}>Audit</a></li>
-                    <li class="site-nav__item nav__item"><a href="/staff/signup" class="site-nav__link nav__link" {{if eq .Title "Staff Account Setup"}}aria-current="page"{{end}}>Staff Accounts</a></li>
-                    {{end}}
-                </ul>
-            </div>
-            <div class="nav__section nav__section--secondary">
-                <p class="nav__section-title">External</p>
-                <ul class="site-nav__list nav__list">
-                    <li class="site-nav__item nav__item"><a href="/storefront" class="site-nav__link nav__link">Storefront</a></li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-</div>
+{{ define "admin-nav" }}
+<nav class="ws-nav" aria-label="Admin">
+  <div class="ws-nav__list">
+    <a class="ws-nav__link" href="/" {{ if eq .Title "Admin Dashboard" }}aria-current="page"{{ end }}>{{ icon "dashboard" }}Overview</a>
+    <a class="ws-nav__link" href="/orders" {{ if eq .Title "Order Management" }}aria-current="page"{{ end }}>{{ icon "orders" }}Orders</a>
+    <a class="ws-nav__link" href="/deliveries" {{ if eq .Title "Delivery Management" }}aria-current="page"{{ end }}>{{ icon "truck" }}Deliveries</a>
+    <a class="ws-nav__link" href="/products" {{ if eq .Title "Product Management" }}aria-current="page"{{ end }}>{{ icon "box" }}Products</a>
+    <a class="ws-nav__link" href="/categories" {{ if eq .Title "Categories" }}aria-current="page"{{ end }}>{{ icon "category" }}Categories</a>
+    <a class="ws-nav__link" href="/reports" {{ if eq .Title "Sales Reports" }}aria-current="page"{{ end }}>{{ icon "chart" }}Reports</a>
+    {{ if eq .Role "admin" }}
+    <span class="ws-nav__sep" aria-hidden="true"></span>
+    <a class="ws-nav__link" href="/partners" {{ if eq .Title "Partners" }}aria-current="page"{{ end }}>{{ icon "store" }}Partners</a>
+    <a class="ws-nav__link" href="/team" {{ if eq .Title "Team Management" }}aria-current="page"{{ end }}>{{ icon "users" }}Team</a>
+    <a class="ws-nav__link" href="/staff/signup" {{ if eq .Title "Staff Account Setup" }}aria-current="page"{{ end }}>{{ icon "user-plus" }}Add staff</a>
+    <a class="ws-nav__link" href="/audit" {{ if eq .Title "Audit Log" }}aria-current="page"{{ end }}>{{ icon "audit" }}Audit</a>
+    {{ end }}
+    <span class="ws-nav__sep" aria-hidden="true"></span>
+    <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
+  </div>
+</nav>
 {{ end }}
 
-{{ define "partner-nav-area" }}
-<div class="nav-shell nav-shell--left nav-shell--sticky">
-    <nav
-        class="site-nav nav nav--left nav--vertical nav--rail nav--sticky"
-        data-nav
-        data-nav-placement="left"
-        data-nav-collapsible="mobile"
-    >
-        <div class="nav__bar">
-            <div class="nav__heading">
-                <a href="/" class="nav__brand">SOKOMOKO</a>
-                <p class="nav__label">Partner Workspace</p>
-                <p class="nav__context">{{.Title}}</p>
-            </div>
-            <button
-                type="button"
-                class="site-nav__toggle nav__toggle"
-                data-nav-toggle
-                aria-expanded="false"
-                aria-controls="partner-site-nav"
-            >
-                Sections
-            </button>
-        </div>
-        <div class="site-nav__menu nav__menu" id="partner-site-nav" data-nav-menu>
-            <div class="nav__section nav__section--primary">
-                <p class="nav__section-title">Workspace</p>
-                <ul class="site-nav__list nav__list">
-                    <li class="site-nav__item nav__item"><a href="/dashboard" class="site-nav__link nav__link" {{if eq .Title "Partner Dashboard"}}aria-current="page"{{end}}>Dashboard</a></li>
-                    <li class="site-nav__item nav__item"><a href="/products" class="site-nav__link nav__link" {{if eq .Title "Partner Products"}}aria-current="page"{{end}}>Products</a></li>
-                    <li class="site-nav__item nav__item"><a href="/products/new" class="site-nav__link nav__link" {{if eq .Title "Add Product"}}aria-current="page"{{end}}>Add Product</a></li>
-                    <li class="site-nav__item nav__item"><a href="/orders" class="site-nav__link nav__link" {{if eq .Title "Partner Orders"}}aria-current="page"{{end}}>Orders</a></li>
-                    <li class="site-nav__item nav__item"><a href="/setup" class="site-nav__link nav__link" {{if eq .Title "Store Setup"}}aria-current="page"{{end}}>Store Setup</a></li>
-                </ul>
-            </div>
-            <div class="nav__section nav__section--secondary">
-                <p class="nav__section-title">External</p>
-                <ul class="site-nav__list nav__list">
-                    <li class="site-nav__item nav__item"><a href="/storefront" class="site-nav__link nav__link">Storefront</a></li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-</div>
-{{ end }}
-
-{{ define "nav-area" }}
-    {{ template "storefront-nav-area" . }}
+{{ define "partner-nav" }}
+<nav class="ws-nav" aria-label="Partner">
+  <div class="ws-nav__list">
+    <a class="ws-nav__link" href="/dashboard" {{ if eq .Title "Partner Dashboard" }}aria-current="page"{{ end }}>{{ icon "dashboard" }}Overview</a>
+    <a class="ws-nav__link" href="/orders" {{ if eq .Title "Partner Orders" }}aria-current="page"{{ end }}>{{ icon "orders" }}Orders</a>
+    <a class="ws-nav__link" href="/products" {{ if eq .Title "Partner Products" }}aria-current="page"{{ end }}>{{ icon "box" }}Products</a>
+    <a class="ws-nav__link" href="/products/new" {{ if eq .Title "Add Product" }}aria-current="page"{{ end }}>{{ icon "plus" }}Add product</a>
+    <a class="ws-nav__link" href="/setup" {{ if eq .Title "Store Setup" }}aria-current="page"{{ end }}>{{ icon "settings" }}Store</a>
+    <span class="ws-nav__sep" aria-hidden="true"></span>
+    <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
+  </div>
+</nav>
 {{ end }}

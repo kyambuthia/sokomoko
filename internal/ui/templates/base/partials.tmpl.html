@@ -1,0 +1,65 @@
+{{/* dict: P (catalog product), CSRFToken. */}}
+{{ define "product-card" }}
+<article class="product">
+  <div class="product__media">
+    <img src="{{ .P.ImageURL }}" alt="{{ .P.ImageAlt }}" width="400" height="400" loading="lazy">
+    {{ if not .P.InStock }}<span class="badge">sold out</span>{{ end }}
+  </div>
+  <a class="product__name" href="/products/{{ .P.Slug }}">{{ .P.Name }}</a>
+  <div class="product__meta">
+    <span class="product__price">${{ .P.Price }}</span>
+    {{ if .P.InStock }}
+    <ui-add-to-cart>
+      <form action="/cart/add" method="POST" class="product__add">
+        {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+        <input type="hidden" name="product_id" value="{{ .P.ID }}">
+        <input type="hidden" name="quantity" value="1">
+        <button type="submit" class="btn btn-icon btn-sm" aria-label="Add {{ .P.Name }} to cart">{{ icon "plus" }}</button>
+      </form>
+    </ui-add-to-cart>
+    {{ end }}
+  </div>
+</article>
+{{ end }}
+
+{{/* dict: Products, CSRFToken. */}}
+{{ define "product-grid" }}
+<ul class="products">
+  {{ range .Products }}<li>{{ template "product-card" dict "P" . "CSRFToken" $.CSRFToken }}</li>{{ end }}
+</ul>
+{{ end }}
+
+{{/* dict: Kind (success, danger, info) and Text. */}}
+{{ define "notice" }}
+{{ if .Text }}
+<div class="notice {{ if eq .Kind "danger" }}notice-error{{ end }}" role="{{ if eq .Kind "danger" }}alert{{ else }}status{{ end }}">
+  {{ if eq .Kind "danger" }}{{ icon "alert" }}{{ else if eq .Kind "success" }}{{ icon "success" }}{{ else }}{{ icon "info" }}{{ end }}
+  <p>{{ .Text }}</p>
+</div>
+{{ end }}
+{{ end }}
+
+{{/* dict: Icon, Text, and optionally Href and Action. */}}
+{{ define "empty" }}
+<div class="empty">
+  {{ icon .Icon }}
+  <p>{{ .Text }}</p>
+  {{ if .Href }}<a class="btn btn-secondary" href="{{ .Href }}">{{ .Action }}</a>{{ end }}
+</div>
+{{ end }}
+
+{{/* Minimal chrome for sign-in, sign-up, password reset, and first-run setup. */}}
+{{ define "auth-layout" }}
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="bar">
+    <div class="container bar__inner">
+      <a class="brand" href="/">sokomoko</a>
+      <div class="bar__actions">{{ template "theme-toggle" }}</div>
+    </div>
+  </header>
+  <main id="main" class="container main" tabindex="-1">
+    {{ template "main-area" . }}
+  </main>
+</body>
+{{ end }}

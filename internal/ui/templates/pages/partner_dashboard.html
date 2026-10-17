@@ -1,78 +1,28 @@
-{{ define "title" }}Partner Dashboard{{ end }}
-
-{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
-
-{{ define "header-area" }}
-{{ template "partner-header-area" . }}
-{{ end }}
-
-{{ define "footer-area" }}
-{{ template "workspace-footer-area" . }}
-{{ end }}
-
-{{ define "nav-area" }}
-{{ template "partner-nav-area" . }}
-{{ end }}
+{{ define "title" }}Overview · partner · sokomoko{{ end }}
+{{ define "layout" }}{{ template "partner-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="workspace-page partner-page" data-partner-dashboard>
-  <header class="workspace-page__header">
+<div class="stack">
+  <div class="page-head">
     <div>
-      <p class="eyebrow">Partner workspace</p>
-      <h1 class="workspace-page__title">Run your store with clarity.</h1>
-      <p class="workspace-page__lead">Manage the catalog, move orders forward, and keep your store details current.</p>
+      <h1>{{ .StoreName }}</h1>
+      <p class="muted small">{{ .Username }} · {{ .Role }}</p>
     </div>
-    <a href="/products/new" class="btn">Add a product</a>
-  </header>
-
-  <section class="workspace-metrics partner-metrics" aria-label="Store overview">
-    <ui-metric-card label="Products" value="{{.ProductCount}}" note="Catalog entries" data-partner-metric="product_count"></ui-metric-card>
-    <ui-metric-card label="Workspace" value="{{.StoreSlug}}" note="Store slug"></ui-metric-card>
-    <ui-metric-card label="Access" value="{{.Role}}" note="Current role"></ui-metric-card>
-    <ui-metric-card label="New Orders" value="{{.NewOrders}}" note="Awaiting acceptance" data-partner-metric="new_orders"></ui-metric-card>
-    <ui-metric-card label="In Progress" value="{{.InProgressOrders}}" note="Accepted or packing" data-partner-metric="in_progress_orders"></ui-metric-card>
-    <ui-metric-card label="Dispatched" value="{{.DispatchedOrders}}" note="On the road" data-partner-metric="dispatched_orders"></ui-metric-card>
-  </section>
-
-  {{if gt .OverdueOrders 0}}
-  <ui-alert variant="danger"><p><strong>{{.OverdueOrders}}</strong> orders are overdue for acceptance (older than 2 hours).</p></ui-alert>
-  {{end}}
-
-  <section class="workspace-actions">
-    <div>
-      <p class="eyebrow">Next actions</p>
-      <h2>Keep the operation moving.</h2>
-    </div>
-    <div class="workspace-actions__links">
-      <a href="/products" class="btn">Manage products</a>
-      <a href="/products/new" class="btn btn--secondary">Add product</a>
-      <a href="/orders" class="btn btn--secondary">Fulfillment queue</a>
-      <a href="/setup" class="btn btn--secondary">Update store setup</a>
-    </div>
-  </section>
-
-  <section class="workspace-card">
-    <div class="workspace-card__header">
-      <p class="eyebrow">Store profile</p>
-      <h2>{{.StoreName}}</h2>
-    </div>
-    <div class="workspace-card__body workspace-card__body--details">
-      <p><strong>Name:</strong> {{.StoreName}}</p>
-      <p><strong>Slug:</strong> {{.StoreSlug}}</p>
-      <p><strong>Contact:</strong> {{.ContactEmail}}</p>
-      <p><strong>Description:</strong> {{if .Description}}{{.Description}}{{else}}Not set{{end}}</p>
-    </div>
-  </section>
-
-  <section class="workspace-card workspace-card--muted">
-    <div class="workspace-card__header">
-      <p class="eyebrow">Session context</p>
-      <h2>Current access</h2>
-    </div>
-    <div class="workspace-card__body workspace-card__body--details">
-      <p><strong>Signed in as:</strong> {{.Username}} ({{.Role}})</p>
-      <p><strong>Products in catalog:</strong> {{.ProductCount}}</p>
-    </div>
-  </section>
-</main>
+    <a class="btn btn-sm" href="/products/new">{{ icon "plus" }}Add product</a>
+  </div>
+  {{ if gt .OverdueOrders 0 }}
+  <a class="notice notice-error" href="/orders?status=new">{{ icon "warning" }}<p>{{ .OverdueOrders }} order{{ if ne .OverdueOrders 1 }}s{{ end }} waiting over 2 hours</p></a>
+  {{ end }}
+  <dl class="stats">
+    <div class="stat"><dt>New</dt><dd>{{ .NewOrders }}</dd></div>
+    <div class="stat"><dt>In progress</dt><dd>{{ .InProgressOrders }}</dd></div>
+    <div class="stat"><dt>Dispatched</dt><dd>{{ .DispatchedOrders }}</dd></div>
+    <div class="stat"><dt>Products</dt><dd>{{ .ProductCount }}</dd></div>
+  </dl>
+  <nav class="list" aria-label="Shortcuts">
+    <a class="list-item" href="/orders"><span>{{ icon "orders" }}</span><span>Orders</span>{{ icon "chevron-right" }}</a>
+    <a class="list-item" href="/products"><span>{{ icon "box" }}</span><span>Products</span>{{ icon "chevron-right" }}</a>
+    <a class="list-item" href="/setup"><span>{{ icon "settings" }}</span><span>Store</span>{{ icon "chevron-right" }}</a>
+  </nav>
+</div>
 {{ end }}

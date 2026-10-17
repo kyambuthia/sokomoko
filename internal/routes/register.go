@@ -131,7 +131,6 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/", staff(PartnerRoot(a)))
 	mux.HandleFunc("/login", a.Auth.WorkspaceLogin(a.Templates.AdminLogin))
 	mux.HandleFunc("/logout", a.Auth.Logout())
-	mux.Handle("/signup", withRole(a, db.RoleAdmin, a.Auth.StaffSignUp(a.Templates.StaffSignup)))
 	mux.HandleFunc(
 		"/password-reset/request",
 		a.Auth.PasswordResetRequest(

@@ -87,8 +87,8 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 	if orders[0].TotalAmount != 2810 {
 		t.Fatalf("order total amount=%s expected=28.10", orders[0].TotalAmount)
 	}
-	if !strings.Contains(orders[0].DeliveryNotice, "Payment method selected: Cash on Delivery") {
-		t.Fatalf("expected payment method in delivery notice, got %q", orders[0].DeliveryNotice)
+	if orders[0].DeliveryNotice != "Order received. Awaiting partner acceptance." {
+		t.Fatalf("unexpected delivery notice %q", orders[0].DeliveryNotice)
 	}
 
 	payments, err := testStore.ListPaymentsByOrderID(orders[0].ID)
@@ -292,7 +292,7 @@ func TestIntegration_CheckoutValidationRendersCurrentCart(t *testing.T) {
 	}
 	// The cart changed after the checkout was prepared, so the re-rendered
 	// checkout reflects the current cart rather than the stale snapshot.
-	if !strings.Contains(body, "Snapshot Product × 1 - $10.00") || !strings.Contains(body, "$17.30") {
+	if !strings.Contains(body, "Snapshot Product") || !strings.Contains(body, "× 1") || !strings.Contains(body, "$10.00") || !strings.Contains(body, "$17.30") {
 		t.Fatalf("expected re-priced checkout line in body, got %q", body)
 	}
 }

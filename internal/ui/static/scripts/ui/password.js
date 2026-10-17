@@ -6,13 +6,10 @@ export class UIPassword extends HTMLElement {
   connectedCallback() {
     const input = this.querySelector("input");
     if (!input || this.toggle) return;
-    this.style.position = "relative";
-    this.style.display = "block";
-    input.style.paddingRight = "52px";
+    this.classList.add("password");
     this.toggle = document.createElement("button");
     this.toggle.type = "button";
-    this.toggle.className = "btn btn-icon btn-sm";
-    this.toggle.style.cssText = "position:absolute;right:6px;top:50%;transform:translateY(-50%)";
+    this.toggle.className = "btn btn-icon btn-sm password__toggle";
     const render = () => {
       const hidden = input.type === "password";
       this.toggle.replaceChildren(icon(hidden ? "eye" : "eye-off"));

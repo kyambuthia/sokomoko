@@ -1,78 +1,49 @@
-{{ define "title" }}Checkout{{ end }}
+{{ define "title" }}Checkout · sokomoko{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "cart" "Page" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="storefront-page checkout-page">
-  <header class="page-intro">
-    <p class="eyebrow">Final step</p>
-    <h1 class="page-intro__title">Almost there.</h1>
-    <p class="page-intro__lead">Confirm your delivery details and payment method, then we’ll take care of the rest.</p>
-  </header>
-
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
-
-  {{if .CanCheckout}}
-  {{if .ExpiresAt}}<ui-countdown deadline="{{.ExpiresAt}}" expired-message="Your reserved items were released. Reload this page to reserve them again."><p>Items are reserved for 15 minutes.</p></ui-countdown>{{end}}
-  <div class="checkout-layout">
-    <section class="checkout-card checkout-summary" aria-labelledby="checkout-summary-title">
-      <div class="checkout-card__header">
-        <p class="eyebrow">Your order</p>
-        <h2 id="checkout-summary-title">A considered selection.</h2>
-      </div>
-      <div class="checkout-items">
-        {{range .Items}}
-        <div class="checkout-item" aria-label="{{.ProductName}} × {{.Quantity}} - ${{.LineTotal}}">
-          <div>
-            <strong class="checkout-item__name">{{.ProductName}}</strong>
-            <span class="checkout-item__meta">Qty {{.Quantity}} · ${{.UnitPrice}} each</span>
-          </div>
-          <strong>${{.LineTotal}}</strong>
-        </div>
-        {{end}}
-      </div>
-      <div class="checkout-totals">
-        <div class="checkout-total"><span>Subtotal</span><span>${{.Subtotal}}</span></div>
-        <div class="checkout-total"><span>Shipping</span><span>${{.ShippingFee}}</span></div>
-        <div class="checkout-total"><span>Estimated tax</span><span>${{.TaxAmount}}</span></div>
-        <div class="checkout-total checkout-total--grand"><strong>Total</strong><strong>${{.TotalAmount}}</strong></div>
-      </div>
-    </section>
-
-    <form action="{{.FormAction}}" method="POST" class="checkout-card checkout-form" data-api-checkout data-checkout-token="{{.IdempotencyKey}}">
-      <div class="checkout-card__header">
-        <p class="eyebrow">Delivery details</p>
-        <h2>Where should we send it?</h2>
-      </div>
-      <fieldset class="form__fieldset">
-        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-        <input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}">
-        <div class="form__group form-group">
-          <label class="form__label" for="delivery_address">Delivery address</label>
-          <textarea class="form__textarea" id="delivery_address" name="delivery_address" rows="5" maxlength="500" autocomplete="street-address" required>{{.DeliveryAddress}}</textarea>
-        </div>
-        <div class="form__group form-group">
-          <label class="form__label" for="payment_method">Payment method</label>
-          <select class="form__select" id="payment_method" name="payment_method" required>
-            {{range .PaymentMethods}}
-            <option value="{{.Value}}" {{if eq $.PaymentMethod .Value}}selected{{end}}>{{.Label}}</option>
-            {{end}}
-          </select>
-        </div>
-      </fieldset>
-      <div class="checkout-form__actions">
-        <a href="/cart" class="btn btn--secondary">Back to cart</a>
-        <button type="submit" class="btn">Place order</button>
-      </div>
-    </form>
+<div class="stack">
+  <div class="page-head">
+    <h1>Checkout</h1>
+    {{ if and .CanCheckout .ExpiresAt }}
+    <ui-countdown deadline="{{ .ExpiresAt }}" expired-message="Hold expired. Reload to reserve again."><span class="badge" data-countdown>{{ icon "clock" }}Held 15 min</span></ui-countdown>
+    {{ end }}
   </div>
-  {{else}}
-  <section class="cart-empty">
-    <p class="eyebrow">Nothing to check out</p>
-    <h2>Your cart is empty.</h2>
-    <p>Add something first, then come back to complete your order.</p>
-    <a href="/" class="btn">Back to storefront</a>
-  </section>
-  {{end}}
-</main>
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+
+  {{ if .CanCheckout }}
+  <div class="split">
+    <form action="{{ .FormAction }}" method="POST" class="form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <input type="hidden" name="idempotency_key" value="{{ .IdempotencyKey }}">
+      <div class="field">
+        <label class="label" for="delivery_address">Delivery address</label>
+        <textarea class="textarea" id="delivery_address" name="delivery_address" rows="3" maxlength="500" autocomplete="street-address" required>{{ .DeliveryAddress }}</textarea>
+      </div>
+      <fieldset class="field">
+        <legend class="label">Payment</legend>
+        {{ range .PaymentMethods }}
+        <label class="choice"><input type="radio" name="payment_method" value="{{ .Value }}" {{ if eq $.PaymentMethod .Value }}checked{{ end }} required>{{ .Label }}</label>
+        {{ end }}
+      </fieldset>
+      <button type="submit" class="btn btn-block">Place order · ${{ .TotalAmount }}</button>
+    </form>
+    <aside class="card stack sticky order-first-mobile" aria-label="Order summary">
+      <ul class="stack-sm">
+        {{ range .Items }}
+        <li class="row-between small"><span class="truncate">{{ .ProductName }} <span class="muted">× {{ .Quantity }}</span></span><span>${{ .LineTotal }}</span></li>
+        {{ end }}
+      </ul>
+      <dl class="kv small">
+        <div><dt>Subtotal</dt><dd>${{ .Subtotal }}</dd></div>
+        <div><dt>Shipping</dt><dd>{{ if eq .ShippingFee 0 }}Free{{ else }}${{ .ShippingFee }}{{ end }}</dd></div>
+        <div><dt>Tax (est.)</dt><dd>${{ .TaxAmount }}</dd></div>
+        <div class="total"><dt>Total</dt><dd>${{ .TotalAmount }}</dd></div>
+      </dl>
+    </aside>
+  </div>
+  {{ else }}
+  {{ template "empty" dict "Icon" "cart" "Text" "Nothing to check out." "Href" "/" "Action" "Shop" }}
+  {{ end }}
+</div>
 {{ end }}

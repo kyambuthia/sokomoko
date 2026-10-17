@@ -1,45 +1,28 @@
-{{ define "title" }}Create Account{{ end }}
+{{ define "title" }}Create account · sokomoko{{ end }}
+{{ define "layout" }}{{ template "auth-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="auth-page auth-panel auth-sheet">
-  <header class="auth-panel__header">
-    <h1 class="auth-panel__title auth-sheet__title">Create Account</h1>
-    <p class="auth-panel__meta auth-sheet__meta">Open a customer account to place and track orders.</p>
-  </header>
-
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
-
-  <form action="/signup" method="POST" class="auth-panel__form form">
-    <fieldset class="form__fieldset">
-      <legend class="form__legend">Registration</legend>
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-
-      <div class="form__group form-group">
-        <label class="form__label" for="username">Username</label>
-        <input class="form__input" type="text" id="username" name="username" value="{{.Username}}" placeholder="choose a username" required autofocus autocomplete="username">
-        <small class="form__hint">Use 3 to 24 characters. Letters and numbers work best.</small>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="email">Email</label>
-        <input class="form__input" type="email" id="email" name="email" value="{{.Email}}" placeholder="you@example.com" required autocomplete="email">
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="password">Password</label>
-        <div class="form__input-wrap">
-          <input class="form__input" type="password" id="password" name="password" required autocomplete="new-password" data-password-input>
-          <button type="button" class="btn btn--secondary btn--small form__password-toggle" data-password-toggle data-target="password">Show</button>
-        </div>
-        <small class="form__hint">Use at least 8 characters with a mix of letters and numbers.</small>
-      </div>
-
-      <button type="submit" class="btn btn--full">Create Account</button>
-    </fieldset>
+<div class="auth stack">
+  <h1>Create account</h1>
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  <form action="/signup" method="POST" class="form">
+    {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+    <div class="field">
+      <label class="label" for="username">Username</label>
+      <input class="input" type="text" id="username" name="username" value="{{ .Username }}" required autofocus autocomplete="username" autocapitalize="none" minlength="3" maxlength="32" aria-describedby="username-hint">
+      <small class="hint" id="username-hint">3–32 letters, numbers, dots, dashes, or underscores</small>
+    </div>
+    <div class="field">
+      <label class="label" for="email">Email</label>
+      <input class="input" type="email" id="email" name="email" value="{{ .Email }}" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label class="label" for="password">Password</label>
+      <ui-password><input class="input" type="password" id="password" name="password" required minlength="10" maxlength="72" autocomplete="new-password" aria-describedby="password-hint"></ui-password>
+      <small class="hint" id="password-hint">10–72 characters</small>
+    </div>
+    <button type="submit" class="btn btn-block">Create account</button>
   </form>
-
-  <p class="auth-panel__alt">Already registered? <a href="/login">Sign in</a>.</p>
-</main>
+  <p class="small">Have an account? <a href="/login">Sign in</a></p>
+</div>
 {{ end }}

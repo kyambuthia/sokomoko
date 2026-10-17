@@ -79,7 +79,7 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
       - name: Check JavaScript syntax
-        run: for f in internal/ui/static/scripts/*.js; do node --check "$f"; done
+        run: for f in internal/ui/static/scripts/*.js internal/ui/static/scripts/ui/*.js; do node --check "$f" || exit 1; done
 
       - name: Run Go tests
         run: go test -race ./...

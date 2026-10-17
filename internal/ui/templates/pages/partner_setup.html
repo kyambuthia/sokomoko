@@ -1,84 +1,44 @@
-{{ define "title" }}Store Setup{{ end }}
-
-{{ define "body-class" }}site site--workspace site--nav-left-rail{{ end }}
-
-{{ define "header-area" }}
-{{ template "partner-header-area" . }}
-{{ end }}
-
-{{ define "footer-area" }}
-{{ template "workspace-footer-area" . }}
-{{ end }}
-
-{{ define "nav-area" }}
-{{ template "partner-nav-area" . }}
-{{ end }}
+{{ define "title" }}Store · partner · sokomoko{{ end }}
+{{ define "layout" }}{{ template "partner-layout" . }}{{ end }}
 
 {{ define "main-area" }}
-<main class="workspace-page workspace-form-page">
-  <header class="workspace-page__header">
-    <div>
-      <p class="eyebrow">Store setup</p>
-      <h1 class="workspace-page__title">Give your store a clear identity.</h1>
-      <p class="workspace-page__lead">Set the details customers and your team will use to recognize this store.</p>
+<div class="stack narrow">
+  <h1>Store</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  {{ if .CanEdit }}
+  <form action="/setup" method="POST" class="form" data-submit-once>
+    {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+    <div class="field">
+      <label class="label" for="store_name">Name</label>
+      <input class="input" type="text" id="store_name" name="store_name" value="{{ .Settings.StoreName }}" required autofocus>
     </div>
-  </header>
-
-  {{if .Message}}
-  <ui-alert variant="info"><p>{{.Message}}</p></ui-alert>
-  {{end}}
-
-  {{if .Error}}
-  <ui-alert variant="danger"><p>{{.Error}}</p></ui-alert>
-  {{end}}
-
-  {{if .CanEdit}}
-  <form class="workspace-card workspace-form-card form" action="/setup" method="POST">
-    <fieldset class="form__fieldset">
-      {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-      <legend class="form__legend">Store Identity</legend>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="store_name">Store Name</label>
-        <input class="form__input" type="text" id="store_name" name="store_name" value="{{.Settings.StoreName}}" required autofocus>
+    <div class="form-row">
+      <div class="field">
+        <label class="label" for="store_slug">Slug</label>
+        <input class="input" type="text" id="store_slug" name="store_slug" value="{{ .Settings.StoreSlug }}" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" autocapitalize="none">
       </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="store_slug">Store Slug</label>
-        <input class="form__input" type="text" id="store_slug" name="store_slug" value="{{.Settings.StoreSlug}}" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" aria-describedby="store_slug_hint">
-        <small class="form__hint" id="store_slug_hint">Lowercase letters, numbers, and dashes.</small>
+      <div class="field">
+        <label class="label" for="contact_email">Contact email</label>
+        <input class="input" type="email" id="contact_email" name="contact_email" value="{{ .Settings.ContactEmail }}" required>
       </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="contact_email">Contact Email</label>
-        <input class="form__input" type="email" id="contact_email" name="contact_email" value="{{.Settings.ContactEmail}}" required>
-      </div>
-
-      <div class="form__group form-group">
-        <label class="form__label" for="description">Store Description</label>
-        <textarea class="form__textarea" id="description" name="description" rows="4">{{.Settings.Description}}</textarea>
-      </div>
-
-      <button class="btn btn--full" type="submit">Save Setup</button>
-    </fieldset>
+    </div>
+    <div class="field">
+      <label class="label" for="description">Description</label>
+      <textarea class="textarea" id="description" name="description" rows="3">{{ .Settings.Description }}</textarea>
+    </div>
+    <div><button type="submit" class="btn">Save</button></div>
   </form>
-  {{else}}
-  <section class="workspace-card workspace-form-card">
-    <h2 class="form__legend">Store Identity</h2>
-    {{if .Settings.StoreName}}
-    <dl>
-      <dt>Store Name</dt><dd>{{.Settings.StoreName}}</dd>
-      <dt>Store Slug</dt><dd>{{.Settings.StoreSlug}}</dd>
-      <dt>Contact Email</dt><dd>{{.Settings.ContactEmail}}</dd>
-      {{if .Settings.Description}}<dt>Description</dt><dd>{{.Settings.Description}}</dd>{{end}}
-    </dl>
-    {{else}}
-    <p>The marketplace has not been set up yet. A platform admin or staff member needs to complete store setup.</p>
-    {{end}}
-    <p class="form__hint">Store settings are managed by platform admins and staff.</p>
-  </section>
-  {{end}}
-
-  <p class="auth-panel__links"><a href="/dashboard">Go to partner dashboard</a></p>
-</main>
+  {{ else if .Settings.StoreName }}
+  <dl class="kv card">
+    <div><dt>Name</dt><dd>{{ .Settings.StoreName }}</dd></div>
+    <div><dt>Slug</dt><dd>{{ .Settings.StoreSlug }}</dd></div>
+    <div><dt>Contact</dt><dd>{{ .Settings.ContactEmail }}</dd></div>
+    {{ if .Settings.Description }}<div><dt>About</dt><dd>{{ .Settings.Description }}</dd></div>{{ end }}
+  </dl>
+  <p class="tiny muted">Managed by platform admins.</p>
+  {{ else }}
+  {{ template "empty" dict "Icon" "settings" "Text" "Store not set up yet. A platform admin needs to complete it." }}
+  {{ end }}
+</div>
 {{ end }}

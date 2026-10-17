@@ -4,7 +4,6 @@ package checkout
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -246,12 +245,9 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	if err != nil {
 		return 0, Summary{}, err
 	}
-	notice := fmt.Sprintf(
-		"%s Payment method selected: %s. Subtotal $%s, shipping $%s, estimated tax $%s.",
-		deliveryNoticePrefix,
-		s.payments.MethodLabel(method),
-		summary.Subtotal, summary.ShippingFee, summary.TaxAmount,
-	)
+	// The payment method and totals live on the payment and order rows; the
+	// notice is only the customer-facing fulfillment message.
+	notice := deliveryNoticePrefix
 
 	placement, err := s.store.PlaceOrderFromCheckoutWithPayment(userID, key, address, notice, paymentRecord)
 	if err != nil {
