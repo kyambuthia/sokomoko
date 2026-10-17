@@ -1,143 +1,105 @@
 # Frontend
 
-The UI is server-rendered HTML with plain CSS and JavaScript. There is no
-bundler, transpiler, or package manager. Everything under `internal/ui/` is
-embedded in the binary.
+Server-rendered HTML with one stylesheet and a small library of ES-module web
+components. There is no bundler or package manager; everything under
+`internal/ui/` is embedded in the binary. Visual rules, tokens, and the
+component catalogue are in [design.md](design.md).
 
 ```text
 internal/ui/
   ui.go                 go:embed for templates/ and static/
   templates.go          ParseTemplates: one *template.Template per page
-  funcs.go              template functions: asset, dict, json, rfc3339
+  funcs.go              template functions: asset, icon, dict, list, field, signedIn, json, rfc3339
   assets.go             AssetURL cache-busting
   product_images.go     ProductImageURL and bundled image fallback
   templates/
-    base/               layout, headers, navigation, footer
+    base/               document, layouts, headers, navigation, footer, partials
     pages/              one file per page
   static/
-    stylesheets/styles.css
-    scripts/            theme-init.js, api.js, main.js, components.js, dynamic.js
-    images/, icons/, manifest.json
+    stylesheets/app.css design system
+    scripts/theme.js    applies the saved theme before first paint
+    scripts/app.js      registers the components
+    scripts/ui/         one module per component, plus core.js
+    fonts/              JetBrains Mono (OFL)
+    icons/              sprite.svg (Tabler, MIT), brand mark
+    images/, manifest.json
+scripts/iconsprite/     regenerates icons/sprite.svg
 ```
 
 ## Templates
 
-`ParseTemplates` parses the base set once, then clones it for each page file,
-so every page gets its own template tree and pages cannot override each other.
-Handlers render the `root_template` entry point.
+`ParseTemplates` parses the base set once, then clones it per page, so pages
+cannot override one another. Handlers render the `root_template` entry point.
 
-**Layout** (`base/base.tmpl.html`) defines the document and these blocks:
+**Layouts.** `base.tmpl.html` defines the document head and a `layout` block.
+The default is `storefront-layout`. Other pages select theirs with one line:
 
-| Block | Default | Overridden by |
+| Layout | Used by | Contents |
 | --- | --- | --- |
-| `title` | `Sokomoko` | most pages |
-| `body-class` | `site site--storefront` | workspace pages use `site site--workspace site--nav-left-rail` |
-| `header-area` | storefront header | workspace pages pick `admin-header-area` or `partner-header-area` |
-| `nav-area` | storefront nav | workspace pages pick `admin-nav-area` or `partner-nav-area` |
-| `main-area` | empty | every page |
-| `footer-area` | site footer | |
+| `storefront-layout` | shop, search, product, cart, checkout, account | Top bar, content, footer (desktop), tab bar (phones) |
+| `auth-layout` | sign in, sign up, password reset | Brand and theme only |
+| `admin-layout` | `admin.html`, `staff_signup.html` | Workspace bar (`admin` tag), admin nav, content |
+| `partner-layout` | `partner_*.html` | Workspace bar (`partner` tag), partner nav, content |
+| `workspace-auth-layout` | workspace sign in, first-run setup | Workspace bar (`workspace` tag), content |
 
-**Page data.** Every page struct carries `CSRFToken`, which the layout writes to
-`<meta name="csrf-token">` and forms include as a hidden `csrf_token` field.
-Storefront pages also carry a `Viewer` (signed in, username).
+**Blocks pages define:**
+
+| Block | Purpose |
+| --- | --- |
+| `title` | Document title, `Page · sokomoko` |
+| `layout` | Optional: choose a non-storefront layout |
+| `main-area` | Page content |
+| `tabbar-area` | Storefront: `{{ template "tabbar" dict "Tab" "cart" "Page" . }}` marks the current tab |
+| `header-chips` | Storefront: `{{ template "category-chips" . }}` on browse pages |
+| `body-class` | Storefront: extra body classes (for example `has-buybar`) |
+
+**Shared templates.** `product-card`, `product-grid`, `notice`, and `empty`
+(in `partials.tmpl.html`) take arguments through `dict`.
+
+**Page data.** Every page struct has `CSRFToken`, written to
+`<meta name="csrf-token">` and to a hidden `csrf_token` field in each form.
+Storefront pages carry a `Viewer`. The shared header reads optional fields
+through `field` and `signedIn`, so page structs need not all have the same
+fields.
 
 **Template functions.**
 
 | Function | Purpose |
 | --- | --- |
-| `asset "path"` | `/static/<path>?v=<version>`. The version is the file's modification time on disk in development, otherwise the first 12 hex characters of the SHA-256 of the embedded file. |
-| `dict k v ...` | Builds a map for partial arguments. |
-| `json v` | JSON for an HTML attribute (escaped by `html/template`). |
-| `rfc3339 t` | UTC RFC 3339 timestamp for components such as `ui-countdown`. |
+| `asset "path"` | `/static/<path>?v=<version>`: file modification time in development, else a content hash. |
+| `icon "name"` | Inline SVG that references the sprite symbol. |
+| `dict k v ...`, `list a b ...` | Build arguments for partials; build string lists for selects. |
+| `field . "Name"`, `signedIn .` | Read optional page data from shared templates. |
+| `json v`, `rfc3339 t` | JSON for attributes; UTC timestamps for components. |
 
-**Product images.** `ui.ProductImageURL` keeps local paths and `data:` images.
-Remote or empty URLs are replaced with a bundled image picked from keywords in
-the product's slug, name, or category (falling back to a stable hash), because
-the CSP only allows same-origin images.
+**Product images.** `ui.ProductImageURL` keeps local paths and `data:` images
+and replaces remote or empty URLs with a bundled image, because the CSP allows
+only same-origin images.
 
 ## Static assets
 
-`/static/` is served by `routes.Static`. It first looks for the file under
-`internal/ui/static/` on disk (so CSS and JS edits show immediately when you run
-from the repository root), then falls back to the embedded copy. In the
-production image there is no source tree, so only embedded files are served.
-
-## CSS
-
-`static/stylesheets/styles.css` is one file organised in this order:
-
-1. **Design tokens** on `:root`: colours (canvas, surface, foreground, border,
-   accent, semantic), spacing, radii, shadows, typography. Dark values apply
-   under `prefers-color-scheme: dark` and `[data-theme="dark"]`.
-2. **Base**, **Layout**, **Areas** (header, nav, main, footer).
-3. **Components**: navigation, controls, buttons, cards, badges, alerts,
-   page-specific blocks, product grid and tiles, auth panels, admin and partner
-   pages, tables.
-4. **Motion**, legacy compatibility classes, and responsive rules.
-5. **Web component hosts** (breadcrumb, price, quantity stepper, toast).
-6. **Refresh layers** added later for the storefront, commerce flow, workspace,
-   and entry/setup pages. These override earlier rules.
-
-Class names are BEM-style (`storefront-header__category-link--active`). Use
-tokens rather than literal colours so both themes keep working.
+`/static/` is served by `routes.Static`. When the server runs from the
+repository root, files on disk under `internal/ui/static/` take precedence, so
+CSS and JS edits show on reload. Template changes need a restart. The
+production image serves only the embedded copy.
 
 ## JavaScript
 
-Scripts load from the layout in this order. All are external files because the
-CSP forbids inline scripts.
+The base layout loads `theme.js` (blocking, tiny) and `app.js` as a module.
+`app.js` imports every component from `scripts/ui/` and adds a
+`data-submit-once` guard against double submission. All scripts are files,
+because the CSP forbids inline scripts. The components are listed in
+[design.md](design.md#web-components).
 
-| File | Loaded | Role |
-| --- | --- | --- |
-| `theme-init.js` | sync, in `<head>` | Applies the saved light or dark theme before first paint |
-| `api.js` | `defer` | `window.SokomokoAPI.request(path, options)`: fetch wrapper for `/api/v1` that sends JSON, adds `X-CSRF-Token`, and unwraps `{data}` or throws on `{error}` |
-| `main.js` | `defer` | Presentational components (below), theme toggle, password visibility toggles, nav toggles, submit-button states, global `UIToast` |
-| `components.js` | `defer` | Behavioural components that enhance server-rendered forms (below); `data-submit-once` double-submit guard |
-| `dynamic.js` | `defer`, end of `<body>` | Turns cart, checkout, and workspace order forms into `/api/v1` calls and refreshes metrics in place |
-
-### Web components
-
-All components are custom elements. Light-DOM components let the site
-stylesheet apply; `ui-toast` uses shadow DOM.
-
-Defined in `main.js`:
-
-| Element | Used for |
-| --- | --- |
-| `ui-alert` | Success, danger, warning, and info messages |
-| `ui-metric-card` | Dashboard numbers |
-| `ui-search-form`, `ui-header-search` | Search forms; the header search queries `/api/v1/catalog/search` |
-| `ui-price` | Price with optional strikethrough original |
-| `ui-quantity` | Quantity stepper that still submits as a normal form field |
-| `ui-badge` | Status badges |
-| `ui-breadcrumb` | Breadcrumbs from a JSON `items` attribute |
-| `ui-toast` | Toast notifications, created through `window.UIToast` |
-
-Defined in `components.js`:
-
-| Element | Used for |
-| --- | --- |
-| `ui-countdown` | Countdown for the checkout stock hold |
-| `ui-category-nav` | Replaces static department links with `/api/categories` |
-| `ui-char-counter` | Remaining characters for a textarea |
-| `ui-copy` | Copy text to the clipboard (setup credentials) |
-| `ui-confirm` | Asks before a destructive form submits (team deactivation) |
-| `ui-table-filter` | Client-side row filter above admin and partner tables |
-
-Cart, checkout, account, and workspace order forms are enhanced by
-`dynamic.js` rather than by components.
-
-### Progressive enhancement rule
-
-Every form posts to a real server route and works without JavaScript. Scripts
-only intercept a submit, call the JSON endpoint, and update the page. When the
-API answers `401`, the script falls back to a normal form submit or a redirect
-to login.
+`make lint` and CI run `node --check` on `scripts/*.js` and `scripts/ui/*.js`.
 
 ## Adding a page
 
-1. Create `templates/pages/<name>.html` that defines `main-area` (and the
-   workspace blocks if it is an admin or partner page).
+1. Create `templates/pages/<name>.html` with `title` and `main-area`, plus
+   `layout` for a workspace or auth page.
 2. Add a field to `ui.Templates` and a parse step in `ParseTemplates`.
 3. Add a page data struct with `CSRFToken` in `internal/routes`.
 4. Register the handler in `routes/register.go`.
-5. Add a route test (see `cmd/sokomoko/page_contracts_integration_test.go`).
+5. Add the page to `cmd/sokomoko/page_contracts_integration_test.go`.
+6. Follow [design.md](design.md): reuse components, no filler text, check at
+   390px and 1440px in both themes.

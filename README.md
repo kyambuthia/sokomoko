@@ -15,7 +15,9 @@ three web workspaces and a JSON API from a single PostgreSQL database:
 - Go 1.26, standard library `net/http` and `html/template`
 - PostgreSQL 17 through `pgx` (`database/sql` driver)
 - `golang.org/x/crypto/bcrypt` for passwords
-- Vanilla CSS and JavaScript web components, with no build step
+- One CSS design system and ES-module web components, with no build step
+  ([docs/design.md](docs/design.md)): monochrome, local JetBrains Mono,
+  Tabler icons, mobile first
 - Templates, static assets, and SQL migrations are embedded in the binary
 
 ## Quick start

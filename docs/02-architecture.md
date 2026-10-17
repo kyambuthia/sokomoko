@@ -45,7 +45,7 @@ Supporting packages with no upward dependencies: `money`, `slug`, `config`,
 | `internal/bootstrap` | `Migrate`, `Seed`, `Prepare(seed bool)` over a small store interface. |
 | `internal/config` | Reads environment variables into `Config` and validates them. |
 | `internal/notify` | SMTP sender with STARTTLS for password-reset links. |
-| `internal/ui` | Embedded `templates/` and `static/`, template parsing, `asset` cache-busting, product image fallback. |
+| `internal/ui` | Embedded `templates/` and `static/`, template parsing and functions (`asset`, `icon`, ...), product image fallback. |
 
 ### Service and store boundaries
 

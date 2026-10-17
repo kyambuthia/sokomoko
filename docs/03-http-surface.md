@@ -78,7 +78,6 @@ address as a draft and re-renders the form with `422`.
 | `/storefront` | GET | public | Redirect to the storefront host |
 | `/logout` | POST | public | `auth.Logout` |
 | `/password-reset/request`, `/password-reset/confirm` | GET, POST | public | admin, staff, partner accounts |
-| `/signup` | GET, POST | admin | `auth.StaffSignUp` (creates staff) |
 | `/` | GET | admin, staff, partner | `PartnerRoot`: redirects to `/setup` or `/dashboard` |
 | `/setup` | GET, POST | admin, staff, partner (POST needs admin or staff) | `PartnerSetup` (store settings; read-only for partners) |
 | `/dashboard` | GET | admin, staff, partner | `PartnerDashboard` |
