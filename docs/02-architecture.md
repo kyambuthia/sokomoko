@@ -1,145 +1,145 @@
-# Architecture Overview
+# Architecture
 
-Last updated: October 17, 2026
-
-## What Sokomoko is
-
-Sokomoko is a host-routed, server-rendered marketplace built with Go,
-`net/http`, `html/template`, embedded static assets, and PostgreSQL.
-
-It is one binary, one database, and three host surfaces:
-
-- `localhost`: customer storefront, cart, checkout, and account
-- `admin.localhost`: first-run admin setup, reporting, team management, order operations, audit log
-- `partner.localhost`: store setup, catalog entry, and fulfillment
-
-## Runtime composition
-
-Startup lives in `cmd/sokomoko`. `serve`:
-
-1. Loads and validates configuration (production refuses unsafe or missing settings).
-2. Configures `slog` (JSON in production); the standard `log` package routes through it.
-3. Parses templates and opens a pooled PostgreSQL connection.
-4. In production verifies the complete migration history after a separate
-   `migrate` release task. Development auto-migrates and permits `--seed`.
-5. Composes the app (`internal/app/compose.go`) and registers the three host muxes and the shared `/api/v1` mux.
-6. Starts background jobs: reservation expiry (every minute) and session/reset-token pruning (every five minutes).
-7. Delegates serving and maintenance to `internal/lifecycle`. On SIGINT/SIGTERM,
-   marks readiness unavailable, cancels maintenance queries, drains HTTP for up
-   to 30 seconds, and waits for maintenance before closing the pool.
-
-## Request flow
-
-1. `cmd/sokomoko/server.go` validates the `Host` header and picks the host mux.
-2. Middleware in order: request ID (inbound IDs validated), structured access
-   log, panic recovery, security headers (CSP, HSTS over trusted TLS), 1 MB body
-   limit, CSRF token check, optional POST rate limit (proxy-aware client IP).
-   This order logs rejected requests and recovered panics. Dynamic responses
-   default to `Cache-Control: no-store`; public assets set their own cache rules.
-3. `internal/routes` handles transport: parsing, flash messages, status codes, JSON vs HTML responses.
-4. `internal/service/*` enforces feature rules and maps store data into view models.
-5. `internal/db` runs SQL inside bounded-timeout contexts and transactions.
-6. `internal/ui` renders templates; `App.Render` buffers output so a template error yields a clean 500 page.
-
-Keep transport concerns in routes, domain rules in services, and SQL in the DB layer.
-
-The partner workspace authorizes admins, staff, and partner users. Explicit
-`partner_users` membership connects login accounts to partner records. Partner
-catalog access and wholly owned orders are scoped to that membership. Mixed-partner
-orders require admin/staff fulfillment. Store settings remain platform-wide.
-
-## Deployment boundary
-
-The production reference runs Caddy and one private app container against an
-external PostgreSQL database. A separate release container owns schema changes.
-Runtime credentials need DML and migration-history SELECT, with no schema DDL.
-The Go 1.26.9 image includes a shell-free readiness command. Production startup
-requires trusted hosts, an HTTPS reset origin, SMTP with STARTTLS, and explicit
-database configuration. See [DEPLOYMENT.md](DEPLOYMENT.md) for release, restore,
-and rollback procedures and [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md) for decisions.
-
-Only cash on delivery can be selected or submitted. It creates a pending payment
-record. Historical placeholder methods can still be displayed but cannot create
-new orders or simulated captured payments.
-
-## Frontend model
-
-Pages are fully server-rendered and work without JavaScript. Custom elements in
-`internal/ui/static/scripts/components.js` enhance server markup in place:
-
-| Element | Enhances |
-| --- | --- |
-| `ui-cart-count` | Header cart badge from `GET /api/cart`, updated live on cart events |
-| `ui-add-to-cart` | `/cart/add` forms: add without a page reload, toast feedback |
-| `ui-cart-line` | Cart quantity inputs: debounced updates of line totals and subtotal |
-| `ui-confirm` | Destructive forms: confirmation prompt |
-| `ui-countdown` | Checkout stock-hold countdown |
-| `ui-relative-time` | Timestamps rendered as "5 minutes ago" |
-| `ui-order-status` | Order progress tracker polling `GET /api/orders/status` |
-| `ui-table-filter` | Client-side filtering of admin and partner tables |
-| `ui-copy` | Copy-to-clipboard for one-time credentials |
-| `ui-char-counter` | Remaining characters for length-limited fields |
-| `ui-category-nav` | Department menu from `GET /api/categories` |
-
-`main.js` holds the earlier presentational components (alerts, badges, price,
-quantity stepper, header search, toasts, dialogs). Cart endpoints return JSON when
-the request sends `Accept: application/json`, and redirect with a flash message
-otherwise. JavaScript sends the CSRF token from the enhanced form in the
-`X-CSRF-Token` header.
-
-## Data model
-
-All tables are defined in `internal/db/migrations`. Conventions: `BIGINT`
-identity keys, `TIMESTAMPTZ` timestamps, money in `*_cents` `BIGINT` columns
-(`internal/money.Cents` in Go), and `updated_at` maintained by triggers.
-
-- Identity: `users` (case-insensitive unique username and email, soft delete), `sessions` (SHA-256 of the cookie token plus a CSRF token), `password_reset_tokens` (hashed, single use).
-- Marketplace: `store_settings` (singleton), `partners` (vendors).
-- Catalog: `categories`, `products` (full-text `search_vector` with a GIN index, partial unique slug), `product_images`.
-- Inventory: `warehouses`, `inventory_stocks` (single source of truth; `CHECK reserved + allocated <= on_hand`), `stock_reservations` (checkout holds with expiry), `stock_movements` (append-only ledger).
-- Shopping: `carts`, `cart_items`, `checkouts` and `checkout_lines` (priced snapshot of the cart).
-- Orders: `orders` (status, partner fulfillment status, delivery status, `inventory_state`, totals that must add up), `order_items` (price and partner snapshot, generated line totals).
-- Payments: `payments`, `payment_attempts`, `idempotency_keys`.
-- Audit: `audit_logs`.
-
-### Stock lifecycle
+Sokomoko is a layered monolith. HTTP handlers call services, services call the
+PostgreSQL store, and the store owns all SQL. Dependencies point downward only.
 
 ```text
-available = on_hand - reserved - allocated
-
-checkout prepared   reserved  += qty                (stock_reservations active)
-hold expires        reserved  -= qty                (background job)
-cart changes        reserved  -= qty, checkout cancelled
-order placed        reserved  -= qty, allocated += qty   (inventory_state = allocated)
-order dispatched    allocated -= qty, on_hand -= qty     (inventory_state = shipped)
-order cancelled     allocated -= qty                     (inventory_state = released)
+cmd/sokomoko            commands, config, server wiring, host router
+      |
+internal/routes         HTML handlers (storefront, admin, partner)
+internal/api            JSON handlers (/api/v1)
+internal/auth           auth handlers and middleware
+      |
+internal/app            App container: service interfaces, middleware, Render/JSON
+      |
+internal/service/*      business rules, one package per domain
+      |
+internal/db             *db.Store: SQL, transactions, migrations
+      |
+PostgreSQL
 ```
 
-Each transition writes a `stock_movements` row. Inventory rows are locked
-`FOR UPDATE` in product-id order to avoid deadlocks, and transactions retry on
-serialization failures and deadlocks.
+Supporting packages with no upward dependencies: `money`, `config`,
+`lifecycle`, `bootstrap`, `notify`, `ui`.
 
-### Checkout and idempotency
+## Packages
 
-The checkout token doubles as the idempotency key. Submitting the same token
-again returns the original order. Changing the cart cancels the open checkout
-and releases its holds, so an order is never placed for a stale snapshot.
+| Package | Responsibility |
+| --- | --- |
+| `cmd/sokomoko` | Parses the command (`serve`, `migrate`, `seed`, `healthcheck`), loads config, sets up `slog`, opens the store, builds the muxes and middleware chain, runs the server. |
+| `internal/app` | `App` holds every dependency behind an interface (`CatalogService`, `CheckoutService`, `AuthService`, ...). `Compose` builds the concrete services from a `*db.Store`. Also holds middleware and the `Render`/`RenderStatus`/`JSON` helpers. |
+| `internal/routes` | HTML handlers. They parse forms, call one service, map service errors to messages, and render a template. Uses a one-shot flash cookie for post-redirect messages. |
+| `internal/api` | The versioned JSON API. Same services as `routes`, with DTOs that convert `money.Cents` to JSON numbers. |
+| `internal/auth` | Login, signup, staff signup, first-run setup, password reset, logout, session lookup, role middleware, CSRF middleware, in-memory abuse limiter. |
+| `internal/service/catalog` | Product listing, search, categories, product lookup by slug, image URL mapping. |
+| `internal/service/commerce` | Cart operations with stock checks. |
+| `internal/service/checkout` | Pricing (`CalculateSummary`), stock holds, draft saving, idempotent order placement. |
+| `internal/service/payment` | Supported payment methods, labels, payment record construction, idempotency key generation. Stateless. |
+| `internal/service/account` | A customer's orders. |
+| `internal/service/admin` | Metrics, reports, order overrides, team deactivation, audit log reads. |
+| `internal/service/partner` | Store settings, product creation, fulfillment, per-partner scoping. |
+| `internal/db` | `Store`, connection pool, `withTx` retry helper, migrations, seed data, typed errors. `dbtest/` provisions isolated schemas for tests. |
+| `internal/money` | `Cents` (int64) with parsing, formatting, and basis-point multiplication. |
+| `internal/lifecycle` | `Run` (listen, serve, drain, shut down), `Readiness` (drain-aware ping), `Maintain` (background jobs). |
+| `internal/bootstrap` | `Migrate`, `Seed`, `Prepare(seed bool)` over a small store interface. |
+| `internal/config` | Reads environment variables into `Config` and validates them. |
+| `internal/notify` | SMTP sender with STARTTLS for password-reset links. |
+| `internal/ui` | Embedded `templates/` and `static/`, template parsing, `asset` cache-busting, product image fallback. |
 
-## Testing
+### Service and store boundaries
 
-- Unit tests sit next to the code. DB-backed tests use `internal/db/dbtest`, which creates a fresh PostgreSQL schema per package from `SOKOMOKO_TEST_DATABASE_URL`.
-- `cmd/sokomoko` integration tests drive the full HTTP stack, including CSRF, host routing, and role checks.
-- `internal/db/orders_test.go` includes a concurrent oversell test; run it under `-race`.
+Each service package that touches the database declares a private `store`
+interface in its own `store.go` listing only the `*db.Store` methods it uses,
+with a compile-time check such as `var _ store = (*db.Store)(nil)`. Unit tests
+substitute fakes; integration tests use a real store from `dbtest`.
 
-## Working rules
+Services return their own error values (`partnersvc.ErrForbiddenOrderUpdate`,
+`checkoutsvc.ErrCartEmpty`, ...). Handlers map those to status codes and
+user-facing messages. Store errors are translated in the service, not in the
+handler, except for a few `db.Err*` sentinels the API checks directly.
 
-- Change one layer at a time and keep interfaces explicit (each service declares the `store` interface it needs).
-- Add tests in the layer where the rule lives.
-- Schema changes go in a new numbered migration. Never edit an applied one.
-- Every state-changing form needs a `csrf_token` field. Page data structs carry `CSRFToken`.
-- New dynamic behavior should enhance server-rendered markup, not replace it.
-- Preserve the host-based architecture unless there is a deliberate routing redesign.
+## Host routing
 
-The versioned JSON API and `api.js`/`dynamic.js` enhance the redesigned pages;
-see [the API contract](11-api.md). Monetary JSON values remain numeric major
-currency units; stored and calculated amounts use integer cents.
+`buildServer` in `cmd/sokomoko/server.go` creates four muxes and one router:
+
+1. The host is canonicalised (lower-cased, port stripped). Hosts not in
+   `ALLOWED_HOSTS` get `400 Invalid host`.
+2. Paths under `/api/v1` go to the API mux, whatever the host.
+3. Hosts starting with `admin.` go to the admin mux.
+4. Hosts starting with `partner.` go to the partner mux.
+5. Everything else goes to the storefront mux.
+
+Production hostnames must therefore begin with `admin.` and `partner.`. When
+`ALLOWED_HOSTS` is empty (development only), the defaults are `localhost`,
+`127.0.0.1`, `admin.localhost`, and `partner.localhost`.
+
+## Request pipeline
+
+Every request passes through this chain, outermost first
+(`buildMiddlewares` in `server.go`):
+
+| Order | Middleware | Effect |
+| --- | --- | --- |
+| 1 | `RequestID` | Accepts a short alphanumeric `X-Request-Id` or generates one; echoes it in the response. |
+| 2 | `RequestLogger` | One structured `slog` line per request: method, path, host, status, duration, request ID. No query strings or bodies. |
+| 3 | `Recoverer` | Turns panics into a 500 error page that shows the request ID. |
+| 4 | `SecurityHeadersWithProxy` | CSP, `X-Frame-Options: DENY`, `nosniff`, referrer policy, `Cache-Control: no-store`, HSTS when the request is HTTPS. |
+| 5 | `BodyLimit(1 MiB)` | Caps request bodies for POST, PUT, PATCH, DELETE. |
+| 6 | `CSRFMiddleware` | Validates the session's CSRF token on unsafe methods (see [Security](04-security.md#csrf)). |
+| 7 | `RateLimitByKey` | Only when `POST_RATE_LIMIT_MAX > 0`: fixed-window POST limit per client IP. |
+| 8 | Host router | Dispatches to a mux as above. |
+
+Per-route wrappers then add authentication: `OptionalUser` (attach the user if
+signed in), `AuthMiddleware` (require a session), `RequireRole` /
+`RequireAnyRole`, or `APIAuthMiddleware` for JSON routes.
+
+## Rendering
+
+Each page template is parsed once at startup by cloning a shared base set
+(`ui.ParseTemplates`). Handlers call `app.Render` or `app.RenderStatus`, which
+execute into a buffer first. A template error therefore produces a clean 500
+page instead of a half-written document.
+
+## Process lifecycle
+
+`serve`:
+
+1. Load and validate config. Production refuses `--seed`.
+2. Build the SMTP sender if SMTP is configured.
+3. Parse templates.
+4. Open the store (pool sizes and query timeout from config) and ping it.
+5. Prepare the schema:
+   - development and test: apply pending migrations, then seed if `--seed`;
+   - production: `CheckSchema` only, which fails if any embedded migration is
+     missing or the database has a version the binary does not know.
+6. Compose services, build the router and middleware, log a startup summary.
+7. `lifecycle.Run` binds the listener, then starts `Maintain` in the
+   background and serves.
+
+`Maintain` releases expired stock reservations every minute and deletes
+expired sessions and password-reset tokens every five minutes.
+
+On `SIGINT` or `SIGTERM`, or if the listener fails, `lifecycle` marks the
+readiness check as draining (`/readyz` returns 503), cancels maintenance,
+and calls `http.Server.Shutdown` with a 30-second deadline. If the deadline
+passes, remaining connections are closed. The store is closed only after
+maintenance has returned.
+
+HTTP server timeouts: read 15 s, read header 10 s, write 15 s, idle 60 s.
+
+## Design principles visible in the code
+
+- **Server-rendered first.** Every feature works as plain HTML forms. JavaScript
+  enhances pages but is not required.
+- **The database enforces invariants.** Money columns are integer cents with
+  `CHECK` constraints; order and checkout totals must equal their parts;
+  inventory cannot oversell (`reserved + allocated <= on_hand`).
+- **Transactions retry.** `Store.withTx` retries serialization failures and
+  deadlocks up to three times, so transaction bodies must be safe to re-run.
+- **Every store call is bounded.** Store methods derive a context with the
+  configured query timeout (default 10 s).
+- **One binary, no runtime files.** Templates, assets, and migrations are
+  embedded with `go:embed`. In development the static handler and the `asset`
+  helper prefer files on disk so edits show without a rebuild.
+- **Fail closed in production.** Missing hosts, database URL, reset base URL,
+  or SMTP settings stop the server at startup.

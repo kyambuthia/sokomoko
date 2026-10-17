@@ -1,151 +1,84 @@
 # Sokomoko
 
-A multi-vendor marketplace built with Go, PostgreSQL, and server-rendered HTML
-enhanced by small custom web components.
+Sokomoko is a server-rendered marketplace written in Go. One binary serves
+three web workspaces and a JSON API from a single PostgreSQL database:
+
+| Host | Who uses it | What it does |
+| --- | --- | --- |
+| `localhost` (storefront) | Customers | Browse, search, cart, checkout, order history |
+| `admin.localhost` | Admins and staff | Metrics, orders, reports, team, audit log |
+| `partner.localhost` | Admins, staff, partners | Store setup, product entry, order fulfillment |
+| any host, `/api/v1/...` | Browser scripts and API clients | JSON API for the same features |
 
 ## Stack
 
-- Go 1.26.9 (`net/http`, `html/template`, `log/slog`)
-- PostgreSQL 15+ via `pgx` (`database/sql` driver), versioned embedded migrations
-- Server-side rendered templates and static assets embedded in the binary
-- Progressive-enhancement web components (`internal/ui/static/scripts/components.js`)
-
-## Repo layout
-
-```text
-cmd/sokomoko/              CLI: serve, migrate, seed; host routing and middleware
-internal/app/              App composition, rendering, middleware, rate limiting
-internal/auth/             Sessions, login, signup, password reset, CSRF, throttling
-internal/config/           Environment configuration and validation
-internal/lifecycle/        HTTP draining and cancellable maintenance jobs
-internal/db/               PostgreSQL store, queries, transactions
-internal/db/migrations/    Versioned SQL migrations (embedded)
-internal/db/dbtest/        Isolated per-test PostgreSQL schemas
-internal/money/            Integer-cent money type
-internal/routes/           HTTP handlers, JSON endpoints, page view models
-internal/service/          Feature services (catalog, commerce, checkout, ...)
-internal/ui/               Templates, static assets, template helpers
-docs/                      Architecture, roadmap, design notes
-deploy/                    Production Compose, TLS proxy, configuration example
-```
+- Go 1.26, standard library `net/http` and `html/template`
+- PostgreSQL 17 through `pgx` (`database/sql` driver)
+- `golang.org/x/crypto/bcrypt` for passwords
+- Vanilla CSS and JavaScript web components, with no build step
+- Templates, static assets, and SQL migrations are embedded in the binary
 
 ## Quick start
 
-With Docker (PostgreSQL and the app):
+With Docker:
 
 ```bash
 docker compose up --build
 ```
 
-Or run PostgreSQL in Docker and the app with Go:
+Without Docker (needs a local PostgreSQL):
 
 ```bash
-make db-up            # PostgreSQL on localhost:5432 (user/password: sokomoko)
-make run              # migrate, seed demo data, serve on :6969
+make db-up    # start PostgreSQL from docker-compose.yml, or set DATABASE_URL to your own server
+make run      # migrate, seed demo data, and serve on :6969
 ```
 
-Add these host entries so the three surfaces resolve locally:
+The binary reads only process environment variables; it does not load `.env`
+files. `.env.example` lists every setting. See
+[docs/07-configuration.md](docs/07-configuration.md).
+
+Then open:
+
+- Storefront: <http://localhost:6969>
+- Admin: <http://admin.localhost:6969> (first visit goes to `/setup`)
+- Partner: <http://partner.localhost:6969>
+
+## Commands
 
 ```text
-127.0.0.1 localhost admin.localhost partner.localhost
+sokomoko serve [--seed]   Start HTTP. Development auto-migrates; production only checks the schema.
+sokomoko migrate          Apply pending migrations and exit.
+sokomoko seed             Migrate and load demo data (refused in production).
+sokomoko healthcheck      Probe /readyz locally (used by the container HEALTHCHECK).
 ```
 
-| Host | Purpose |
-| --- | --- |
-| `http://localhost:6969` | Storefront: browse, cart, checkout, account |
-| `http://admin.localhost:6969` | Platform admin: first-run `/setup`, orders, reports, team, audit |
-| `http://partner.localhost:6969` | Partner workspace: store setup, products, fulfillment |
+Common `make` targets: `run`, `build`, `test`, `test-race`, `lint`, `fmt`,
+`docker`, `smoke-image`, `vuln`. Run `make help` for the full list.
 
-First-run admin setup happens at `admin.localhost/setup` (loopback only, or with
-`ADMIN_SETUP_TOKEN`), or seed an admin with `ADMIN_PASSWORD` when running `seed`.
+## Repository layout
 
-## Configuration
-
-All settings are environment variables; see [`.env.example`](.env.example) for
-the full list with comments. The important ones:
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `DATABASE_URL` | `postgres://sokomoko@localhost:5432/sokomoko?sslmode=disable` | Required in production |
-| `ENV` | `development` | `production` enables secure cookies, JSON logs, strict validation |
-| `PORT` | `6969` | |
-| `ALLOWED_HOSTS` | local hosts | Required in production |
-| `PASSWORD_RESET_BASE_URL` | | Required in production |
-| `SMTP_HOST` / `SMTP_FROM` | | Required in production; STARTTLS required |
-| `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For`/`-Proto`; only behind a proxy that overwrites them |
-| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `20` / `10` | Pool sizing |
-| `DB_QUERY_TIMEOUT_SECONDS` | `10` | Upper bound on any single store call |
-| `LOG_FORMAT` / `LOG_LEVEL` | `text` (`json` in production) / `info` | |
-| `POST_RATE_LIMIT_MAX` | `0` (off) | POSTs per client IP per window |
-| `AUTH_ABUSE_MAX_FAILURES` | `0` (off) | Login/reset failures before backoff |
-| `SMTP_HOST`, `SMTP_FROM`, ... | | Password reset email delivery |
-
-The server refuses to start in production when required settings are missing.
-
-## Development
-
-```bash
-make help        # list targets
-make migrate     # apply migrations
-make seed        # migrations + demo partners and catalog
-make test        # full test suite (needs PostgreSQL)
-make test-race   # with the race detector
-make lint        # gofmt, go vet, JavaScript syntax check
-make docker      # build the production image
-make vuln        # scan reachable Go vulnerabilities
+```text
+cmd/sokomoko/      Entry point: commands, server wiring, host router, integration tests
+internal/
+  app/             App container, service interfaces, middleware, rendering helpers
+  routes/          HTML handlers for the storefront, admin, and partner hosts
+  api/             JSON API under /api/v1
+  auth/            Sessions, login, signup, setup, password reset, CSRF, abuse limits
+  service/         Business logic: account, admin, catalog, checkout, commerce, partner, payment
+  db/              PostgreSQL store, embedded migrations, seed data, test helpers (dbtest/)
+  money/           Integer cents type
+  lifecycle/       Graceful shutdown, readiness draining, background maintenance
+  bootstrap/       Migrate and seed orchestration
+  config/          Environment configuration and validation
+  notify/          SMTP sender for password-reset email
+  ui/              Embedded templates, static assets, template functions
+deploy/            Production Compose file, Caddy reverse proxy, env example
+scripts/           Image smoke test
+docs/              Design and operations documentation
 ```
 
-Tests that need a database read `SOKOMOKO_TEST_DATABASE_URL` and create a
-throwaway schema per package, so they can share one database and run in
-parallel. Without the variable they are skipped; CI sets
-`SOKOMOKO_REQUIRE_DB_TESTS=1` so a missing database fails the build instead.
+## Documentation
 
-```bash
-make db-up && make db-test-create
-SOKOMOKO_TEST_DATABASE_URL=postgres://sokomoko:sokomoko@localhost:5432/sokomoko_test?sslmode=disable make test
-```
-
-## Database migrations
-
-Migrations live in `internal/db/migrations/NNNN_description.sql`, are embedded in
-the binary, and run in order inside transactions. A PostgreSQL advisory lock
-stops two instances from migrating at once. In development, `serve` applies
-pending migrations. In production, run `migrate` as a separate release task;
-`serve` only verifies the complete migration history and refuses an incompatible
-schema. Demo seeding is disabled in production. Never edit an applied migration;
-add a new one.
-
-## Deployment
-
-The `Dockerfile` builds a static binary into a distroless, non-root image that
-defaults to `ENV=production` and port 8080. Its built-in `healthcheck` command
-probes HTTP and database readiness without requiring a shell. Use the
-[deployment runbook](docs/DEPLOYMENT.md) and
-[production Compose file](deploy/compose.production.yml) for a TLS proxy,
-separate migration credentials, and a private app listener. Health endpoints on every host:
-
-- `/healthz` liveness
-- `/readyz` database readiness
-
-A background job releases expired checkout stock holds every minute and prunes
-expired sessions and reset tokens every five minutes.
-
-Checkout supports **cash on delivery**, recorded as a pending payment. Card and
-mobile-money providers require an actual integration before they can be offered.
-The partner host supports admins, staff, and explicitly assigned partner accounts.
-Partner catalog and wholly owned orders are scoped through `partner_users`;
-store settings remain platform-wide, and mixed-partner fulfillment requires staff. See the [architecture decision](docs/DEPLOYMENT_PLAN.md) for launch scope.
-
-## Docs
-
-1. [Getting started](docs/01-getting-started.md)
-2. [Architecture](docs/02-architecture.md)
-3. [Routes](docs/03-routes.md)
-4. [Authentication](docs/04-authentication.md)
-5. [Database and commerce](docs/05-database.md)
-6. [UI and assets](docs/06-ui.md)
-7. [Operations](docs/07-operations.md)
-8. [Known issues](docs/08-known-issues.md)
-9. [Roadmap](docs/09-roadmap.md)
-10. [Contributing](docs/10-contributing.md)
-11. [Dynamic JSON API](docs/11-api.md)
+Start with [docs/README.md](docs/README.md). It indexes the overview,
+architecture, HTTP surface, security, data model, frontend, configuration,
+development, deployment, and known limitations.
