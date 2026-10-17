@@ -22,6 +22,7 @@ type AdminPageData struct {
 	Products       []adminsvc.Product
 	TeamMembers    []adminsvc.TeamMember
 	Orders         []adminsvc.Order
+	Deliveries     adminsvc.DeliveryBoard
 	AuditLogs      []adminsvc.AuditLog
 	OrderCount     int
 	CancelledCount int
@@ -191,7 +192,12 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		renderAdminPage(a, w, r, http.StatusOK, adminDeliveriesPage(metrics, adminRoleFromContext(r)))
+		board, err := svc.Deliveries()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		renderAdminPage(a, w, r, http.StatusOK, adminDeliveriesPage(metrics, adminRoleFromContext(r), board))
 	}
 }
 

@@ -6,6 +6,10 @@
 {{ template "admin-header-area" . }}
 {{ end }}
 
+{{ define "footer-area" }}
+{{ template "workspace-footer-area" . }}
+{{ end }}
+
 {{ define "nav-area" }}
 {{ template "admin-nav-area" . }}
 {{ end }}
@@ -52,9 +56,8 @@
 
   {{if eq .Title "Product Management"}}
   <section class="workspace-actions admin-actions" aria-label="Catalog actions">
-    <a href="/products/new" class="btn">Add New Product</a>
-    <a href="/products/import" class="btn btn--secondary">Import Products</a>
-    <a href="/products/export" class="btn btn--secondary">Export Products</a>
+    <a href="/catalog/new" class="btn">Add New Product</a>
+    <a href="/catalog" class="btn btn--secondary">Edit Products in Partner Workspace</a>
   </section>
 
   <section class="workspace-card">
@@ -182,7 +185,42 @@
   {{end}}
 
   {{if eq .Title "Delivery Management"}}
-  <section class="workspace-card"><div class="workspace-card__body"><p>Delivery pipeline placeholders are ready for integration with dispatch and tracking providers.</p></div></section>
+  <section class="workspace-metrics admin-metrics" aria-label="Delivery pipeline">
+    <ui-metric-card label="Queued" value="{{.Deliveries.QueuedCount}}" note="Awaiting dispatch prep"></ui-metric-card>
+    <ui-metric-card label="Processing" value="{{.Deliveries.ProcessingCount}}" note="Being prepared"></ui-metric-card>
+    <ui-metric-card label="Shipped" value="{{.Deliveries.ShippedCount}}" note="On the way"></ui-metric-card>
+    <ui-metric-card label="Delivered" value="{{.Deliveries.DeliveredCount}}" note="Completed"></ui-metric-card>
+  </section>
+
+  <section class="workspace-card">
+    <div class="workspace-card__header"><p class="eyebrow">Pipeline</p><h2>Awaiting delivery</h2></div>
+    <div class="workspace-card__body">
+      {{if .Deliveries.Pending}}
+      <ui-table-filter for="admin-deliveries-table" placeholder="Filter deliveries"></ui-table-filter>
+      <div class="table-wrap">
+        <table class="data-table data-table--admin" id="admin-deliveries-table">
+          <thead><tr><th>Order</th><th>Placed</th><th>Customer</th><th>Address</th><th>Partner status</th><th>Delivery</th><th>Notice</th></tr></thead>
+          <tbody>
+          {{range .Deliveries.Pending}}
+          <tr>
+            <td>#{{.ID}}</td>
+            <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+            <td>{{.CustomerName}}</td>
+            <td>{{.DeliveryAddress}}</td>
+            <td>{{.PartnerStatus}}</td>
+            <td>{{.DeliveryStatus}}</td>
+            <td>{{.DeliveryNotice}}</td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </div>
+      <p class="form__hint">Update delivery stages from <a href="/orders">Orders</a> or the partner workspace.</p>
+      {{else}}
+      <p class="text-muted">No orders are waiting for delivery.</p>
+      {{end}}
+    </div>
+  </section>
   {{end}}
 
   {{if eq .Title "Team Management"}}

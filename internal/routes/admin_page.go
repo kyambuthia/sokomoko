@@ -66,8 +66,10 @@ func adminReportsPage(metrics adminsvc.Metrics, role string, report adminsvc.Sal
 	return page
 }
 
-func adminDeliveriesPage(metrics adminsvc.Metrics, role string) AdminPageData {
-	return newAdminPage(metrics, role, "Delivery Management", "Delivery pipeline placeholders are ready for integration")
+func adminDeliveriesPage(metrics adminsvc.Metrics, role string, board adminsvc.DeliveryBoard) AdminPageData {
+	page := newAdminPage(metrics, role, "Delivery Management", "Open orders by delivery stage, oldest first")
+	page.Deliveries = board
+	return page
 }
 
 func adminTeamPage(metrics adminsvc.Metrics, role string, teamMembers []adminsvc.TeamMember) AdminPageData {

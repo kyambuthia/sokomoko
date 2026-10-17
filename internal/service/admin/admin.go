@@ -177,6 +177,47 @@ func (s *Service) Orders() ([]Order, error) {
 	return mapped, nil
 }
 
+// DeliveryBoard summarizes the delivery pipeline: how many open orders are in
+// each delivery status, and the orders still waiting to be delivered, oldest
+// first.
+type DeliveryBoard struct {
+	QueuedCount     int
+	ProcessingCount int
+	ShippedCount    int
+	DeliveredCount  int
+	Pending         []Order
+}
+
+func (s *Service) Deliveries() (DeliveryBoard, error) {
+	orders, err := s.Orders()
+	if err != nil {
+		return DeliveryBoard{}, err
+	}
+	var board DeliveryBoard
+	for _, order := range orders {
+		if order.Status == db.OrderStatusCancelled {
+			continue
+		}
+		switch order.DeliveryStatus {
+		case "queued":
+			board.QueuedCount++
+		case "processing":
+			board.ProcessingCount++
+		case "shipped":
+			board.ShippedCount++
+		case "delivered":
+			board.DeliveredCount++
+			continue
+		}
+		board.Pending = append(board.Pending, order)
+	}
+	// Orders arrive newest first; the board works oldest first.
+	for i, j := 0, len(board.Pending)-1; i < j; i, j = i+1, j-1 {
+		board.Pending[i], board.Pending[j] = board.Pending[j], board.Pending[i]
+	}
+	return board, nil
+}
+
 func (s *Service) Reports() (SalesReport, error) {
 	revenue, err := s.store.SumOrderRevenue()
 	if err != nil {

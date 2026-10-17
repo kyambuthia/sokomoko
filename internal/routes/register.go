@@ -77,6 +77,10 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/readyz", Ready(a))
 	mux.Handle("/static/", Static(a.StaticFS))
 
+	mux.HandleFunc("/storefront", redirectToSibling("", "/"))
+	mux.HandleFunc("/catalog", redirectToSibling(partnerHostPrefix, "/products"))
+	mux.HandleFunc("/catalog/new", redirectToSibling(partnerHostPrefix, "/products/new"))
+
 	mux.HandleFunc("/setup", a.Auth.AdminSetup(a.Templates.AdminSetup))
 	mux.HandleFunc("/login", a.Auth.AdminLogin(a.Templates.AdminLogin))
 	mux.HandleFunc("/logout", a.Auth.Logout())
@@ -119,6 +123,8 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
 	mux.Handle("/static/", Static(a.StaticFS))
+
+	mux.HandleFunc("/storefront", redirectToSibling("", "/"))
 
 	mux.Handle("/", staff(PartnerRoot(a)))
 	mux.HandleFunc("/login", a.Auth.WorkspaceLogin(a.Templates.AdminLogin))

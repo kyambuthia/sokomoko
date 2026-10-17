@@ -9,6 +9,10 @@ All routes are registered in `internal/routes/register.go` (HTML) and
 | `GET/HEAD /readyz` | Database ping with a 2 s deadline. `503` while draining or when the database is unreachable. |
 | `/static/...` | Embedded assets. In development, files under `internal/ui/static/` on disk take precedence. |
 
+Workspace pages link to other hosts through the `/storefront` and `/catalog`
+redirect routes listed below. The target is derived from the current host by swapping the `admin.` or `partner.` prefix
+(`routes/hosts.go`).
+
 Access column legend: **public** (no session needed), **signed in** (any
 session, otherwise redirect to `/login?next=...`), or a list of roles.
 
@@ -54,11 +58,13 @@ address as a draft and re-renders the form with `422`.
 | `/logout` | POST | public | `auth.Logout` |
 | `/password-reset/request`, `/password-reset/confirm` | GET, POST | public | admin and staff accounts |
 | `/staff/signup` | GET, POST | admin | `auth.StaffSignUp` |
+| `/storefront` | GET | public | Redirect to the storefront host |
+| `/catalog`, `/catalog/new` | GET | public | Redirect to the partner host's `/products` and `/products/new` |
 | `/` | GET | admin, staff | `AdminDashboard` |
 | `/products` | GET | admin, staff | `AdminProducts` |
 | `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` |
 | `/reports` | GET | admin, staff | `AdminReports` |
-| `/deliveries` | GET | admin, staff | `AdminDeliveries` |
+| `/deliveries` | GET | admin, staff | `AdminDeliveries` (delivery board) |
 | `/team` | GET, POST | admin | `AdminTeam` (POST deactivates a user) |
 | `/audit` | GET | admin | `AdminAudit` |
 
@@ -67,6 +73,7 @@ address as a draft and re-renders the form with `422`.
 | Path | Methods | Access | Handler |
 | --- | --- | --- | --- |
 | `/login` | GET, POST | public | `auth.WorkspaceLogin` (admin, staff, partner) |
+| `/storefront` | GET | public | Redirect to the storefront host |
 | `/logout` | POST | public | `auth.Logout` |
 | `/password-reset/request`, `/password-reset/confirm` | GET, POST | public | admin, staff, partner accounts |
 | `/signup` | GET, POST | admin | `auth.StaffSignUp` (creates staff) |

@@ -51,7 +51,3 @@ where to look.
 ## Performance
 
 - Admin and partner lists are not paginated.
-
-## Unfinished pages
-
-- The admin `/deliveries` page renders only the shared metrics.
