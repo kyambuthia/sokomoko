@@ -6,7 +6,7 @@ require golang.org/x/crypto v0.58.0
 
 require golang.org/x/text v0.43.0 // indirect
 
-require github.com/jackc/pgx/v5 v5.10.0
+require github.com/jackc/pgx/v5 v5.11.0
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
