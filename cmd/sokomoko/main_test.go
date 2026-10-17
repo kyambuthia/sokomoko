@@ -37,6 +37,11 @@ func TestParseCommand(t *testing.T) {
 			want: commandConfig{Name: commandSeed},
 		},
 		{
+			name: "healthcheck",
+			args: []string{"healthcheck"},
+			want: commandConfig{Name: commandHealthcheck},
+		},
+		{
 			name: "help",
 			args: []string{"help"},
 			want: commandConfig{ShowHelpOnly: true},

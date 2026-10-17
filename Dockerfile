@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- build ----------------------------------------------------------------
-FROM golang:1.25-bookworm AS build
+FROM golang:1.26.9-bookworm AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -26,6 +26,9 @@ ENV ENV=production \
     LOG_FORMAT=json
 EXPOSE 8080
 USER nonroot:nonroot
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/usr/local/bin/sokomoko", "healthcheck"]
 
 ENTRYPOINT ["/usr/local/bin/sokomoko"]
 CMD ["serve"]

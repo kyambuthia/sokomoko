@@ -2,14 +2,17 @@ name: CI
 
 on:
   push:
-    branches:
-      - trunk
   pull_request:
-    branches:
-      - trunk
+  workflow_dispatch:
+  schedule:
+    - cron: '20 6 * * 1'
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -72,6 +75,9 @@ jobs:
       - name: Vet Go packages
         run: go vet ./...
 
+      - name: Check reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
       - name: Check JavaScript syntax
         run: for f in internal/ui/static/scripts/*.js; do node --check "$f"; done
 
@@ -87,3 +93,9 @@ jobs:
 
       - name: Build image
         run: docker build --build-arg VERSION=${{ github.sha }} -t sokomoko:ci .
+
+      - name: Smoke test production image and isolated restore
+        run: bash scripts/smoke-image.sh sokomoko:ci
+
+      - name: Validate production Compose configuration
+        run: docker compose --env-file deploy/production.env.example -f deploy/compose.production.yml config --quiet

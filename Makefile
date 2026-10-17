@@ -6,7 +6,7 @@ DATABASE_URL ?= postgres://sokomoko:sokomoko@localhost:5432/sokomoko?sslmode=dis
 SOKOMOKO_TEST_DATABASE_URL ?= postgres://sokomoko:sokomoko@localhost:5432/sokomoko_test?sslmode=disable
 export DATABASE_URL SOKOMOKO_TEST_DATABASE_URL
 
-.PHONY: help db-up db-down db-test-create migrate seed run build test test-race lint fmt docker
+.PHONY: help db-up db-down db-test-create migrate seed run build test test-race lint fmt docker vuln smoke-image
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -49,3 +49,9 @@ fmt: ## Format Go code
 
 docker: ## Build the production image
 	docker build -t sokomoko:local .
+
+vuln: ## Check reachable vulnerabilities with a pinned scanner
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+smoke-image: ## Verify a local production image using isolated disposable containers
+	bash scripts/smoke-image.sh sokomoko:local
