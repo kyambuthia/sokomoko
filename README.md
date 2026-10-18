@@ -66,8 +66,10 @@ internal/
   routes/          HTML handlers for the storefront, admin, and partner hosts
   api/             JSON API under /api/v1
   auth/            Sessions, login, signup, setup, password reset, CSRF, abuse limits
-  service/         Business logic: account, admin, catalog, checkout, commerce, partner, payment
+  service/         Business logic: account, admin, catalog, checkout, commerce, partner, payment (refunds)
   db/              PostgreSQL store, embedded migrations, seed data, test helpers (dbtest/)
+  payments/        Payment providers: cash on delivery, M-Pesa Daraja, Paystack
+  secret/          Encryption for stored provider credentials
   money/           Integer cents type
   lifecycle/       Graceful shutdown, readiness draining, background maintenance
   bootstrap/       Migrate and seed orchestration

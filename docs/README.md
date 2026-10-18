@@ -15,4 +15,6 @@ disagree, the code is right and the document needs fixing.
 | 8 | [Development](08-development.md) | Local setup, tests, CI, coding conventions |
 | 9 | [Deployment](09-deployment.md) | Container image, production Compose, release, operations, recovery |
 | 10 | [Known limitations](10-known-limitations.md) | Gaps and rough edges visible in the current code |
+| – | [Payments](payments.md) | Providers, payment flow, unpaid-order expiry, refunds for late or duplicate charges |
+| – | [Roadmap](roadmap.md) | Planned and completed improvement work |
 | – | [Design](design.md) | Visual rules, tokens, components, and the web component library |

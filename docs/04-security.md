@@ -82,7 +82,11 @@ no admin exists, and only when one of these holds:
 - `ADMIN_SETUP_TOKEN` is set and the request supplies it in the
   `X-Admin-Setup-Token` header or the `setup_token` form field (constant-time
   compare; production requires at least 32 bytes); or
-- no token is configured and the request comes from a loopback address.
+- no token is configured and the request comes straight from a loopback
+  address. A request carrying any forwarding header (`X-Forwarded-For`,
+  `X-Real-Ip`, `Forwarded`, `Via`, ...) never counts as loopback, because a
+  reverse proxy on the same host relays internet traffic from loopback too.
+  Behind a proxy, set `ADMIN_SETUP_TOKEN`.
 
 The form can also create up to 20 staff accounts (`staff01`, `staff02`, ...)
 with random temporary passwords that are shown once. The admin and staff are
@@ -120,9 +124,10 @@ Two independent, in-memory mechanisms:
 | Auth abuse limiter | Login (per area), reset request, reset confirm | `AUTH_ABUSE_MAX_FAILURES`, `..._BACKOFF_BASE_SECONDS`, `..._BACKOFF_MAX_SECONDS` | Keyed by scope, client IP, and identifier. After the maximum number of failures, locks for the base duration, doubling per further failure up to the maximum. Success clears the key. Locked requests get `429` with `Retry-After`. Off when max failures is 0. |
 | POST rate limit | Every POST | `POST_RATE_LIMIT_MAX`, `POST_RATE_LIMIT_WINDOW_SECONDS` | Fixed window per client IP. `429` with `Retry-After`. Off when max is 0. |
 
-Client IP is `RemoteAddr`, or the first `X-Forwarded-For` entry when
-`TRUST_PROXY_HEADERS=true`. Enable that only behind a proxy that overwrites the
-header, or clients can spoof their IP to dodge limits.
+Client IP is `RemoteAddr`, or the right-most `X-Forwarded-For` entry when
+`TRUST_PROXY_HEADERS=true`. The right-most entry is the one the proxy wrote, so
+values a client puts in the header cannot change its rate-limit key. This
+assumes exactly one trusted proxy in front of the app.
 
 Both limiters live in process memory, so limits are per instance and reset on
 restart.

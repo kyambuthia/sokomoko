@@ -35,6 +35,12 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/cart/remove` | POST | signed in | `CartRemove` | |
 | `/checkout` | GET, POST | signed in | `Checkout` | See below |
 | `/account` | GET | signed in | `Account` | Order history |
+| `/account/orders/<id>/cancel` | POST | signed in | `AccountOrderCancel` | Own order, while `pending`, partner status `new`, and unpaid |
+| `/account/password` | GET, POST | signed in | `auth.PasswordChange` | Needs the current password; revokes every session and issues a new one |
+| `/payments/order/<id>` | GET, POST | signed in | `PaymentPage` | Pay or retry an online payment for an own order |
+| `/payments/return` | GET | signed in | `PaymentReturn` | Where Paystack sends the customer back |
+| `/payments/webhooks/<provider>` | POST | provider (signed) | `PaymentWebhook` | Paystack events, HMAC-SHA512 |
+| `/payments/callback/<provider>/<token>` | POST | provider (token) | `PaymentCallback` | M-Pesa STK results |
 
 `/api/categories` is the one unversioned JSON route left. New client code
 should use `/api/v1`.
@@ -65,9 +71,11 @@ address as a draft and re-renders the form with `422`.
 | `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` |
 | `/reports` | GET | admin, staff | `AdminReports` |
 | `/deliveries` | GET | admin, staff | `AdminDeliveries` (delivery board) |
-| `/categories` | GET, POST | admin, staff | `AdminCategories` (list, create, delete) |
-| `/team` | GET, POST | admin | `AdminTeam` (POST deactivates a user) |
-| `/partners` | GET, POST | admin | `AdminPartners` (create, suspend or reactivate, create partner logins) |
+| `/categories` | GET, POST | admin, staff | `AdminCategories` (list, create, rename with `action=update`, delete); `?edit=<id>` opens the edit form |
+| `/team` | GET, POST | admin | `AdminTeam` (POST deactivates a user, or reactivates one with `action=reactivate`) |
+| `/partners` | GET, POST | admin | `AdminPartners` (create, rename with `action=update`, suspend or reactivate, create partner logins); `?edit=<id>` opens the edit form |
+| `/payments` | GET, POST | admin | `AdminPayments` (pricing, providers, refund queue: `refund`, `refund_refresh`, `refund_resolve`) |
+| `/password` | GET, POST | admin, staff | `auth.PasswordChange` |
 | `/audit` | GET | admin | `AdminAudit` |
 
 ## Partner host
@@ -83,6 +91,8 @@ address as a draft and re-renders the form with `422`.
 | `/dashboard` | GET | admin, staff, partner | `PartnerDashboard` |
 | `/products` | GET | admin, staff, partner | `PartnerProducts` |
 | `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` |
+| `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` |
+| `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (`status` filter; POST updates fulfillment) |
 
 Before any admin exists, the partner login page returns `503` with a message to
@@ -122,7 +132,9 @@ there are no API keys or bearer tokens.
 | `PATCH /checkout/<token>` | signed in | Save `{delivery_address, payment_method}` |
 | `POST /checkout/<token>/place-order` | signed in | Place the order. Optional `Idempotency-Key` header must equal the token. Replays return the original order. |
 | `GET /account/orders` | signed in | Own orders |
-| `GET /account/orders/<id>` | signed in | One own order |
+| `GET /account/orders/<id>` | signed in | One own order, with `cancellable` |
+| `GET /account/orders/<id>/payment` | signed in | Payment state of an own order (`pending`, `paid`, `failed`, `cancelled`, `offline`); polling it also confirms a pending payment with the provider |
+| `POST /account/orders/<id>/cancel` | signed in | Cancel an own new, unpaid order. `409 order_not_cancellable` once accepted or paid. Returns the order |
 | `GET /admin` or `/admin/metrics` | admin, staff | Dashboard metrics |
 | `GET /admin/products` | admin, staff | Product list |
 | `GET /admin/orders` | admin, staff | All orders |
@@ -134,6 +146,7 @@ there are no API keys or bearer tokens.
 | `GET /partner/dashboard` | admin, staff, partner | Dashboard data |
 | `GET /partner/products` | admin, staff, partner | Products and categories |
 | `POST /partner/products` | admin, staff, partner | Create a product |
+| `PATCH /partner/products/<id>` | admin, staff, partner | Change any of `{name, description, price, stock, category_id}`; omitted fields keep their values. `stock` sets available stock |
 | `GET /partner/orders?status=` | admin, staff, partner | Orders and summary |
 | `PATCH /partner/orders/<id>` | admin, staff, partner | Update `{partner_status, delivery_status, delivery_notice}` |
 | `GET /partner/settings` | admin, staff, partner | Store settings (`404 store_not_configured` if unset) |

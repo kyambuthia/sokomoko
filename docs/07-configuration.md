@@ -22,7 +22,7 @@ SMTP or host settings.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `DATABASE_URL` | `postgres://sokomoko@localhost:5432/sokomoko?sslmode=disable` | Required explicitly in production |
-| `DB_MAX_OPEN_CONNS` | `20` | |
+| `DB_MAX_OPEN_CONNS` | `20` | At least 2: a maintenance pass holds one connection for its lock while the job uses another |
 | `DB_MAX_IDLE_CONNS` | `10` | Must not exceed max open |
 | `DB_CONN_MAX_LIFETIME_SECONDS` | `1800` | |
 | `DB_QUERY_TIMEOUT_SECONDS` | `10` | Upper bound for every store call |
@@ -32,14 +32,14 @@ SMTP or host settings.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `ALLOWED_HOSTS` | `localhost,127.0.0.1,admin.localhost,partner.localhost` when empty | Comma-separated exact hostnames, no scheme, port, path, or wildcard. Required in production. Admin and partner hosts must start with `admin.` and `partner.`. The first entry is used as the `Host` for `sokomoko healthcheck`. |
-| `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For` and `X-Forwarded-Proto`. Only behind a proxy that overwrites them. |
+| `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For` (right-most entry) and `X-Forwarded-Proto`. Only behind exactly one reverse proxy. |
 | `SESSION_COOKIE_DOMAIN` | empty (host-only cookies) | A DNS domain that contains every allowed host, for example `.example.com`, to share sessions across hosts |
 
 ## Admin bootstrap
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `ADMIN_SETUP_TOKEN` | empty | Unlocks `/setup` on the admin host. At least 32 bytes in production. When empty, `/setup` is allowed only from loopback. |
+| `ADMIN_SETUP_TOKEN` | empty | Unlocks `/setup` on the admin host. At least 32 bytes in production. When empty, `/setup` is allowed only from a direct loopback request (never through a proxy). |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin`, `admin@sokomoko.local`, empty | Read by `seed` only. No admin is seeded unless `ADMIN_PASSWORD` (10 to 72 bytes) is set. |
 
 ## Abuse protection
