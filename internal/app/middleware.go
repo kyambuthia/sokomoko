@@ -95,7 +95,7 @@ func RequestLogger() Middleware {
 			next.ServeHTTP(rec, r)
 			slog.LogAttrs(r.Context(), slog.LevelInfo, "http request",
 				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
+				slog.String("path", requestLogPath(r.URL.Path)),
 				slog.String("host", r.Host),
 				slog.Int("status", rec.status),
 				slog.Duration("duration", time.Since(start)),
@@ -103,6 +103,19 @@ func RequestLogger() Middleware {
 			)
 		})
 	}
+}
+
+// requestLogPath removes the bearer token used to authenticate M-Pesa
+// callbacks. The provider and route stay visible for operational logs.
+func requestLogPath(path string) string {
+	const prefix = "/payments/callback/"
+	if strings.HasPrefix(path, prefix) {
+		provider, _, ok := strings.Cut(strings.TrimPrefix(path, prefix), "/")
+		if ok && provider != "" {
+			return prefix + provider + "/[redacted]"
+		}
+	}
+	return path
 }
 
 func Recoverer() Middleware {

@@ -13,6 +13,9 @@
     <div class="stat"><dt>Admins</dt><dd>{{ .AdminCount }}</dd></div>
     <div class="stat"><dt>Sessions</dt><dd>{{ .SessionCount }}</dd></div>
   </dl>
+  {{ if .PaymentAttention }}
+  <a class="notice" href="/payments">{{ icon "info" }}<p>{{ .PaymentAttention }} payment {{ if eq .PaymentAttention 1 }}exception needs{{ else }}exceptions need{{ end }} a refund decision.</p></a>
+  {{ end }}
   {{ if and (eq .Role "admin") (not .OnlinePayments) }}
   <a class="notice" href="/payments">{{ icon "info" }}<p>Only cash on delivery is on. Set up M-Pesa or Paystack.</p></a>
   {{ end }}
@@ -178,6 +181,7 @@
           <td class="muted">{{ .Slug }}</td>
           <td class="num">{{ .ProductCount }}</td>
           <td class="actions">
+            <a class="btn btn-icon btn-sm" href="/categories?edit={{ .ID }}#new-category" aria-label="Edit {{ .Name }}">{{ icon "pencil" }}</a>
             <ui-confirm title="Delete {{ .Name }}?" message="Its {{ .ProductCount }} products become uncategorised." confirm-label="Delete">
               <form method="POST" action="/categories" class="inline-form">
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
@@ -196,25 +200,35 @@
   {{ template "empty" dict "Icon" "category" "Text" "No categories yet." }}
   {{ end }}
   <section class="card stack" aria-labelledby="new-category">
-    <h2 id="new-category">New category</h2>
+    <h2 id="new-category">{{ if .EditCategoryID }}Edit category{{ else }}New category{{ end }}</h2>
     <form method="POST" action="/categories" class="form" data-submit-once>
       {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      {{ if .EditCategoryID }}
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="category_id" value="{{ .EditCategoryID }}">
+      {{ else }}
       <input type="hidden" name="action" value="create">
+      {{ end }}
       <div class="form-row">
         <div class="field">
           <label class="label" for="category_name">Name</label>
           <input class="input" type="text" id="category_name" name="name" value="{{ .CategoryForm.Name }}" maxlength="80" required>
         </div>
         <div class="field">
-          <label class="label" for="category_slug">Slug <span class="muted">(optional)</span></label>
-          <input class="input" type="text" id="category_slug" name="slug" value="{{ .CategoryForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none">
+          <label class="label" for="category_slug">Slug{{ if not .EditCategoryID }} <span class="muted">(optional)</span>{{ end }}</label>
+          <input class="input" type="text" id="category_slug" name="slug" value="{{ .CategoryForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none"{{ if .EditCategoryID }} disabled aria-describedby="category-slug-hint"{{ end }}>
+          {{ if .EditCategoryID }}<small class="hint" id="category-slug-hint">Slugs stay fixed so links keep working.</small>{{ end }}
         </div>
       </div>
       <div class="field">
         <label class="label" for="category_description">Description <span class="muted">(optional)</span></label>
         <input class="input" type="text" id="category_description" name="description" value="{{ .CategoryForm.Description }}" maxlength="500">
       </div>
+      {{ if .EditCategoryID }}
+      <div class="row"><button type="submit" class="btn">{{ icon "check" }}Save changes</button><a class="btn btn-secondary" href="/categories">Cancel</a></div>
+      {{ else }}
       <div><button type="submit" class="btn">{{ icon "plus" }}Add category</button></div>
+      {{ end }}
     </form>
   </section>
 {{ end }}
@@ -234,8 +248,9 @@
           <td class="muted">{{ if .ContactEmail }}{{ .ContactEmail }}{{ else }}–{{ end }}</td>
           <td><span class="badge {{ if eq .Status "active" }}badge-solid{{ else }}badge-muted{{ end }}">{{ .Status }}</span></td>
           <td class="actions">
+            <a class="btn btn-icon btn-sm" href="/partners?edit={{ .ID }}#new-partner" aria-label="Edit {{ .Name }}">{{ icon "pencil" }}</a>
             {{ if eq .Status "active" }}
-            <ui-confirm title="Suspend {{ .Name }}?" message="Their products are hidden from customers and their logins see no partner data." confirm-label="Suspend">
+            <ui-confirm title="Suspend {{ .Name }}?" message="Their products are hidden from customers and their logins are signed out and blocked." confirm-label="Suspend">
               <form method="POST" action="/partners" class="inline-form">
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="action" value="status">
@@ -264,25 +279,34 @@
   {{ end }}
 
   <section class="card stack" aria-labelledby="new-partner">
-    <h2 id="new-partner">New partner</h2>
+    <h2 id="new-partner">{{ if .EditPartnerID }}Edit partner{{ else }}New partner{{ end }}</h2>
     <form method="POST" action="/partners" class="form" data-submit-once>
       {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      {{ if .EditPartnerID }}
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="partner_id" value="{{ .EditPartnerID }}">
+      {{ else }}
       <input type="hidden" name="action" value="create_partner">
+      {{ end }}
       <div class="form-row">
         <div class="field">
           <label class="label" for="partner_name">Name</label>
           <input class="input" type="text" id="partner_name" name="name" value="{{ .PartnerForm.Name }}" maxlength="120" required>
         </div>
         <div class="field">
-          <label class="label" for="partner_slug">Slug <span class="muted">(optional)</span></label>
-          <input class="input" type="text" id="partner_slug" name="slug" value="{{ .PartnerForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none">
+          <label class="label" for="partner_slug">Slug{{ if not .EditPartnerID }} <span class="muted">(optional)</span>{{ end }}</label>
+          <input class="input" type="text" id="partner_slug" name="slug" value="{{ .PartnerForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none"{{ if .EditPartnerID }} disabled{{ end }}>
         </div>
         <div class="field">
           <label class="label" for="partner_contact">Contact email <span class="muted">(optional)</span></label>
           <input class="input" type="email" id="partner_contact" name="contact_email" value="{{ .PartnerForm.ContactEmail }}">
         </div>
       </div>
+      {{ if .EditPartnerID }}
+      <div class="row"><button type="submit" class="btn">{{ icon "check" }}Save changes</button><a class="btn btn-secondary" href="/partners">Cancel</a></div>
+      {{ else }}
       <div><button type="submit" class="btn">{{ icon "plus" }}Add partner</button></div>
+      {{ end }}
     </form>
   </section>
 
@@ -439,6 +463,56 @@
   </section>
   {{ end }}
   <p class="tiny muted">Other providers (Flutterwave, Stripe, MTN MoMo) plug in the same way. See docs/payments.md.</p>
+
+  <h2 class="section-title">Payment exceptions</h2>
+  <p class="tiny muted">Confirmed charges after cancellation or a second charge for one order need a refund. Paystack refunds are requested here; record an M-Pesa reversal after completing it in the M-Pesa portal.</p>
+  {{ if .PaymentExceptions }}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Order</th><th>Charge</th><th>Issue</th><th>Status</th><th class="actions">Action</th></tr></thead>
+      <tbody>
+        {{ range .PaymentExceptions }}
+        <tr>
+          <td>#{{ .OrderID }}<div class="tiny muted">{{ .RequestReference }}</div></td>
+          <td>{{ .Currency }} {{ .Amount }}</td>
+          <td>{{ if eq .Reason "late_capture" }}After cancellation{{ else }}Second charge{{ end }}</td>
+          <td><span class="badge {{ if eq .Status "refunded" }}badge-solid{{ else }}badge-muted{{ end }}">{{ .Status }}</span>{{ if .LastError }}<div class="tiny muted">{{ .LastError }}</div>{{ end }}{{ if .RefundReference }}<div class="tiny muted">{{ .RefundReference }}</div>{{ end }}</td>
+          <td class="actions">
+            {{ if eq .Status "open" }}
+              <form method="POST" action="/payments" class="stack-sm" data-submit-once>
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <input type="hidden" name="action" value="refund">
+                <input type="hidden" name="exception_id" value="{{ .ID }}">
+                {{ if eq .Provider "mpesa" }}<label class="sr-only" for="refund-reference-{{ .ID }}">M-Pesa reversal receipt</label><input class="input" id="refund-reference-{{ .ID }}" name="refund_reference" placeholder="Reversal receipt" required>{{ end }}
+                <button type="submit" class="btn btn-sm">{{ if eq .Provider "mpesa" }}Record refund{{ else }}Request refund{{ end }}</button>
+              </form>
+            {{ else if and (eq .Provider "paystack") .RefundReference (ne .Status "refunded") }}
+              <form method="POST" action="/payments" data-submit-once>
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <input type="hidden" name="action" value="refund_refresh">
+                <input type="hidden" name="exception_id" value="{{ .ID }}">
+                <button type="submit" class="btn btn-sm">Check status</button>
+              </form>
+            {{ end }}
+            {{ if or (eq .Status "requested") (eq .Status "pending") (eq .Status "review") }}
+              <form method="POST" action="/payments" class="stack-sm" data-submit-once>
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <input type="hidden" name="action" value="refund_resolve">
+                <input type="hidden" name="exception_id" value="{{ .ID }}">
+                <label class="sr-only" for="resolve-reference-{{ .ID }}">Provider refund reference</label>
+                <input class="input" id="resolve-reference-{{ .ID }}" name="refund_reference" placeholder="Refund reference" required>
+                <button type="submit" class="btn btn-secondary btn-sm">Mark refunded</button>
+              </form>
+            {{ end }}
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  <p class="muted">No payment exceptions.</p>
+  {{ end }}
 {{ end }}
 
 {{ if eq .Title "Team Management" }}
@@ -459,7 +533,7 @@
           <td><span class="badge {{ if eq .Role "admin" }}badge-solid{{ end }}">{{ .Role }}</span></td>
           <td class="actions">
             {{ if ne .Role "admin" }}
-            <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in again." confirm-label="Deactivate">
+            <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in until an admin reactivates them." confirm-label="Deactivate">
               <form method="POST" action="/team" class="inline-form">
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="user_id" value="{{ .ID }}">
@@ -475,6 +549,30 @@
       </tbody>
     </table>
   </div>
+  {{ if .Deactivated }}
+  <h2 class="section-title">Deactivated</h2>
+  <div class="table-wrap">
+    <table class="table" id="admin-deactivated-table">
+      <thead><tr><th>User</th><th>Role</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+        {{ range .Deactivated }}
+        <tr>
+          <td>{{ .Username }}<div class="tiny muted">{{ .Email }}</div></td>
+          <td><span class="badge badge-muted">{{ .Role }}</span></td>
+          <td class="actions">
+            <form method="POST" action="/team" class="inline-form" data-submit-once>
+              {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+              <input type="hidden" name="action" value="reactivate">
+              <input type="hidden" name="user_id" value="{{ .ID }}">
+              <button type="submit" class="btn btn-secondary btn-sm">Reactivate</button>
+            </form>
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ end }}
 {{ end }}
 
 {{ if eq .Title "Audit Log" }}

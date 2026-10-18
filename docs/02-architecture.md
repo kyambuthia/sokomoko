@@ -34,7 +34,8 @@ Supporting packages with no upward dependencies: `money`, `slug`, `config`,
 | `internal/service/catalog` | Product listing, search, categories, product lookup by slug, image URL mapping. |
 | `internal/service/commerce` | Cart operations with stock checks. |
 | `internal/service/checkout` | Pricing (`CalculateSummary`), stock holds, draft saving, idempotent order placement. |
-| `internal/service/payment` | Supported payment methods, labels, payment record construction, idempotency key generation. Stateless. |
+| `internal/service/payment` | Enabled payment methods, provider setup and pricing, starting and confirming online payments, webhooks and callbacks, and the refund queue. See [Payments](payments.md). |
+| `internal/payments` | Provider implementations (cash on delivery, M-Pesa Daraja, Paystack) and their registry. |
 | `internal/service/account` | A customer's orders. |
 | `internal/service/admin` | Metrics, reports, order overrides, team deactivation, audit log reads. |
 | `internal/service/partner` | Store settings, product creation, fulfillment, per-partner scoping. |
@@ -117,8 +118,12 @@ page instead of a half-written document.
 7. `lifecycle.Run` binds the listener, then starts `Maintain` in the
    background and serves.
 
-`Maintain` releases expired stock reservations every minute and deletes
-expired sessions and password-reset tokens every five minutes.
+`Maintain` releases expired stock reservations and cancels unpaid online
+orders every minute, and deletes expired sessions and password-reset tokens
+every five minutes. Each pass runs under a PostgreSQL advisory lock
+(`Store.RunExclusive`), so with several replicas only one does the work; if
+the lock cannot be checked the pass runs anyway, since every job is
+idempotent.
 
 On `SIGINT` or `SIGTERM`, or if the listener fails, `lifecycle` marks the
 readiness check as draining (`/readyz` returns 503), cancels maintenance,

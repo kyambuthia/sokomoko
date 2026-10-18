@@ -3,6 +3,7 @@
 package partner
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -31,14 +32,16 @@ var (
 	ErrInvalidProductStock       = errors.New("invalid product stock")
 	ErrUnableToCreateProduct     = errors.New("unable to create product")
 	ErrUnableToCreateProductSlug = errors.New("unable to create product slug")
+	ErrProductNotFound           = errors.New("product not found")
 )
 
+const maxProductPrice money.Cents = 10_000_000 // 100,000.00
+
 const (
-	maxProductPrice  money.Cents = 10_000_000 // 100,000.00
-	maxProductStock              = 1_000_000
-	maxProductName               = 200
-	maxNoticeLength              = 500
-	maxDescriptionLn             = 5000
+	maxProductStock  = 1_000_000
+	maxProductName   = 200
+	maxNoticeLength  = 500
+	maxDescriptionLn = 5000
 )
 
 type Service struct {
@@ -74,6 +77,7 @@ type Product struct {
 	Category      string
 	PartnerName   string
 	Price         money.Cents
+	Currency      string
 	StockQuantity int
 	PartnerID     int
 }
@@ -97,6 +101,7 @@ type OrderItem struct {
 
 type Order struct {
 	ID              int
+	Currency        string
 	CustomerName    string
 	Status          string
 	PartnerStatus   string
@@ -204,24 +209,42 @@ func (s *Service) Dashboard() (DashboardData, error) {
 }
 
 func (s *Service) DashboardForActor(actor *Actor) (DashboardData, error) {
+	return s.DashboardForActorContext(context.Background(), actor)
+}
+
+func (s *Service) DashboardForActorContext(ctx context.Context, actor *Actor) (DashboardData, error) {
 	settings, err := s.requireStoreSettings()
 	if err != nil {
 		return DashboardData{}, err
 	}
 
-	products, err := s.ProductsForActor(actor)
+	partnerID, err := s.partnerIDForActor(actor)
 	if err != nil {
 		return DashboardData{}, err
 	}
-	orders, err := s.OrdersForActor(actor, "")
+	if actorIsPartner(actor) && partnerID == 0 {
+		return DashboardData{Settings: *settings}, nil
+	}
+	count, err := s.store.CountFilteredProductsContext(ctx, db.ProductFilter{PartnerID: partnerID})
+	if err != nil {
+		return DashboardData{}, err
+	}
+	summary, err := s.store.FulfillmentSummaryContext(ctx, partnerID)
 	if err != nil {
 		return DashboardData{}, err
 	}
 	return DashboardData{
 		Settings:     *settings,
-		ProductCount: len(products.Products),
-		OrderSummary: orders.Summary,
+		ProductCount: count,
+		OrderSummary: Summary(summary),
 	}, nil
+}
+
+func (s *Service) partnerIDForActor(actor *Actor) (int, error) {
+	if !actorIsPartner(actor) {
+		return 0, nil
+	}
+	return s.store.PartnerIDForUser(actor.ID)
 }
 
 func (s *Service) Products() (ProductsData, error) {
@@ -229,39 +252,52 @@ func (s *Service) Products() (ProductsData, error) {
 }
 
 func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
+	data, _, err := s.productsForActorContext(context.Background(), actor, 0, 0)
+	return data, err
+}
+
+func (s *Service) ProductsPageForActorContext(ctx context.Context, actor *Actor, page, limit int) (ProductsData, int, error) {
+	return s.productsForActorContext(ctx, actor, limit, (page-1)*limit)
+}
+
+func (s *Service) productsForActorContext(ctx context.Context, actor *Actor, limit, offset int) (ProductsData, int, error) {
 	settings, err := s.requireStoreSettings()
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
 	}
-	filter := db.ProductFilter{}
+	filter := db.ProductFilter{Limit: limit, Offset: offset}
 	if actorIsPartner(actor) {
-		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		partnerID, err := s.partnerIDForActor(actor)
 		if err != nil {
-			return ProductsData{}, err
+			return ProductsData{}, 0, err
 		}
 		if partnerID == 0 {
-			return ProductsData{Settings: *settings}, nil
+			return ProductsData{Settings: *settings}, 0, nil
 		}
 		filter.PartnerID = partnerID
 	}
-	products, err := s.store.ListProducts(filter)
+	total, err := s.store.CountFilteredProductsContext(ctx, filter)
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
+	}
+	products, err := s.store.ListProductsContext(ctx, filter)
+	if err != nil {
+		return ProductsData{}, 0, err
 	}
 	categories, err := s.store.GetAllCategories()
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
 	}
 	partners, err := s.store.ListPartners()
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
 	}
 
 	data := ProductsData{Settings: *settings}
 	for _, p := range products {
 		data.Products = append(data.Products, Product{
 			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
-			Price: p.Price, StockQuantity: p.StockQuantity, PartnerID: int(p.PartnerID.Int64),
+			Price: p.Price, Currency: p.Currency, StockQuantity: p.StockQuantity, PartnerID: int(p.PartnerID.Int64),
 		})
 	}
 	for _, c := range categories {
@@ -272,7 +308,34 @@ func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
 			data.Partners = append(data.Partners, PartnerOption{ID: p.ID, Name: p.Name})
 		}
 	}
-	return data, nil
+	return data, total, nil
+}
+
+func (s *Service) OrdersPageForActorContext(ctx context.Context, actor *Actor, filter string, page, limit int) (OrdersData, int, error) {
+	clean := strings.TrimSpace(filter)
+	if clean == "" {
+		clean = "all"
+	}
+	partnerID, err := s.partnerIDForActor(actor)
+	if err != nil {
+		return OrdersData{}, 0, err
+	}
+	if actorIsPartner(actor) && partnerID == 0 {
+		return OrdersData{Filter: clean}, 0, nil
+	}
+	orders, total, err := s.store.ListFulfillmentOrdersPageContext(ctx, partnerID, clean, limit, (page-1)*limit)
+	if err != nil {
+		return OrdersData{}, 0, err
+	}
+	summary, err := s.store.FulfillmentSummaryContext(ctx, partnerID)
+	if err != nil {
+		return OrdersData{}, 0, err
+	}
+	mapped := make([]Order, 0, len(orders))
+	for _, order := range orders {
+		mapped = append(mapped, mapOrder(order))
+	}
+	return OrdersData{Filter: clean, Orders: mapped, Summary: Summary(summary)}, total, nil
 }
 
 func (s *Service) CreateProduct(input CreateProductInput) error {
@@ -341,6 +404,101 @@ func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) 
 		}
 	}
 	return ErrUnableToCreateProductSlug
+}
+
+// ProductInput holds the editable fields of a product as typed in a form.
+type ProductInput struct {
+	Name        string
+	Description string
+	Price       string
+	Stock       string
+	CategoryID  string
+}
+
+// productForActor loads a product the actor may edit. A partner user may only
+// edit their own partner's products; anything else reads as not found.
+func (s *Service) productForActor(actor *Actor, idRaw string) (*db.Product, error) {
+	if actor == nil || (actor.Role != db.RoleAdmin && actor.Role != db.RoleStaff && actor.Role != db.RolePartner) {
+		return nil, ErrProductNotFound
+	}
+	id, err := strconv.Atoi(strings.TrimSpace(idRaw))
+	if err != nil || id <= 0 {
+		return nil, ErrProductNotFound
+	}
+	product, err := s.store.GetProductByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if product == nil {
+		return nil, ErrProductNotFound
+	}
+	if actorIsPartner(actor) {
+		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		if err != nil {
+			return nil, err
+		}
+		if partnerID == 0 || !product.PartnerID.Valid || int(product.PartnerID.Int64) != partnerID {
+			return nil, ErrProductNotFound
+		}
+	}
+	return product, nil
+}
+
+// ProductForEdit returns the current values of a product for its edit form.
+func (s *Service) ProductForEdit(actor *Actor, idRaw string) (int, ProductInput, error) {
+	product, err := s.productForActor(actor, idRaw)
+	if err != nil {
+		return 0, ProductInput{}, err
+	}
+	input := ProductInput{
+		Name:        product.Name,
+		Description: product.Description,
+		Price:       product.Price.String(),
+		Stock:       strconv.Itoa(product.StockQuantity),
+	}
+	if product.CategoryID.Valid {
+		input.CategoryID = strconv.FormatInt(product.CategoryID.Int64, 10)
+	}
+	return product.ID, input, nil
+}
+
+// UpdateProductForActor changes a product's details and sets its available
+// stock. The slug stays the same so product links keep working.
+func (s *Service) UpdateProductForActor(actor *Actor, idRaw string, input ProductInput) error {
+	product, err := s.productForActor(actor, idRaw)
+	if err != nil {
+		return err
+	}
+	name := strings.TrimSpace(input.Name)
+	description := strings.TrimSpace(input.Description)
+	priceRaw := strings.TrimSpace(input.Price)
+	stockRaw := strings.TrimSpace(input.Stock)
+	if name == "" || priceRaw == "" || stockRaw == "" {
+		return ErrMissingProductFields
+	}
+	if len([]rune(name)) > maxProductName || len([]rune(description)) > maxDescriptionLn {
+		return ErrMissingProductFields
+	}
+	price, err := money.Parse(priceRaw)
+	if err != nil || price > maxProductPrice {
+		return ErrInvalidProductPrice
+	}
+	stock, err := strconv.Atoi(stockRaw)
+	if err != nil || stock < 0 || stock > maxProductStock {
+		return ErrInvalidProductStock
+	}
+	before := fmt.Sprintf("price=%s stock=%d", product.Price, product.StockQuantity)
+	product.Name, product.Description, product.Price, product.StockQuantity = name, description, price, stock
+	product.CategoryID = parseOptionalID(input.CategoryID)
+	if err := s.store.UpdateProduct(*product); err != nil {
+		if errors.Is(err, db.ErrProductNotFound) {
+			return ErrProductNotFound
+		}
+		return fmt.Errorf("update product: %w", err)
+	}
+	_ = s.store.CreateAuditLog(actor.ID, "product.update", "product", product.ID,
+		fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock))
+	return nil
 }
 
 func (s *Service) Orders(filter string) (OrdersData, error) {
@@ -460,6 +618,7 @@ func mapOrder(order db.Order) Order {
 	}
 	return Order{
 		ID:              order.ID,
+		Currency:        order.Currency,
 		CustomerName:    order.CustomerName,
 		Status:          order.Status,
 		PartnerStatus:   order.PartnerStatus,

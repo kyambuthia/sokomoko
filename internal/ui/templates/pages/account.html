@@ -8,10 +8,13 @@
       <h1>Account</h1>
       <p class="muted small">{{ .Viewer.Username }}</p>
     </div>
-    <form action="/logout" method="POST">
-      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
-      <button type="submit" class="btn btn-secondary btn-sm">{{ icon "logout" }}Sign out</button>
-    </form>
+    <div class="row">
+      <a class="btn btn-secondary btn-sm" href="/account/password">{{ icon "settings" }}Password</a>
+      <form action="/logout" method="POST">
+        {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+        <button type="submit" class="btn btn-secondary btn-sm">{{ icon "logout" }}Sign out</button>
+      </form>
+    </div>
   </div>
   {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
 
@@ -35,7 +38,15 @@
           <p class="small">{{ .Status }} · {{ .DeliveryStatus }}</p>
         </ui-order-progress>
         {{ end }}
-        {{ if and .DeliveryNotice (ne .PartnerStatus "new") }}<p class="small muted" data-order-notice>{{ .DeliveryNotice }}</p>{{ end }}
+        {{ if and .DeliveryNotice (or (ne .PartnerStatus "new") (eq .Status "cancelled")) }}<p class="small muted" data-order-notice>{{ .DeliveryNotice }}</p>{{ end }}
+        {{ if .Cancellable }}
+        <ui-confirm title="Cancel order #{{ .ID }}?" message="The items go back on sale. This cannot be undone." confirm-label="Cancel order" cancel-label="Keep order">
+          <form method="POST" action="/account/orders/{{ .ID }}/cancel" data-submit-once>
+            {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+            <button type="submit" class="btn btn-secondary btn-sm">{{ icon "x" }}Cancel order</button>
+          </form>
+        </ui-confirm>
+        {{ end }}
         <p class="tiny muted">
           <ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2 Jan 2006" }}</ui-relative-time>
           · {{ len .Items }} item{{ if ne (len .Items) 1 }}s{{ end }}

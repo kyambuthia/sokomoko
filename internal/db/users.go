@@ -94,6 +94,26 @@ func (s *Store) CountUsersByRole(role string) (int, error) {
 	return count, err
 }
 
+// DashboardCounts is the admin header summary, read in one round trip.
+type DashboardCounts struct {
+	Products, Sessions, Admins, Staff, Users int
+}
+
+func (s *Store) DashboardCounts() (DashboardCounts, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var c DashboardCounts
+	err := s.DB.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM products WHERE deleted_at IS NULL),
+		(SELECT count(*) FROM sessions WHERE expires_at > now()),
+		count(*) FILTER (WHERE role = 'admin'),
+		count(*) FILTER (WHERE role = 'staff'),
+		count(*) FILTER (WHERE role = 'user')
+		FROM users WHERE deleted_at IS NULL`).
+		Scan(&c.Products, &c.Sessions, &c.Admins, &c.Staff, &c.Users)
+	return c, err
+}
+
 func (s *Store) HasAdminUser() (bool, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
@@ -156,6 +176,47 @@ func (s *Store) DeleteUser(id int) error {
 		_, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id)
 		return err
 	})
+}
+
+// ListDeactivatedUsers returns the most recently deactivated non-admin
+// accounts, newest first.
+func (s *Store) ListDeactivatedUsers(limit int) ([]User, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	ctx, cancel := s.ctx()
+	defer cancel()
+	rows, err := s.DB.QueryContext(ctx,
+		"SELECT "+userColumns+` FROM users
+		 WHERE deleted_at IS NOT NULL AND role <> 'admin'
+		 ORDER BY deleted_at DESC, id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	users := []User{}
+	for rows.Next() {
+		user, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, *user)
+	}
+	return users, rows.Err()
+}
+
+// ReactivateUser restores a deactivated non-admin account. Usernames and
+// emails stay unique across deactivated rows, so restoring cannot collide.
+func (s *Store) ReactivateUser(id int) (bool, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	result, err := s.DB.ExecContext(ctx,
+		"UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL AND role <> 'admin'", id)
+	if err != nil {
+		return false, err
+	}
+	n, err := rowsAffected(result)
+	return n > 0, err
 }
 
 func (s *Store) ListUsersByRoles(roles []string) ([]User, error) {

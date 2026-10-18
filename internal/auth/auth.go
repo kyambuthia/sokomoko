@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"net/textproto"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -48,6 +49,8 @@ type store interface {
 	HasAdminUser() (bool, error)
 	BootstrapAdmin(admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
 	UsePasswordResetToken(token, passwordHash string) (bool, error)
+	PartnerIDForUser(userID int) (int, error)
+	UpdateUserPassword(userID int, passwordHash string) error
 }
 
 type Config struct {
@@ -68,6 +71,7 @@ type Service struct {
 	store                    store
 	environment              string
 	adminSetupToken          string
+	resetEmailBackoff        []time.Duration // nil means defaultResetEmailBackoff
 	sessionCookieDomain      string
 	abuseLimiter             *authAbuseLimiter
 	passwordResetBaseURL     string
@@ -103,15 +107,21 @@ func normalizeIdentifierForAbuse(identifier string, preserveCase bool) string {
 
 // ClientIP returns the client address for rate limiting. X-Forwarded-For is
 // only honoured when trustProxy is set, otherwise any client could spoof it to
-// dodge throttling.
+// dodge throttling. Only the right-most entry is used: it is the one the
+// trusted proxy wrote, while entries to its left come from the client when the
+// proxy appends to the header.
 func ClientIP(r *http.Request, trustProxy bool) string {
 	if r == nil {
 		return "unknown"
 	}
 	if trustProxy {
-		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
-			first, _, _ := strings.Cut(forwarded, ",")
-			if candidate := strings.TrimSpace(first); candidate != "" {
+		values := r.Header.Values("X-Forwarded-For")
+		if len(values) > 0 {
+			last := values[len(values)-1]
+			if i := strings.LastIndex(last, ","); i >= 0 {
+				last = last[i+1:]
+			}
+			if candidate := strings.TrimSpace(last); candidate != "" {
 				return candidate
 			}
 		}
@@ -410,7 +420,15 @@ func containsRole(roles []string, role string) bool {
 	return false
 }
 
+// isLoopbackRequest reports whether the request came straight from this
+// machine. A request relayed by a reverse proxy on the same host also arrives
+// from loopback, so any forwarding header disqualifies it.
 func isLoopbackRequest(r *http.Request) bool {
+	for _, header := range []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-Ip", "Forwarded", "Via"} {
+		if len(r.Header.Values(header)) > 0 {
+			return false
+		}
+	}
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	if err != nil {
 		host = strings.TrimSpace(r.RemoteAddr)
@@ -497,13 +515,35 @@ func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink st
 	}
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), resetEmailTimeout)
-		defer cancel()
-
-		if err := sender(ctx, recipientEmail, resetLink); err != nil {
+		var err error
+		backoff := s.resetEmailBackoff
+		if backoff == nil {
+			backoff = defaultResetEmailBackoff
+		}
+		for attempt := 0; attempt < len(backoff)+1; attempt++ {
+			if attempt > 0 {
+				time.Sleep(backoff[attempt-1])
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), resetEmailTimeout)
+			err = sender(ctx, recipientEmail, resetLink)
+			cancel()
+			if err == nil || permanentMailError(err) {
+				break
+			}
+		}
+		if err != nil {
 			log.Printf("password reset email send failed for user_id=%d: %v", userID, err)
 		}
 	}()
+}
+
+// defaultResetEmailBackoff is the wait before each retry of a reset email.
+var defaultResetEmailBackoff = []time.Duration{time.Second, 4 * time.Second}
+
+// permanentMailError reports an SMTP 5xx reply, which a retry cannot fix.
+func permanentMailError(err error) bool {
+	var reply *textproto.Error
+	return errors.As(err, &reply) && reply.Code >= 500
 }
 
 func isUniqueConstraintErr(err error) bool {
@@ -769,6 +809,18 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 	}
 
 	s.clearAbuseFailures(cfg.abuseScope, username, false, r)
+	if user.Role == db.RolePartner {
+		partnerID, err := s.store.PartnerIDForUser(user.ID)
+		if err != nil {
+			log.Printf("partner lookup failed: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if partnerID == 0 {
+			renderWithStatus(w, cfg.tmpl, http.StatusForbidden, withError(data, "This vendor account is suspended. Contact the marketplace team."))
+			return
+		}
+	}
 	if err := s.startSession(w, r, user.ID); err != nil {
 		log.Printf("create session failed: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -1285,4 +1337,87 @@ func (s *Service) APIAuthMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, user)))
 	})
+}
+
+// PasswordChangePageData backs the signed-in password change form.
+type PasswordChangePageData struct {
+	Title     string
+	Username  string
+	Action    string
+	BackHref  string
+	Message   string
+	Error     string
+	CSRFToken string
+}
+
+// PasswordChange lets a signed-in user replace their password after proving
+// they know the current one. Every session for the account is revoked and the
+// browser gets a fresh one. Mount it behind AuthMiddleware.
+func (s *Service) PasswordChange(tmpl *template.Template, action, backHref string) http.HandlerFunc {
+	const scope = "password-change"
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r.Context())
+		if user == nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		data := PasswordChangePageData{
+			Title: "Change password", Username: user.Username, Action: action, BackHref: backHref,
+			CSRFToken: s.CSRFTokenForSession(r),
+		}
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			if r.URL.Query().Get("changed") == "1" {
+				data.Message = "Password changed. Other devices have been signed out."
+			}
+			renderWithStatus(w, tmpl, 0, data)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		identifier := strconv.Itoa(user.ID)
+		if s.checkAbuseLock(w, scope, identifier, true, r) {
+			data.Error = "Too many attempts. Please wait and try again."
+			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+			return
+		}
+		current := r.FormValue("current_password")
+		password := r.FormValue("password")
+		confirm := r.FormValue("confirm_password")
+		switch {
+		case current == "" || password == "" || confirm == "":
+			data.Error = "All fields are required"
+		case !checkPassword(user, current):
+			s.markAbuseFailure(scope, identifier, true, r)
+			data.Error = "Current password is incorrect"
+		case password != confirm:
+			data.Error = "New passwords do not match"
+		case !isStrongEnoughPassword(password):
+			data.Error = "Password must be 10 to 72 characters"
+		case password == current:
+			data.Error = "Choose a password you have not been using"
+		}
+		if data.Error != "" {
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		s.clearAbuseFailures(scope, identifier, true, r)
+		hash, err := hashPassword(password)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if err := s.store.UpdateUserPassword(user.ID, hash); err != nil {
+			log.Printf("password change failed for user_id=%d: %v", user.ID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if err := s.startSession(w, r, user.ID); err != nil {
+			log.Printf("create session after password change: %v", err)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, action+"?changed=1", http.StatusSeeOther)
+	}
 }

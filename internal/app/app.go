@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kyambuthia/sokomoko/internal/db"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
@@ -32,11 +33,15 @@ type CatalogService interface {
 	ProductBySlug(slug string) (*catalogsvc.Product, error)
 	Search(query string) ([]catalogsvc.Product, error)
 	SearchInCategory(query, category string) ([]catalogsvc.Product, error)
+	SearchPage(ctx context.Context, query, category string, page, limit int) ([]catalogsvc.Product, int, error)
 }
 
 type AccountService interface {
 	OrderForUser(userID, orderID int) (*accountsvc.Order, error)
+	OrderForUserContext(context.Context, int, int) (*accountsvc.Order, error)
 	OrdersForUser(userID int) ([]accountsvc.Order, error)
+	OrdersForUserPageContext(context.Context, int, int, int) ([]accountsvc.Order, int, error)
+	CancelOrder(ctx context.Context, userID, orderID int) error
 }
 
 type CommerceService interface {
@@ -65,6 +70,11 @@ type PaymentService interface {
 	HandleWebhook(ctx context.Context, providerID string, r *http.Request, body []byte) error
 	HandleCallback(ctx context.Context, providerID, token string, r *http.Request, body []byte) error
 	Providers() ([]paymentsvc.ProviderView, error)
+	PaymentExceptions() ([]db.PaymentException, error)
+	RequestRefund(context.Context, *paymentsvc.Actor, int, string) (*db.PaymentException, error)
+	RefreshRefund(context.Context, *paymentsvc.Actor, int) (*db.PaymentException, error)
+	ResolveRefund(*paymentsvc.Actor, int, string) (*db.PaymentException, error)
+	ExceptionsNeedingAttention(context.Context) (int, error)
 	SaveProvider(actor *paymentsvc.Actor, id string, input paymentsvc.ProviderInput) error
 	Pricing() (paymentsvc.Pricing, error)
 	SavePricing(actor *paymentsvc.Actor, input paymentsvc.PricingInput) (paymentsvc.Pricing, error)
@@ -79,12 +89,18 @@ type AdminService interface {
 	CreatePartnerAccount(actor *adminsvc.Actor, input adminsvc.PartnerAccountInput) error
 	Partners() ([]adminsvc.Partner, []adminsvc.PartnerAccount, error)
 	SetPartnerStatus(actor *adminsvc.Actor, idRaw, status string) error
+	UpdatePartner(actor *adminsvc.Actor, idRaw string, input adminsvc.PartnerInput) error
 	DeleteCategory(actor *adminsvc.Actor, idRaw string) error
+	UpdateCategory(actor *adminsvc.Actor, idRaw string, input adminsvc.CategoryInput) error
 	DeactivateUser(actor *adminsvc.Actor, userIDRaw string) error
+	ReactivateUser(actor *adminsvc.Actor, userIDRaw string) error
+	DeactivatedMembers() ([]adminsvc.TeamMember, error)
 	Deliveries() (adminsvc.DeliveryBoard, error)
 	Metrics() (adminsvc.Metrics, error)
 	Orders() ([]adminsvc.Order, error)
+	OrdersPageContext(context.Context, int, int) ([]adminsvc.Order, int, error)
 	Products() ([]adminsvc.Product, error)
+	ProductsPageContext(context.Context, int, int) ([]adminsvc.Product, int, error)
 	Reports() (adminsvc.SalesReport, error)
 	TeamMembers() ([]adminsvc.TeamMember, error)
 	UpdateOrder(actor *adminsvc.Actor, input adminsvc.UpdateOrderInput) error
@@ -93,12 +109,17 @@ type AdminService interface {
 type PartnerService interface {
 	CreateProduct(input partnersvc.CreateProductInput) error
 	CreateProductForActor(actor *partnersvc.Actor, input partnersvc.CreateProductInput) error
+	ProductForEdit(actor *partnersvc.Actor, id string) (int, partnersvc.ProductInput, error)
+	UpdateProductForActor(actor *partnersvc.Actor, id string, input partnersvc.ProductInput) error
 	Dashboard() (partnersvc.DashboardData, error)
 	DashboardForActor(actor *partnersvc.Actor) (partnersvc.DashboardData, error)
+	DashboardForActorContext(context.Context, *partnersvc.Actor) (partnersvc.DashboardData, error)
 	Orders(filter string) (partnersvc.OrdersData, error)
 	OrdersForActor(actor *partnersvc.Actor, filter string) (partnersvc.OrdersData, error)
+	OrdersPageForActorContext(context.Context, *partnersvc.Actor, string, int, int) (partnersvc.OrdersData, int, error)
 	Products() (partnersvc.ProductsData, error)
 	ProductsForActor(actor *partnersvc.Actor) (partnersvc.ProductsData, error)
+	ProductsPageForActorContext(context.Context, *partnersvc.Actor, int, int) (partnersvc.ProductsData, int, error)
 	SaveStoreSettings(actor *partnersvc.Actor, input partnersvc.StoreSettingsInput) (partnersvc.StoreSettings, error)
 	StoreSettings() (*partnersvc.StoreSettings, error)
 	UpdateOrder(actor *partnersvc.Actor, input partnersvc.UpdateOrderInput) error
@@ -118,6 +139,7 @@ type AuthService interface {
 	PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc
 	SignUp(tmpl *template.Template) http.HandlerFunc
 	StaffSignUp(tmpl *template.Template) http.HandlerFunc
+	PasswordChange(tmpl *template.Template, action, backHref string) http.HandlerFunc
 	WorkspaceLogin(tmpl *template.Template) http.HandlerFunc
 }
 

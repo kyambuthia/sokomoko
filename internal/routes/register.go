@@ -69,6 +69,8 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/cart/remove", customer(CartRemove(a)))
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
+	mux.Handle("/account/orders/{id}/cancel", customer(AccountOrderCancel(a)))
+	mux.Handle("/account/password", customer(a.Auth.PasswordChange(a.Templates.PasswordChange, "/account/password", "/account")))
 	mux.Handle("/payments/order/{id}", customer(PaymentPage(a)))
 	mux.Handle("/payments/return", customer(PaymentReturn(a)))
 	// Provider servers call these without a session; they authenticate with
@@ -110,6 +112,7 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 		),
 	)
 	mux.Handle("/staff/signup", withRole(a, db.RoleAdmin, a.Auth.StaffSignUp(a.Templates.StaffSignup)))
+	mux.Handle("/password", withAnyRole(a, roleAdminStaff, a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/")))
 
 	adminHandlers := http.NewServeMux()
 	adminHandlers.HandleFunc("/", AdminDashboard(a))
@@ -161,5 +164,7 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/dashboard", staff(PartnerDashboard(a)))
 	mux.Handle("/products", staff(PartnerProducts(a)))
 	mux.Handle("/products/new", staff(PartnerProductNew(a)))
+	mux.Handle("/products/{id}/edit", staff(PartnerProductEdit(a)))
+	mux.Handle("/password", staff(a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/dashboard")))
 	mux.Handle("/orders", staff(PartnerOrders(a)))
 }

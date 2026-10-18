@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
 	"strings"
 	"testing"
@@ -90,8 +93,43 @@ func TestClientIP_IgnoresForwardedForUnlessTrusted(t *testing.T) {
 	if got := ClientIP(req, false); got != "10.0.0.5" {
 		t.Fatalf("untrusted ClientIP = %q, want remote addr", got)
 	}
-	if got := ClientIP(req, true); got != "203.0.113.9" {
-		t.Fatalf("trusted ClientIP = %q, want first forwarded hop", got)
+	if got := ClientIP(req, true); got != "10.0.0.1" {
+		t.Fatalf("trusted ClientIP = %q, want the hop the proxy wrote", got)
+	}
+}
+
+func TestClientIP_IgnoresClientSuppliedForwardedEntries(t *testing.T) {
+	// An appending proxy keeps whatever the client sent and adds the real
+	// address last. Rotating the spoofed entry must not change the key.
+	for _, spoofed := range []string{"198.51.100.1", "198.51.100.2"} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "127.0.0.1:1234"
+		req.Header.Add("X-Forwarded-For", spoofed)
+		req.Header.Add("X-Forwarded-For", "203.0.113.9")
+		if got := ClientIP(req, true); got != "203.0.113.9" {
+			t.Fatalf("ClientIP with spoofed %s = %q", spoofed, got)
+		}
+	}
+}
+
+func TestIsLoopbackRequest_RejectsProxiedRequests(t *testing.T) {
+	direct := httptest.NewRequest(http.MethodGet, "/setup", nil)
+	direct.RemoteAddr = "127.0.0.1:5000"
+	if !isLoopbackRequest(direct) {
+		t.Fatal("direct loopback request rejected")
+	}
+	for _, header := range []string{"X-Forwarded-For", "X-Real-Ip", "Forwarded", "Via"} {
+		proxied := httptest.NewRequest(http.MethodGet, "/setup", nil)
+		proxied.RemoteAddr = "127.0.0.1:5000"
+		proxied.Header.Set(header, "203.0.113.9")
+		if isLoopbackRequest(proxied) {
+			t.Fatalf("request relayed with %s treated as loopback", header)
+		}
+	}
+	remote := httptest.NewRequest(http.MethodGet, "/setup", nil)
+	remote.RemoteAddr = "203.0.113.9:5000"
+	if isLoopbackRequest(remote) {
+		t.Fatal("remote request treated as loopback")
 	}
 }
 
@@ -173,5 +211,42 @@ func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
 
 	if again := submit(); again.Code != http.StatusFound || again.Header().Get("Location") != "/login" {
 		t.Fatalf("second setup status=%d location=%q, want redirect to /login", again.Code, again.Header().Get("Location"))
+	}
+}
+
+func TestDispatchPasswordResetEmail_RetriesTransientFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		failures  []error
+		wantCalls int
+	}{
+		{"succeeds after two transient failures", []error{errors.New("dial tcp: timeout"), errors.New("421 try later")}, 3},
+		{"gives up after three attempts", []error{errors.New("a"), errors.New("b"), errors.New("c"), errors.New("d")}, 3},
+		{"stops on a permanent rejection", []error{&textproto.Error{Code: 550, Msg: "no such user"}}, 1},
+	} {
+		calls := make(chan int, 10)
+		n := 0
+		svc := &Service{resetEmailBackoff: []time.Duration{time.Millisecond, time.Millisecond}, passwordResetEmailSender: func(context.Context, string, string) error {
+			n++
+			calls <- n
+			if n <= len(tc.failures) {
+				return tc.failures[n-1]
+			}
+			return nil
+		}}
+		svc.dispatchPasswordResetEmail("a@example.com", "https://shop.example/reset", 1)
+		got := 0
+		for got < tc.wantCalls {
+			select {
+			case got = <-calls:
+			case <-time.After(2 * time.Second):
+				t.Fatalf("%s: %d calls, want %d", tc.name, got, tc.wantCalls)
+			}
+		}
+		select {
+		case extra := <-calls:
+			t.Fatalf("%s: unexpected call %d", tc.name, extra)
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }

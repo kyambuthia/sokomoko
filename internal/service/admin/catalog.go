@@ -84,6 +84,41 @@ func (s *Service) CreateCategory(actor *Actor, input CategoryInput) error {
 	return nil
 }
 
+// UpdateCategory changes a category's name and description. The slug stays
+// the same so category links keep working.
+func (s *Service) UpdateCategory(actor *Actor, idRaw string, input CategoryInput) error {
+	if !canManageCatalog(actor) {
+		return ErrForbiddenCatalogAction
+	}
+	id, err := parsePositiveInt(idRaw)
+	if err != nil {
+		return ErrCategoryNotFound
+	}
+	name := strings.TrimSpace(input.Name)
+	description := strings.TrimSpace(input.Description)
+	if name == "" || len([]rune(name)) > maxCategoryName || len([]rune(description)) > maxCategoryDescription {
+		return ErrInvalidCategory
+	}
+	category, err := s.store.GetCategoryByID(id)
+	if err != nil {
+		return err
+	}
+	if category == nil {
+		return ErrCategoryNotFound
+	}
+	before := category.Name
+	category.Name, category.Description = name, description
+	err = s.store.UpdateCategory(*category)
+	if db.IsUniqueConstraintError(err) {
+		return ErrDuplicateCategory
+	}
+	if err != nil {
+		return err
+	}
+	_ = s.store.CreateAuditLog(actor.ID, "category.update", "category", id, before+" -> "+name)
+	return nil
+}
+
 // DeleteCategory soft-deletes a category. Its products become uncategorized.
 func (s *Service) DeleteCategory(actor *Actor, idRaw string) error {
 	if !canManageCatalog(actor) {

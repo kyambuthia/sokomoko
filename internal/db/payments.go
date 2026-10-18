@@ -24,12 +24,13 @@ type PaymentRecordInput struct {
 func checkoutPlacementTx(ctx context.Context, q querier, userID int, key string) (*CheckoutPlacement, error) {
 	var placement CheckoutPlacement
 	err := q.QueryRowContext(ctx,
-		`SELECT ik.order_id, ik.payment_id, o.total_cents
+		`SELECT ik.order_id, ik.payment_id, o.subtotal_cents, o.shipping_cents, o.tax_cents, o.total_cents, o.currency
 		 FROM idempotency_keys ik
 		 JOIN orders o ON o.id = ik.order_id
 		 WHERE ik.user_id = $1 AND ik.operation = $2 AND ik.idempotency_key = $3 AND ik.completed_at IS NOT NULL`,
 		userID, checkoutCompleteOperation, key,
-	).Scan(&placement.OrderID, &placement.PaymentID, &placement.TotalAmount)
+	).Scan(&placement.OrderID, &placement.PaymentID, &placement.Subtotal, &placement.ShippingFee,
+		&placement.TaxAmount, &placement.TotalAmount, &placement.Currency)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -97,6 +98,10 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 
 	var placement CheckoutPlacement
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		var currentCurrency string
+		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
+			return err
+		}
 		// Concurrent submissions of the same key serialize on this insert; the
 		// loser sees the winner's completed placement below.
 		if _, err := tx.ExecContext(ctx,
@@ -123,6 +128,9 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 		}
 		if checkout == nil {
 			return ErrCheckoutNotFound
+		}
+		if checkout.Currency != currentCurrency {
+			return ErrCheckoutCurrencyChanged
 		}
 		switch {
 		case checkout.Status == CheckoutStatusExpired:
@@ -185,7 +193,11 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 			return err
 		}
 
-		placement = CheckoutPlacement{OrderID: orderID, PaymentID: paymentID, TotalAmount: checkout.TotalAmount}
+		placement = CheckoutPlacement{
+			OrderID: orderID, PaymentID: paymentID, Subtotal: checkout.SubtotalAmount,
+			ShippingFee: checkout.ShippingFee, TaxAmount: checkout.TaxAmount,
+			TotalAmount: checkout.TotalAmount, Currency: checkout.Currency,
+		}
 		return nil
 	})
 	return placement, err

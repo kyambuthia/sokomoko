@@ -48,6 +48,15 @@ func TestStatusRecorder_TracksTheStatusActuallySent(t *testing.T) {
 	}
 }
 
+func TestRequestLogPath_RedactsCallbackToken(t *testing.T) {
+	if got := requestLogPath("/payments/callback/mpesa/sensitive-token"); got != "/payments/callback/mpesa/[redacted]" {
+		t.Fatalf("callback log path = %q", got)
+	}
+	if got := requestLogPath("/payments/order/42"); got != "/payments/order/42" {
+		t.Fatalf("ordinary log path = %q", got)
+	}
+}
+
 func TestCanonicalHost_IPv6(t *testing.T) {
 	if got := CanonicalHost("[::1]:8080"); got != "::1" {
 		t.Fatalf("host=%q, want ::1", got)

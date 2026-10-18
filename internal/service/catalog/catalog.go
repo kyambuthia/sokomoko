@@ -2,6 +2,7 @@
 package catalog
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -25,6 +26,7 @@ type Product struct {
 	Slug          string
 	Description   string
 	Price         money.Cents
+	Currency      string
 	StockQuantity int
 	Category      string
 	PartnerName   string
@@ -53,10 +55,6 @@ type Service struct {
 }
 
 func New(store *db.Store) *Service {
-	return &Service{store: store}
-}
-
-func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
@@ -116,6 +114,36 @@ func (s *Service) SearchInCategory(query, category string) ([]Product, error) {
 	return s.Browse(Filter{Query: query, Category: category, Limit: defaultSearchLimit})
 }
 
+// SearchPage returns one bounded page and the total number of matches. The
+// query and image fetches stop when the HTTP request is cancelled.
+func (s *Service) SearchPage(ctx context.Context, query, category string, page, limit int) ([]Product, int, error) {
+	query = normalizeQuery(query)
+	if query == "" {
+		return []Product{}, 0, nil
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	category = strings.TrimSpace(category)
+	if strings.EqualFold(category, AllCategories) || strings.EqualFold(category, "all") {
+		category = ""
+	}
+	filter := db.ProductFilter{Query: query, Category: category, PublicOnly: true}
+	total, err := s.store.CountFilteredProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	filter.Limit, filter.Offset = limit, (page-1)*limit
+	products, err := s.store.ListProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return mapProducts(products), total, nil
+}
+
 func (s *Service) ProductBySlug(slug string) (*Product, error) {
 	cleanSlug := strings.TrimSpace(slug)
 	if cleanSlug == "" || strings.Contains(cleanSlug, "/") || len(cleanSlug) > 200 {
@@ -168,6 +196,7 @@ func mapProduct(product db.Product) Product {
 		Slug:          product.Slug,
 		Description:   product.Description,
 		Price:         product.Price,
+		Currency:      product.Currency,
 		StockQuantity: product.StockQuantity,
 		Category:      product.Category,
 		PartnerName:   product.PartnerName,

@@ -99,11 +99,13 @@ func TestAPI_CatalogSearchUsesJSONContract(t *testing.T) {
 			Name          string  `json:"name"`
 			StockQuantity int     `json:"stock_quantity"`
 			Price         float64 `json:"price"`
+			PriceMinor    int64   `json:"price_minor"`
+			Currency      string  `json:"currency"`
 		} `json:"items"`
 	}
 	decodeAPIData(t, body, &data)
-	if len(data.Items) != 1 || data.Items[0].Price != 24.5 {
-		t.Fatalf("price must be major currency units: %#v", data.Items)
+	if len(data.Items) != 1 || data.Items[0].Price != 24.5 || data.Items[0].PriceMinor != 2450 || data.Items[0].Currency != "USD" {
+		t.Fatalf("price must include decimal and exact minor units: %#v", data.Items)
 	}
 	if len(data.Items) != 1 || data.Items[0].ID != int(productID) || data.Items[0].Name != "API Lamp" || data.Items[0].StockQuantity != 3 {
 		t.Fatalf("unexpected catalog response: %#v", data.Items)
@@ -180,6 +182,19 @@ func TestAPI_CheckoutPlacementIsIdempotent(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("checkout replay status=%d body=%s", resp.StatusCode, body)
 	}
+	var replay struct {
+		Summary struct {
+			SubtotalMinor    int64  `json:"subtotal_minor"`
+			ShippingFeeMinor int64  `json:"shipping_fee_minor"`
+			TaxAmountMinor   int64  `json:"tax_amount_minor"`
+			TotalMinor       int64  `json:"total_minor"`
+			Currency         string `json:"currency"`
+		} `json:"summary"`
+	}
+	decodeAPIData(t, body, &replay)
+	if replay.Summary.SubtotalMinor != 2000 || replay.Summary.ShippingFeeMinor != 650 || replay.Summary.TaxAmountMinor != 160 || replay.Summary.TotalMinor != 2810 || replay.Summary.Currency != "USD" {
+		t.Fatalf("replayed summary = %+v", replay.Summary)
+	}
 
 	orders, err := testStore.ListOrdersByUser(int(mustUserID(t, username)))
 	if err != nil {
@@ -197,12 +212,40 @@ func TestAPI_CheckoutPlacementIsIdempotent(t *testing.T) {
 	}
 	var account struct {
 		Items []struct {
-			TotalAmount float64 `json:"total_amount"`
+			TotalAmount      float64 `json:"total_amount"`
+			TotalAmountMinor int64   `json:"total_amount_minor"`
+			Currency         string  `json:"currency"`
 		} `json:"items"`
 	}
 	decodeAPIData(t, body, &account)
-	if len(account.Items) != 1 || account.Items[0].TotalAmount != 28.10 {
-		t.Fatalf("account amounts must be major units: %#v", account.Items)
+	if len(account.Items) != 1 || account.Items[0].TotalAmount != 28.10 || account.Items[0].TotalAmountMinor != 2810 || account.Items[0].Currency != "USD" {
+		t.Fatalf("account amounts must include exact minor units: %#v", account.Items)
+	}
+	resp, body = makeAPIRequest(t, http.MethodGet, "/api/v1/account/orders?page=2&limit=1", nil, []*http.Cookie{cookie}, false, nil)
+	var secondPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &secondPage)
+	if resp.StatusCode != http.StatusOK || len(secondPage.Items) != 0 || secondPage.Total != 1 {
+		t.Fatalf("account pagination status=%d data=%+v", resp.StatusCode, secondPage)
+	}
+}
+
+func TestAPI_CatalogSearchPaginatesBeyondSixtyMatches(t *testing.T) {
+	clearAllTables()
+	for i := 0; i < 65; i++ {
+		createTestProduct(t, fmt.Sprintf("Paged Lamp %03d", i), fmt.Sprintf("paged-lamp-%03d", i), 1000, 1)
+	}
+	resp, body := makeAPIRequest(t, http.MethodGet, "/api/v1/catalog/search?q=Paged+Lamp&page=4&limit=20", nil, nil, false, nil)
+	var page struct {
+		Items []json.RawMessage `json:"items"`
+		Page  int               `json:"page"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &page)
+	if resp.StatusCode != http.StatusOK || page.Page != 4 || page.Total != 65 || len(page.Items) != 5 {
+		t.Fatalf("search page status=%d page=%d total=%d items=%d", resp.StatusCode, page.Page, page.Total, len(page.Items))
 	}
 }
 
@@ -256,6 +299,15 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	if len(products.Items) != 1 || products.Items[0].Name != "Partner A Product" {
 		t.Fatalf("partner A saw unexpected products: %#v", products.Items)
 	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/products?page=2&limit=1", nil, []*http.Cookie{cookie}, false, nil)
+	var productPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &productPage)
+	if resp.StatusCode != http.StatusOK || len(productPage.Items) != 0 || productPage.Total != 1 {
+		t.Fatalf("partner product pagination: %s", body)
+	}
 
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/settings", nil, []*http.Cookie{cookie}, false, nil)
 	if resp.StatusCode != http.StatusOK {
@@ -281,6 +333,20 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 		t.Fatalf("partner settings update status=%d body=%s, want 403", resp.StatusCode, body)
 	}
 	adminCookie := loginAndGetSessionCookie(t, "partner.localhost", "api_admin", "strongpass123")
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/admin/products?page=2&limit=1", nil, []*http.Cookie{adminCookie}, false, nil)
+	var adminPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &adminPage)
+	if resp.StatusCode != http.StatusOK || len(adminPage.Items) != 1 || adminPage.Total != 2 {
+		t.Fatalf("admin product pagination: %s", body)
+	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/admin/orders?page=2&limit=1", nil, []*http.Cookie{adminCookie}, false, nil)
+	decodeAPIData(t, body, &adminPage)
+	if resp.StatusCode != http.StatusOK || len(adminPage.Items) != 0 || adminPage.Total != 1 {
+		t.Fatalf("admin order pagination: %s", body)
+	}
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, "/api/v1/partner/settings", settingsUpdate, []*http.Cookie{adminCookie}, true, nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin settings update status=%d body=%s", resp.StatusCode, body)
@@ -297,6 +363,9 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 		t.Fatalf("cross-partner update status=%d body=%s", resp.StatusCode, body)
 	}
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/orders", nil, []*http.Cookie{cookie}, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("partner orders status=%d body=%s", resp.StatusCode, body)
+	}
 	var hiddenOrders struct {
 		Items []json.RawMessage `json:"items"`
 	}
@@ -312,12 +381,24 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("own order update status=%d body=%s", resp.StatusCode, body)
 	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/orders?page=2&limit=1", nil, []*http.Cookie{cookieB}, false, nil)
+	var orderPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &orderPage)
+	if resp.StatusCode != http.StatusOK || len(orderPage.Items) != 0 || orderPage.Total != 1 {
+		t.Fatalf("partner order pagination: %s", body)
+	}
 	// A partner login without explicit membership must not inherit a record
 	// simply because its user ID happens to match a partner ID.
 	if _, err := testStore.DB.Exec("DELETE FROM partner_users WHERE user_id = $1", mustUserID(t, partnerA)); err != nil {
 		t.Fatal(err)
 	}
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/products", nil, []*http.Cookie{cookie}, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unassigned partner products status=%d body=%s", resp.StatusCode, body)
+	}
 	decodeAPIData(t, body, &products)
 	if len(products.Items) != 0 {
 		t.Fatalf("unassigned partner saw catalog: %s", body)

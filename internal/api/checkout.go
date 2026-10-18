@@ -36,10 +36,15 @@ type paymentStartDTO struct {
 }
 
 type checkoutSummaryDTO struct {
-	Subtotal    float64 `json:"subtotal"`
-	ShippingFee float64 `json:"shipping_fee"`
-	TaxAmount   float64 `json:"tax_amount"`
-	Total       float64 `json:"total"`
+	Subtotal         float64 `json:"subtotal"`
+	SubtotalMinor    int64   `json:"subtotal_minor"`
+	ShippingFee      float64 `json:"shipping_fee"`
+	ShippingFeeMinor int64   `json:"shipping_fee_minor"`
+	TaxAmount        float64 `json:"tax_amount"`
+	TaxAmountMinor   int64   `json:"tax_amount_minor"`
+	Total            float64 `json:"total"`
+	TotalMinor       int64   `json:"total_minor"`
+	Currency         string  `json:"currency"`
 }
 
 func (h *Handler) checkout(w http.ResponseWriter, r *http.Request) {
@@ -144,8 +149,13 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Idempotency-Key", token)
 		placed := placedOrderDTO{
-			OrderID:     orderID,
-			Summary:     checkoutSummaryDTO{Subtotal: summary.Subtotal.Float64(), ShippingFee: summary.ShippingFee.Float64(), TaxAmount: summary.TaxAmount.Float64(), Total: summary.Total.Float64()},
+			OrderID: orderID,
+			Summary: checkoutSummaryDTO{
+				Subtotal: summary.Subtotal.Float64(), SubtotalMinor: int64(summary.Subtotal),
+				ShippingFee: summary.ShippingFee.Float64(), ShippingFeeMinor: int64(summary.ShippingFee),
+				TaxAmount: summary.TaxAmount.Float64(), TaxAmountMinor: int64(summary.TaxAmount),
+				Total: summary.Total.Float64(), TotalMinor: int64(summary.Total), Currency: summary.Currency,
+			},
 			Idempotency: token,
 		}
 		if h.app.Payment.IsOnline(input.PaymentMethod) {

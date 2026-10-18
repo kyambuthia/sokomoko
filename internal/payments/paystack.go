@@ -175,6 +175,61 @@ func (p *Paystack) Verify(ctx context.Context, cfg Config, req VerifyRequest) (V
 	return v, nil
 }
 
+func (p *Paystack) CreateRefund(ctx context.Context, cfg Config, reference string, amount money.Cents, currency string) (RefundResult, error) {
+	headers, err := p.auth(cfg)
+	if err != nil {
+		return RefundResult{}, err
+	}
+	var env paystackEnvelope
+	status, err := doJSON(ctx, p.Client, http.MethodPost, p.base()+"/refund", headers,
+		map[string]any{"transaction": reference, "amount": int64(amount), "currency": currency,
+			"merchant_note": "Sokomoko confirmed excess charge"}, &env)
+	if err != nil {
+		return RefundResult{}, err
+	}
+	if status != http.StatusOK || !env.Status {
+		return RefundResult{}, fmt.Errorf("%w: refund request: %s", ErrProviderFailure, firstNonEmpty(env.Message, http.StatusText(status)))
+	}
+	result, err := parsePaystackRefund(env.Data)
+	if err != nil {
+		return RefundResult{}, err
+	}
+	if result.Amount != amount || !strings.EqualFold(result.Currency, currency) {
+		return RefundResult{}, fmt.Errorf("%w: refund amount or currency mismatch", ErrProviderFailure)
+	}
+	return result, nil
+}
+
+func (p *Paystack) FetchRefund(ctx context.Context, cfg Config, refundID string) (RefundResult, error) {
+	headers, err := p.auth(cfg)
+	if err != nil {
+		return RefundResult{}, err
+	}
+	var env paystackEnvelope
+	status, err := doJSON(ctx, p.Client, http.MethodGet, p.base()+"/refund/"+url.PathEscape(refundID), headers, nil, &env)
+	if err != nil {
+		return RefundResult{}, err
+	}
+	if status != http.StatusOK || !env.Status {
+		return RefundResult{}, fmt.Errorf("%w: refund lookup: %s", ErrProviderFailure, firstNonEmpty(env.Message, http.StatusText(status)))
+	}
+	return parsePaystackRefund(env.Data)
+}
+
+func parsePaystackRefund(raw json.RawMessage) (RefundResult, error) {
+	var data struct {
+		ID       int64  `json:"id"`
+		Status   string `json:"status"`
+		Amount   int64  `json:"amount"`
+		Currency string `json:"currency"`
+	}
+	if err := json.Unmarshal(raw, &data); err != nil || data.ID <= 0 || data.Amount <= 0 || data.Currency == "" {
+		return RefundResult{}, fmt.Errorf("%w: invalid refund response", ErrProviderFailure)
+	}
+	return RefundResult{ID: strconv.FormatInt(data.ID, 10), Status: data.Status,
+		Amount: money.Cents(data.Amount), Currency: strings.ToUpper(data.Currency)}, nil
+}
+
 // ParseWebhook authenticates a Paystack event. Only the reference is trusted
 // from the body; the caller confirms the result with Verify.
 func (p *Paystack) ParseWebhook(cfg Config, r *http.Request, body []byte) (WebhookEvent, error) {

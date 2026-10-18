@@ -2,6 +2,7 @@
 package admin
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strconv"
@@ -51,6 +52,7 @@ type Product struct {
 	Category      string
 	PartnerName   string
 	Price         money.Cents
+	Currency      string
 	StockQuantity int
 }
 
@@ -62,6 +64,7 @@ type OrderItem struct {
 
 type Order struct {
 	ID              int
+	Currency        string
 	CustomerName    string
 	Status          string
 	PartnerStatus   string
@@ -115,26 +118,14 @@ func newWithStore(store store) *Service {
 }
 
 func (s *Service) Metrics() (Metrics, error) {
-	var (
-		m   Metrics
-		err error
-	)
-	if m.ProductCount, err = s.store.CountProducts(); err != nil {
+	c, err := s.store.DashboardCounts()
+	if err != nil {
 		return Metrics{}, err
 	}
-	if m.SessionCount, err = s.store.CountActiveSessions(); err != nil {
-		return Metrics{}, err
-	}
-	if m.AdminCount, err = s.store.CountUsersByRole(db.RoleAdmin); err != nil {
-		return Metrics{}, err
-	}
-	if m.StaffCount, err = s.store.CountUsersByRole(db.RoleStaff); err != nil {
-		return Metrics{}, err
-	}
-	if m.UserCount, err = s.store.CountUsersByRole(db.RoleUser); err != nil {
-		return Metrics{}, err
-	}
-	return m, nil
+	return Metrics{
+		ProductCount: c.Products, SessionCount: c.Sessions,
+		AdminCount: c.Admins, StaffCount: c.Staff, UserCount: c.Users,
+	}, nil
 }
 
 func (s *Service) Products() ([]Product, error) {
@@ -146,10 +137,31 @@ func (s *Service) Products() ([]Product, error) {
 	for _, p := range products {
 		mapped = append(mapped, Product{
 			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
-			Price: p.Price, StockQuantity: p.StockQuantity,
+			Price: p.Price, Currency: p.Currency, StockQuantity: p.StockQuantity,
 		})
 	}
 	return mapped, nil
+}
+
+func (s *Service) ProductsPageContext(ctx context.Context, page, limit int) ([]Product, int, error) {
+	filter := db.ProductFilter{}
+	total, err := s.store.CountFilteredProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	filter.Limit, filter.Offset = limit, (page-1)*limit
+	products, err := s.store.ListProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	mapped := make([]Product, 0, len(products))
+	for _, p := range products {
+		mapped = append(mapped, Product{
+			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
+			Price: p.Price, Currency: p.Currency, StockQuantity: p.StockQuantity,
+		})
+	}
+	return mapped, total, nil
 }
 
 func (s *Service) Orders() ([]Order, error) {
@@ -159,26 +171,35 @@ func (s *Service) Orders() ([]Order, error) {
 	}
 	mapped := make([]Order, 0, len(orders))
 	for _, order := range orders {
-		items := make([]OrderItem, 0, len(order.Items))
-		for _, item := range order.Items {
-			items = append(items, OrderItem{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
-		}
-		mapped = append(mapped, Order{
-			ID:              order.ID,
-			CustomerName:    order.CustomerName,
-			Status:          order.Status,
-			PartnerStatus:   order.PartnerStatus,
-			DeliveryStatus:  order.DeliveryStatus,
-			DeliveryNotice:  order.DeliveryNotice,
-			DeliveryAddress: order.DeliveryAddress,
-			TotalAmount:     order.TotalAmount,
-			CreatedAt:       order.CreatedAt,
-			PaymentMethod:   order.PaymentMethod,
-			PaymentStatus:   order.PaymentStatus,
-			Items:           items,
-		})
+		mapped = append(mapped, mapAdminOrder(order))
 	}
 	return mapped, nil
+}
+
+func (s *Service) OrdersPageContext(ctx context.Context, page, limit int) ([]Order, int, error) {
+	orders, total, err := s.store.ListAllOrdersPageContext(ctx, limit, (page-1)*limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	mapped := make([]Order, 0, len(orders))
+	for _, order := range orders {
+		mapped = append(mapped, mapAdminOrder(order))
+	}
+	return mapped, total, nil
+}
+
+func mapAdminOrder(order db.Order) Order {
+	items := make([]OrderItem, 0, len(order.Items))
+	for _, item := range order.Items {
+		items = append(items, OrderItem{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
+	}
+	return Order{
+		ID: order.ID, Currency: order.Currency, CustomerName: order.CustomerName,
+		Status: order.Status, PartnerStatus: order.PartnerStatus, DeliveryStatus: order.DeliveryStatus,
+		DeliveryNotice: order.DeliveryNotice, DeliveryAddress: order.DeliveryAddress,
+		TotalAmount: order.TotalAmount, CreatedAt: order.CreatedAt,
+		PaymentMethod: order.PaymentMethod, PaymentStatus: order.PaymentStatus, Items: items,
+	}
 }
 
 // DeliveryBoard summarizes the delivery pipeline: how many open orders are in
@@ -309,6 +330,40 @@ func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 		return err
 	}
 	_ = s.store.CreateAuditLog(actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
+	return nil
+}
+
+// DeactivatedMembers lists recently deactivated accounts an admin can restore.
+func (s *Service) DeactivatedMembers() ([]TeamMember, error) {
+	users, err := s.store.ListDeactivatedUsers(50)
+	if err != nil {
+		return nil, err
+	}
+	members := make([]TeamMember, 0, len(users))
+	for _, u := range users {
+		members = append(members, TeamMember{ID: u.ID, Username: u.Username, Email: u.Email, Role: u.Role, CreatedAt: u.CreatedAt})
+	}
+	return members, nil
+}
+
+// ReactivateUser restores a deactivated account. The user signs in again with
+// their existing password.
+func (s *Service) ReactivateUser(actor *Actor, userIDRaw string) error {
+	if actor == nil || actor.Role != db.RoleAdmin {
+		return ErrForbiddenUserAction
+	}
+	userID, err := parsePositiveInt(userIDRaw)
+	if err != nil {
+		return ErrInvalidUserID
+	}
+	found, err := s.store.ReactivateUser(userID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return ErrUserNotFound
+	}
+	_ = s.store.CreateAuditLog(actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
 	return nil
 }
 

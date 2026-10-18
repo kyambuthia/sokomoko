@@ -15,8 +15,10 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/lifecycle"
 	"github.com/kyambuthia/sokomoko/internal/notify"
+	"github.com/kyambuthia/sokomoko/internal/payments"
 	"github.com/kyambuthia/sokomoko/internal/routes"
 	"github.com/kyambuthia/sokomoko/internal/secret"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
@@ -63,6 +65,12 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	if err != nil {
 		return wrapCommandError(commandServe, "configure secrets", err)
 	}
+	if cfg.IsProduction() {
+		paymentService := paymentsvc.New(store, payments.NewRegistry(payments.Options{}), secrets)
+		if err := paymentService.ValidateProduction(cfg.PublicBaseURL); err != nil {
+			return wrapCommandError(commandServe, "validate payment providers", err)
+		}
+	}
 	if commerce, err := store.GetCommerceSettings(); err == nil {
 		ui.SetCurrency(commerce.Currency)
 	} else {
@@ -98,7 +106,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 // production a fixed development key is used when SECRETS_KEY is unset, so
 // local setup works; production without a key cannot store credentials.
 func secretsBox(cfg config.Config) (*secret.Box, error) {
-	box, err := secret.New(cfg.SecretsKey)
+	box, err := secret.NewWithPrevious(cfg.SecretsKey, cfg.SecretsKeyPrevious)
 	if err != nil || box != nil {
 		return box, err
 	}

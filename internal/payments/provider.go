@@ -132,6 +132,19 @@ type WebhookParser interface {
 	ParseWebhook(cfg Config, r *http.Request, body []byte) (WebhookEvent, error)
 }
 
+// RefundProvider can initiate and check a refund for a confirmed charge.
+type RefundProvider interface {
+	CreateRefund(ctx context.Context, cfg Config, reference string, amount money.Cents, currency string) (RefundResult, error)
+	FetchRefund(ctx context.Context, cfg Config, refundID string) (RefundResult, error)
+}
+
+type RefundResult struct {
+	ID       string
+	Status   string // provider status: pending, processing, needs-attention, failed, processed
+	Amount   money.Cents
+	Currency string
+}
+
 // Registry holds the providers a store can enable, in display order.
 type Registry struct {
 	providers []Provider

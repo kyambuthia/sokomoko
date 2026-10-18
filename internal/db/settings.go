@@ -170,15 +170,44 @@ func (s *Store) GetPartnerByID(id int) (*Partner, error) {
 // SetPartnerStatus marks a partner active or suspended. Suspending hides the
 // partner's products from customers and stops its accounts from seeing
 // partner data. It reports false when the partner does not exist.
-func (s *Store) SetPartnerStatus(id int, status string) (bool, error) {
+// UpdatePartnerDetails renames a partner and changes its contact email. The
+// slug stays the same.
+func (s *Store) UpdatePartnerDetails(id int, name, contactEmail string) (bool, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
-	result, err := s.DB.ExecContext(ctx, "UPDATE partners SET status = $1 WHERE id = $2", status, id)
+	result, err := s.DB.ExecContext(ctx, "UPDATE partners SET name = $1, contact_email = $2 WHERE id = $3",
+		strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(contactEmail)), id)
 	if err != nil {
 		return false, wrapDBError(err)
 	}
 	n, err := rowsAffected(result)
 	return n > 0, err
+}
+
+// SetPartnerStatus changes a partner's status. Suspending also signs out the
+// partner's own logins in the same transaction.
+func (s *Store) SetPartnerStatus(id int, status string) (bool, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	found := false
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, "UPDATE partners SET status = $1 WHERE id = $2", status, id)
+		if err != nil {
+			return wrapDBError(err)
+		}
+		n, err := rowsAffected(result)
+		if err != nil {
+			return err
+		}
+		found = n > 0
+		if !found || status != "suspended" {
+			return nil
+		}
+		_, err = tx.ExecContext(ctx,
+			"DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM partner_users WHERE partner_id = $1)", id)
+		return err
+	})
+	return found, err
 }
 
 // CreatePartnerUser creates a login with the partner role and links it to

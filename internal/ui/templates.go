@@ -25,6 +25,7 @@ type Templates struct {
 	Signup               *template.Template
 	PasswordResetRequest *template.Template
 	PasswordResetConfirm *template.Template
+	PasswordChange       *template.Template
 }
 
 func ParseTemplates() (*Templates, error) {
@@ -142,6 +143,11 @@ func ParseTemplates() (*Templates, error) {
 		return nil, err
 	}
 
+	passwordChangeTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/password_change.html")
+	if err != nil {
+		return nil, err
+	}
+
 	return &Templates{
 		Index:                indexTmpl,
 		Search:               searchTmpl,
@@ -163,5 +169,6 @@ func ParseTemplates() (*Templates, error) {
 		Signup:               signupTmpl,
 		PasswordResetRequest: passwordResetRequestTmpl,
 		PasswordResetConfirm: passwordResetConfirmTmpl,
+		PasswordChange:       passwordChangeTmpl,
 	}, nil
 }

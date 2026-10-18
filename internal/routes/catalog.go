@@ -150,18 +150,6 @@ func Search(a *app.App) http.HandlerFunc {
 	}
 }
 
-type searchResultJSON struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	URL      string `json:"url"`
-	Price    string `json:"price"`
-	Currency string `json:"currency"`
-	InStock  bool   `json:"inStock"`
-	ImageURL string `json:"imageUrl"`
-	Category string `json:"category,omitempty"`
-}
-
 // CategoriesAPI serves GET /api/categories for the header department menus.
 func CategoriesAPI(a *app.App) http.HandlerFunc {
 	type categoryJSON struct {

@@ -19,6 +19,9 @@ The process routes each request by its `Host` header (see
 - Checkout: stock is held for 15 minutes while the customer enters a delivery
   address; placing the order is idempotent
 - Account page with order history and a live fulfillment tracker
+- Cancel an order while the vendor has not accepted it and nothing is paid
+- Pay online with M-Pesa or Paystack when the store enables them
+- Change password while signed in (`/account/password`)
 
 ### Admin workspace (`admin.` host)
 
@@ -29,8 +32,10 @@ The process routes each request by its `Host` header (see
 - Sales report: revenue and order counts by status
 - Deliveries board: open orders counted by delivery stage and listed oldest first
 - Categories: create and delete (admin and staff)
-- Partners: onboard vendors, create partner logins, suspend or reactivate (admin only). A suspended partner's products disappear from the storefront and carts.
-- Team list with user deactivation (admin only)
+- Partners: onboard vendors, rename them, create partner logins, suspend or reactivate (admin only). A suspended partner's products disappear from the storefront and carts, and its logins are signed out and refused.
+- Categories can be renamed; slugs stay fixed
+- Payments (admin only): store currency and pricing, provider setup, and the refund queue for late or duplicate charges ([Payments](payments.md))
+- Team list with user deactivation and reactivation (admin only)
 - Audit log (admin only)
 - Staff account creation (admin only)
 
@@ -38,7 +43,7 @@ The process routes each request by its `Host` header (see
 
 - Store settings (name, slug, description, contact email)
 - Dashboard with product count and fulfillment summary
-- Product list and new-product form
+- Product list, new-product form, and product editing (name, price, stock, category, description)
 - Order fulfillment: move orders through partner and delivery statuses
 
 Admins and staff see every product and order here. A user with the `partner`
@@ -57,15 +62,16 @@ whose every line belongs to that partner.
 Each login page accepts only its own roles. A customer cannot sign in on the
 admin host, and an admin cannot sign in on the storefront.
 
-## Commerce rules in code
+## Commerce rules
 
-These are hard-coded in `internal/service/checkout/checkout.go`:
+Admins set these on the admin host at `/payments`; the defaults
+(`checkout.DefaultPricing`) are:
 
-- Currency: USD
-- Shipping: $6.50 flat, free at a subtotal of $80 or more
+- Currency: USD (also KES, NGN, and others in `money.Currencies`)
+- Shipping: 6.50 flat, free at a subtotal of 80 or more
 - Tax: estimated 8% of the subtotal
-- Payment: cash on delivery only. A payment row is recorded as `pending`
-  with provider `manual_cash_on_delivery`. No online payment provider exists.
+- Payment: cash on delivery, plus M-Pesa and Paystack once configured. See
+  [Payments](payments.md).
 
 ## Demo data
 

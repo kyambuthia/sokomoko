@@ -1,4 +1,4 @@
-// <ui-confirm message="…" confirm-label="Delete"><form>…</form></ui-confirm>
+// <ui-confirm message="…" confirm-label="Delete" cancel-label="Keep"><form>…</form></ui-confirm>
 // Asks before a destructive form submits, using a native modal dialog.
 export class UIConfirm extends HTMLElement {
   connectedCallback() {
@@ -29,7 +29,7 @@ export class UIConfirm extends HTMLElement {
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "btn btn-secondary";
-    cancel.textContent = "Cancel";
+    cancel.textContent = this.getAttribute("cancel-label") || "Cancel";
     cancel.addEventListener("click", () => modal.close());
     const confirm = document.createElement("button");
     confirm.type = "button";

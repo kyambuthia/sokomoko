@@ -134,6 +134,36 @@ func (s *Service) SetPartnerStatus(actor *Actor, idRaw, status string) error {
 	return nil
 }
 
+// UpdatePartner renames a partner and changes its contact email.
+func (s *Service) UpdatePartner(actor *Actor, idRaw string, input PartnerInput) error {
+	if !canManagePartners(actor) {
+		return ErrForbiddenPartnerAction
+	}
+	id, err := parsePositiveInt(idRaw)
+	if err != nil {
+		return ErrPartnerNotFound
+	}
+	name := strings.TrimSpace(input.Name)
+	email := strings.ToLower(strings.TrimSpace(input.ContactEmail))
+	if name == "" || len([]rune(name)) > maxPartnerName {
+		return ErrInvalidPartner
+	}
+	if email != "" {
+		if addr, err := mail.ParseAddress(email); err != nil || addr.Address != email {
+			return ErrInvalidPartner
+		}
+	}
+	found, err := s.store.UpdatePartnerDetails(id, name, email)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return ErrPartnerNotFound
+	}
+	_ = s.store.CreateAuditLog(actor.ID, "partner.update", "partner", id, "name="+name)
+	return nil
+}
+
 // CreatePartnerAccount creates a partner-role login tied to one partner.
 func (s *Service) CreatePartnerAccount(actor *Actor, input PartnerAccountInput) error {
 	if !canManagePartners(actor) {

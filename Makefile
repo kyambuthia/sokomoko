@@ -39,9 +39,10 @@ test: ## Run all tests (requires PostgreSQL)
 test-race: ## Run all tests with the race detector
 	SOKOMOKO_REQUIRE_DB_TESTS=1 $(GO) test -race ./...
 
-lint: ## gofmt check, go vet, and JavaScript syntax check
+lint: ## gofmt check, go vet, staticcheck, and JavaScript syntax check
 	@unformatted="$$(gofmt -l $$(git ls-files '*.go'))"; if [ -n "$$unformatted" ]; then echo "$$unformatted"; exit 1; fi
 	$(GO) vet ./...
+	$(GO) run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
 	@for f in internal/ui/static/scripts/*.js internal/ui/static/scripts/ui/*.js; do node --check "$$f" || exit 1; done
 
 fmt: ## Format Go code

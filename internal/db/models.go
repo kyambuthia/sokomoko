@@ -328,6 +328,10 @@ type AuditLog struct {
 type CheckoutPlacement struct {
 	OrderID     int64
 	PaymentID   int64
+	Subtotal    money.Cents
+	ShippingFee money.Cents
+	TaxAmount   money.Cents
 	TotalAmount money.Cents
+	Currency    string
 	Reused      bool
 }

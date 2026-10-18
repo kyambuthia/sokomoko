@@ -36,7 +36,10 @@ From the header of `0001_initial_schema.sql`:
 | Cart | `carts`, `cart_items` | One cart per user; line quantity 1 to 999 |
 | Checkout | `checkouts`, `checkout_lines` | Priced snapshot of the cart with a unique token |
 | Orders | `orders`, `order_items` | Placed orders with three status fields and an inventory state |
-| Payments | `payments`, `payment_attempts` | Payment record per order |
+| Payments | `payments`, `payment_attempts` | Payment record per order; one attempt per provider request, kept after retries (migrations 3 and 4) |
+| | `commerce_settings` | Single row: store currency, flat shipping, free-shipping threshold, tax rate (migration 3) |
+| | `payment_providers` | Enabled flag, mode, and encrypted credentials per provider (migration 3) |
+| | `payment_exceptions` | Confirmed charges that need a refund: late captures and duplicate charges, with refund status (migration 6) |
 | | `idempotency_keys` | Unique `(user_id, operation, key)` that makes order placement idempotent |
 | Audit | `audit_logs` | Actor, action, target, details |
 | Migrations | `schema_migrations` | Applied versions (created by the migration runner) |
@@ -167,6 +170,13 @@ Delivery status may only move forward (`queued` -> `processing` -> `shipped`
 **Admin updates** (`UpdateOrderByAdmin`) may set any valid combination, with one
 guard: an order whose stock was released (cancelled) cannot be reopened.
 
+**Customer cancellation** (`CancelOrderByCustomer`) moves an order to
+`cancelled` only while `status` is `pending`, `partner_status` is `new`, and no
+payment is captured or refunded. It locks the payments before the order (the
+same order `CapturePayment` uses), releases stock, and fails open payment
+attempts. A charge confirmed afterwards becomes a late capture in
+`payment_exceptions` ([Payments](payments.md)).
+
 Every partner and admin update writes an `audit_logs` row.
 
 ## Search
@@ -176,6 +186,15 @@ configuration: name weighted A, description weighted B. It has a GIN index.
 `ListProducts` matches `websearch_to_tsquery` or a case-insensitive substring
 on name or description, so partial words still match. Results are ranked with
 `ts_rank`. Category filters match a category slug or name.
+
+## Product edits
+
+`UpdateProduct` changes name, description, price, and category, and sets
+*available* stock: `on_hand` becomes the new figure plus whatever is reserved
+or allocated, so open checkouts and placed orders keep their stock. The change
+is written to `stock_movements` as an adjustment. The slug never changes.
+Checkouts snapshot prices, so a price edit does not change what a customer
+already in checkout pays.
 
 ## Seed data
 

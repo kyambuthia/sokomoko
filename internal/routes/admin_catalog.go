@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
@@ -38,6 +39,11 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 			case "delete":
 				err = svc.DeleteCategory(actor, r.FormValue("category_id"))
 				message = "Category deleted"
+			case "update":
+				page.CategoryForm = adminsvc.CategoryInput{Name: r.FormValue("name"), Description: r.FormValue("description")}
+				page.EditCategoryID, _ = strconv.Atoi(r.FormValue("category_id"))
+				err = svc.UpdateCategory(actor, r.FormValue("category_id"), page.CategoryForm)
+				message = "Category updated"
 			default:
 				page.CategoryForm = adminsvc.CategoryInput{
 					Name: r.FormValue("name"), Slug: r.FormValue("slug"), Description: r.FormValue("description"),
@@ -70,6 +76,22 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 		if page.Categories, err = svc.Categories(); err != nil {
 			serverError(w, r)
 			return
+		}
+		if r.Method == http.MethodGet {
+			editID, _ := strconv.Atoi(r.URL.Query().Get("edit"))
+			for _, c := range page.Categories {
+				if editID > 0 && c.ID == editID {
+					page.EditCategoryID = c.ID
+					page.CategoryForm = adminsvc.CategoryInput{Name: c.Name, Slug: c.Slug, Description: c.Description}
+				}
+			}
+		}
+		if page.EditCategoryID > 0 {
+			for _, c := range page.Categories {
+				if c.ID == page.EditCategoryID {
+					page.CategoryForm.Slug = c.Slug
+				}
+			}
 		}
 		renderAdminPage(a, w, r, status, page)
 	}
@@ -104,6 +126,11 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 				if newStatus == "suspended" {
 					message = "Partner suspended. Their products are hidden from customers."
 				}
+			case "update":
+				page.PartnerForm = adminsvc.PartnerInput{Name: r.FormValue("name"), ContactEmail: r.FormValue("contact_email")}
+				page.EditPartnerID, _ = strconv.Atoi(r.FormValue("partner_id"))
+				err = svc.UpdatePartner(actor, r.FormValue("partner_id"), page.PartnerForm)
+				message = "Partner updated"
 			case "create_account":
 				page.AccountForm = adminsvc.PartnerAccountInput{
 					PartnerID: r.FormValue("partner_id"), Username: r.FormValue("username"), Email: r.FormValue("email"),
@@ -150,6 +177,22 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 			serverError(w, r)
 			return
 		}
+		if r.Method == http.MethodGet {
+			editID, _ := strconv.Atoi(r.URL.Query().Get("edit"))
+			for _, p := range page.Partners {
+				if editID > 0 && p.ID == editID {
+					page.EditPartnerID = p.ID
+					page.PartnerForm = adminsvc.PartnerInput{Name: p.Name, Slug: p.Slug, ContactEmail: p.ContactEmail}
+				}
+			}
+		}
+		if page.EditPartnerID > 0 {
+			for _, p := range page.Partners {
+				if p.ID == page.EditPartnerID {
+					page.PartnerForm.Slug = p.Slug
+				}
+			}
+		}
 		renderAdminPage(a, w, r, status, page)
 	}
 }
@@ -174,6 +217,24 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 		if r.Method == http.MethodPost {
 			var message string
 			switch r.FormValue("action") {
+			case "refund", "refund_refresh", "refund_resolve":
+				var id int
+				id, err = strconv.Atoi(r.FormValue("exception_id"))
+				if err == nil && id > 0 {
+					switch r.FormValue("action") {
+					case "refund_refresh":
+						_, err = a.Payment.RefreshRefund(r.Context(), actor, id)
+						message = "Refund status checked"
+					case "refund_resolve":
+						_, err = a.Payment.ResolveRefund(actor, id, r.FormValue("refund_reference"))
+						message = "Refund marked as completed"
+					default:
+						_, err = a.Payment.RequestRefund(r.Context(), actor, id, r.FormValue("refund_reference"))
+						message = "Refund request recorded"
+					}
+				} else {
+					err = db.ErrPaymentExceptionNotFound
+				}
 			case "pricing":
 				var saved paymentsvc.Pricing
 				saved, err = a.Payment.SavePricing(actor, paymentsvc.PricingInput{
@@ -215,6 +276,13 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 				page.FormError = "Set SECRETS_KEY on the server to store payment credentials."
 			case errors.Is(err, paymentsvc.ErrLastMethod):
 				page.FormError = "Keep at least one payment method enabled, or customers cannot check out."
+			case errors.Is(err, paymentsvc.ErrRefundReferenceRequired):
+				page.FormError = "Enter the M-Pesa reversal receipt after completing the refund in M-Pesa."
+			case errors.Is(err, db.ErrPaymentExceptionNotFound):
+				page.FormError = "That payment exception no longer exists."
+			case errors.Is(err, paymentsvc.ErrRefundNotReady), errors.Is(err, paymentsvc.ErrRefundUnsupported),
+				errors.Is(err, paymentsvc.ErrRefundNotResolvable):
+				page.FormError = sentence(err)
 			case errors.Is(err, paymentsvc.ErrMissingFields), errors.Is(err, paymentsvc.ErrCurrencyMismatch),
 				errors.Is(err, paymentsvc.ErrInvalidPricing), errors.Is(err, paymentsvc.ErrUnknownProvider):
 				page.FormError = sentence(err)
@@ -232,6 +300,10 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 			return
 		}
 		if page.Providers, err = a.Payment.Providers(); err != nil {
+			serverError(w, r)
+			return
+		}
+		if page.PaymentExceptions, err = a.Payment.PaymentExceptions(); err != nil {
 			serverError(w, r)
 			return
 		}

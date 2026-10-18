@@ -57,6 +57,7 @@ type paymentService interface {
 }
 
 type Summary struct {
+	Currency    string
 	Subtotal    money.Cents
 	ShippingFee money.Cents
 	TaxAmount   money.Cents
@@ -73,6 +74,7 @@ type Item struct {
 
 type PageState struct {
 	Token           string
+	Currency        string
 	Items           []Item
 	Summary         Summary
 	PaymentMethod   string
@@ -104,6 +106,7 @@ func CalculateSummary(subtotal money.Cents, pricing Pricing) Summary {
 	}
 	tax := subtotal.MulBasisPoints(pricing.TaxRateBP)
 	return Summary{
+		Currency:    pricing.Currency,
 		Subtotal:    subtotal,
 		ShippingFee: shipping,
 		TaxAmount:   tax,
@@ -168,6 +171,16 @@ func (s *Service) SaveDraft(userID int, checkoutToken string, deliveryAddress st
 // Prepare reserves stock for the cart under reservationKey and snapshots the
 // priced cart into an open checkout.
 func (s *Service) Prepare(userID int, reservationKey string) error {
+	for attempt := 0; attempt < 3; attempt++ {
+		err := s.prepareOnce(userID, reservationKey)
+		if !errors.Is(err, db.ErrCheckoutCurrencyChanged) {
+			return err
+		}
+	}
+	return ErrCartEmpty
+}
+
+func (s *Service) prepareOnce(userID int, reservationKey string) error {
 	key := strings.TrimSpace(reservationKey)
 	if key == "" {
 		return nil
@@ -216,6 +229,9 @@ func (s *Service) Prepare(userID int, reservationKey string) error {
 		ExpiresAt:      expiresAt,
 		Lines:          lines,
 	})
+	if errors.Is(err, db.ErrCheckoutCurrencyChanged) {
+		return err
+	}
 	return mapStoreError(err)
 }
 
@@ -244,7 +260,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 			return 0, Summary{}, err
 		}
 		if existing != nil {
-			return existing.OrderID, Summary{Total: existing.TotalAmount}, nil
+			return existing.OrderID, summaryFromPlacement(*existing), nil
 		}
 	} else {
 		generated, err := s.payments.GenerateIdempotencyKey()
@@ -276,7 +292,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		return 0, Summary{}, mapStoreError(err)
 	}
 	if placement.Reused {
-		summary = Summary{Total: placement.TotalAmount}
+		summary = summaryFromPlacement(placement)
 	}
 	return placement.OrderID, summary, nil
 }
@@ -313,7 +329,7 @@ func mapStoreError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, db.ErrCartEmpty), errors.Is(err, db.ErrCheckoutExpired), errors.Is(err, db.ErrCheckoutNotFound):
+	case errors.Is(err, db.ErrCartEmpty), errors.Is(err, db.ErrCheckoutExpired), errors.Is(err, db.ErrCheckoutNotFound), errors.Is(err, db.ErrCheckoutCurrencyChanged):
 		return ErrCartEmpty
 	case errors.Is(err, db.ErrDeliveryAddressRequired):
 		return ErrDeliveryAddress
@@ -329,10 +345,19 @@ func summaryFromCheckout(checkout *db.Checkout) Summary {
 		return Summary{}
 	}
 	return Summary{
+		Currency:    checkout.Currency,
 		Subtotal:    checkout.SubtotalAmount,
 		ShippingFee: checkout.ShippingFee,
 		TaxAmount:   checkout.TaxAmount,
 		Total:       checkout.TotalAmount,
+	}
+}
+
+func summaryFromPlacement(placement db.CheckoutPlacement) Summary {
+	return Summary{
+		Currency: placement.Currency, Subtotal: placement.Subtotal,
+		ShippingFee: placement.ShippingFee, TaxAmount: placement.TaxAmount,
+		Total: placement.TotalAmount,
 	}
 }
 
@@ -352,6 +377,7 @@ func mapPageState(checkout *db.Checkout) PageState {
 	}
 	return PageState{
 		Token:           checkout.Token,
+		Currency:        checkout.Currency,
 		Items:           items,
 		Summary:         summaryFromCheckout(checkout),
 		PaymentMethod:   checkout.PaymentMethod,
