@@ -97,6 +97,10 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 
 	var placement CheckoutPlacement
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		var currentCurrency string
+		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
+			return err
+		}
 		// Concurrent submissions of the same key serialize on this insert; the
 		// loser sees the winner's completed placement below.
 		if _, err := tx.ExecContext(ctx,
@@ -123,6 +127,9 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 		}
 		if checkout == nil {
 			return ErrCheckoutNotFound
+		}
+		if checkout.Currency != currentCurrency {
+			return ErrCheckoutCurrencyChanged
 		}
 		switch {
 		case checkout.Status == CheckoutStatusExpired:

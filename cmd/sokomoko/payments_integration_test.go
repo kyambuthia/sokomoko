@@ -5,6 +5,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -445,6 +446,47 @@ func TestIntegration_AdminPaymentsValidation(t *testing.T) {
 	}, []*http.Cookie{admin}, "admin.localhost")
 	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(body, "cannot change after orders exist") {
 		t.Fatalf("currency change after an order status=%d", resp.StatusCode)
+	}
+}
+
+func TestIntegration_CurrencyChangeInvalidatesOpenCheckout(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "USD", 1000)
+	oldToken := checkoutIdempotencyKey(t, []*http.Cookie{customer})
+	var active int
+	if err := testStore.DB.QueryRow("SELECT count(*) FROM stock_reservations WHERE status = 'active'").Scan(&active); err != nil || active != 1 {
+		t.Fatalf("active reservations before change = %d, %v", active, err)
+	}
+	resp, body := makeRequest(http.MethodPost, "/payments", url.Values{
+		"action": {"pricing"}, "currency": {"KES"}, "shipping_flat": {"0"},
+		"free_shipping_threshold": {"0"}, "tax_rate": {"0"},
+	}, []*http.Cookie{admin}, "admin.localhost")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("currency change status=%d body=%s", resp.StatusCode, body)
+	}
+	var status string
+	if err := testStore.DB.QueryRow("SELECT status FROM checkouts WHERE token = $1", oldToken).Scan(&status); err != nil || status != db.CheckoutStatusCancelled {
+		t.Fatalf("old checkout status=%q, %v", status, err)
+	}
+	if err := testStore.DB.QueryRow("SELECT count(*) FROM stock_reservations WHERE status = 'active'").Scan(&active); err != nil || active != 0 {
+		t.Fatalf("active reservations after change = %d, %v", active, err)
+	}
+	var customerID int
+	if err := testStore.DB.QueryRow("SELECT id FROM users WHERE username = 'pay_customer'").Scan(&customerID); err != nil {
+		t.Fatal(err)
+	}
+	_, err := testStore.PlaceOrderFromCheckoutWithPayment(customerID, oldToken, "1 Pay Street", "", db.PaymentRecordInput{
+		Method: "cash_on_delivery", Provider: "manual_cash_on_delivery", Status: db.PaymentStatusPending, Currency: "USD",
+	})
+	if !errors.Is(err, db.ErrCheckoutCurrencyChanged) {
+		t.Fatalf("place old checkout error = %v", err)
+	}
+	newToken := checkoutIdempotencyKey(t, []*http.Cookie{customer})
+	if newToken == oldToken {
+		t.Fatal("stale checkout token was reused")
+	}
+	var currency string
+	if err := testStore.DB.QueryRow("SELECT currency FROM checkouts WHERE token = $1", newToken).Scan(&currency); err != nil || currency != "KES" {
+		t.Fatalf("new checkout currency=%q, %v", currency, err)
 	}
 }
 

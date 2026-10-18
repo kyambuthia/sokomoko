@@ -14,10 +14,11 @@ import (
 )
 
 var (
-	ErrPaymentNotFound    = errors.New("payment not found")
-	ErrCurrencyLocked     = errors.New("currency cannot change after orders exist")
-	ErrPaymentAmountMatch = errors.New("payment amount or currency does not match")
-	ErrAttemptInProgress  = errors.New("a payment attempt is already in progress")
+	ErrPaymentNotFound         = errors.New("payment not found")
+	ErrCurrencyLocked          = errors.New("currency cannot change after orders exist")
+	ErrPaymentAmountMatch      = errors.New("payment amount or currency does not match")
+	ErrAttemptInProgress       = errors.New("a payment attempt is already in progress")
+	ErrCheckoutCurrencyChanged = errors.New("checkout currency changed")
 )
 
 // UnpaidOrderTTL is how long an online order waits for payment before
@@ -63,6 +64,12 @@ func (s *Store) UpdateCommerceSettings(c CommerceSettings) error {
 			}
 			if orders > 0 {
 				return ErrCurrencyLocked
+			}
+			if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased, "TRUE"); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE checkouts SET status = 'cancelled' WHERE status = 'open'"); err != nil {
+				return err
 			}
 			if _, err := tx.ExecContext(ctx, "UPDATE products SET currency = $1", c.Currency); err != nil {
 				return err

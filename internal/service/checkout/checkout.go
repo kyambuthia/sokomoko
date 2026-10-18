@@ -168,6 +168,16 @@ func (s *Service) SaveDraft(userID int, checkoutToken string, deliveryAddress st
 // Prepare reserves stock for the cart under reservationKey and snapshots the
 // priced cart into an open checkout.
 func (s *Service) Prepare(userID int, reservationKey string) error {
+	for attempt := 0; attempt < 3; attempt++ {
+		err := s.prepareOnce(userID, reservationKey)
+		if !errors.Is(err, db.ErrCheckoutCurrencyChanged) {
+			return err
+		}
+	}
+	return ErrCartEmpty
+}
+
+func (s *Service) prepareOnce(userID int, reservationKey string) error {
 	key := strings.TrimSpace(reservationKey)
 	if key == "" {
 		return nil
@@ -216,6 +226,9 @@ func (s *Service) Prepare(userID int, reservationKey string) error {
 		ExpiresAt:      expiresAt,
 		Lines:          lines,
 	})
+	if errors.Is(err, db.ErrCheckoutCurrencyChanged) {
+		return err
+	}
 	return mapStoreError(err)
 }
 
@@ -313,7 +326,7 @@ func mapStoreError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, db.ErrCartEmpty), errors.Is(err, db.ErrCheckoutExpired), errors.Is(err, db.ErrCheckoutNotFound):
+	case errors.Is(err, db.ErrCartEmpty), errors.Is(err, db.ErrCheckoutExpired), errors.Is(err, db.ErrCheckoutNotFound), errors.Is(err, db.ErrCheckoutCurrencyChanged):
 		return ErrCartEmpty
 	case errors.Is(err, db.ErrDeliveryAddressRequired):
 		return ErrDeliveryAddress
