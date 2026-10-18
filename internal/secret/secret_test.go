@@ -54,3 +54,36 @@ func TestNewValidatesKey(t *testing.T) {
 		t.Fatal("development box missing")
 	}
 }
+
+func TestKeyRotationOpensPreviousAndSealsWithCurrent(t *testing.T) {
+	oldKey, newKey := testKey(t), testKey(t)
+	old, _ := New(oldKey)
+	oldCiphertext, err := old.Seal([]byte("previous credential"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotating, err := NewWithPrevious(newKey, oldKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, err := rotating.Open(oldCiphertext); err != nil || string(value) != "previous credential" {
+		t.Fatalf("open previous = %q, %v", value, err)
+	}
+	newCiphertext, err := rotating.Seal([]byte("new credential"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Open(newCiphertext); !errors.Is(err, ErrCorrupted) {
+		t.Fatalf("old key opened new ciphertext: %v", err)
+	}
+	current, _ := New(newKey)
+	if value, err := current.Open(newCiphertext); err != nil || string(value) != "new credential" {
+		t.Fatalf("open new = %q, %v", value, err)
+	}
+	if _, err := current.Open(oldCiphertext); !errors.Is(err, ErrCorrupted) {
+		t.Fatalf("old credential unexpectedly re-encrypted: %v", err)
+	}
+	if _, err := NewWithPrevious("", oldKey); !errors.Is(err, ErrNoKey) {
+		t.Fatalf("previous without current = %v", err)
+	}
+}

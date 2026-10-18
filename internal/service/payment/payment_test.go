@@ -2,6 +2,7 @@ package payment
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"testing"
 
@@ -150,5 +151,38 @@ func TestSavePricingParsesInput(t *testing.T) {
 		if _, err := svc.SavePricing(admin, bad); !errors.Is(err, ErrInvalidPricing) {
 			t.Errorf("SavePricing(%+v) = %v, want ErrInvalidPricing", bad, err)
 		}
+	}
+}
+
+func TestValidateProductionPaymentReadiness(t *testing.T) {
+	svc, _ := newTestService(t)
+	if err := svc.ValidateProduction(""); err != nil {
+		t.Fatalf("cash only startup = %v", err)
+	}
+	if _, err := svc.SavePricing(admin, PricingInput{Currency: "NGN", ShippingFlat: "0", TaxRatePercent: "0"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SaveProvider(admin, "paystack", ProviderInput{
+		Enabled: true, Mode: "test", Values: map[string]string{"secret_key": "sk_test_ready"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ValidateProduction(""); !errors.Is(err, ErrNoPublicURL) {
+		t.Fatalf("missing public URL = %v", err)
+	}
+	if err := svc.ValidateProduction("https://shop.example"); err != nil {
+		t.Fatalf("ready provider = %v", err)
+	}
+	svc.box = nil
+	if err := svc.ValidateProduction("https://shop.example"); !errors.Is(err, ErrSecretsKeyMissing) {
+		t.Fatalf("missing secrets key = %v", err)
+	}
+	wrong, err := secret.New(base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.box = wrong
+	if err := svc.ValidateProduction("https://shop.example"); !errors.Is(err, secret.ErrCorrupted) {
+		t.Fatalf("wrong secrets key = %v", err)
 	}
 }

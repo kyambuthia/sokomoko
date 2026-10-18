@@ -23,7 +23,8 @@ var (
 // Box seals and opens values. A nil *Box has no key: Seal and Open fail with
 // ErrNoKey.
 type Box struct {
-	aead cipher.AEAD
+	aead     cipher.AEAD
+	previous []cipher.AEAD
 }
 
 // New builds a Box from a base64 key of exactly 32 bytes. An empty key
@@ -41,6 +42,25 @@ func New(encodedKey string) (*Box, error) {
 		return nil, ErrBadKey
 	}
 	return fromKey(key)
+}
+
+// NewWithPrevious seals with the current key and accepts ciphertext from one
+// previous key during a planned rotation. Callers should re-enter provider
+// credentials under the current key before removing the previous key.
+func NewWithPrevious(current, previous string) (*Box, error) {
+	box, err := New(current)
+	if err != nil || strings.TrimSpace(previous) == "" {
+		return box, err
+	}
+	if box == nil {
+		return nil, ErrNoKey
+	}
+	old, err := New(previous)
+	if err != nil {
+		return nil, err
+	}
+	box.previous = []cipher.AEAD{old.aead}
+	return box, nil
 }
 
 // Development returns a Box with a fixed, publicly known key. It exists so
@@ -86,8 +106,13 @@ func (b *Box) Open(sealed []byte) ([]byte, error) {
 		return nil, ErrCorrupted
 	}
 	plaintext, err := b.aead.Open(nil, sealed[:size], sealed[size:], nil)
-	if err != nil {
-		return nil, ErrCorrupted
+	if err == nil {
+		return plaintext, nil
 	}
-	return plaintext, nil
+	for _, previous := range b.previous {
+		if plaintext, err := previous.Open(nil, sealed[:size], sealed[size:], nil); err == nil {
+			return plaintext, nil
+		}
+	}
+	return nil, ErrCorrupted
 }

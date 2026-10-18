@@ -139,8 +139,7 @@ func (s *Service) enabled() ([]enabledProvider, error) {
 		}
 		cfg, err := s.decrypt(record)
 		if err != nil {
-			slog.Error("payment provider credentials unreadable", "provider", record.Provider, "error", err)
-			continue
+			return nil, fmt.Errorf("%s credentials: %w", record.Provider, err)
 		}
 		out = append(out, enabledProvider{provider: p, config: cfg, record: record})
 	}
@@ -153,6 +152,9 @@ func (s *Service) decrypt(record db.PaymentProviderConfig) (payments.Config, err
 		values[k] = v
 	}
 	if len(record.Secrets) > 0 {
+		if s.box == nil {
+			return payments.Config{}, ErrSecretsKeyMissing
+		}
 		plain, err := s.box.Open(record.Secrets)
 		if err != nil {
 			return payments.Config{}, err
@@ -166,6 +168,50 @@ func (s *Service) decrypt(record db.PaymentProviderConfig) (payments.Config, err
 		}
 	}
 	return payments.Config{Mode: record.Mode, Values: values}, nil
+}
+
+// ValidateProduction rejects an enabled online method that cannot process or
+// reconcile payments with this instance's configuration. It is called before
+// the HTTP listener starts, so a bad deployment does not silently hide a
+// payment method already offered to customers.
+func (s *Service) ValidateProduction(publicBaseURL string) error {
+	settings, err := s.store.GetCommerceSettings()
+	if err != nil {
+		return err
+	}
+	configs, err := s.store.ListPaymentProviderConfigs()
+	if err != nil {
+		return err
+	}
+	for _, record := range configs {
+		if !record.Enabled {
+			continue
+		}
+		provider, ok := s.registry.Get(record.Provider)
+		if !ok {
+			return fmt.Errorf("enabled payment provider %q is unavailable", record.Provider)
+		}
+		descriptor := provider.Descriptor()
+		if !descriptor.Online {
+			continue
+		}
+		if strings.TrimSpace(publicBaseURL) == "" {
+			return ErrNoPublicURL
+		}
+		if !descriptor.SupportsCurrency(settings.Currency) {
+			return fmt.Errorf("%w: %s cannot charge %s", ErrCurrencyMismatch, descriptor.Name, settings.Currency)
+		}
+		cfg, err := s.decrypt(record)
+		if err != nil {
+			return fmt.Errorf("%s credentials: %w", record.Provider, err)
+		}
+		for _, field := range descriptor.Fields {
+			if field.Required && strings.TrimSpace(cfg.Value(field.Key)) == "" {
+				return fmt.Errorf("%w: %s %s", ErrMissingFields, descriptor.Name, field.Label)
+			}
+		}
+	}
+	return nil
 }
 
 // MethodOptions lists the methods checkout offers for the store currency.

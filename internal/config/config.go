@@ -62,6 +62,8 @@ type Config struct {
 	PublicBaseURL string
 	// SecretsKey (base64, 32 bytes) seals payment provider credentials.
 	SecretsKey string
+	// SecretsKeyPrevious opens existing credentials while rotating the key.
+	SecretsKeyPrevious string
 
 	SMTPHost     string
 	SMTPPort     string
@@ -99,6 +101,7 @@ func LoadFromEnv() Config {
 		PasswordResetBaseURL: strings.TrimSpace(os.Getenv("PASSWORD_RESET_BASE_URL")),
 		PublicBaseURL:        strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")),
 		SecretsKey:           strings.TrimSpace(os.Getenv("SECRETS_KEY")),
+		SecretsKeyPrevious:   strings.TrimSpace(os.Getenv("SECRETS_KEY_PREVIOUS")),
 		SMTPHost:             strings.TrimSpace(strings.ToLower(os.Getenv("SMTP_HOST"))),
 		SMTPPort:             readEnv("SMTP_PORT", defaultSMTPPort),
 		SMTPUsername:         strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
@@ -196,6 +199,13 @@ func (c Config) Validate() error {
 	if c.SecretsKey != "" {
 		if _, err := secret.New(c.SecretsKey); err != nil {
 			problems = append(problems, "SECRETS_KEY must be 32 random bytes encoded as base64 (openssl rand -base64 32)")
+		}
+	}
+	if c.SecretsKeyPrevious != "" {
+		if c.SecretsKey == "" {
+			problems = append(problems, "SECRETS_KEY is required when SECRETS_KEY_PREVIOUS is set")
+		} else if _, err := secret.New(c.SecretsKeyPrevious); err != nil {
+			problems = append(problems, "SECRETS_KEY_PREVIOUS must be 32 random bytes encoded as base64")
 		}
 	}
 	if c.SessionCookieDomain != "" {
