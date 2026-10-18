@@ -657,3 +657,45 @@ func TestUnpaidOrderTTLMatches(t *testing.T) {
 		t.Fatalf("lifecycle.UnpaidOrderTTL %s != db.UnpaidOrderTTL %s", lifecycle.UnpaidOrderTTL, db.UnpaidOrderTTL)
 	}
 }
+
+func TestIntegration_CustomerCancelDuringMpesaPromptQueuesLateCharge(t *testing.T) {
+	customer, admin, productID := paymentsShop(t, "KES", 10000)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	callbackURL, _ := testProviders.lastSTK["CallBackURL"].(string)
+	callbackPath := strings.TrimPrefix(callbackURL, "https://shop.example")
+
+	if _, body := makeRequest(http.MethodGet, "/account", nil, []*http.Cookie{customer}, ""); !strings.Contains(body, "/account/orders/1/cancel") {
+		t.Fatal("unpaid M-Pesa order offers no cancel action")
+	}
+	resp, _ := makeRequest(http.MethodPost, "/account/orders/1/cancel", nil, []*http.Cookie{customer}, "")
+	assertFlashRedirect(t, resp, "/account", "Order #1 cancelled")
+	var attempt string
+	if err := testStore.DB.QueryRow("SELECT status FROM payment_attempts WHERE payment_id = 1 ORDER BY id DESC LIMIT 1").Scan(&attempt); err != nil || attempt != "failed" || paymentStatus(t, 1) != db.PaymentStatusFailed {
+		t.Fatalf("after cancel attempt=%s payment=%s err=%v", attempt, paymentStatus(t, 1), err)
+	}
+	if p, _ := testStore.GetProductByID(int(productID)); p == nil || p.StockQuantity != 5 {
+		t.Fatalf("stock after cancel = %+v", p)
+	}
+
+	// The customer approves the prompt anyway. The charge is kept for refund
+	// and the order stays cancelled.
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+	callback := `{"Body":{"stkCallback":{"MerchantRequestID":"m-1","CheckoutRequestID":"ws_CO_1","ResultCode":0,"ResultDesc":"ok","CallbackMetadata":{"Item":[{"Name":"Amount","Value":100},{"Name":"MpesaReceiptNumber","Value":"AFTER-CANCEL"}]}}}}`
+	req := httptest.NewRequest(http.MethodPost, "http://localhost"+callbackPath, strings.NewReader(callback))
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || partnerQueueHasOrders(t, admin) {
+		t.Fatalf("late callback status=%d fulfillable=%t", rec.Code, partnerQueueHasOrders(t, admin))
+	}
+	var reason, receipt string
+	if err := testStore.DB.QueryRow("SELECT reason, receipt FROM payment_exceptions WHERE payment_id = 1").Scan(&reason, &receipt); err != nil || reason != "late_capture" || receipt != "AFTER-CANCEL" {
+		t.Fatalf("exception = %q %q, %v", reason, receipt, err)
+	}
+	var status string
+	if err := testStore.DB.QueryRow("SELECT status FROM orders WHERE id = 1").Scan(&status); err != nil || status != db.OrderStatusCancelled {
+		t.Fatalf("order status after late charge = %s, %v", status, err)
+	}
+}

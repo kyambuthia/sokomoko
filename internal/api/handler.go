@@ -240,6 +240,7 @@ type orderDTO struct {
 	TotalAmountMinor int64          `json:"total_amount_minor"`
 	Currency         string         `json:"currency"`
 	CreatedAt        time.Time      `json:"created_at"`
+	Cancellable      *bool          `json:"cancellable,omitempty"` // account orders only
 	Items            []orderItemDTO `json:"items,omitempty"`
 }
 
@@ -256,7 +257,7 @@ func mapAccountOrder(order accountsvc.Order) orderDTO {
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,
 		DeliveryStatus: order.DeliveryStatus, DeliveryNotice: order.DeliveryNotice,
 		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), TotalAmountMinor: int64(order.TotalAmount), Currency: order.Currency,
-		CreatedAt: order.CreatedAt, Items: items,
+		CreatedAt: order.CreatedAt, Cancellable: &order.Cancellable, Items: items,
 	}
 }
 

@@ -69,6 +69,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/cart/remove", customer(CartRemove(a)))
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
+	mux.Handle("/account/orders/{id}/cancel", customer(AccountOrderCancel(a)))
 	mux.Handle("/payments/order/{id}", customer(PaymentPage(a)))
 	mux.Handle("/payments/return", customer(PaymentReturn(a)))
 	// Provider servers call these without a session; they authenticate with

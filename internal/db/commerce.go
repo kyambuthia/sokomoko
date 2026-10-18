@@ -505,6 +505,72 @@ func (s *Store) ExpireUnpaidOrders(ctx context.Context, cutoff time.Time) (int, 
 	return expired, err
 }
 
+// ErrOrderNotCancellable means the order has been accepted by the vendor or
+// already paid, so only the marketplace team can cancel it.
+var ErrOrderNotCancellable = errors.New("order can no longer be cancelled")
+
+// CancelOrderByCustomer cancels a customer's own order while the vendor has
+// not accepted it and nothing has been charged. Stock is released and any
+// outstanding payment request is closed. A charge confirmed after this point
+// is recorded as a late capture and queued for refund by CapturePayment.
+func (s *Store) CancelOrderByCustomer(ctx context.Context, userID, orderID int) error {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		// Lock payments before the order, the same order CapturePayment uses.
+		rows, err := tx.QueryContext(ctx,
+			"SELECT status FROM payments WHERE order_id = $1 AND user_id = $2 ORDER BY id FOR UPDATE", orderID, userID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var status string
+			if err := rows.Scan(&status); err != nil {
+				rows.Close()
+				return err
+			}
+			if status == PaymentStatusCaptured || status == PaymentStatusRefunded {
+				rows.Close()
+				return ErrOrderNotCancellable
+			}
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		var owner int
+		if err := tx.QueryRowContext(ctx, "SELECT user_id FROM orders WHERE id = $1", orderID).Scan(&owner); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrOrderNotFound
+			}
+			return err
+		}
+		if owner != userID {
+			return ErrOrderNotFound
+		}
+		current, err := lockOrderTx(ctx, tx, orderID)
+		if err != nil {
+			return err
+		}
+		if current.Status == OrderStatusCancelled {
+			return nil
+		}
+		if current.Status != OrderStatusPending || current.PartnerStatus != "new" {
+			return ErrOrderNotCancellable
+		}
+		if err := writeOrderStateTx(ctx, tx, orderID, current, OrderStatusCancelled, "cancelled", current.DeliveryStatus,
+			"Cancelled by the customer."); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE payment_attempts SET status = 'failed', error_message = 'order cancelled'
+			 WHERE status = 'pending' AND payment_id IN (SELECT id FROM payments WHERE order_id = $1)`, orderID); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, "UPDATE payments SET status = 'failed' WHERE order_id = $1 AND status = 'pending'", orderID)
+		return err
+	})
+}
+
 func truncateText(s string, max int) string {
 	if r := []rune(s); len(r) > max {
 		return string(r[:max])

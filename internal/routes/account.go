@@ -1,8 +1,11 @@
 package routes
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
@@ -37,5 +40,34 @@ func Account(a *app.App) http.HandlerFunc {
 			Viewer:    viewerFromRequest(r),
 			CSRFToken: a.Auth.CSRFToken(r),
 		})
+	}
+}
+
+// AccountOrderCancel cancels one of the customer's orders before the vendor
+// accepts it and before it is paid.
+func AccountOrderCancel(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		userID, _ := requestUserID(r)
+		orderID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || orderID <= 0 {
+			http.NotFound(w, r)
+			return
+		}
+		err = a.Account.CancelOrder(r.Context(), userID, orderID)
+		switch {
+		case err == nil:
+			redirectWithFlash(w, r, "/account", "success", fmt.Sprintf("Order #%d cancelled", orderID))
+		case errors.Is(err, accountsvc.ErrOrderNotFound):
+			http.NotFound(w, r)
+		case errors.Is(err, accountsvc.ErrOrderNotCancellable):
+			redirectWithFlash(w, r, "/account", "danger", fmt.Sprintf("Order #%d is already being prepared or paid. Contact the store to cancel it.", orderID))
+		default:
+			log.Printf("cancel order: %v", err)
+			serverError(w, r)
+		}
 	}
 }

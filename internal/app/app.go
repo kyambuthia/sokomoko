@@ -41,6 +41,7 @@ type AccountService interface {
 	OrderForUserContext(context.Context, int, int) (*accountsvc.Order, error)
 	OrdersForUser(userID int) ([]accountsvc.Order, error)
 	OrdersForUserPageContext(context.Context, int, int, int) ([]accountsvc.Order, int, error)
+	CancelOrder(ctx context.Context, userID, orderID int) error
 }
 
 type CommerceService interface {
