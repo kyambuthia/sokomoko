@@ -178,6 +178,47 @@ func (s *Store) DeleteUser(id int) error {
 	})
 }
 
+// ListDeactivatedUsers returns the most recently deactivated non-admin
+// accounts, newest first.
+func (s *Store) ListDeactivatedUsers(limit int) ([]User, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	ctx, cancel := s.ctx()
+	defer cancel()
+	rows, err := s.DB.QueryContext(ctx,
+		"SELECT "+userColumns+` FROM users
+		 WHERE deleted_at IS NOT NULL AND role <> 'admin'
+		 ORDER BY deleted_at DESC, id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	users := []User{}
+	for rows.Next() {
+		user, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, *user)
+	}
+	return users, rows.Err()
+}
+
+// ReactivateUser restores a deactivated non-admin account. Usernames and
+// emails stay unique across deactivated rows, so restoring cannot collide.
+func (s *Store) ReactivateUser(id int) (bool, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	result, err := s.DB.ExecContext(ctx,
+		"UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL AND role <> 'admin'", id)
+	if err != nil {
+		return false, err
+	}
+	n, err := rowsAffected(result)
+	return n > 0, err
+}
+
 func (s *Store) ListUsersByRoles(roles []string) ([]User, error) {
 	if len(roles) == 0 {
 		return []User{}, nil

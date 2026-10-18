@@ -333,6 +333,40 @@ func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 	return nil
 }
 
+// DeactivatedMembers lists recently deactivated accounts an admin can restore.
+func (s *Service) DeactivatedMembers() ([]TeamMember, error) {
+	users, err := s.store.ListDeactivatedUsers(50)
+	if err != nil {
+		return nil, err
+	}
+	members := make([]TeamMember, 0, len(users))
+	for _, u := range users {
+		members = append(members, TeamMember{ID: u.ID, Username: u.Username, Email: u.Email, Role: u.Role, CreatedAt: u.CreatedAt})
+	}
+	return members, nil
+}
+
+// ReactivateUser restores a deactivated account. The user signs in again with
+// their existing password.
+func (s *Service) ReactivateUser(actor *Actor, userIDRaw string) error {
+	if actor == nil || actor.Role != db.RoleAdmin {
+		return ErrForbiddenUserAction
+	}
+	userID, err := parsePositiveInt(userIDRaw)
+	if err != nil {
+		return ErrInvalidUserID
+	}
+	found, err := s.store.ReactivateUser(userID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return ErrUserNotFound
+	}
+	_ = s.store.CreateAuditLog(actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
+	return nil
+}
+
 func (s *Service) AuditLogs(limit int) ([]AuditLog, error) {
 	logs, err := s.store.ListAuditLogs(limit)
 	if err != nil {

@@ -23,6 +23,7 @@ type AdminPageData struct {
 	UserCount       int
 	Products        []adminsvc.Product
 	TeamMembers     []adminsvc.TeamMember
+	Deactivated     []adminsvc.TeamMember
 	Orders          []adminsvc.Order
 	Deliveries      adminsvc.DeliveryBoard
 	AuditLogs       []adminsvc.AuditLog
@@ -249,7 +250,13 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 		page := adminTeamPage(metrics, adminRoleFromContext(r), nil)
 
 		if r.Method == http.MethodPost {
-			err := svc.DeactivateUser(adminActorFromContext(r), r.FormValue("user_id"))
+			reactivate := r.FormValue("action") == "reactivate"
+			var err error
+			if reactivate {
+				err = svc.ReactivateUser(adminActorFromContext(r), r.FormValue("user_id"))
+			} else {
+				err = svc.DeactivateUser(adminActorFromContext(r), r.FormValue("user_id"))
+			}
 			switch {
 			case errors.Is(err, adminsvc.ErrForbiddenUserAction):
 				http.Error(w, "Forbidden", http.StatusForbidden)
@@ -260,8 +267,13 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 				page.TeamError = "User does not exist"
 			case errors.Is(err, adminsvc.ErrProtectedUser):
 				page.TeamError = "Admin accounts cannot be deactivated from this view"
+			case err != nil && reactivate:
+				page.TeamError = "Unable to reactivate user"
 			case err != nil:
 				page.TeamError = "Unable to deactivate user"
+			case reactivate:
+				redirectWithFlash(w, r, "/team", "success", "User account reactivated")
+				return
 			default:
 				redirectWithFlash(w, r, "/team", "success", "User account deactivated")
 				return
@@ -276,6 +288,10 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			return
 		}
 		page.TeamMembers = teamMembers
+		if page.Deactivated, err = svc.DeactivatedMembers(); err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		renderAdminPage(a, w, r, http.StatusOK, page)
 	}
 }

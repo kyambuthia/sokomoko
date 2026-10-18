@@ -21,6 +21,8 @@ type store interface {
 	SetPartnerStatus(id int, status string) (bool, error)
 	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
 	DeleteUser(id int) error
+	ListDeactivatedUsers(limit int) ([]db.User, error)
+	ReactivateUser(id int) (bool, error)
 	GetAllProducts() ([]db.Product, error)
 	ListProductsContext(context.Context, db.ProductFilter) ([]db.Product, error)
 	CountFilteredProductsContext(context.Context, db.ProductFilter) (int, error)

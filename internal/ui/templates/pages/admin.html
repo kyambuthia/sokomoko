@@ -512,7 +512,7 @@
           <td><span class="badge {{ if eq .Role "admin" }}badge-solid{{ end }}">{{ .Role }}</span></td>
           <td class="actions">
             {{ if ne .Role "admin" }}
-            <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in again." confirm-label="Deactivate">
+            <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in until an admin reactivates them." confirm-label="Deactivate">
               <form method="POST" action="/team" class="inline-form">
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="user_id" value="{{ .ID }}">
@@ -528,6 +528,30 @@
       </tbody>
     </table>
   </div>
+  {{ if .Deactivated }}
+  <h2 class="section-title">Deactivated</h2>
+  <div class="table-wrap">
+    <table class="table" id="admin-deactivated-table">
+      <thead><tr><th>User</th><th>Role</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+        {{ range .Deactivated }}
+        <tr>
+          <td>{{ .Username }}<div class="tiny muted">{{ .Email }}</div></td>
+          <td><span class="badge badge-muted">{{ .Role }}</span></td>
+          <td class="actions">
+            <form method="POST" action="/team" class="inline-form" data-submit-once>
+              {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+              <input type="hidden" name="action" value="reactivate">
+              <input type="hidden" name="user_id" value="{{ .ID }}">
+              <button type="submit" class="btn btn-secondary btn-sm">Reactivate</button>
+            </form>
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ end }}
 {{ end }}
 
 {{ if eq .Title "Audit Log" }}

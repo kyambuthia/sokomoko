@@ -91,6 +91,8 @@ type AdminService interface {
 	SetPartnerStatus(actor *adminsvc.Actor, idRaw, status string) error
 	DeleteCategory(actor *adminsvc.Actor, idRaw string) error
 	DeactivateUser(actor *adminsvc.Actor, userIDRaw string) error
+	ReactivateUser(actor *adminsvc.Actor, userIDRaw string) error
+	DeactivatedMembers() ([]adminsvc.TeamMember, error)
 	Deliveries() (adminsvc.DeliveryBoard, error)
 	Metrics() (adminsvc.Metrics, error)
 	Orders() ([]adminsvc.Order, error)
