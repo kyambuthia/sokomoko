@@ -299,6 +299,15 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	if len(products.Items) != 1 || products.Items[0].Name != "Partner A Product" {
 		t.Fatalf("partner A saw unexpected products: %#v", products.Items)
 	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/products?page=2&limit=1", nil, []*http.Cookie{cookie}, false, nil)
+	var productPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &productPage)
+	if resp.StatusCode != http.StatusOK || len(productPage.Items) != 0 || productPage.Total != 1 {
+		t.Fatalf("partner product pagination: %s", body)
+	}
 
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/settings", nil, []*http.Cookie{cookie}, false, nil)
 	if resp.StatusCode != http.StatusOK {
@@ -324,6 +333,20 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 		t.Fatalf("partner settings update status=%d body=%s, want 403", resp.StatusCode, body)
 	}
 	adminCookie := loginAndGetSessionCookie(t, "partner.localhost", "api_admin", "strongpass123")
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/admin/products?page=2&limit=1", nil, []*http.Cookie{adminCookie}, false, nil)
+	var adminPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &adminPage)
+	if resp.StatusCode != http.StatusOK || len(adminPage.Items) != 1 || adminPage.Total != 2 {
+		t.Fatalf("admin product pagination: %s", body)
+	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/admin/orders?page=2&limit=1", nil, []*http.Cookie{adminCookie}, false, nil)
+	decodeAPIData(t, body, &adminPage)
+	if resp.StatusCode != http.StatusOK || len(adminPage.Items) != 0 || adminPage.Total != 1 {
+		t.Fatalf("admin order pagination: %s", body)
+	}
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, "/api/v1/partner/settings", settingsUpdate, []*http.Cookie{adminCookie}, true, nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin settings update status=%d body=%s", resp.StatusCode, body)
@@ -354,6 +377,15 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	}, []*http.Cookie{cookieB}, true, nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("own order update status=%d body=%s", resp.StatusCode, body)
+	}
+	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/orders?page=2&limit=1", nil, []*http.Cookie{cookieB}, false, nil)
+	var orderPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &orderPage)
+	if resp.StatusCode != http.StatusOK || len(orderPage.Items) != 0 || orderPage.Total != 1 {
+		t.Fatalf("partner order pagination: %s", body)
 	}
 	// A partner login without explicit membership must not inherit a record
 	// simply because its user ID happens to match a partner ID.

@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
@@ -23,9 +24,12 @@ type store interface {
 	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
 	DeleteUser(id int) error
 	GetAllProducts() ([]db.Product, error)
+	ListProductsContext(context.Context, db.ProductFilter) ([]db.Product, error)
+	CountFilteredProductsContext(context.Context, db.ProductFilter) (int, error)
 	GetOrderStatusCounts() (map[string]int, error)
 	GetUserByID(id int) (*db.User, error)
 	ListAllOrders() ([]db.Order, error)
+	ListAllOrdersPageContext(context.Context, int, int) ([]db.Order, int, error)
 	ListAuditLogs(limit int) ([]db.AuditLog, error)
 	ListUsersByRoles(roles []string) ([]db.User, error)
 	SumOrderRevenue() (money.Cents, error)

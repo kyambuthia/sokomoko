@@ -3,6 +3,7 @@
 package partner
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -206,24 +207,42 @@ func (s *Service) Dashboard() (DashboardData, error) {
 }
 
 func (s *Service) DashboardForActor(actor *Actor) (DashboardData, error) {
+	return s.DashboardForActorContext(context.Background(), actor)
+}
+
+func (s *Service) DashboardForActorContext(ctx context.Context, actor *Actor) (DashboardData, error) {
 	settings, err := s.requireStoreSettings()
 	if err != nil {
 		return DashboardData{}, err
 	}
 
-	products, err := s.ProductsForActor(actor)
+	partnerID, err := s.partnerIDForActor(actor)
 	if err != nil {
 		return DashboardData{}, err
 	}
-	orders, err := s.OrdersForActor(actor, "")
+	if actorIsPartner(actor) && partnerID == 0 {
+		return DashboardData{Settings: *settings}, nil
+	}
+	count, err := s.store.CountFilteredProductsContext(ctx, db.ProductFilter{PartnerID: partnerID})
+	if err != nil {
+		return DashboardData{}, err
+	}
+	summary, err := s.store.FulfillmentSummaryContext(ctx, partnerID)
 	if err != nil {
 		return DashboardData{}, err
 	}
 	return DashboardData{
 		Settings:     *settings,
-		ProductCount: len(products.Products),
-		OrderSummary: orders.Summary,
+		ProductCount: count,
+		OrderSummary: Summary(summary),
 	}, nil
+}
+
+func (s *Service) partnerIDForActor(actor *Actor) (int, error) {
+	if !actorIsPartner(actor) {
+		return 0, nil
+	}
+	return s.store.PartnerIDForUser(actor.ID)
 }
 
 func (s *Service) Products() (ProductsData, error) {
@@ -231,32 +250,45 @@ func (s *Service) Products() (ProductsData, error) {
 }
 
 func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
+	data, _, err := s.productsForActorContext(context.Background(), actor, 0, 0)
+	return data, err
+}
+
+func (s *Service) ProductsPageForActorContext(ctx context.Context, actor *Actor, page, limit int) (ProductsData, int, error) {
+	return s.productsForActorContext(ctx, actor, limit, (page-1)*limit)
+}
+
+func (s *Service) productsForActorContext(ctx context.Context, actor *Actor, limit, offset int) (ProductsData, int, error) {
 	settings, err := s.requireStoreSettings()
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
 	}
-	filter := db.ProductFilter{}
+	filter := db.ProductFilter{Limit: limit, Offset: offset}
 	if actorIsPartner(actor) {
-		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		partnerID, err := s.partnerIDForActor(actor)
 		if err != nil {
-			return ProductsData{}, err
+			return ProductsData{}, 0, err
 		}
 		if partnerID == 0 {
-			return ProductsData{Settings: *settings}, nil
+			return ProductsData{Settings: *settings}, 0, nil
 		}
 		filter.PartnerID = partnerID
 	}
-	products, err := s.store.ListProducts(filter)
+	total, err := s.store.CountFilteredProductsContext(ctx, filter)
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
+	}
+	products, err := s.store.ListProductsContext(ctx, filter)
+	if err != nil {
+		return ProductsData{}, 0, err
 	}
 	categories, err := s.store.GetAllCategories()
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
 	}
 	partners, err := s.store.ListPartners()
 	if err != nil {
-		return ProductsData{}, err
+		return ProductsData{}, 0, err
 	}
 
 	data := ProductsData{Settings: *settings}
@@ -274,7 +306,34 @@ func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
 			data.Partners = append(data.Partners, PartnerOption{ID: p.ID, Name: p.Name})
 		}
 	}
-	return data, nil
+	return data, total, nil
+}
+
+func (s *Service) OrdersPageForActorContext(ctx context.Context, actor *Actor, filter string, page, limit int) (OrdersData, int, error) {
+	clean := strings.TrimSpace(filter)
+	if clean == "" {
+		clean = "all"
+	}
+	partnerID, err := s.partnerIDForActor(actor)
+	if err != nil {
+		return OrdersData{}, 0, err
+	}
+	if actorIsPartner(actor) && partnerID == 0 {
+		return OrdersData{Filter: clean}, 0, nil
+	}
+	orders, total, err := s.store.ListFulfillmentOrdersPageContext(ctx, partnerID, clean, limit, (page-1)*limit)
+	if err != nil {
+		return OrdersData{}, 0, err
+	}
+	summary, err := s.store.FulfillmentSummaryContext(ctx, partnerID)
+	if err != nil {
+		return OrdersData{}, 0, err
+	}
+	mapped := make([]Order, 0, len(orders))
+	for _, order := range orders {
+		mapped = append(mapped, mapOrder(order))
+	}
+	return OrdersData{Filter: clean, Orders: mapped, Summary: Summary(summary)}, total, nil
 }
 
 func (s *Service) CreateProduct(input CreateProductInput) error {

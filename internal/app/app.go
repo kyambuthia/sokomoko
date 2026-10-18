@@ -87,7 +87,9 @@ type AdminService interface {
 	Deliveries() (adminsvc.DeliveryBoard, error)
 	Metrics() (adminsvc.Metrics, error)
 	Orders() ([]adminsvc.Order, error)
+	OrdersPageContext(context.Context, int, int) ([]adminsvc.Order, int, error)
 	Products() ([]adminsvc.Product, error)
+	ProductsPageContext(context.Context, int, int) ([]adminsvc.Product, int, error)
 	Reports() (adminsvc.SalesReport, error)
 	TeamMembers() ([]adminsvc.TeamMember, error)
 	UpdateOrder(actor *adminsvc.Actor, input adminsvc.UpdateOrderInput) error
@@ -98,10 +100,13 @@ type PartnerService interface {
 	CreateProductForActor(actor *partnersvc.Actor, input partnersvc.CreateProductInput) error
 	Dashboard() (partnersvc.DashboardData, error)
 	DashboardForActor(actor *partnersvc.Actor) (partnersvc.DashboardData, error)
+	DashboardForActorContext(context.Context, *partnersvc.Actor) (partnersvc.DashboardData, error)
 	Orders(filter string) (partnersvc.OrdersData, error)
 	OrdersForActor(actor *partnersvc.Actor, filter string) (partnersvc.OrdersData, error)
+	OrdersPageForActorContext(context.Context, *partnersvc.Actor, string, int, int) (partnersvc.OrdersData, int, error)
 	Products() (partnersvc.ProductsData, error)
 	ProductsForActor(actor *partnersvc.Actor) (partnersvc.ProductsData, error)
+	ProductsPageForActorContext(context.Context, *partnersvc.Actor, int, int) (partnersvc.ProductsData, int, error)
 	SaveStoreSettings(actor *partnersvc.Actor, input partnersvc.StoreSettingsInput) (partnersvc.StoreSettings, error)
 	StoreSettings() (*partnersvc.StoreSettings, error)
 	UpdateOrder(actor *partnersvc.Actor, input partnersvc.UpdateOrderInput) error

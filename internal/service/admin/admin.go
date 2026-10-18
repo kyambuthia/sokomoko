@@ -2,6 +2,7 @@
 package admin
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strconv"
@@ -154,6 +155,27 @@ func (s *Service) Products() ([]Product, error) {
 	return mapped, nil
 }
 
+func (s *Service) ProductsPageContext(ctx context.Context, page, limit int) ([]Product, int, error) {
+	filter := db.ProductFilter{}
+	total, err := s.store.CountFilteredProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	filter.Limit, filter.Offset = limit, (page-1)*limit
+	products, err := s.store.ListProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	mapped := make([]Product, 0, len(products))
+	for _, p := range products {
+		mapped = append(mapped, Product{
+			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
+			Price: p.Price, Currency: p.Currency, StockQuantity: p.StockQuantity,
+		})
+	}
+	return mapped, total, nil
+}
+
 func (s *Service) Orders() ([]Order, error) {
 	orders, err := s.store.ListAllOrders()
 	if err != nil {
@@ -161,27 +183,35 @@ func (s *Service) Orders() ([]Order, error) {
 	}
 	mapped := make([]Order, 0, len(orders))
 	for _, order := range orders {
-		items := make([]OrderItem, 0, len(order.Items))
-		for _, item := range order.Items {
-			items = append(items, OrderItem{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
-		}
-		mapped = append(mapped, Order{
-			ID:              order.ID,
-			Currency:        order.Currency,
-			CustomerName:    order.CustomerName,
-			Status:          order.Status,
-			PartnerStatus:   order.PartnerStatus,
-			DeliveryStatus:  order.DeliveryStatus,
-			DeliveryNotice:  order.DeliveryNotice,
-			DeliveryAddress: order.DeliveryAddress,
-			TotalAmount:     order.TotalAmount,
-			CreatedAt:       order.CreatedAt,
-			PaymentMethod:   order.PaymentMethod,
-			PaymentStatus:   order.PaymentStatus,
-			Items:           items,
-		})
+		mapped = append(mapped, mapAdminOrder(order))
 	}
 	return mapped, nil
+}
+
+func (s *Service) OrdersPageContext(ctx context.Context, page, limit int) ([]Order, int, error) {
+	orders, total, err := s.store.ListAllOrdersPageContext(ctx, limit, (page-1)*limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	mapped := make([]Order, 0, len(orders))
+	for _, order := range orders {
+		mapped = append(mapped, mapAdminOrder(order))
+	}
+	return mapped, total, nil
+}
+
+func mapAdminOrder(order db.Order) Order {
+	items := make([]OrderItem, 0, len(order.Items))
+	for _, item := range order.Items {
+		items = append(items, OrderItem{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal})
+	}
+	return Order{
+		ID: order.ID, Currency: order.Currency, CustomerName: order.CustomerName,
+		Status: order.Status, PartnerStatus: order.PartnerStatus, DeliveryStatus: order.DeliveryStatus,
+		DeliveryNotice: order.DeliveryNotice, DeliveryAddress: order.DeliveryAddress,
+		TotalAmount: order.TotalAmount, CreatedAt: order.CreatedAt,
+		PaymentMethod: order.PaymentMethod, PaymentStatus: order.PaymentStatus, Items: items,
+	}
 }
 
 // DeliveryBoard summarizes the delivery pipeline: how many open orders are in

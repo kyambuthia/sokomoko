@@ -174,7 +174,8 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		products, err := h.app.Admin.Products()
+		page, limit := pageParams(r)
+		products, total, err := h.app.Admin.ProductsPageContext(r.Context(), page, limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load products")
 			return
@@ -185,7 +186,10 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 		}
 		writeData(w, http.StatusOK, struct {
 			Items []productDTO `json:"items"`
-		}{Items: items})
+			Page  int          `json:"page"`
+			Limit int          `json:"limit"`
+			Total int          `json:"total"`
+		}{Items: items, Page: page, Limit: limit, Total: total})
 	case "orders":
 		h.adminOrders(w, r, parts)
 	case "reports":
@@ -230,7 +234,8 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) adminOrders(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		orders, err := h.app.Admin.Orders()
+		page, limit := pageParams(r)
+		orders, total, err := h.app.Admin.OrdersPageContext(r.Context(), page, limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load orders")
 			return
@@ -241,7 +246,10 @@ func (h *Handler) adminOrders(w http.ResponseWriter, r *http.Request, parts []st
 		}
 		writeData(w, http.StatusOK, struct {
 			Items []orderDTO `json:"items"`
-		}{Items: items})
+			Page  int        `json:"page"`
+			Limit int        `json:"limit"`
+			Total int        `json:"total"`
+		}{Items: items, Page: page, Limit: limit, Total: total})
 		return
 	}
 	if len(parts) != 2 || r.Method != http.MethodPatch {
@@ -337,7 +345,7 @@ func (h *Handler) partner(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		actor := partnerActor(r)
-		data, err := h.app.Partner.DashboardForActor(actor)
+		data, err := h.app.Partner.DashboardForActorContext(r.Context(), actor)
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -360,7 +368,8 @@ func (h *Handler) partner(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		data, err := h.app.Partner.ProductsForActor(partnerActor(r))
+		page, limit := pageParams(r)
+		data, total, err := h.app.Partner.ProductsPageForActorContext(r.Context(), partnerActor(r), page, limit)
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -372,7 +381,10 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 		writeData(w, http.StatusOK, struct {
 			Items      []productDTO  `json:"items"`
 			Categories []categoryDTO `json:"categories"`
-		}{Items: items, Categories: mapCategories(data.Categories)})
+			Page       int           `json:"page"`
+			Limit      int           `json:"limit"`
+			Total      int           `json:"total"`
+		}{Items: items, Categories: mapCategories(data.Categories), Page: page, Limit: limit, Total: total})
 		return
 	}
 	if len(parts) != 1 || r.Method != http.MethodPost {
@@ -395,7 +407,8 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 
 func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		data, err := h.app.Partner.OrdersForActor(partnerActor(r), strings.TrimSpace(r.URL.Query().Get("status")))
+		page, limit := pageParams(r)
+		data, total, err := h.app.Partner.OrdersPageForActorContext(r.Context(), partnerActor(r), strings.TrimSpace(r.URL.Query().Get("status")), page, limit)
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -407,7 +420,10 @@ func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []
 		writeData(w, http.StatusOK, struct {
 			Items   []orderDTO        `json:"items"`
 			Summary partnerSummaryDTO `json:"summary"`
-		}{Items: items, Summary: mapPartnerSummary(data.Summary)})
+			Page    int               `json:"page"`
+			Limit   int               `json:"limit"`
+			Total   int               `json:"total"`
+		}{Items: items, Summary: mapPartnerSummary(data.Summary), Page: page, Limit: limit, Total: total})
 		return
 	}
 	if len(parts) != 2 || r.Method != http.MethodPatch {

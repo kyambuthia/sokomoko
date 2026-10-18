@@ -1,6 +1,10 @@
 package partner
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import (
+	"context"
+
+	"github.com/kyambuthia/sokomoko/internal/db"
+)
 
 type store interface {
 	PartnerIDForUser(userID int) (int, error)
@@ -15,6 +19,10 @@ type store interface {
 	PartnerOwnsOrder(partnerID, orderID int) (bool, error)
 	ListPartners() ([]db.Partner, error)
 	ListProducts(filter db.ProductFilter) ([]db.Product, error)
+	ListProductsContext(context.Context, db.ProductFilter) ([]db.Product, error)
+	CountFilteredProductsContext(context.Context, db.ProductFilter) (int, error)
+	ListFulfillmentOrdersPageContext(context.Context, int, string, int, int) ([]db.Order, int, error)
+	FulfillmentSummaryContext(context.Context, int) (db.PartnerOrderSummary, error)
 	UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
 	UpsertStoreSettings(settings db.StoreSettings) error
 }

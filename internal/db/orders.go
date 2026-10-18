@@ -371,6 +371,68 @@ func (s *Store) ListAllOrders() ([]Order, error) {
 	return s.listOrders(ctx, "ORDER BY o.created_at DESC, o.id DESC")
 }
 
+func (s *Store) ListAllOrdersPageContext(parent context.Context, limit, offset int) ([]Order, int, error) {
+	ctx, cancel := s.queryContext(parent)
+	defer cancel()
+	var total int
+	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders").Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	orders, err := s.listOrders(ctx, "ORDER BY o.created_at DESC, o.id DESC LIMIT $1 OFFSET $2", limit, offset)
+	return orders, total, err
+}
+
+func fulfillmentPredicate(partnerID int) string {
+	if partnerID > 0 {
+		return partnerOwnsOrderSQL
+	}
+	return "o.status <> 'cancelled' AND " + paymentSettledSQL
+}
+
+// ListFulfillmentOrdersPageContext applies role scope and status filtering in
+// SQL before loading order lines. partnerID=0 is the admin/staff queue.
+func (s *Store) ListFulfillmentOrdersPageContext(parent context.Context, partnerID int, status string, limit, offset int) ([]Order, int, error) {
+	ctx, cancel := s.queryContext(parent)
+	defer cancel()
+	predicate := fulfillmentPredicate(partnerID)
+	args := []any{}
+	if partnerID > 0 {
+		args = append(args, partnerID)
+	}
+	if status != "" && status != "all" {
+		args = append(args, status)
+		predicate += fmt.Sprintf(" AND o.partner_status = $%d", len(args))
+	}
+	var total int
+	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders o WHERE "+predicate, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	limitArg := fmt.Sprintf("$%d", len(args)+1)
+	offsetArg := fmt.Sprintf("$%d", len(args)+2)
+	orders, err := s.listOrders(ctx, "WHERE "+predicate+" ORDER BY o.created_at DESC, o.id DESC LIMIT "+limitArg+" OFFSET "+offsetArg,
+		append(args, limit, offset)...)
+	return orders, total, err
+}
+
+func (s *Store) FulfillmentSummaryContext(parent context.Context, partnerID int) (PartnerOrderSummary, error) {
+	ctx, cancel := s.queryContext(parent)
+	defer cancel()
+	args := []any{}
+	if partnerID > 0 {
+		args = append(args, partnerID)
+	}
+	var summary PartnerOrderSummary
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT count(*) FILTER (WHERE o.partner_status = 'new'),
+		        count(*) FILTER (WHERE o.partner_status IN ('accepted', 'packing')),
+		        count(*) FILTER (WHERE o.partner_status = 'dispatched'),
+		        count(*) FILTER (WHERE o.partner_status = 'completed'),
+		        count(*) FILTER (WHERE o.partner_status IN ('new', 'accepted') AND o.created_at <= now() - interval '2 hours')
+		 FROM orders o WHERE `+fulfillmentPredicate(partnerID), args...).Scan(
+		&summary.NewCount, &summary.InProgressCount, &summary.DispatchedCount, &summary.CompletedCount, &summary.OverdueCount)
+	return summary, err
+}
+
 type lockedOrder struct {
 	Status         string
 	PartnerStatus  string
