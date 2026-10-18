@@ -25,6 +25,7 @@ type Product struct {
 	Slug          string
 	Description   string
 	Price         money.Cents
+	Currency      string
 	StockQuantity int
 	Category      string
 	PartnerName   string
@@ -168,6 +169,7 @@ func mapProduct(product db.Product) Product {
 		Slug:          product.Slug,
 		Description:   product.Description,
 		Price:         product.Price,
+		Currency:      product.Currency,
 		StockQuantity: product.StockQuantity,
 		Category:      product.Category,
 		PartnerName:   product.PartnerName,

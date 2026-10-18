@@ -140,5 +140,10 @@ there are no API keys or bearer tokens.
 | `PATCH /partner/settings` | admin, staff | Save store settings |
 
 Partner-role callers are scoped exactly as in the partner HTML workspace.
-Money fields are JSON numbers in dollars (for example `12.5`), converted from
-integer cents at the edge.
+Money responses retain the existing decimal JSON numbers for v1 clients and
+also include exact integer minor-unit fields plus a three-letter `currency`.
+For example, a product priced at KES 12.50 has `"price": 12.5`,
+`"price_minor": 1250`, and `"currency": "KES"`. Cart, checkout, order,
+and payment totals follow the same `*_minor` convention. Clients should use
+the integer fields for arithmetic; all supported store currencies currently
+have two decimal places.

@@ -92,7 +92,12 @@ func (h *Handler) writeCart(w http.ResponseWriter, r *http.Request, status int) 
 		writeError(w, http.StatusInternalServerError, "cart_unavailable", "Unable to load cart")
 		return
 	}
-	writeData(w, status, mapCart(cart.Items, cart.Subtotal))
+	pricing, err := h.app.Payment.Pricing()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "cart_unavailable", "Unable to load cart")
+		return
+	}
+	writeData(w, status, mapCart(cart.Items, cart.Subtotal, pricing.Currency))
 }
 
 func writeCommerceError(w http.ResponseWriter, err error) {

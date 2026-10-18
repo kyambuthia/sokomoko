@@ -72,27 +72,27 @@ func (h *Handler) accountOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_order_id", "Order id must be a positive integer")
 		return
 	}
-	orders, err := h.app.Account.OrdersForUser(uid)
+	order, err := h.app.Account.OrderForUser(uid, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "orders_unavailable", "Unable to load order")
 		return
 	}
-	for _, order := range orders {
-		if order.ID == id {
-			writeData(w, http.StatusOK, mapAccountOrder(order))
-			return
-		}
+	if order != nil {
+		writeData(w, http.StatusOK, mapAccountOrder(*order))
+		return
 	}
 	writeError(w, http.StatusNotFound, "order_not_found", "Order not found")
 }
 
 type paymentStatusDTO struct {
-	OrderID  int     `json:"order_id"`
-	Method   string  `json:"method"`
-	Status   string  `json:"status"` // pending, paid, failed, cancelled, offline
-	Message  string  `json:"message,omitempty"`
-	Amount   float64 `json:"amount"`
-	Currency string  `json:"currency"`
+	OrderID      int     `json:"order_id"`
+	Method       string  `json:"method"`
+	Status       string  `json:"status"` // pending, paid, failed, cancelled, offline
+	Message      string  `json:"message,omitempty"`
+	Amount       float64 `json:"amount"`
+	AmountMinor  int64   `json:"amount_minor"`
+	ChargedMinor int64   `json:"charged_minor"`
+	Currency     string  `json:"currency"`
 }
 
 // accountOrderPayment reports the payment state of one of the customer's
@@ -114,6 +114,6 @@ func (h *Handler) accountOrderPayment(w http.ResponseWriter, r *http.Request, ui
 	}
 	writeData(w, http.StatusOK, paymentStatusDTO{
 		OrderID: view.OrderID, Method: view.Method, Status: view.Status, Message: view.Message,
-		Amount: view.Amount.Float64(), Currency: view.Currency,
+		Amount: view.Amount.Float64(), AmountMinor: int64(view.Amount), ChargedMinor: int64(view.Charged), Currency: view.Currency,
 	})
 }

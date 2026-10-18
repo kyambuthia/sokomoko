@@ -57,6 +57,7 @@ type paymentService interface {
 }
 
 type Summary struct {
+	Currency    string
 	Subtotal    money.Cents
 	ShippingFee money.Cents
 	TaxAmount   money.Cents
@@ -73,6 +74,7 @@ type Item struct {
 
 type PageState struct {
 	Token           string
+	Currency        string
 	Items           []Item
 	Summary         Summary
 	PaymentMethod   string
@@ -104,6 +106,7 @@ func CalculateSummary(subtotal money.Cents, pricing Pricing) Summary {
 	}
 	tax := subtotal.MulBasisPoints(pricing.TaxRateBP)
 	return Summary{
+		Currency:    pricing.Currency,
 		Subtotal:    subtotal,
 		ShippingFee: shipping,
 		TaxAmount:   tax,
@@ -257,7 +260,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 			return 0, Summary{}, err
 		}
 		if existing != nil {
-			return existing.OrderID, Summary{Total: existing.TotalAmount}, nil
+			return existing.OrderID, summaryFromPlacement(*existing), nil
 		}
 	} else {
 		generated, err := s.payments.GenerateIdempotencyKey()
@@ -289,7 +292,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		return 0, Summary{}, mapStoreError(err)
 	}
 	if placement.Reused {
-		summary = Summary{Total: placement.TotalAmount}
+		summary = summaryFromPlacement(placement)
 	}
 	return placement.OrderID, summary, nil
 }
@@ -342,10 +345,19 @@ func summaryFromCheckout(checkout *db.Checkout) Summary {
 		return Summary{}
 	}
 	return Summary{
+		Currency:    checkout.Currency,
 		Subtotal:    checkout.SubtotalAmount,
 		ShippingFee: checkout.ShippingFee,
 		TaxAmount:   checkout.TaxAmount,
 		Total:       checkout.TotalAmount,
+	}
+}
+
+func summaryFromPlacement(placement db.CheckoutPlacement) Summary {
+	return Summary{
+		Currency: placement.Currency, Subtotal: placement.Subtotal,
+		ShippingFee: placement.ShippingFee, TaxAmount: placement.TaxAmount,
+		Total: placement.TotalAmount,
 	}
 }
 
@@ -365,6 +377,7 @@ func mapPageState(checkout *db.Checkout) PageState {
 	}
 	return PageState{
 		Token:           checkout.Token,
+		Currency:        checkout.Currency,
 		Items:           items,
 		Summary:         summaryFromCheckout(checkout),
 		PaymentMethod:   checkout.PaymentMethod,

@@ -51,6 +51,7 @@ type Product struct {
 	Category      string
 	PartnerName   string
 	Price         money.Cents
+	Currency      string
 	StockQuantity int
 }
 
@@ -62,6 +63,7 @@ type OrderItem struct {
 
 type Order struct {
 	ID              int
+	Currency        string
 	CustomerName    string
 	Status          string
 	PartnerStatus   string
@@ -146,7 +148,7 @@ func (s *Service) Products() ([]Product, error) {
 	for _, p := range products {
 		mapped = append(mapped, Product{
 			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
-			Price: p.Price, StockQuantity: p.StockQuantity,
+			Price: p.Price, Currency: p.Currency, StockQuantity: p.StockQuantity,
 		})
 	}
 	return mapped, nil
@@ -165,6 +167,7 @@ func (s *Service) Orders() ([]Order, error) {
 		}
 		mapped = append(mapped, Order{
 			ID:              order.ID,
+			Currency:        order.Currency,
 			CustomerName:    order.CustomerName,
 			Status:          order.Status,
 			PartnerStatus:   order.PartnerStatus,

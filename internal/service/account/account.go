@@ -18,6 +18,7 @@ type OrderItem struct {
 
 type Order struct {
 	ID              int
+	Currency        string
 	Status          string
 	PartnerStatus   string
 	DeliveryStatus  string
@@ -82,6 +83,7 @@ func mapOrder(order db.Order) Order {
 	}
 	return Order{
 		ID:              order.ID,
+		Currency:        order.Currency,
 		Status:          order.Status,
 		PartnerStatus:   order.PartnerStatus,
 		DeliveryStatus:  order.DeliveryStatus,

@@ -118,6 +118,8 @@ type productDTO struct {
 	Slug          string  `json:"slug"`
 	Description   string  `json:"description"`
 	Price         float64 `json:"price"`
+	PriceMinor    int64   `json:"price_minor"`
+	Currency      string  `json:"currency"`
 	StockQuantity int     `json:"stock_quantity"`
 	Category      string  `json:"category,omitempty"`
 	PrimaryImage  string  `json:"primary_image"`
@@ -126,59 +128,70 @@ type productDTO struct {
 func mapProduct(product catalogsvc.Product) productDTO {
 	return productDTO{
 		ID: product.ID, Name: product.Name, Slug: product.Slug,
-		Description: product.Description, Price: product.Price.Float64(),
+		Description: product.Description, Price: product.Price.Float64(), PriceMinor: int64(product.Price), Currency: product.Currency,
 		StockQuantity: product.StockQuantity, Category: product.Category,
 		PrimaryImage: product.ImageURL,
 	}
 }
 
 type cartItemDTO struct {
-	ProductID     int     `json:"product_id"`
-	ProductName   string  `json:"product_name"`
-	ProductSlug   string  `json:"product_slug,omitempty"`
-	ProductImage  string  `json:"product_image,omitempty"`
-	UnitPrice     float64 `json:"unit_price"`
-	Quantity      int     `json:"quantity"`
-	StockQuantity int     `json:"stock_quantity"`
-	LineTotal     float64 `json:"line_total"`
+	ProductID      int     `json:"product_id"`
+	ProductName    string  `json:"product_name"`
+	ProductSlug    string  `json:"product_slug,omitempty"`
+	ProductImage   string  `json:"product_image,omitempty"`
+	UnitPrice      float64 `json:"unit_price"`
+	UnitPriceMinor int64   `json:"unit_price_minor"`
+	Quantity       int     `json:"quantity"`
+	StockQuantity  int     `json:"stock_quantity"`
+	LineTotal      float64 `json:"line_total"`
+	LineTotalMinor int64   `json:"line_total_minor"`
 }
 
 type cartDTO struct {
-	Items    []cartItemDTO `json:"items"`
-	Subtotal float64       `json:"subtotal"`
+	Items         []cartItemDTO `json:"items"`
+	Subtotal      float64       `json:"subtotal"`
+	SubtotalMinor int64         `json:"subtotal_minor"`
+	Currency      string        `json:"currency"`
 }
 
-func mapCart(items []commerceSvc.CartItem, subtotal money.Cents) cartDTO {
+func mapCart(items []commerceSvc.CartItem, subtotal money.Cents, currency string) cartDTO {
 	mapped := make([]cartItemDTO, 0, len(items))
 	for _, item := range items {
 		mapped = append(mapped, cartItemDTO{
 			ProductID: item.ProductID, ProductName: item.ProductName,
-			UnitPrice: item.UnitPrice.Float64(), Quantity: item.Quantity,
-			StockQuantity: item.StockQuantity, LineTotal: item.LineTotal.Float64(),
+			UnitPrice: item.UnitPrice.Float64(), UnitPriceMinor: int64(item.UnitPrice), Quantity: item.Quantity,
+			StockQuantity: item.StockQuantity, LineTotal: item.LineTotal.Float64(), LineTotalMinor: int64(item.LineTotal),
 		})
 	}
-	return cartDTO{Items: mapped, Subtotal: subtotal.Float64()}
+	return cartDTO{Items: mapped, Subtotal: subtotal.Float64(), SubtotalMinor: int64(subtotal), Currency: currency}
 }
 
 type checkoutItemDTO struct {
-	ProductID   int     `json:"product_id"`
-	ProductName string  `json:"product_name"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unit_price"`
-	LineTotal   float64 `json:"line_total"`
+	ProductID      int     `json:"product_id"`
+	ProductName    string  `json:"product_name"`
+	Quantity       int     `json:"quantity"`
+	UnitPrice      float64 `json:"unit_price"`
+	UnitPriceMinor int64   `json:"unit_price_minor"`
+	LineTotal      float64 `json:"line_total"`
+	LineTotalMinor int64   `json:"line_total_minor"`
 }
 
 type checkoutDTO struct {
-	Token           string             `json:"token"`
-	Items           []checkoutItemDTO  `json:"items"`
-	Subtotal        float64            `json:"subtotal"`
-	ShippingFee     float64            `json:"shipping_fee"`
-	TaxAmount       float64            `json:"tax_amount"`
-	TotalAmount     float64            `json:"total_amount"`
-	PaymentMethod   string             `json:"payment_method"`
-	DeliveryAddress string             `json:"delivery_address,omitempty"`
-	CanCheckout     bool               `json:"can_checkout"`
-	PaymentMethods  []paymentMethodDTO `json:"payment_methods,omitempty"`
+	Token            string             `json:"token"`
+	Items            []checkoutItemDTO  `json:"items"`
+	Subtotal         float64            `json:"subtotal"`
+	SubtotalMinor    int64              `json:"subtotal_minor"`
+	ShippingFee      float64            `json:"shipping_fee"`
+	ShippingFeeMinor int64              `json:"shipping_fee_minor"`
+	TaxAmount        float64            `json:"tax_amount"`
+	TaxAmountMinor   int64              `json:"tax_amount_minor"`
+	TotalAmount      float64            `json:"total_amount"`
+	TotalAmountMinor int64              `json:"total_amount_minor"`
+	Currency         string             `json:"currency"`
+	PaymentMethod    string             `json:"payment_method"`
+	DeliveryAddress  string             `json:"delivery_address,omitempty"`
+	CanCheckout      bool               `json:"can_checkout"`
+	PaymentMethods   []paymentMethodDTO `json:"payment_methods,omitempty"`
 }
 
 type paymentMethodDTO struct {
@@ -192,36 +205,43 @@ func mapCheckout(state checkoutsvc.PageState, methods []paymentMethodDTO) checko
 	for _, item := range state.Items {
 		items = append(items, checkoutItemDTO{
 			ProductID: item.ProductID, ProductName: item.ProductName,
-			Quantity: item.Quantity, UnitPrice: item.UnitPrice.Float64(), LineTotal: item.LineTotal.Float64(),
+			Quantity: item.Quantity, UnitPrice: item.UnitPrice.Float64(), UnitPriceMinor: int64(item.UnitPrice),
+			LineTotal: item.LineTotal.Float64(), LineTotalMinor: int64(item.LineTotal),
 		})
 	}
 	return checkoutDTO{
-		Token: state.Token, Items: items, Subtotal: state.Summary.Subtotal.Float64(),
-		ShippingFee: state.Summary.ShippingFee.Float64(), TaxAmount: state.Summary.TaxAmount.Float64(),
-		TotalAmount: state.Summary.Total.Float64(), PaymentMethod: state.PaymentMethod,
+		Token: state.Token, Items: items, Subtotal: state.Summary.Subtotal.Float64(), SubtotalMinor: int64(state.Summary.Subtotal),
+		ShippingFee: state.Summary.ShippingFee.Float64(), ShippingFeeMinor: int64(state.Summary.ShippingFee),
+		TaxAmount: state.Summary.TaxAmount.Float64(), TaxAmountMinor: int64(state.Summary.TaxAmount),
+		TotalAmount: state.Summary.Total.Float64(), TotalAmountMinor: int64(state.Summary.Total), Currency: state.Currency,
+		PaymentMethod:   state.PaymentMethod,
 		DeliveryAddress: state.DeliveryAddress, CanCheckout: state.CanCheckout,
 		PaymentMethods: methods,
 	}
 }
 
 type orderItemDTO struct {
-	ProductID   int     `json:"product_id"`
-	ProductName string  `json:"product_name"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unit_price"`
-	LineTotal   float64 `json:"line_total"`
+	ProductID      int     `json:"product_id"`
+	ProductName    string  `json:"product_name"`
+	Quantity       int     `json:"quantity"`
+	UnitPrice      float64 `json:"unit_price"`
+	UnitPriceMinor int64   `json:"unit_price_minor"`
+	LineTotal      float64 `json:"line_total"`
+	LineTotalMinor int64   `json:"line_total_minor"`
 }
 
 type orderDTO struct {
-	ID              int            `json:"id"`
-	Status          string         `json:"status"`
-	PartnerStatus   string         `json:"partner_status"`
-	DeliveryStatus  string         `json:"delivery_status"`
-	DeliveryNotice  string         `json:"delivery_notice,omitempty"`
-	DeliveryAddress string         `json:"delivery_address,omitempty"`
-	TotalAmount     float64        `json:"total_amount"`
-	CreatedAt       time.Time      `json:"created_at"`
-	Items           []orderItemDTO `json:"items,omitempty"`
+	ID               int            `json:"id"`
+	Status           string         `json:"status"`
+	PartnerStatus    string         `json:"partner_status"`
+	DeliveryStatus   string         `json:"delivery_status"`
+	DeliveryNotice   string         `json:"delivery_notice,omitempty"`
+	DeliveryAddress  string         `json:"delivery_address,omitempty"`
+	TotalAmount      float64        `json:"total_amount"`
+	TotalAmountMinor int64          `json:"total_amount_minor"`
+	Currency         string         `json:"currency"`
+	CreatedAt        time.Time      `json:"created_at"`
+	Items            []orderItemDTO `json:"items,omitempty"`
 }
 
 func mapAccountOrder(order accountsvc.Order) orderDTO {
@@ -229,13 +249,14 @@ func mapAccountOrder(order accountsvc.Order) orderDTO {
 	for _, item := range order.Items {
 		items = append(items, orderItemDTO{
 			ProductID: item.ProductID, ProductName: item.ProductName,
-			Quantity: item.Quantity, UnitPrice: item.UnitPrice.Float64(), LineTotal: item.LineTotal.Float64(),
+			Quantity: item.Quantity, UnitPrice: item.UnitPrice.Float64(), UnitPriceMinor: int64(item.UnitPrice),
+			LineTotal: item.LineTotal.Float64(), LineTotalMinor: int64(item.LineTotal),
 		})
 	}
 	return orderDTO{
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,
 		DeliveryStatus: order.DeliveryStatus, DeliveryNotice: order.DeliveryNotice,
-		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(),
+		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), TotalAmountMinor: int64(order.TotalAmount), Currency: order.Currency,
 		CreatedAt: order.CreatedAt, Items: items,
 	}
 }
@@ -243,33 +264,33 @@ func mapAccountOrder(order accountsvc.Order) orderDTO {
 func mapAdminOrder(order adminsvc.Order) orderDTO {
 	items := make([]orderItemDTO, 0, len(order.Items))
 	for _, item := range order.Items {
-		items = append(items, orderItemDTO{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal.Float64()})
+		items = append(items, orderItemDTO{ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal.Float64(), LineTotalMinor: int64(item.LineTotal)})
 	}
 	return orderDTO{
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,
 		DeliveryStatus: order.DeliveryStatus, DeliveryNotice: order.DeliveryNotice,
-		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), Items: items,
+		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), TotalAmountMinor: int64(order.TotalAmount), Currency: order.Currency, Items: items,
 	}
 }
 
 func mapPartnerOrder(order partnersvc.Order) orderDTO {
 	items := make([]orderItemDTO, 0, len(order.Items))
 	for _, item := range order.Items {
-		items = append(items, orderItemDTO{ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal.Float64()})
+		items = append(items, orderItemDTO{ProductID: item.ProductID, ProductName: item.ProductName, Quantity: item.Quantity, LineTotal: item.LineTotal.Float64(), LineTotalMinor: int64(item.LineTotal)})
 	}
 	return orderDTO{
 		ID: order.ID, Status: order.Status, PartnerStatus: order.PartnerStatus,
 		DeliveryStatus: order.DeliveryStatus, DeliveryNotice: order.DeliveryNotice,
-		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), Items: items,
+		DeliveryAddress: order.DeliveryAddress, TotalAmount: order.TotalAmount.Float64(), TotalAmountMinor: int64(order.TotalAmount), Currency: order.Currency, Items: items,
 	}
 }
 
 func mapPartnerProduct(product partnersvc.Product) productDTO {
-	return productDTO{ID: product.ID, Name: product.Name, Category: product.Category, Price: product.Price.Float64(), StockQuantity: product.StockQuantity}
+	return productDTO{ID: product.ID, Name: product.Name, Category: product.Category, Price: product.Price.Float64(), PriceMinor: int64(product.Price), Currency: product.Currency, StockQuantity: product.StockQuantity}
 }
 
 func mapAdminProduct(product adminsvc.Product) productDTO {
-	return productDTO{Name: product.Name, Category: product.Category, Price: product.Price.Float64(), StockQuantity: product.StockQuantity}
+	return productDTO{Name: product.Name, Category: product.Category, Price: product.Price.Float64(), PriceMinor: int64(product.Price), Currency: product.Currency, StockQuantity: product.StockQuantity}
 }
 
 func isNotFound(err error) bool {

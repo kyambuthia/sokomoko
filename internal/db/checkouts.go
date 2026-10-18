@@ -115,9 +115,10 @@ func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, erro
 		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
 			return err
 		}
-		if currency != currentCurrency {
+		if currency != "" && currency != currentCurrency {
 			return ErrCheckoutCurrencyChanged
 		}
+		currency = currentCurrency
 		if _, err := tx.ExecContext(ctx,
 			"UPDATE checkouts SET status = 'cancelled' WHERE user_id = $1 AND status = 'open' AND token <> $2",
 			userID, token,

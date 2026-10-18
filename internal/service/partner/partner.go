@@ -74,6 +74,7 @@ type Product struct {
 	Category      string
 	PartnerName   string
 	Price         money.Cents
+	Currency      string
 	StockQuantity int
 	PartnerID     int
 }
@@ -97,6 +98,7 @@ type OrderItem struct {
 
 type Order struct {
 	ID              int
+	Currency        string
 	CustomerName    string
 	Status          string
 	PartnerStatus   string
@@ -261,7 +263,7 @@ func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
 	for _, p := range products {
 		data.Products = append(data.Products, Product{
 			ID: p.ID, Name: p.Name, Slug: p.Slug, Category: p.Category, PartnerName: p.PartnerName,
-			Price: p.Price, StockQuantity: p.StockQuantity, PartnerID: int(p.PartnerID.Int64),
+			Price: p.Price, Currency: p.Currency, StockQuantity: p.StockQuantity, PartnerID: int(p.PartnerID.Int64),
 		})
 	}
 	for _, c := range categories {
@@ -460,6 +462,7 @@ func mapOrder(order db.Order) Order {
 	}
 	return Order{
 		ID:              order.ID,
+		Currency:        order.Currency,
 		CustomerName:    order.CustomerName,
 		Status:          order.Status,
 		PartnerStatus:   order.PartnerStatus,
