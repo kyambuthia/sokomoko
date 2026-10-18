@@ -181,6 +181,7 @@
           <td class="muted">{{ .Slug }}</td>
           <td class="num">{{ .ProductCount }}</td>
           <td class="actions">
+            <a class="btn btn-icon btn-sm" href="/categories?edit={{ .ID }}#new-category" aria-label="Edit {{ .Name }}">{{ icon "pencil" }}</a>
             <ui-confirm title="Delete {{ .Name }}?" message="Its {{ .ProductCount }} products become uncategorised." confirm-label="Delete">
               <form method="POST" action="/categories" class="inline-form">
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
@@ -199,25 +200,35 @@
   {{ template "empty" dict "Icon" "category" "Text" "No categories yet." }}
   {{ end }}
   <section class="card stack" aria-labelledby="new-category">
-    <h2 id="new-category">New category</h2>
+    <h2 id="new-category">{{ if .EditCategoryID }}Edit category{{ else }}New category{{ end }}</h2>
     <form method="POST" action="/categories" class="form" data-submit-once>
       {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      {{ if .EditCategoryID }}
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="category_id" value="{{ .EditCategoryID }}">
+      {{ else }}
       <input type="hidden" name="action" value="create">
+      {{ end }}
       <div class="form-row">
         <div class="field">
           <label class="label" for="category_name">Name</label>
           <input class="input" type="text" id="category_name" name="name" value="{{ .CategoryForm.Name }}" maxlength="80" required>
         </div>
         <div class="field">
-          <label class="label" for="category_slug">Slug <span class="muted">(optional)</span></label>
-          <input class="input" type="text" id="category_slug" name="slug" value="{{ .CategoryForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none">
+          <label class="label" for="category_slug">Slug{{ if not .EditCategoryID }} <span class="muted">(optional)</span>{{ end }}</label>
+          <input class="input" type="text" id="category_slug" name="slug" value="{{ .CategoryForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none"{{ if .EditCategoryID }} disabled aria-describedby="category-slug-hint"{{ end }}>
+          {{ if .EditCategoryID }}<small class="hint" id="category-slug-hint">Slugs stay fixed so links keep working.</small>{{ end }}
         </div>
       </div>
       <div class="field">
         <label class="label" for="category_description">Description <span class="muted">(optional)</span></label>
         <input class="input" type="text" id="category_description" name="description" value="{{ .CategoryForm.Description }}" maxlength="500">
       </div>
+      {{ if .EditCategoryID }}
+      <div class="row"><button type="submit" class="btn">{{ icon "check" }}Save changes</button><a class="btn btn-secondary" href="/categories">Cancel</a></div>
+      {{ else }}
       <div><button type="submit" class="btn">{{ icon "plus" }}Add category</button></div>
+      {{ end }}
     </form>
   </section>
 {{ end }}
@@ -237,6 +248,7 @@
           <td class="muted">{{ if .ContactEmail }}{{ .ContactEmail }}{{ else }}–{{ end }}</td>
           <td><span class="badge {{ if eq .Status "active" }}badge-solid{{ else }}badge-muted{{ end }}">{{ .Status }}</span></td>
           <td class="actions">
+            <a class="btn btn-icon btn-sm" href="/partners?edit={{ .ID }}#new-partner" aria-label="Edit {{ .Name }}">{{ icon "pencil" }}</a>
             {{ if eq .Status "active" }}
             <ui-confirm title="Suspend {{ .Name }}?" message="Their products are hidden from customers and their logins are signed out and blocked." confirm-label="Suspend">
               <form method="POST" action="/partners" class="inline-form">
@@ -267,25 +279,34 @@
   {{ end }}
 
   <section class="card stack" aria-labelledby="new-partner">
-    <h2 id="new-partner">New partner</h2>
+    <h2 id="new-partner">{{ if .EditPartnerID }}Edit partner{{ else }}New partner{{ end }}</h2>
     <form method="POST" action="/partners" class="form" data-submit-once>
       {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      {{ if .EditPartnerID }}
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="partner_id" value="{{ .EditPartnerID }}">
+      {{ else }}
       <input type="hidden" name="action" value="create_partner">
+      {{ end }}
       <div class="form-row">
         <div class="field">
           <label class="label" for="partner_name">Name</label>
           <input class="input" type="text" id="partner_name" name="name" value="{{ .PartnerForm.Name }}" maxlength="120" required>
         </div>
         <div class="field">
-          <label class="label" for="partner_slug">Slug <span class="muted">(optional)</span></label>
-          <input class="input" type="text" id="partner_slug" name="slug" value="{{ .PartnerForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none">
+          <label class="label" for="partner_slug">Slug{{ if not .EditPartnerID }} <span class="muted">(optional)</span>{{ end }}</label>
+          <input class="input" type="text" id="partner_slug" name="slug" value="{{ .PartnerForm.Slug }}" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none"{{ if .EditPartnerID }} disabled{{ end }}>
         </div>
         <div class="field">
           <label class="label" for="partner_contact">Contact email <span class="muted">(optional)</span></label>
           <input class="input" type="email" id="partner_contact" name="contact_email" value="{{ .PartnerForm.ContactEmail }}">
         </div>
       </div>
+      {{ if .EditPartnerID }}
+      <div class="row"><button type="submit" class="btn">{{ icon "check" }}Save changes</button><a class="btn btn-secondary" href="/partners">Cancel</a></div>
+      {{ else }}
       <div><button type="submit" class="btn">{{ icon "plus" }}Add partner</button></div>
+      {{ end }}
     </form>
   </section>
 

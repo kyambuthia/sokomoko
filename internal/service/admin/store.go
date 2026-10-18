@@ -13,6 +13,8 @@ type store interface {
 	CreatePartner(partner db.Partner) (int64, error)
 	CreatePartnerUser(user db.User, partnerID int) (int64, error)
 	DeleteCategory(id int) error
+	UpdateCategory(category db.Category) error
+	UpdatePartnerDetails(id int, name, contactEmail string) (bool, error)
 	GetAllCategories() ([]db.Category, error)
 	GetCategoryByID(id int) (*db.Category, error)
 	GetPartnerByID(id int) (*db.Partner, error)

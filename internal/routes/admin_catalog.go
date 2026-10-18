@@ -39,6 +39,11 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 			case "delete":
 				err = svc.DeleteCategory(actor, r.FormValue("category_id"))
 				message = "Category deleted"
+			case "update":
+				page.CategoryForm = adminsvc.CategoryInput{Name: r.FormValue("name"), Description: r.FormValue("description")}
+				page.EditCategoryID, _ = strconv.Atoi(r.FormValue("category_id"))
+				err = svc.UpdateCategory(actor, r.FormValue("category_id"), page.CategoryForm)
+				message = "Category updated"
 			default:
 				page.CategoryForm = adminsvc.CategoryInput{
 					Name: r.FormValue("name"), Slug: r.FormValue("slug"), Description: r.FormValue("description"),
@@ -71,6 +76,22 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 		if page.Categories, err = svc.Categories(); err != nil {
 			serverError(w, r)
 			return
+		}
+		if r.Method == http.MethodGet {
+			editID, _ := strconv.Atoi(r.URL.Query().Get("edit"))
+			for _, c := range page.Categories {
+				if editID > 0 && c.ID == editID {
+					page.EditCategoryID = c.ID
+					page.CategoryForm = adminsvc.CategoryInput{Name: c.Name, Slug: c.Slug, Description: c.Description}
+				}
+			}
+		}
+		if page.EditCategoryID > 0 {
+			for _, c := range page.Categories {
+				if c.ID == page.EditCategoryID {
+					page.CategoryForm.Slug = c.Slug
+				}
+			}
 		}
 		renderAdminPage(a, w, r, status, page)
 	}
@@ -105,6 +126,11 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 				if newStatus == "suspended" {
 					message = "Partner suspended. Their products are hidden from customers."
 				}
+			case "update":
+				page.PartnerForm = adminsvc.PartnerInput{Name: r.FormValue("name"), ContactEmail: r.FormValue("contact_email")}
+				page.EditPartnerID, _ = strconv.Atoi(r.FormValue("partner_id"))
+				err = svc.UpdatePartner(actor, r.FormValue("partner_id"), page.PartnerForm)
+				message = "Partner updated"
 			case "create_account":
 				page.AccountForm = adminsvc.PartnerAccountInput{
 					PartnerID: r.FormValue("partner_id"), Username: r.FormValue("username"), Email: r.FormValue("email"),
@@ -150,6 +176,22 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 		if page.Partners, page.PartnerAccounts, err = svc.Partners(); err != nil {
 			serverError(w, r)
 			return
+		}
+		if r.Method == http.MethodGet {
+			editID, _ := strconv.Atoi(r.URL.Query().Get("edit"))
+			for _, p := range page.Partners {
+				if editID > 0 && p.ID == editID {
+					page.EditPartnerID = p.ID
+					page.PartnerForm = adminsvc.PartnerInput{Name: p.Name, Slug: p.Slug, ContactEmail: p.ContactEmail}
+				}
+			}
+		}
+		if page.EditPartnerID > 0 {
+			for _, p := range page.Partners {
+				if p.ID == page.EditPartnerID {
+					page.PartnerForm.Slug = p.Slug
+				}
+			}
 		}
 		renderAdminPage(a, w, r, status, page)
 	}

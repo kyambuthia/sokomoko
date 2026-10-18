@@ -89,7 +89,9 @@ type AdminService interface {
 	CreatePartnerAccount(actor *adminsvc.Actor, input adminsvc.PartnerAccountInput) error
 	Partners() ([]adminsvc.Partner, []adminsvc.PartnerAccount, error)
 	SetPartnerStatus(actor *adminsvc.Actor, idRaw, status string) error
+	UpdatePartner(actor *adminsvc.Actor, idRaw string, input adminsvc.PartnerInput) error
 	DeleteCategory(actor *adminsvc.Actor, idRaw string) error
+	UpdateCategory(actor *adminsvc.Actor, idRaw string, input adminsvc.CategoryInput) error
 	DeactivateUser(actor *adminsvc.Actor, userIDRaw string) error
 	ReactivateUser(actor *adminsvc.Actor, userIDRaw string) error
 	DeactivatedMembers() ([]adminsvc.TeamMember, error)

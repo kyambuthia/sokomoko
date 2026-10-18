@@ -41,9 +41,11 @@ type AdminPageData struct {
 	FormMessage     string
 	Categories      []adminsvc.Category
 	CategoryForm    adminsvc.CategoryInput
+	EditCategoryID  int // the category form edits this category
 	Partners        []adminsvc.Partner
 	PartnerAccounts []adminsvc.PartnerAccount
 	PartnerForm     adminsvc.PartnerInput
+	EditPartnerID   int // the partner form edits this partner
 	AccountForm     adminsvc.PartnerAccountInput
 
 	Pricing           paymentsvc.Pricing
