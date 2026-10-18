@@ -70,6 +70,8 @@ type Order struct {
 	DeliveryAddress string
 	TotalAmount     money.Cents
 	CreatedAt       time.Time
+	PaymentMethod   string
+	PaymentStatus   string
 	Items           []OrderItem
 }
 
@@ -171,6 +173,8 @@ func (s *Service) Orders() ([]Order, error) {
 			DeliveryAddress: order.DeliveryAddress,
 			TotalAmount:     order.TotalAmount,
 			CreatedAt:       order.CreatedAt,
+			PaymentMethod:   order.PaymentMethod,
+			PaymentStatus:   order.PaymentStatus,
 			Items:           items,
 		})
 	}

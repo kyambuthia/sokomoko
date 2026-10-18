@@ -69,6 +69,12 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/cart/remove", customer(CartRemove(a)))
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
+	mux.Handle("/payments/order/{id}", customer(PaymentPage(a)))
+	mux.Handle("/payments/return", customer(PaymentReturn(a)))
+	// Provider servers call these without a session; they authenticate with
+	// a signature (webhooks) or a per-payment secret URL (callbacks).
+	mux.HandleFunc("/payments/webhooks/{provider}", PaymentWebhook(a))
+	mux.HandleFunc("/payments/callback/{provider}/{token}", PaymentCallback(a))
 }
 
 // RegisterAdmin wires the platform administration host.
@@ -115,6 +121,7 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 	adminHandlers.Handle("/audit", auth.RequireRole(db.RoleAdmin, http.HandlerFunc(AdminAudit(a))))
 	adminHandlers.Handle("/team", auth.RequireRole(db.RoleAdmin, http.HandlerFunc(AdminTeam(a))))
 	adminHandlers.Handle("/partners", auth.RequireRole(db.RoleAdmin, http.HandlerFunc(AdminPartners(a))))
+	adminHandlers.Handle("/payments", auth.RequireRole(db.RoleAdmin, http.HandlerFunc(AdminPayments(a))))
 	mux.Handle("/", withAnyRole(a, roleAdminStaff, adminHandlers))
 }
 

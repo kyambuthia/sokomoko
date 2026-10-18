@@ -4,9 +4,14 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/money"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
+	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
 // AdminCategories lists categories and handles create and delete actions.
@@ -147,4 +152,101 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 		}
 		renderAdminPage(a, w, r, status, page)
 	}
+}
+
+// AdminPayments manages the store currency, pricing, and payment providers.
+func AdminPayments(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
+			return
+		}
+		metrics, err := loadAdminMetrics(a.Admin)
+		if err != nil {
+			serverError(w, r)
+			return
+		}
+		page := newAdminPage(metrics, adminRoleFromContext(r), "Payments", "")
+		status := http.StatusOK
+		user := requestUserFromContext(r)
+		actor := &paymentsvc.Actor{ID: user.ID, Role: user.Role}
+
+		if r.Method == http.MethodPost {
+			var message string
+			switch r.FormValue("action") {
+			case "pricing":
+				var saved paymentsvc.Pricing
+				saved, err = a.Payment.SavePricing(actor, paymentsvc.PricingInput{
+					Currency:              r.FormValue("currency"),
+					ShippingFlat:          r.FormValue("shipping_flat"),
+					FreeShippingThreshold: r.FormValue("free_shipping_threshold"),
+					TaxRatePercent:        r.FormValue("tax_rate"),
+				})
+				if err == nil {
+					ui.SetCurrency(saved.Currency)
+				}
+				message = "Currency and pricing saved"
+			default:
+				id := r.FormValue("provider")
+				input := paymentsvc.ProviderInput{
+					Enabled: r.FormValue("enabled") == "1",
+					Mode:    r.FormValue("mode"),
+					Values:  map[string]string{},
+				}
+				for key, values := range r.PostForm {
+					if field, ok := strings.CutPrefix(key, "field_"); ok && len(values) > 0 {
+						input.Values[field] = values[0]
+					}
+				}
+				err = a.Payment.SaveProvider(actor, id, input)
+				message = "Payment method saved"
+				page.FormProvider = id
+			}
+			switch {
+			case err == nil:
+				redirectWithFlash(w, r, "/payments", "success", message)
+				return
+			case errors.Is(err, paymentsvc.ErrForbidden):
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			case errors.Is(err, db.ErrCurrencyLocked):
+				page.FormError = "The currency cannot change after orders exist, because existing prices are stored in the current currency."
+			case errors.Is(err, paymentsvc.ErrSecretsKeyMissing):
+				page.FormError = "Set SECRETS_KEY on the server to store payment credentials."
+			case errors.Is(err, paymentsvc.ErrLastMethod):
+				page.FormError = "Keep at least one payment method enabled, or customers cannot check out."
+			case errors.Is(err, paymentsvc.ErrMissingFields), errors.Is(err, paymentsvc.ErrCurrencyMismatch),
+				errors.Is(err, paymentsvc.ErrInvalidPricing), errors.Is(err, paymentsvc.ErrUnknownProvider):
+				page.FormError = sentence(err)
+			default:
+				log.Printf("admin payments: %v", err)
+				page.FormError = "Unable to save payment settings."
+			}
+			status = http.StatusBadRequest
+		} else if flash := popFlash(w, r); flash.Message != "" {
+			page.FormMessage = flash.Message
+		}
+
+		if page.Pricing, err = a.Payment.Pricing(); err != nil {
+			serverError(w, r)
+			return
+		}
+		if page.Providers, err = a.Payment.Providers(); err != nil {
+			serverError(w, r)
+			return
+		}
+		page.Currencies = money.Currencies
+		page.SecretsConfigured = a.Payment.SecretsConfigured()
+		page.PublicBase = a.PublicBase(r)
+		renderAdminPage(a, w, r, status, page)
+	}
+}
+
+// sentence capitalises an error message for display.
+func sentence(err error) string {
+	msg := err.Error()
+	if msg == "" {
+		return msg
+	}
+	return strings.ToUpper(msg[:1]) + msg[1:] + "."
 }

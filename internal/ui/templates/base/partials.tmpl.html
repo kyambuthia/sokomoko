@@ -7,7 +7,7 @@
   </div>
   <a class="product__name" href="/products/{{ .P.Slug }}">{{ .P.Name }}</a>
   <div class="product__meta">
-    <span class="product__price">${{ .P.Price }}</span>
+    <span class="product__price">{{ money .P.Price }}</span>
     {{ if .P.InStock }}
     <ui-add-to-cart>
       <form action="/cart/add" method="POST" class="product__add">

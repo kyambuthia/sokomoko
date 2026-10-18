@@ -18,6 +18,10 @@ var (
 	ErrPaymentAmountMatch = errors.New("payment amount or currency does not match")
 )
 
+// UnpaidOrderTTL is how long an online order waits for payment before
+// maintenance cancels it and releases its stock.
+const UnpaidOrderTTL = 30 * time.Minute
+
 // CommerceSettings are the marketplace-wide money rules.
 type CommerceSettings struct {
 	Currency              string
@@ -210,10 +214,25 @@ func (s *Store) GetPaymentByReference(provider, reference string) (*OnlinePaymen
 		onlinePaymentSelect+" WHERE p.provider = $1 AND p.external_reference = $2", provider, reference))
 }
 
+// GetPaymentByCallbackToken finds the payment whose current attempt was given
+// the callback token with this SHA-256 hash.
+func (s *Store) GetPaymentByCallbackToken(provider, tokenHash string) (*OnlinePayment, error) {
+	if strings.TrimSpace(tokenHash) == "" {
+		return nil, ErrPaymentNotFound
+	}
+	ctx, cancel := s.ctx()
+	defer cancel()
+	return scanOnlinePayment(s.DB.QueryRowContext(ctx,
+		onlinePaymentSelect+" WHERE p.provider = $1 AND p.callback_token_hash = $2", provider, tokenHash))
+}
+
 // StartPaymentAttempt records that a provider request is being made for a
 // pending payment: the new external reference, the hashed callback token,
 // and the provider payload (for example M-Pesa request IDs).
 func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash string, payload map[string]string) error {
+	if payload == nil {
+		payload = map[string]string{} // a JSON null would turn later merges into arrays
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -244,6 +263,9 @@ func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash 
 // UpdatePaymentPayload merges provider identifiers into the payment, for
 // example the M-Pesa CheckoutRequestID returned after an STK push.
 func (s *Store) UpdatePaymentPayload(paymentID int, payload map[string]string) error {
+	if payload == nil {
+		payload = map[string]string{}
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err

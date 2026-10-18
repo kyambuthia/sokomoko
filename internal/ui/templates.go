@@ -10,6 +10,7 @@ type Templates struct {
 	Product              *template.Template
 	Cart                 *template.Template
 	Checkout             *template.Template
+	Payment              *template.Template
 	Account              *template.Template
 	Admin                *template.Template
 	AdminLogin           *template.Template
@@ -63,6 +64,10 @@ func ParseTemplates() (*Templates, error) {
 	}
 
 	checkoutTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/checkout.html")
+	if err != nil {
+		return nil, err
+	}
+	paymentTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/payment.html")
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +148,7 @@ func ParseTemplates() (*Templates, error) {
 		Product:              productTmpl,
 		Cart:                 cartTmpl,
 		Checkout:             checkoutTmpl,
+		Payment:              paymentTmpl,
 		Account:              accountTmpl,
 		Admin:                adminTmpl,
 		AdminLogin:           adminLoginTmpl,

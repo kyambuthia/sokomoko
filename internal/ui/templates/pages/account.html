@@ -23,11 +23,18 @@
       <li class="card stack-sm" id="order-{{ .ID }}" data-order>
         <div class="row-between">
           <span class="strong">#{{ .ID }}</span>
-          <span class="strong">${{ .TotalAmount }}</span>
+          <span class="strong">{{ money .TotalAmount }}</span>
         </div>
+        {{ if .AwaitingPayment }}
+        <div class="row-between">
+          <span class="badge badge-solid">awaiting payment</span>
+          <a class="btn btn-sm" href="/payments/order/{{ .ID }}">Pay now</a>
+        </div>
+        {{ else }}
         <ui-order-progress order-id="{{ .ID }}" status="{{ .Status }}" partner-status="{{ .PartnerStatus }}" delivery-status="{{ .DeliveryStatus }}">
           <p class="small">{{ .Status }} · {{ .DeliveryStatus }}</p>
         </ui-order-progress>
+        {{ end }}
         {{ if and .DeliveryNotice (ne .PartnerStatus "new") }}<p class="small muted" data-order-notice>{{ .DeliveryNotice }}</p>{{ end }}
         <p class="tiny muted">
           <ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2 Jan 2006" }}</ui-relative-time>

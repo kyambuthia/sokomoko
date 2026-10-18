@@ -3,7 +3,7 @@
 // without JavaScript. See docs/design.md for the catalogue.
 import { UIAddToCart, UICartBadge, UICartLine } from "./ui/cart.js";
 import { UIConfirm } from "./ui/confirm.js";
-import { UIOrderForm, UIOrderProgress } from "./ui/order.js";
+import { UIOrderForm, UIOrderProgress, UIPaymentStatus } from "./ui/order.js";
 import { UIPassword } from "./ui/password.js";
 import { UIQuantity } from "./ui/quantity.js";
 import { UISearch } from "./ui/search.js";
@@ -22,6 +22,7 @@ const components = {
   "ui-order-form": UIOrderForm,
   "ui-order-progress": UIOrderProgress,
   "ui-password": UIPassword,
+  "ui-payment-status": UIPaymentStatus,
   "ui-quantity": UIQuantity,
   "ui-relative-time": UIRelativeTime,
   "ui-search": UISearch,

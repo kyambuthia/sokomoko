@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/kyambuthia/sokomoko/internal/secret"
 )
 
 const (
@@ -55,11 +57,17 @@ type Config struct {
 	AuthAbuseBackoffMax  int
 
 	PasswordResetBaseURL string
-	SMTPHost             string
-	SMTPPort             string
-	SMTPUsername         string
-	SMTPPassword         string
-	SMTPFrom             string
+	// PublicBaseURL is the public storefront origin used in payment return and
+	// callback URLs. It defaults to PASSWORD_RESET_BASE_URL.
+	PublicBaseURL string
+	// SecretsKey (base64, 32 bytes) seals payment provider credentials.
+	SecretsKey string
+
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 func LoadFromEnv() Config {
@@ -89,6 +97,8 @@ func LoadFromEnv() Config {
 		AuthAbuseBackoffBase: readInt("AUTH_ABUSE_BACKOFF_BASE_SECONDS", defaultAuthAbuseBackoffBaseSeconds),
 		AuthAbuseBackoffMax:  readInt("AUTH_ABUSE_BACKOFF_MAX_SECONDS", defaultAuthAbuseBackoffMaxSeconds),
 		PasswordResetBaseURL: strings.TrimSpace(os.Getenv("PASSWORD_RESET_BASE_URL")),
+		PublicBaseURL:        strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")),
+		SecretsKey:           strings.TrimSpace(os.Getenv("SECRETS_KEY")),
 		SMTPHost:             strings.TrimSpace(strings.ToLower(os.Getenv("SMTP_HOST"))),
 		SMTPPort:             readEnv("SMTP_PORT", defaultSMTPPort),
 		SMTPUsername:         strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
@@ -98,6 +108,9 @@ func LoadFromEnv() Config {
 	cfg.loadErrors = loadErrors
 	if cfg.DatabaseURL == "" {
 		cfg.DatabaseURL = defaultDatabaseURL
+	}
+	if cfg.PublicBaseURL == "" {
+		cfg.PublicBaseURL = cfg.PasswordResetBaseURL
 	}
 	if cfg.LogFormat == "" {
 		cfg.LogFormat = "text"
@@ -170,6 +183,19 @@ func (c Config) Validate() error {
 			problems = append(problems, "PASSWORD_RESET_BASE_URL must be an absolute HTTP(S) origin")
 		} else if c.IsProduction() && (u.Scheme != "https" || !hosts[strings.ToLower(u.Hostname())]) {
 			problems = append(problems, "PASSWORD_RESET_BASE_URL must use HTTPS and a host from ALLOWED_HOSTS in production")
+		}
+	}
+	if c.PublicBaseURL != "" {
+		u, err := url.Parse(c.PublicBaseURL)
+		if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") || (u.Scheme != "http" && u.Scheme != "https") {
+			problems = append(problems, "PUBLIC_BASE_URL must be an absolute HTTP(S) origin")
+		} else if c.IsProduction() && (u.Scheme != "https" || !hosts[strings.ToLower(u.Hostname())]) {
+			problems = append(problems, "PUBLIC_BASE_URL must use HTTPS and a host from ALLOWED_HOSTS in production")
+		}
+	}
+	if c.SecretsKey != "" {
+		if _, err := secret.New(c.SecretsKey); err != nil {
+			problems = append(problems, "SECRETS_KEY must be 32 random bytes encoded as base64 (openssl rand -base64 32)")
 		}
 	}
 	if c.SessionCookieDomain != "" {

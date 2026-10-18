@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"errors"
+	"github.com/kyambuthia/sokomoko/internal/money"
 	"html/template"
 	"reflect"
 	"time"
@@ -13,6 +14,9 @@ func templateFuncs() template.FuncMap {
 		"asset":    AssetURL,
 		"icon":     Icon,
 		"list":     list,
+		"money":    FormatMoney,
+		"percent":  basisPoints,
+		"currency": Currency,
 		"field":    field,
 		"signedIn": signedIn,
 		"dict":     dict,
@@ -52,6 +56,9 @@ func Icon(name string) template.HTML {
 	href := AssetURL("icons/sprite.svg") + "#i-" + template.HTMLEscapeString(name)
 	return template.HTML(`<svg class="icon" aria-hidden="true" focusable="false"><use href="` + href + `"></use></svg>`)
 }
+
+// basisPoints renders basis points as a percentage, 800 -> "8.00".
+func basisPoints(bp int64) string { return money.Cents(bp).String() }
 
 // list builds a string slice in templates, for example the options of a
 // status select.

@@ -23,22 +23,34 @@
       <fieldset class="field">
         <legend class="label">Payment</legend>
         {{ range .PaymentMethods }}
-        <label class="choice"><input type="radio" name="payment_method" value="{{ .Value }}" {{ if eq $.PaymentMethod .Value }}checked{{ end }} required>{{ .Label }}</label>
+        <label class="choice">
+          <input type="radio" name="payment_method" value="{{ .Value }}" {{ if eq $.PaymentMethod .Value }}checked{{ end }} {{ if .NeedsPhone }}data-needs-phone{{ end }} required>
+          <span class="choice__body"><span>{{ .Label }}{{ if .TestMode }} <span class="badge badge-muted">test</span>{{ end }}</span>{{ if .Summary }}<span class="tiny muted">{{ .Summary }}</span>{{ end }}</span>
+        </label>
+        {{ else }}
+        <p class="small muted">No payment method is available yet.</p>
         {{ end }}
       </fieldset>
-      <button type="submit" class="btn btn-block">Place order · ${{ .TotalAmount }}</button>
+      {{ if .NeedsPhone }}
+      <div class="field phone-field">
+        <label class="label" for="phone">M-Pesa number</label>
+        <input class="input" type="tel" id="phone" name="phone" value="{{ $.Phone }}" autocomplete="tel" inputmode="tel" placeholder="0712 345 678">
+        <small class="hint">You approve the payment on this phone.</small>
+      </div>
+      {{ end }}
+      <button type="submit" class="btn btn-block">Place order · {{ money .TotalAmount }}</button>
     </form>
     <aside class="card stack sticky order-first-mobile" aria-label="Order summary">
       <ul class="stack-sm">
         {{ range .Items }}
-        <li class="row-between small"><span class="truncate">{{ .ProductName }} <span class="muted">× {{ .Quantity }}</span></span><span>${{ .LineTotal }}</span></li>
+        <li class="row-between small"><span class="truncate">{{ .ProductName }} <span class="muted">× {{ .Quantity }}</span></span><span>{{ money .LineTotal }}</span></li>
         {{ end }}
       </ul>
       <dl class="kv small">
-        <div><dt>Subtotal</dt><dd>${{ .Subtotal }}</dd></div>
-        <div><dt>Shipping</dt><dd>{{ if eq .ShippingFee 0 }}Free{{ else }}${{ .ShippingFee }}{{ end }}</dd></div>
-        <div><dt>Tax (est.)</dt><dd>${{ .TaxAmount }}</dd></div>
-        <div class="total"><dt>Total</dt><dd>${{ .TotalAmount }}</dd></div>
+        <div><dt>Subtotal</dt><dd>{{ money .Subtotal }}</dd></div>
+        <div><dt>Shipping</dt><dd>{{ if eq .ShippingFee 0 }}Free{{ else }}{{ money .ShippingFee }}{{ end }}</dd></div>
+        <div><dt>Tax (est.)</dt><dd>{{ money .TaxAmount }}</dd></div>
+        <div class="total"><dt>Total</dt><dd>{{ money .TotalAmount }}</dd></div>
       </dl>
     </aside>
   </div>

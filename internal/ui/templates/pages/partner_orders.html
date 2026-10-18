@@ -24,13 +24,13 @@
     <li class="card stack-sm" data-order>
       <div class="row-between">
         <span class="strong">#{{ .ID }} · {{ .CustomerName }}</span>
-        <span class="strong">${{ .TotalAmount }}</span>
+        <span class="strong">{{ money .TotalAmount }}</span>
       </div>
       <div class="row">
         <span class="badge badge-solid" data-badge="partner_status">{{ .PartnerStatus }}</span>
         <span class="badge" data-badge="delivery_status">{{ .DeliveryStatus }}</span>
       </div>
-      <ul class="small">{{ range .Items }}<li>{{ .ProductName }} × {{ .Quantity }} - ${{ .LineTotal }}</li>{{ end }}</ul>
+      <ul class="small">{{ range .Items }}<li>{{ .ProductName }} × {{ .Quantity }} - {{ money .LineTotal }}</li>{{ end }}</ul>
       <p class="tiny muted">{{ icon "map-pin" }} {{ .DeliveryAddress }}</p>
       <details>
         <summary class="btn btn-secondary btn-sm">Update</summary>

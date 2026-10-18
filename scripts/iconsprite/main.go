@@ -65,6 +65,7 @@ var icons = [][2]string{
 	{"user", "user"},
 	{"user-plus", "user-plus"},
 	{"users", "users"},
+	{"wallet", "wallet"},
 	{"warning", "alert-triangle"},
 	{"x", "x"},
 }

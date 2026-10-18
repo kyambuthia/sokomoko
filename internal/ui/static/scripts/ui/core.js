@@ -42,9 +42,17 @@ export function announceCart(cart) {
 
 const moneyFormat = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Prefixes match internal/money.Currencies so client and server agree.
+const currencyPrefix = {
+  USD: "$", KES: "KES ", NGN: "₦", GHS: "GH₵", ZAR: "R ", UGX: "UGX ", TZS: "TZS ", RWF: "RWF ", EUR: "€", GBP: "£",
+};
+
 export function money(amount) {
   const value = Number(amount);
-  return Number.isFinite(value) ? `$${moneyFormat.format(value)}` : "";
+  if (!Number.isFinite(value)) return "";
+  const code = document.querySelector('meta[name="currency"]')?.content || "USD";
+  const prefix = currencyPrefix[code] ?? `${code} `;
+  return `${value < 0 ? "-" : ""}${prefix}${moneyFormat.format(Math.abs(value))}`;
 }
 
 export function icon(name) {

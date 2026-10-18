@@ -7,6 +7,8 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
+	"github.com/kyambuthia/sokomoko/internal/payments"
+	"github.com/kyambuthia/sokomoko/internal/secret"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
@@ -23,7 +25,8 @@ func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 
 	cleanup := func() { _ = store.Close() }
 
-	return New(store, paymentsvc.New()), store, cleanup
+	paymentService := paymentsvc.New(store, payments.NewRegistry(payments.Options{}), secret.Development())
+	return New(store, paymentService), store, cleanup
 }
 
 func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
@@ -78,14 +81,19 @@ func TestCheckout_ValidationErrors(t *testing.T) {
 }
 
 func TestCalculateSummary(t *testing.T) {
-	summary := CalculateSummary(2000)
+	summary := CalculateSummary(2000, DefaultPricing())
 	if summary.Subtotal != 2000 || summary.ShippingFee != 650 || summary.TaxAmount != 160 || summary.Total != 2810 {
 		t.Fatalf("summary = %+v, want 20.00 + 6.50 + 1.60 = 28.10", summary)
 	}
 
-	free := CalculateSummary(8000)
+	free := CalculateSummary(8000, DefaultPricing())
 	if free.ShippingFee != 0 || free.Total != 8640 {
 		t.Fatalf("free shipping summary = %+v", free)
+	}
+
+	kes := Pricing{Currency: "KES", ShippingFlat: 20000, FreeShippingThreshold: 0, TaxRateBP: 1600}
+	if s := CalculateSummary(1000000, kes); s.ShippingFee != 20000 || s.TaxAmount != 160000 || s.Total != 1180000 {
+		t.Fatalf("KES summary with free shipping off = %+v", s)
 	}
 }
 
@@ -342,7 +350,7 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	key, err := paymentsvc.New().GenerateIdempotencyKey()
+	key, err := svc.payments.GenerateIdempotencyKey()
 	if err != nil {
 		t.Fatalf("generate key error = %v", err)
 	}

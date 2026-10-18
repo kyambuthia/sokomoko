@@ -29,6 +29,9 @@ type Order struct {
 	TotalAmount     money.Cents
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	PaymentMethod   string
+	PaymentStatus   string
+	AwaitingPayment bool // online payment still outstanding
 	Items           []OrderItem
 }
 
@@ -90,6 +93,9 @@ func mapOrder(order db.Order) Order {
 		TotalAmount:     order.TotalAmount,
 		CreatedAt:       order.CreatedAt,
 		UpdatedAt:       order.UpdatedAt,
+		PaymentMethod:   order.PaymentMethod,
+		PaymentStatus:   order.PaymentStatus,
+		AwaitingPayment: order.AwaitingPayment(),
 		Items:           items,
 	}
 }

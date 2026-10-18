@@ -21,6 +21,7 @@
     <a class="ws-nav__link" href="/reports" {{ if eq .Title "Sales Reports" }}aria-current="page"{{ end }}>{{ icon "chart" }}Reports</a>
     {{ if eq .Role "admin" }}
     <span class="ws-nav__sep" aria-hidden="true"></span>
+    <a class="ws-nav__link" href="/payments" {{ if eq .Title "Payments" }}aria-current="page"{{ end }}>{{ icon "wallet" }}Payments</a>
     <a class="ws-nav__link" href="/partners" {{ if eq .Title "Partners" }}aria-current="page"{{ end }}>{{ icon "store" }}Partners</a>
     <a class="ws-nav__link" href="/team" {{ if eq .Title "Team Management" }}aria-current="page"{{ end }}>{{ icon "users" }}Team</a>
     <a class="ws-nav__link" href="/staff/signup" {{ if eq .Title "Staff Account Setup" }}aria-current="page"{{ end }}>{{ icon "user-plus" }}Add staff</a>

@@ -200,9 +200,19 @@ func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, e
 const orderSelect = `
 SELECT o.id, o.user_id, u.username, o.status, o.partner_status, o.delivery_status, o.inventory_state,
        o.delivery_address, o.delivery_notice, o.currency,
-       o.subtotal_cents, o.shipping_cents, o.tax_cents, o.total_cents, o.created_at, o.updated_at
+       o.subtotal_cents, o.shipping_cents, o.tax_cents, o.total_cents, o.created_at, o.updated_at,
+       COALESCE(pay.method, ''), COALESCE(pay.status, '')
 FROM orders o
-JOIN users u ON u.id = o.user_id`
+JOIN users u ON u.id = o.user_id
+LEFT JOIN LATERAL (
+    SELECT p.method, p.status FROM payments p WHERE p.order_id = o.id ORDER BY p.id DESC LIMIT 1
+) pay ON true`
+
+// paymentSettledSQL matches orders a partner may fulfil: cash on delivery,
+// or online payments that have been captured.
+const paymentSettledSQL = `NOT EXISTS (
+    SELECT 1 FROM payments pp
+    WHERE pp.order_id = o.id AND pp.method <> 'cash_on_delivery' AND pp.status <> 'captured')`
 
 func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 	order := &Order{}
@@ -210,7 +220,7 @@ func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 		&order.ID, &order.UserID, &order.CustomerName, &order.Status, &order.PartnerStatus,
 		&order.DeliveryStatus, &order.InventoryState, &order.DeliveryAddress, &order.DeliveryNotice,
 		&order.Currency, &order.Subtotal, &order.ShippingFee, &order.TaxAmount, &order.TotalAmount,
-		&order.CreatedAt, &order.UpdatedAt,
+		&order.CreatedAt, &order.UpdatedAt, &order.PaymentMethod, &order.PaymentStatus,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -298,16 +308,17 @@ func (s *Store) ListOrdersByUser(userID int) ([]Order, error) {
 	return s.listOrders(ctx, "WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC", userID)
 }
 
-// ListOrdersForFulfillment returns every order that is not cancelled.
+// ListOrdersForFulfillment returns every order that is not cancelled and is
+// either cash on delivery or paid online.
 func (s *Store) ListOrdersForFulfillment() ([]Order, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
-	return s.listOrders(ctx, "WHERE o.status <> 'cancelled' ORDER BY o.created_at DESC, o.id DESC")
+	return s.listOrders(ctx, "WHERE o.status <> 'cancelled' AND "+paymentSettledSQL+" ORDER BY o.created_at DESC, o.id DESC")
 }
 
 // partnerOwnsOrderSQL matches open orders with at least one line where every
 // line belongs to the partner in parameter $1.
-const partnerOwnsOrderSQL = `o.status <> 'cancelled'
+const partnerOwnsOrderSQL = `o.status <> 'cancelled' AND ` + paymentSettledSQL + `
 	AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id)
 	AND NOT EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.partner_id IS DISTINCT FROM $1)`
 

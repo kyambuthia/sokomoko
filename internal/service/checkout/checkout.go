@@ -20,23 +20,40 @@ var (
 )
 
 const (
-	shippingFeeFlat       money.Cents = 650
-	freeShippingThreshold money.Cents = 8000
-	estimatedTaxRateBP                = 800 // 8%
-	currency                          = "USD"
-	defaultPaymentMethod              = paymentsvc.MethodCashOnDelivery
-	deliveryNoticePrefix              = "Order received. Awaiting partner acceptance."
-	maxDeliveryAddressLen             = 500
+	defaultPaymentMethod  = paymentsvc.MethodCashOnDelivery
+	deliveryNoticePrefix  = "Order received. Awaiting partner acceptance."
+	maxDeliveryAddressLen = 500
 
 	// ReservationHoldTTL is how long stock stays held for an open checkout.
 	ReservationHoldTTL = 15 * time.Minute
 )
 
+// Pricing is the store's money rules for a checkout.
+type Pricing struct {
+	Currency              string
+	ShippingFlat          money.Cents
+	FreeShippingThreshold money.Cents // 0 disables free shipping
+	TaxRateBP             int64
+}
+
+// DefaultPricing matches the defaults seeded by migration 0003.
+func DefaultPricing() Pricing {
+	return Pricing{Currency: "USD", ShippingFlat: 650, FreeShippingThreshold: 8000, TaxRateBP: 800}
+}
+
+func pricingFrom(settings db.CommerceSettings) Pricing {
+	return Pricing{
+		Currency:              settings.Currency,
+		ShippingFlat:          settings.ShippingFlat,
+		FreeShippingThreshold: settings.FreeShippingThreshold,
+		TaxRateBP:             settings.TaxRateBP,
+	}
+}
+
 type paymentService interface {
-	BuildRecord(method string, totalAmount money.Cents) (db.PaymentRecordInput, error)
+	BuildRecord(method string, totalAmount money.Cents, currency string) (db.PaymentRecordInput, error)
 	GenerateIdempotencyKey() (string, error)
-	IsSupportedMethod(method string) bool
-	MethodLabel(method string) string
+	IsSupportedMethod(method, currency string) bool
 }
 
 type Summary struct {
@@ -75,20 +92,17 @@ func New(store *db.Store, payments paymentService) *Service {
 }
 
 func newWithStore(store store, payments paymentService) *Service {
-	if payments == nil {
-		payments = paymentsvc.New()
-	}
 	return &Service{store: store, payments: payments, now: time.Now}
 }
 
 // CalculateSummary prices a subtotal: flat shipping below the free-shipping
 // threshold plus estimated tax on the subtotal.
-func CalculateSummary(subtotal money.Cents) Summary {
-	shipping := shippingFeeFlat
-	if subtotal >= freeShippingThreshold || subtotal == 0 {
+func CalculateSummary(subtotal money.Cents, pricing Pricing) Summary {
+	shipping := pricing.ShippingFlat
+	if subtotal == 0 || (pricing.FreeShippingThreshold > 0 && subtotal >= pricing.FreeShippingThreshold) {
 		shipping = 0
 	}
-	tax := subtotal.MulBasisPoints(estimatedTaxRateBP)
+	tax := subtotal.MulBasisPoints(pricing.TaxRateBP)
 	return Summary{
 		Subtotal:    subtotal,
 		ShippingFee: shipping,
@@ -133,7 +147,7 @@ func (s *Service) SaveDraft(userID int, checkoutToken string, deliveryAddress st
 		}
 		key = state.Token
 	}
-	if !s.payments.IsSupportedMethod(paymentMethod) {
+	if paymentMethod != "" && !s.payments.IsSupportedMethod(paymentMethod, "") {
 		paymentMethod = ""
 	}
 	address := truncate(strings.TrimSpace(deliveryAddress), maxDeliveryAddressLen)
@@ -185,10 +199,15 @@ func (s *Service) Prepare(userID int, reservationKey string) error {
 		})
 	}
 
-	summary := CalculateSummary(subtotal)
+	settings, err := s.store.GetCommerceSettings()
+	if err != nil {
+		return err
+	}
+	pricing := pricingFrom(settings)
+	summary := CalculateSummary(subtotal, pricing)
 	_, err = s.store.UpsertCheckout(userID, db.CheckoutInput{
 		Token:          key,
-		Currency:       currency,
+		Currency:       pricing.Currency,
 		PaymentMethod:  defaultPaymentMethod,
 		SubtotalAmount: summary.Subtotal,
 		ShippingFee:    summary.ShippingFee,
@@ -214,7 +233,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	if method == "" {
 		method = defaultPaymentMethod
 	}
-	if !s.payments.IsSupportedMethod(method) {
+	if !s.payments.IsSupportedMethod(method, "") {
 		return 0, Summary{}, ErrInvalidPaymentMethod
 	}
 
@@ -241,7 +260,10 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	}
 
 	summary := summaryFromCheckout(record)
-	paymentRecord, err := s.payments.BuildRecord(method, summary.Total)
+	if !s.payments.IsSupportedMethod(method, record.Currency) {
+		return 0, Summary{}, ErrInvalidPaymentMethod
+	}
+	paymentRecord, err := s.payments.BuildRecord(method, summary.Total, record.Currency)
 	if err != nil {
 		return 0, Summary{}, err
 	}

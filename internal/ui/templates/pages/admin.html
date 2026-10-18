@@ -13,6 +13,9 @@
     <div class="stat"><dt>Admins</dt><dd>{{ .AdminCount }}</dd></div>
     <div class="stat"><dt>Sessions</dt><dd>{{ .SessionCount }}</dd></div>
   </dl>
+  {{ if and (eq .Role "admin") (not .OnlinePayments) }}
+  <a class="notice" href="/payments">{{ icon "info" }}<p>Only cash on delivery is on. Set up M-Pesa or Paystack.</p></a>
+  {{ end }}
   <nav class="list" aria-label="Shortcuts">
     <a class="list-item" href="/orders">{{ icon "orders" }}<span>Orders</span>{{ icon "chevron-right" }}</a>
     <a class="list-item" href="/deliveries">{{ icon "truck" }}<span>Deliveries</span>{{ icon "chevron-right" }}</a>
@@ -39,7 +42,7 @@
           <td>{{ .Name }}</td>
           <td class="muted">{{ if .Category }}{{ .Category }}{{ else }}–{{ end }}</td>
           <td class="muted">{{ if .PartnerName }}{{ .PartnerName }}{{ else }}–{{ end }}</td>
-          <td class="num">${{ .Price }}</td>
+          <td class="num">{{ money .Price }}</td>
           <td class="num">{{ if gt .StockQuantity 0 }}{{ .StockQuantity }}{{ else }}<span class="badge">out</span>{{ end }}</td>
         </tr>
         {{ end }}
@@ -61,12 +64,13 @@
     <li class="card stack-sm" data-order>
       <div class="row-between">
         <span class="strong">#{{ .ID }} · {{ .CustomerName }}</span>
-        <span class="strong">${{ .TotalAmount }}</span>
+        <span class="strong">{{ money .TotalAmount }}</span>
       </div>
       <div class="row">
         <span class="badge {{ if eq .Status "cancelled" }}badge-muted{{ else }}badge-solid{{ end }}" data-badge="status">{{ .Status }}</span>
         <span class="badge" data-badge="partner_status">{{ .PartnerStatus }}</span>
         <span class="badge" data-badge="delivery_status">{{ .DeliveryStatus }}</span>
+        {{ if .PaymentMethod }}<span class="badge {{ if eq .PaymentStatus "pending" }}badge-muted{{ end }}">{{ .PaymentMethod }} · {{ .PaymentStatus }}</span>{{ end }}
       </div>
       <p class="small">{{ range $i, $item := .Items }}{{ if $i }}, {{ end }}{{ $item.ProductName }} × {{ $item.Quantity }}{{ end }}</p>
       <p class="tiny muted">{{ icon "map-pin" }} {{ .DeliveryAddress }}</p>
@@ -117,7 +121,7 @@
 {{ if eq .Title "Sales Reports" }}
   <h1>Reports</h1>
   <dl class="stats">
-    <div class="stat"><dt>Revenue</dt><dd>${{ .RevenueTotal }}</dd></div>
+    <div class="stat"><dt>Revenue</dt><dd>{{ money .RevenueTotal }}</dd></div>
     <div class="stat"><dt>Orders</dt><dd>{{ .OrderCount }}</dd></div>
     <div class="stat"><dt>Open</dt><dd>{{ .PendingCount }}</dd></div>
     <div class="stat"><dt>Shipped</dt><dd>{{ .ShippedCount }}</dd></div>
@@ -322,6 +326,119 @@
     <p class="small muted">Add a partner first.</p>
     {{ end }}
   </section>
+{{ end }}
+
+{{ if eq .Title "Payments" }}
+  <h1>Payments</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .FormMessage }}
+  {{ template "notice" dict "Kind" "danger" "Text" .FormError }}
+  {{ if not .SecretsConfigured }}
+  {{ template "notice" dict "Kind" "danger" "Text" "SECRETS_KEY is not set, so payment credentials cannot be saved. Generate one with: openssl rand -base64 32" }}
+  {{ end }}
+
+  <section class="card stack" aria-labelledby="pricing-title">
+    <h2 id="pricing-title">Currency and pricing</h2>
+    <form method="POST" action="/payments" class="form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <input type="hidden" name="action" value="pricing">
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="currency">Store currency</label>
+          <select class="select" id="currency" name="currency">
+            {{ $current := .Pricing.Currency }}
+            {{ range .Currencies }}<option value="{{ .Code }}" {{ if eq .Code $current }}selected{{ end }}>{{ .Code }} · {{ .Name }}</option>{{ end }}
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="shipping_flat">Shipping fee</label>
+          <input class="input" type="text" id="shipping_flat" name="shipping_flat" value="{{ .Pricing.ShippingFlat }}" inputmode="decimal" required>
+        </div>
+        <div class="field">
+          <label class="label" for="free_shipping_threshold">Free shipping from</label>
+          <input class="input" type="text" id="free_shipping_threshold" name="free_shipping_threshold" value="{{ .Pricing.FreeShippingThreshold }}" inputmode="decimal" aria-describedby="free-hint">
+          <small class="hint" id="free-hint">0 turns free shipping off</small>
+        </div>
+        <div class="field">
+          <label class="label" for="tax_rate">Tax rate (%)</label>
+          <input class="input" type="text" id="tax_rate" name="tax_rate" value="{{ percent .Pricing.TaxRateBP }}" inputmode="decimal" required>
+        </div>
+      </div>
+      <p class="tiny muted">The currency can change only before the first order. Amounts are in the store currency.</p>
+      <div><button type="submit" class="btn">Save pricing</button></div>
+    </form>
+  </section>
+
+  <h2 class="section-title">Payment methods</h2>
+  {{ range .Providers }}
+  {{ $provider := . }}
+  <section class="card stack" id="provider-{{ .ID }}" aria-labelledby="provider-{{ .ID }}-title">
+    <div class="row-between">
+      <div class="stack-sm">
+        <h2 id="provider-{{ .ID }}-title">{{ .Name }}</h2>
+        <p class="tiny muted">{{ .Summary }}</p>
+      </div>
+      <span class="badge {{ if .Enabled }}badge-solid{{ else }}badge-muted{{ end }}">{{ if .Enabled }}{{ if .Online }}{{ .Mode }}{{ else }}on{{ end }}{{ else }}off{{ end }}</span>
+    </div>
+    {{ if .Countries }}
+    <p class="tiny muted">{{ range $i, $c := .Countries }}{{ if $i }} · {{ end }}{{ $c }}{{ end }} — charges {{ range $i, $c := .Currencies }}{{ if $i }}, {{ end }}{{ $c }}{{ end }}</p>
+    {{ end }}
+    {{ if not .SupportsCurrency }}
+    {{ template "notice" dict "Kind" "info" "Text" (printf "Switch the store currency to %s to use %s." (index .Currencies 0) .Name) }}
+    {{ end }}
+    {{ if .CredentialsBroken }}
+    {{ template "notice" dict "Kind" "danger" "Text" "Saved credentials cannot be read with the current SECRETS_KEY. Enter them again." }}
+    {{ end }}
+    <form method="POST" action="/payments#provider-{{ .ID }}" class="form" data-submit-once>
+      {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+      <input type="hidden" name="action" value="provider">
+      <input type="hidden" name="provider" value="{{ .ID }}">
+      <div class="form-row">
+        <label class="choice"><input type="checkbox" name="enabled" value="1" {{ if .Enabled }}checked{{ end }}><span>Offer at checkout</span></label>
+        {{ if .Online }}
+        <div class="field">
+          <label class="label" for="{{ .ID }}-mode">Mode</label>
+          <select class="select" id="{{ .ID }}-mode" name="mode">
+            <option value="test" {{ if eq .Mode "test" }}selected{{ end }}>Test (sandbox)</option>
+            <option value="live" {{ if eq .Mode "live" }}selected{{ end }}>Live</option>
+          </select>
+        </div>
+        {{ end }}
+      </div>
+      {{ if .Fields }}
+      <div class="form-row">
+        {{ range .Fields }}
+        <div class="field">
+          <label class="label" for="{{ $provider.ID }}-{{ .Key }}">{{ .Label }}{{ if not .Required }} <span class="muted">(optional)</span>{{ end }}</label>
+          {{ if .Options }}
+          <select class="select" id="{{ $provider.ID }}-{{ .Key }}" name="field_{{ .Key }}">
+            {{ $value := .Value }}
+            {{ range .Options }}<option value="{{ . }}" {{ if eq . $value }}selected{{ end }}>{{ . }}</option>{{ end }}
+          </select>
+          {{ else if .Secret }}
+          <ui-password><input class="input" type="password" id="{{ $provider.ID }}-{{ .Key }}" name="field_{{ .Key }}" autocomplete="off" placeholder="{{ if .IsSet }}Saved · leave blank to keep{{ else }}{{ .Placeholder }}{{ end }}"></ui-password>
+          {{ else }}
+          <input class="input" type="text" id="{{ $provider.ID }}-{{ .Key }}" name="field_{{ .Key }}" value="{{ .Value }}" placeholder="{{ .Placeholder }}" autocomplete="off">
+          {{ end }}
+          {{ if .Help }}<small class="hint">{{ .Help }}</small>{{ end }}
+        </div>
+        {{ end }}
+      </div>
+      {{ end }}
+      {{ if .WebhookPath }}
+      <div class="field">
+        <span class="label">Webhook URL</span>
+        <div class="row"><code class="small break">{{ $.PublicBase }}{{ .WebhookPath }}</code><ui-copy text="{{ $.PublicBase }}{{ .WebhookPath }}"><button type="button" class="btn btn-icon btn-sm" aria-label="Copy webhook URL">{{ icon "copy" }}</button></ui-copy></div>
+        <small class="hint">Paste this into the provider dashboard so payments confirm even if the customer closes the page.</small>
+      </div>
+      {{ end }}
+      <div class="row">
+        <button type="submit" class="btn">Save</button>
+        {{ if .DocsURL }}<a class="btn btn-plain btn-sm" href="{{ .DocsURL }}" target="_blank" rel="noopener noreferrer">{{ icon "external" }}Setup guide</a>{{ end }}
+      </div>
+    </form>
+  </section>
+  {{ end }}
+  <p class="tiny muted">Other providers (Flutterwave, Stripe, MTN MoMo) plug in the same way. See docs/payments.md.</p>
 {{ end }}
 
 {{ if eq .Title "Team Management" }}

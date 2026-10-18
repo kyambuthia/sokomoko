@@ -19,7 +19,7 @@
         <tr>
           <td>{{ .Name }}{{ if .PartnerName }}<div class="tiny muted">{{ .PartnerName }}</div>{{ end }}</td>
           <td class="muted">{{ if .Category }}{{ .Category }}{{ else }}–{{ end }}</td>
-          <td class="num">${{ .Price }}</td>
+          <td class="num">{{ money .Price }}</td>
           <td class="num">{{ if gt .StockQuantity 0 }}{{ .StockQuantity }}{{ else }}<span class="badge">out</span>{{ end }}</td>
         </tr>
         {{ end }}

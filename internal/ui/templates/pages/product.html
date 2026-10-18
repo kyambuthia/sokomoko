@@ -13,7 +13,7 @@
       <div class="stack-sm">
         {{ if .Product.Category }}<p class="muted small">{{ .Product.Category }}</p>{{ end }}
         <h1>{{ .Product.Name }}</h1>
-        <p class="detail__price">${{ .Product.Price }}</p>
+        <p class="detail__price">{{ money .Product.Price }}</p>
         <p class="small">{{ if .Product.InStock }}{{ .Product.StockQuantity }} in stock{{ else }}<span class="badge">sold out</span>{{ end }}</p>
       </div>
       {{ if .Product.InStock }}

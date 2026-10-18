@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
@@ -56,7 +57,18 @@ type CheckoutService interface {
 type PaymentService interface {
 	GenerateIdempotencyKey() (string, error)
 	MethodLabel(method string) string
-	SupportedMethodOptions() []paymentsvc.MethodOption
+	MethodOptions() []paymentsvc.MethodOption
+	IsOnline(method string) bool
+	Start(ctx context.Context, req paymentsvc.StartRequest) (paymentsvc.StartOutcome, error)
+	Status(ctx context.Context, userID, orderID int) (paymentsvc.StatusView, error)
+	HandleReturn(ctx context.Context, userID int, reference string) (int, error)
+	HandleWebhook(ctx context.Context, providerID string, r *http.Request, body []byte) error
+	HandleCallback(ctx context.Context, providerID, token string, r *http.Request, body []byte) error
+	Providers() ([]paymentsvc.ProviderView, error)
+	SaveProvider(actor *paymentsvc.Actor, id string, input paymentsvc.ProviderInput) error
+	Pricing() (paymentsvc.Pricing, error)
+	SavePricing(actor *paymentsvc.Actor, input paymentsvc.PricingInput) (paymentsvc.Pricing, error)
+	SecretsConfigured() bool
 }
 
 type AdminService interface {
@@ -121,36 +133,66 @@ type Dependencies struct {
 	Auth      AuthService
 	Templates *ui.Templates
 	StaticFS  embed.FS
+	// PublicBaseURL is the public origin used in payment return and callback
+	// URLs. When empty, development derives it from the request.
+	PublicBaseURL string
+	Production    bool
 }
 
 type App struct {
-	Readiness ReadinessChecker
-	Catalog   CatalogService
-	Account   AccountService
-	Commerce  CommerceService
-	Checkout  CheckoutService
-	Payment   PaymentService
-	Admin     AdminService
-	Partner   PartnerService
-	Auth      AuthService
-	Templates *ui.Templates
-	StaticFS  embed.FS
+	Readiness     ReadinessChecker
+	Catalog       CatalogService
+	Account       AccountService
+	Commerce      CommerceService
+	Checkout      CheckoutService
+	Payment       PaymentService
+	Admin         AdminService
+	Partner       PartnerService
+	Auth          AuthService
+	Templates     *ui.Templates
+	StaticFS      embed.FS
+	PublicBaseURL string
+	Production    bool
 }
 
 func New(deps Dependencies) *App {
 	return &App{
-		Readiness: deps.Readiness,
-		Catalog:   deps.Catalog,
-		Account:   deps.Account,
-		Commerce:  deps.Commerce,
-		Checkout:  deps.Checkout,
-		Payment:   deps.Payment,
-		Admin:     deps.Admin,
-		Partner:   deps.Partner,
-		Auth:      deps.Auth,
-		Templates: deps.Templates,
-		StaticFS:  deps.StaticFS,
+		Readiness:     deps.Readiness,
+		Catalog:       deps.Catalog,
+		Account:       deps.Account,
+		Commerce:      deps.Commerce,
+		Checkout:      deps.Checkout,
+		Payment:       deps.Payment,
+		Admin:         deps.Admin,
+		Partner:       deps.Partner,
+		Auth:          deps.Auth,
+		Templates:     deps.Templates,
+		StaticFS:      deps.StaticFS,
+		PublicBaseURL: deps.PublicBaseURL,
+		Production:    deps.Production,
 	}
+}
+
+// PublicBase is the public origin used in payment return and callback URLs:
+// the configured PUBLIC_BASE_URL, or in development the storefront origin
+// derived from the request (workspace host prefixes removed). Production
+// without PUBLIC_BASE_URL returns "", and online payments refuse to start.
+func (a *App) PublicBase(r *http.Request) string {
+	if a.PublicBaseURL != "" {
+		return strings.TrimRight(a.PublicBaseURL, "/")
+	}
+	if a.Production {
+		return ""
+	}
+	host := strings.ToLower(r.Host)
+	for _, prefix := range []string{"admin.", "partner."} {
+		host = strings.TrimPrefix(host, prefix)
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + host
 }
 
 // Render executes tmpl into a buffer and writes it with a 200 status. Rendering

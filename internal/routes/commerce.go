@@ -12,6 +12,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/money"
+	"github.com/kyambuthia/sokomoko/internal/payments"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
@@ -45,12 +46,19 @@ type CheckoutPageData struct {
 	CanCheckout     bool
 	CSRFToken       string
 	Viewer          Viewer
+	Phone           string
+	NeedsPhone      bool // some offered method collects a mobile number
 }
 
 type PaymentMethodOption struct {
-	Value string
-	Label string
+	Value      string
+	Label      string
+	Summary    string
+	NeedsPhone bool
+	TestMode   bool
 }
+
+var errInvalidPhone = errors.New("invalid phone")
 
 // cartJSON is returned by cart endpoints to JSON clients.
 type cartJSON struct {
@@ -205,9 +213,22 @@ func CartRemove(a *app.App) http.HandlerFunc {
 func checkoutPaymentOptions(paymentOptions []paymentsvc.MethodOption) []PaymentMethodOption {
 	options := make([]PaymentMethodOption, 0, len(paymentOptions))
 	for _, option := range paymentOptions {
-		options = append(options, PaymentMethodOption{Value: option.Value, Label: option.Label})
+		options = append(options, PaymentMethodOption{
+			Value: option.Value, Label: option.Label, Summary: option.Summary,
+			NeedsPhone: option.NeedsPhone, TestMode: option.TestMode,
+		})
 	}
 	return options
+}
+
+// findMethod returns the checkout option for method, if offered.
+func findMethod(a *app.App, method string) (paymentsvc.MethodOption, bool) {
+	for _, option := range a.Payment.MethodOptions() {
+		if option.Value == method {
+			return option, true
+		}
+	}
+	return paymentsvc.MethodOption{}, false
 }
 
 func checkoutPage(a *app.App, r *http.Request, state checkoutsvc.PageState, paymentMethod string) CheckoutPageData {
@@ -215,8 +236,13 @@ func checkoutPage(a *app.App, r *http.Request, state checkoutsvc.PageState, paym
 	if selected == "" {
 		selected = state.PaymentMethod
 	}
-	if selected == "" {
-		selected = paymentsvc.MethodCashOnDelivery
+	options := checkoutPaymentOptions(a.Payment.MethodOptions())
+	if !hasOption(options, selected) && len(options) > 0 {
+		selected = options[0].Value
+	}
+	needsPhone := false
+	for _, option := range options {
+		needsPhone = needsPhone || option.NeedsPhone
 	}
 	expires := ""
 	if !state.ExpiresAt.IsZero() {
@@ -232,13 +258,24 @@ func checkoutPage(a *app.App, r *http.Request, state checkoutsvc.PageState, paym
 		TotalAmount:     state.Summary.Total,
 		DeliveryAddress: state.DeliveryAddress,
 		PaymentMethod:   selected,
-		PaymentMethods:  checkoutPaymentOptions(a.Payment.SupportedMethodOptions()),
+		PaymentMethods:  options,
+		Phone:           strings.TrimSpace(r.FormValue("phone")),
+		NeedsPhone:      needsPhone,
 		IdempotencyKey:  state.Token,
 		FormAction:      checkoutFormAction(state.Token),
 		ExpiresAt:       expires,
 		CanCheckout:     state.CanCheckout,
 		CSRFToken:       a.Auth.CSRFToken(r),
 	}
+}
+
+func hasOption(options []PaymentMethodOption, value string) bool {
+	for _, option := range options {
+		if option.Value == value {
+			return true
+		}
+	}
+	return false
 }
 
 func checkoutFormAction(token string) string {
@@ -257,6 +294,8 @@ func checkoutErrorMessage(err error) (string, bool) {
 		return "Your cart is empty", true
 	case errors.Is(err, checkoutsvc.ErrInvalidPaymentMethod):
 		return "Choose a supported payment method", true
+	case errors.Is(err, errInvalidPhone):
+		return "Enter a valid M-Pesa number, for example 0712 345 678", true
 	case errors.Is(err, checkoutsvc.ErrInsufficientStock):
 		return "One or more cart items exceed available stock. Review your cart quantities.", true
 	default:
@@ -297,7 +336,17 @@ func Checkout(a *app.App) http.HandlerFunc {
 			key = strings.TrimSpace(r.URL.Query().Get("checkout"))
 		}
 
-		orderID, summary, err := a.Checkout.CheckoutWithPayment(userID, address, paymentMethod, key)
+		phone := strings.TrimSpace(r.FormValue("phone"))
+		var err error
+		if option, ok := findMethod(a, paymentMethod); ok && option.NeedsPhone {
+			if _, phoneErr := payments.NormalizePhone(phone); phoneErr != nil {
+				err = errInvalidPhone
+			}
+		}
+		var orderID int64
+		if err == nil {
+			orderID, _, err = a.Checkout.CheckoutWithPayment(userID, address, paymentMethod, key)
+		}
 		if err != nil {
 			message, known := checkoutErrorMessage(err)
 			if !known {
@@ -325,7 +374,20 @@ func Checkout(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		redirectWithFlash(w, r, fmt.Sprintf("/account#order-%d", orderID), "success",
-			fmt.Sprintf("Order #%d placed · $%s", orderID, summary.Total))
+		if !a.Payment.IsOnline(paymentMethod) {
+			redirectWithFlash(w, r, fmt.Sprintf("/account#order-%d", orderID), "success", fmt.Sprintf("Order #%d placed", orderID))
+			return
+		}
+		outcome, err := a.Payment.Start(r.Context(), paymentsvc.StartRequest{
+			UserID: userID, OrderID: int(orderID), Phone: phone, BaseURL: a.PublicBase(r),
+		})
+		if err != nil {
+			log.Printf("start payment for order %d: %v", orderID, err)
+		}
+		if err == nil && outcome.RedirectURL != "" {
+			http.Redirect(w, r, outcome.RedirectURL, http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/payments/order/%d", orderID), http.StatusSeeOther)
 	}
 }

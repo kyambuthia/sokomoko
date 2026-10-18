@@ -19,6 +19,9 @@ func (s *blockingMaintenance) CleanupSessionsContext(context.Context) error {
 func (s *blockingMaintenance) CleanupPasswordResetTokensContext(context.Context) error {
 	panic("cleanup after cancellation")
 }
+func (s *blockingMaintenance) ExpireUnpaidOrders(context.Context, time.Time) (int, error) {
+	return 0, nil
+}
 
 func TestMaintain_CancelsDatabaseWorkBeforeContinuing(t *testing.T) {
 	store := &blockingMaintenance{started: make(chan struct{})}

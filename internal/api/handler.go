@@ -182,8 +182,9 @@ type checkoutDTO struct {
 }
 
 type paymentMethodDTO struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
+	Value      string `json:"value"`
+	Label      string `json:"label"`
+	NeedsPhone bool   `json:"needs_phone,omitempty"`
 }
 
 func mapCheckout(state checkoutsvc.PageState, methods []paymentMethodDTO) checkoutDTO {

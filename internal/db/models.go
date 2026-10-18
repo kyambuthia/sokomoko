@@ -204,7 +204,14 @@ type Order struct {
 	TotalAmount     money.Cents
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	PaymentMethod   string // newest payment's method
+	PaymentStatus   string // newest payment's status
 	Items           []OrderItem
+}
+
+// AwaitingPayment reports whether an online payment is still outstanding.
+func (o Order) AwaitingPayment() bool {
+	return o.PaymentMethod != "" && o.PaymentMethod != "cash_on_delivery" && o.PaymentStatus == PaymentStatusPending && o.Status != OrderStatusCancelled
 }
 
 // OrderTotals carries the priced breakdown for an order.

@@ -94,3 +94,36 @@ export class UIOrderForm extends HTMLElement {
     }
   }
 }
+
+// <ui-payment-status order-id="12">server-rendered notice</ui-payment-status>
+// Polls the payment status while the customer approves on their phone, then
+// reloads the page, which redirects on success or shows the failure.
+export class UIPaymentStatus extends HTMLElement {
+  connectedCallback() {
+    this.started = Date.now();
+    this.timer = setInterval(() => this.poll(), 4000);
+  }
+
+  disconnectedCallback() {
+    clearInterval(this.timer);
+  }
+
+  async poll() {
+    if (document.hidden) return;
+    if (Date.now() - this.started > 5 * 60 * 1000) {
+      clearInterval(this.timer);
+      const text = this.querySelector("[data-status-text]");
+      if (text) text.textContent = "Still waiting. If you approved the payment, refresh this page.";
+      return;
+    }
+    try {
+      const status = await api(`/account/orders/${this.getAttribute("order-id")}/payment`);
+      if (status.status !== "pending") {
+        clearInterval(this.timer);
+        location.reload();
+      }
+    } catch {
+      // Keep the server-rendered message and try again on the next tick.
+    }
+  }
+}

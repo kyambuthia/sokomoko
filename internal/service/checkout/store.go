@@ -9,6 +9,7 @@ import (
 
 // store is the subset of *db.Store the checkout service depends on.
 type store interface {
+	GetCommerceSettings() (db.CommerceSettings, error)
 	GetCartItemsForCheckout(userID int, reservationKey string) ([]db.CartItem, money.Cents, error)
 	GetCheckoutByToken(userID int, token string) (*db.Checkout, error)
 	GetLatestOpenCheckout(userID int) (*db.Checkout, error)

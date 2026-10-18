@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -14,12 +15,24 @@ type checkoutInput struct {
 	Token           string `json:"token"`
 	DeliveryAddress string `json:"delivery_address"`
 	PaymentMethod   string `json:"payment_method"`
+	Phone           string `json:"phone,omitempty"` // M-Pesa number, for methods that need one
 }
 
 type placedOrderDTO struct {
 	OrderID     int64              `json:"order_id"`
 	Summary     checkoutSummaryDTO `json:"summary"`
 	Idempotency string             `json:"idempotency_key"`
+	Payment     *paymentStartDTO   `json:"payment,omitempty"`
+}
+
+// paymentStartDTO tells an API client what to do after placing an order
+// with an online method: follow redirect_url (hosted page) or poll
+// status_url until the status is "paid".
+type paymentStartDTO struct {
+	Method      string `json:"method"`
+	RedirectURL string `json:"redirect_url,omitempty"`
+	StatusURL   string `json:"status_url"`
+	Error       string `json:"error,omitempty"`
 }
 
 type checkoutSummaryDTO struct {
@@ -130,11 +143,23 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Idempotency-Key", token)
-		writeData(w, http.StatusCreated, placedOrderDTO{
+		placed := placedOrderDTO{
 			OrderID:     orderID,
 			Summary:     checkoutSummaryDTO{Subtotal: summary.Subtotal.Float64(), ShippingFee: summary.ShippingFee.Float64(), TaxAmount: summary.TaxAmount.Float64(), Total: summary.Total.Float64()},
 			Idempotency: token,
-		})
+		}
+		if h.app.Payment.IsOnline(input.PaymentMethod) {
+			start := &paymentStartDTO{Method: input.PaymentMethod, StatusURL: fmt.Sprintf("%s/account/orders/%d/payment", apiPrefix, orderID)}
+			outcome, err := h.app.Payment.Start(r.Context(), paymentsvc.StartRequest{
+				UserID: uid, OrderID: int(orderID), Phone: input.Phone, BaseURL: h.app.PublicBase(r),
+			})
+			if err != nil {
+				start.Error = paymentsvc.CustomerReason(err)
+			}
+			start.RedirectURL = outcome.RedirectURL
+			placed.Payment = start
+		}
+		writeData(w, http.StatusCreated, placed)
 		return
 	}
 
@@ -143,8 +168,8 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) checkoutDTO(state checkoutsvc.PageState) checkoutDTO {
 	methods := make([]paymentMethodDTO, 0)
-	for _, option := range h.app.Payment.SupportedMethodOptions() {
-		methods = append(methods, paymentMethodDTO{Value: option.Value, Label: option.Label})
+	for _, option := range h.app.Payment.MethodOptions() {
+		methods = append(methods, paymentMethodDTO{Value: option.Value, Label: option.Label, NeedsPhone: option.NeedsPhone})
 	}
 	return mapCheckout(state, methods)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/lifecycle"
 	"github.com/kyambuthia/sokomoko/internal/notify"
 	"github.com/kyambuthia/sokomoko/internal/routes"
+	"github.com/kyambuthia/sokomoko/internal/secret"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
@@ -58,10 +59,23 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 		return wrapCommandError(commandServe, "prepare store", err)
 	}
 
+	secrets, err := secretsBox(cfg)
+	if err != nil {
+		return wrapCommandError(commandServe, "configure secrets", err)
+	}
+	if commerce, err := store.GetCommerceSettings(); err == nil {
+		ui.SetCurrency(commerce.Currency)
+	} else {
+		return wrapCommandError(commandServe, "load commerce settings", err)
+	}
+
 	application := app.Compose(app.ComposeOptions{
-		Store:     store,
-		Templates: templates,
-		StaticFS:  ui.StaticFS,
+		Store:         store,
+		Templates:     templates,
+		StaticFS:      ui.StaticFS,
+		Secrets:       secrets,
+		PublicBaseURL: cfg.PublicBaseURL,
+		Production:    cfg.IsProduction(),
 		Auth: auth.Config{
 			Environment:              cfg.Environment,
 			AdminSetupToken:          cfg.AdminSetupToken,
@@ -78,6 +92,22 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	printStartupSummary(cfg, server, allowedHosts, seedOnServe)
 
 	return wrapCommandError(commandServe, "serve http", runHTTPServerFunc(server, store))
+}
+
+// secretsBox returns the box that seals payment credentials. Outside
+// production a fixed development key is used when SECRETS_KEY is unset, so
+// local setup works; production without a key cannot store credentials.
+func secretsBox(cfg config.Config) (*secret.Box, error) {
+	box, err := secret.New(cfg.SecretsKey)
+	if err != nil || box != nil {
+		return box, err
+	}
+	if cfg.IsProduction() {
+		log.Printf("[startup] SECRETS_KEY unset: payment provider credentials cannot be saved")
+		return nil, nil
+	}
+	log.Printf("[startup] SECRETS_KEY unset: using the development secrets key")
+	return secret.Development(), nil
 }
 
 func prepareStore(cfg config.Config, store *db.Store, seed bool) error {

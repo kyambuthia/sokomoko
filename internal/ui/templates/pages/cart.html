@@ -20,9 +20,9 @@
             <div class="line__body">
               <div class="row-between">
                 <a class="strong small" href="/products/{{ .ProductSlug }}">{{ .ProductName }}</a>
-                <span class="strong" data-line-total>${{ .LineTotal }}</span>
+                <span class="strong" data-line-total>{{ money .LineTotal }}</span>
               </div>
-              <span class="tiny muted">${{ .UnitPrice }} each</span>
+              <span class="tiny muted">{{ money .UnitPrice }} each</span>
               <div class="line__controls">
                 <form action="/cart/update" method="POST" class="row">
                   {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
@@ -43,7 +43,7 @@
       {{ end }}
     </ul>
     <aside class="card stack sticky">
-      <dl class="kv"><div class="total"><dt>Subtotal</dt><dd data-cart-subtotal>${{ .Subtotal }}</dd></div></dl>
+      <dl class="kv"><div class="total"><dt>Subtotal</dt><dd data-cart-subtotal>{{ money .Subtotal }}</dd></div></dl>
       <p class="tiny muted">Shipping and tax are added at checkout.</p>
       <a class="btn btn-block" href="/checkout">Checkout</a>
     </aside>

@@ -1,0 +1,48 @@
+{{ define "title" }}Pay · sokomoko{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "account" "Page" . }}{{ end }}
+
+{{ define "main-area" }}
+{{ $p := .Payment }}
+<div class="stack narrow">
+  <div class="page-head">
+    <h1>Pay order #{{ $p.OrderID }}</h1>
+    <span class="badge">{{ $p.MethodName }}</span>
+  </div>
+  {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
+
+  <dl class="kv card">
+    <div class="total"><dt>Total</dt><dd>{{ money $p.Amount }}</dd></div>
+    {{ if and $p.Charged (ne $p.Charged $p.Amount) }}
+    <div class="small"><dt>Charged</dt><dd>{{ money $p.Charged }}</dd></div>
+    {{ end }}
+  </dl>
+  {{ if and $p.Charged (ne $p.Charged $p.Amount) }}<p class="tiny muted">M-Pesa charges whole shillings, so the total is rounded up.</p>{{ end }}
+
+  {{ if eq $p.Status "cancelled" }}
+  {{ template "notice" dict "Kind" "danger" "Text" $p.Message }}
+  <a class="btn btn-block" href="/">Shop</a>
+  {{ else }}
+    {{ if eq $p.Status "failed" }}
+    {{ template "notice" dict "Kind" "danger" "Text" $p.Message }}
+    {{ else if and $p.Attempted $p.NeedsPhone }}
+    <ui-payment-status order-id="{{ $p.OrderID }}">
+      <div class="notice" role="status">{{ icon "clock" }}<p data-status-text>Check your phone{{ if .Phone }} ({{ .Phone }}){{ end }} and enter your M-Pesa PIN.</p></div>
+    </ui-payment-status>
+    {{ end }}
+
+    <form action="/payments/order/{{ $p.OrderID }}" method="POST" class="form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      {{ if $p.NeedsPhone }}
+      <div class="field">
+        <label class="label" for="phone">M-Pesa number</label>
+        <input class="input" type="tel" id="phone" name="phone" value="{{ .Phone }}" required autocomplete="tel" inputmode="tel" placeholder="0712 345 678">
+      </div>
+      {{ end }}
+      <button type="submit" class="btn {{ if and $p.Attempted (eq $p.Status "pending") $p.NeedsPhone }}btn-secondary{{ end }} btn-block">
+        {{ if $p.NeedsPhone }}{{ if $p.Attempted }}Send prompt again{{ else }}Send M-Pesa prompt{{ end }}{{ else }}Pay with {{ $p.MethodName }}{{ end }}
+      </button>
+    </form>
+    <p class="tiny muted">Unpaid orders are cancelled after 30 minutes. <a href="/account">View orders</a></p>
+  {{ end }}
+</div>
+{{ end }}

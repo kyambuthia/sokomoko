@@ -14,7 +14,7 @@
     </div>
     <div class="form-row">
       <div class="field">
-        <label class="label" for="price">Price ($)</label>
+        <label class="label" for="price">Price ({{ currency }})</label>
         <input class="input" type="text" id="price" name="price" value="{{ .Form.Price }}" required inputmode="decimal" pattern="\d+(\.\d{1,2})?" placeholder="0.00">
       </div>
       <div class="field">

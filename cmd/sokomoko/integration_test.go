@@ -19,6 +19,8 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 	"github.com/kyambuthia/sokomoko/internal/money"
+	"github.com/kyambuthia/sokomoko/internal/payments"
+	"github.com/kyambuthia/sokomoko/internal/secret"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -56,11 +58,15 @@ func setupTestServer(dsn string) {
 		panic(err)
 	}
 
+	testProviders = newFakeProviders()
 	a := app.Compose(app.ComposeOptions{
-		Store:     testStore,
-		Templates: testTemplates,
-		StaticFS:  ui.StaticFS,
-		Auth:      auth.Config{},
+		Store:         testStore,
+		Templates:     testTemplates,
+		StaticFS:      ui.StaticFS,
+		Auth:          auth.Config{},
+		Secrets:       secret.Development(),
+		Payments:      payments.Options{PaystackURL: testProviders.server.URL, MpesaURL: testProviders.server.URL},
+		PublicBaseURL: "https://shop.example",
 	})
 
 	cfg := config.Config{
@@ -75,6 +81,9 @@ func setupTestServer(dsn string) {
 var testDatabaseURL string
 
 func teardownTestServer() {
+	if testProviders != nil {
+		testProviders.server.Close()
+	}
 	if testStore != nil {
 		testStore.Close()
 	}
@@ -98,6 +107,14 @@ func clearAllTables() {
 		RESTART IDENTITY CASCADE`); err != nil {
 		panic(err)
 	}
+	// Restore the money defaults seeded by migration 0003.
+	if _, err := testStore.DB.Exec(`
+		UPDATE commerce_settings SET currency = 'USD', shipping_flat_cents = 650, free_shipping_threshold_cents = 8000, tax_rate_bp = 800;
+		DELETE FROM payment_providers WHERE provider <> 'cash_on_delivery';
+		UPDATE payment_providers SET enabled = true WHERE provider = 'cash_on_delivery'`); err != nil {
+		panic(err)
+	}
+	ui.SetCurrency("USD")
 }
 
 func checkoutIdempotencyKey(t *testing.T, cookies []*http.Cookie) string {

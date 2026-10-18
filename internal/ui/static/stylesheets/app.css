@@ -493,7 +493,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .choice:has(input:checked) { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
-.choice input { accent-color: var(--fg); width: 18px; height: 18px; margin: 0; }
+.choice input { accent-color: var(--fg); width: 18px; height: 18px; margin: 0; flex: none; }
+.choice__body { display: grid; gap: 2px; padding-block: var(--s2); }
+
+/* Show the phone field only for methods that need it, where :has works. */
+@supports selector(:has(*)) {
+  .phone-field { display: none; }
+  .form:has(input[data-needs-phone]:checked) .phone-field { display: grid; }
+}
 
 /* Password reveal (ui-password) */
 .password { position: relative; display: block; }
@@ -838,5 +845,5 @@ dialog .row-between { margin-top: var(--s5); justify-content: flex-end; }
 
 /* Custom elements render as blocks until upgraded */
 ui-quantity, ui-copy, ui-countdown, ui-relative-time, ui-confirm, ui-add-to-cart, ui-order-form { display: contents; }
-ui-search, ui-table-filter, ui-order-progress, ui-category-nav, ui-password, ui-cart-line { display: block; }
+ui-search, ui-table-filter, ui-order-progress, ui-category-nav, ui-password, ui-cart-line, ui-payment-status { display: block; }
 ui-cart-badge, ui-theme-toggle { display: contents; }
