@@ -13,14 +13,15 @@
   <ui-table-filter for="partner-products-table" placeholder="Filter products"></ui-table-filter>
   <div class="table-wrap">
     <table class="table" id="partner-products-table">
-      <thead><tr><th>Product</th><th>Category</th><th class="num">Price</th><th class="num">Stock</th></tr></thead>
+      <thead><tr><th>Product</th><th>Category</th><th class="num">Price</th><th class="num">Stock</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>
         {{ range .Products }}
         <tr>
-          <td>{{ .Name }}{{ if .PartnerName }}<div class="tiny muted">{{ .PartnerName }}</div>{{ end }}</td>
+          <td><a href="/products/{{ .ID }}/edit">{{ .Name }}</a>{{ if .PartnerName }}<div class="tiny muted">{{ .PartnerName }}</div>{{ end }}</td>
           <td class="muted">{{ if .Category }}{{ .Category }}{{ else }}–{{ end }}</td>
           <td class="num">{{ money .Price }}</td>
           <td class="num">{{ if gt .StockQuantity 0 }}{{ .StockQuantity }}{{ else }}<span class="badge">out</span>{{ end }}</td>
+          <td class="actions"><a class="btn btn-secondary btn-sm" href="/products/{{ .ID }}/edit" aria-label="Edit {{ .Name }}">{{ icon "pencil" }}Edit</a></td>
         </tr>
         {{ end }}
       </tbody>

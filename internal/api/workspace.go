@@ -32,6 +32,15 @@ type partnerProductInput struct {
 	CategoryID  string `json:"category_id"`
 }
 
+// partnerProductPatch changes only the fields present in the request.
+type partnerProductPatch struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+	Price       *string `json:"price"`
+	Stock       *string `json:"stock"`
+	CategoryID  *string `json:"category_id"`
+}
+
 type partnerSettingsInput struct {
 	StoreName    string `json:"store_name"`
 	StoreSlug    string `json:"store_slug"`
@@ -387,6 +396,10 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 		}{Items: items, Categories: mapCategories(data.Categories), Page: page, Limit: limit, Total: total})
 		return
 	}
+	if len(parts) == 2 && r.Method == http.MethodPatch {
+		h.patchPartnerProduct(w, r, parts[1])
+		return
+	}
 	if len(parts) != 1 || r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
@@ -403,6 +416,33 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 		return
 	}
 	writeData(w, http.StatusCreated, map[string]string{"message": "Product created"})
+}
+
+func (h *Handler) patchPartnerProduct(w http.ResponseWriter, r *http.Request, id string) {
+	var patch partnerProductPatch
+	if err := decodeJSON(r, &patch); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
+		return
+	}
+	actor := partnerActor(r)
+	_, input, err := h.app.Partner.ProductForEdit(actor, id)
+	if err != nil {
+		writePartnerError(w, err)
+		return
+	}
+	for field, value := range map[*string]*string{
+		&input.Name: patch.Name, &input.Description: patch.Description, &input.Price: patch.Price,
+		&input.Stock: patch.Stock, &input.CategoryID: patch.CategoryID,
+	} {
+		if value != nil {
+			*field = *value
+		}
+	}
+	if err := h.app.Partner.UpdateProductForActor(actor, id, input); err != nil {
+		writePartnerError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, map[string]string{"message": "Product updated"})
 }
 
 func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []string) {
@@ -487,7 +527,7 @@ func writePartnerError(w http.ResponseWriter, err error) {
 	case errors.Is(err, partnersvc.ErrInvalidOrderID), errors.Is(err, partnersvc.ErrMissingProductFields), errors.Is(err, partnersvc.ErrInvalidProductPrice), errors.Is(err, partnersvc.ErrInvalidProductStock), errors.Is(err, partnersvc.ErrMissingStoreFields),
 		errors.Is(err, partnersvc.ErrInvalidStoreSlug), errors.Is(err, partnersvc.ErrInvalidContactEmail):
 		writeError(w, http.StatusBadRequest, "invalid_input", "Request data is invalid")
-	case errors.Is(err, partnersvc.ErrOrderNotFound), errors.Is(err, partnersvc.ErrStoreNotConfigured):
+	case errors.Is(err, partnersvc.ErrOrderNotFound), errors.Is(err, partnersvc.ErrStoreNotConfigured), errors.Is(err, partnersvc.ErrProductNotFound):
 		writeError(w, http.StatusNotFound, "resource_not_found", "Resource not found")
 	case errors.Is(err, partnersvc.ErrInvalidOrderTransition):
 		writeError(w, http.StatusConflict, "invalid_order_transition", "Order transition is invalid")

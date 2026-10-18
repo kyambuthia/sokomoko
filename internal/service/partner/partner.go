@@ -32,6 +32,7 @@ var (
 	ErrInvalidProductStock       = errors.New("invalid product stock")
 	ErrUnableToCreateProduct     = errors.New("unable to create product")
 	ErrUnableToCreateProductSlug = errors.New("unable to create product slug")
+	ErrProductNotFound           = errors.New("product not found")
 )
 
 const maxProductPrice money.Cents = 10_000_000 // 100,000.00
@@ -403,6 +404,101 @@ func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) 
 		}
 	}
 	return ErrUnableToCreateProductSlug
+}
+
+// ProductInput holds the editable fields of a product as typed in a form.
+type ProductInput struct {
+	Name        string
+	Description string
+	Price       string
+	Stock       string
+	CategoryID  string
+}
+
+// productForActor loads a product the actor may edit. A partner user may only
+// edit their own partner's products; anything else reads as not found.
+func (s *Service) productForActor(actor *Actor, idRaw string) (*db.Product, error) {
+	if actor == nil || (actor.Role != db.RoleAdmin && actor.Role != db.RoleStaff && actor.Role != db.RolePartner) {
+		return nil, ErrProductNotFound
+	}
+	id, err := strconv.Atoi(strings.TrimSpace(idRaw))
+	if err != nil || id <= 0 {
+		return nil, ErrProductNotFound
+	}
+	product, err := s.store.GetProductByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if product == nil {
+		return nil, ErrProductNotFound
+	}
+	if actorIsPartner(actor) {
+		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		if err != nil {
+			return nil, err
+		}
+		if partnerID == 0 || !product.PartnerID.Valid || int(product.PartnerID.Int64) != partnerID {
+			return nil, ErrProductNotFound
+		}
+	}
+	return product, nil
+}
+
+// ProductForEdit returns the current values of a product for its edit form.
+func (s *Service) ProductForEdit(actor *Actor, idRaw string) (int, ProductInput, error) {
+	product, err := s.productForActor(actor, idRaw)
+	if err != nil {
+		return 0, ProductInput{}, err
+	}
+	input := ProductInput{
+		Name:        product.Name,
+		Description: product.Description,
+		Price:       product.Price.String(),
+		Stock:       strconv.Itoa(product.StockQuantity),
+	}
+	if product.CategoryID.Valid {
+		input.CategoryID = strconv.FormatInt(product.CategoryID.Int64, 10)
+	}
+	return product.ID, input, nil
+}
+
+// UpdateProductForActor changes a product's details and sets its available
+// stock. The slug stays the same so product links keep working.
+func (s *Service) UpdateProductForActor(actor *Actor, idRaw string, input ProductInput) error {
+	product, err := s.productForActor(actor, idRaw)
+	if err != nil {
+		return err
+	}
+	name := strings.TrimSpace(input.Name)
+	description := strings.TrimSpace(input.Description)
+	priceRaw := strings.TrimSpace(input.Price)
+	stockRaw := strings.TrimSpace(input.Stock)
+	if name == "" || priceRaw == "" || stockRaw == "" {
+		return ErrMissingProductFields
+	}
+	if len([]rune(name)) > maxProductName || len([]rune(description)) > maxDescriptionLn {
+		return ErrMissingProductFields
+	}
+	price, err := money.Parse(priceRaw)
+	if err != nil || price > maxProductPrice {
+		return ErrInvalidProductPrice
+	}
+	stock, err := strconv.Atoi(stockRaw)
+	if err != nil || stock < 0 || stock > maxProductStock {
+		return ErrInvalidProductStock
+	}
+	before := fmt.Sprintf("price=%s stock=%d", product.Price, product.StockQuantity)
+	product.Name, product.Description, product.Price, product.StockQuantity = name, description, price, stock
+	product.CategoryID = parseOptionalID(input.CategoryID)
+	if err := s.store.UpdateProduct(*product); err != nil {
+		if errors.Is(err, db.ErrProductNotFound) {
+			return ErrProductNotFound
+		}
+		return fmt.Errorf("update product: %w", err)
+	}
+	_ = s.store.CreateAuditLog(actor.ID, "product.update", "product", product.ID,
+		fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock))
+	return nil
 }
 
 func (s *Service) Orders(filter string) (OrdersData, error) {

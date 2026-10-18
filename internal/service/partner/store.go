@@ -11,6 +11,8 @@ type store interface {
 	CountProducts() (int, error)
 	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
 	CreateProduct(product db.Product) (int64, error)
+	GetProductByID(id int) (*db.Product, error)
+	UpdateProduct(product db.Product) error
 	GetAllCategories() ([]db.Category, error)
 	GetPartnerOrderSummary() (db.PartnerOrderSummary, error)
 	GetStoreSettings() (*db.StoreSettings, error)

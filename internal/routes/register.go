@@ -161,5 +161,6 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/dashboard", staff(PartnerDashboard(a)))
 	mux.Handle("/products", staff(PartnerProducts(a)))
 	mux.Handle("/products/new", staff(PartnerProductNew(a)))
+	mux.Handle("/products/{id}/edit", staff(PartnerProductEdit(a)))
 	mux.Handle("/orders", staff(PartnerOrders(a)))
 }

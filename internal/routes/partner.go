@@ -56,6 +56,7 @@ type PartnerProductNewData struct {
 	Form        partnersvc.CreateProductInput
 	DefaultName string
 	CSRFToken   string
+	EditID      int // set when the form edits an existing product
 }
 
 func PartnerRoot(a *app.App) http.HandlerFunc {
@@ -267,5 +268,83 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 		}
 
 		redirectWithFlash(w, r, "/products", "success", "Product created")
+	}
+}
+
+// PartnerProductEdit shows and saves the edit form for one product.
+func PartnerProductEdit(a *app.App) http.HandlerFunc {
+	svc := a.Partner
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		actor := partnerActorFromContext(r)
+		view, err := svc.ProductsForActor(actor)
+		switch {
+		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
+			http.Redirect(w, r, "/setup", http.StatusFound)
+			return
+		case err != nil:
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		idRaw := r.PathValue("id")
+		id, current, err := svc.ProductForEdit(actor, idRaw)
+		switch {
+		case errors.Is(err, partnersvc.ErrProductNotFound):
+			http.NotFound(w, r)
+			return
+		case err != nil:
+			log.Printf("partner load product: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		data := partnerProductNewPage(view.Categories, a.Auth.CSRFToken(r))
+		data.Title = "Edit Product"
+		data.EditID = id
+		data.Form = partnersvc.CreateProductInput{Name: current.Name, Description: current.Description,
+			Price: current.Price, Stock: current.Stock, CategoryID: current.CategoryID}
+		data.DefaultName = current.Name
+
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			a.Render(w, a.Templates.PartnerProductNew, data)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		input := partnersvc.ProductInput{
+			Name:        r.FormValue("name"),
+			Description: r.FormValue("description"),
+			Price:       r.FormValue("price"),
+			Stock:       r.FormValue("stock_quantity"),
+			CategoryID:  r.FormValue("category_id"),
+		}
+		data.Form = partnersvc.CreateProductInput{Name: input.Name, Description: input.Description,
+			Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID}
+		data.DefaultName = strings.TrimSpace(input.Name)
+
+		err = svc.UpdateProductForActor(actor, idRaw, input)
+		status := http.StatusBadRequest
+		switch {
+		case err == nil:
+			redirectWithFlash(w, r, "/products", "success", "Product updated")
+			return
+		case errors.Is(err, partnersvc.ErrProductNotFound):
+			http.NotFound(w, r)
+			return
+		case errors.Is(err, partnersvc.ErrMissingProductFields):
+			data.Error = "Name, price and stock are required"
+		case errors.Is(err, partnersvc.ErrInvalidProductPrice):
+			data.Error = "Price must be an amount like 12.50 (up to 100000.00)"
+		case errors.Is(err, partnersvc.ErrInvalidProductStock):
+			data.Error = "Stock must be a non-negative integer"
+		default:
+			log.Printf("partner update product: %v", err)
+			data.Error = "Unable to update product"
+			status = http.StatusInternalServerError
+		}
+		a.RenderStatus(w, a.Templates.PartnerProductNew, status, data)
 	}
 }

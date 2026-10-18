@@ -104,6 +104,8 @@ type AdminService interface {
 type PartnerService interface {
 	CreateProduct(input partnersvc.CreateProductInput) error
 	CreateProductForActor(actor *partnersvc.Actor, input partnersvc.CreateProductInput) error
+	ProductForEdit(actor *partnersvc.Actor, id string) (int, partnersvc.ProductInput, error)
+	UpdateProductForActor(actor *partnersvc.Actor, id string, input partnersvc.ProductInput) error
 	Dashboard() (partnersvc.DashboardData, error)
 	DashboardForActor(actor *partnersvc.Actor) (partnersvc.DashboardData, error)
 	DashboardForActorContext(context.Context, *partnersvc.Actor) (partnersvc.DashboardData, error)
