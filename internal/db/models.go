@@ -213,6 +213,7 @@ type OrderTotals struct {
 	ShippingFee money.Cents
 	TaxAmount   money.Cents
 	Total       money.Cents
+	Currency    string // empty means the store currency
 }
 
 const (

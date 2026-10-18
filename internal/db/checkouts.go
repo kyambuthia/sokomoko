@@ -100,10 +100,7 @@ func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, erro
 	if paymentMethod == "" {
 		paymentMethod = "cash_on_delivery"
 	}
-	currency := strings.TrimSpace(input.Currency)
-	if currency == "" {
-		currency = "USD"
-	}
+	currency := strings.ToUpper(strings.TrimSpace(input.Currency))
 	expiresAt := input.ExpiresAt.UTC()
 	if expiresAt.IsZero() {
 		expiresAt = time.Now().UTC()
@@ -125,7 +122,7 @@ func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, erro
 		err := tx.QueryRowContext(ctx,
 			`INSERT INTO checkouts (user_id, token, status, currency, payment_method,
 			                        subtotal_cents, shipping_cents, tax_cents, total_cents, expires_at)
-			 VALUES ($1, $2, 'open', $3, $4, $5, $6, $7, $8, $9)
+			 VALUES ($1, $2, 'open', COALESCE(NULLIF($3, ''), (SELECT currency FROM commerce_settings WHERE id = 1)), $4, $5, $6, $7, $8, $9)
 			 ON CONFLICT (token) DO UPDATE SET
 			     status = 'open',
 			     currency = EXCLUDED.currency,

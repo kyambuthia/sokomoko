@@ -191,10 +191,7 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 	if product.StockQuantity < 0 {
 		return 0, ErrInvalidQuantity
 	}
-	currency := strings.TrimSpace(product.Currency)
-	if currency == "" {
-		currency = "USD"
-	}
+	currency := strings.ToUpper(strings.TrimSpace(product.Currency))
 
 	var id int64
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
@@ -205,7 +202,7 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 
 		if err := tx.QueryRowContext(ctx,
 			`INSERT INTO products (name, slug, description, price_cents, currency, category_id, partner_id)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			 VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), (SELECT currency FROM commerce_settings WHERE id = 1)), $6, $7)
 			 RETURNING id`,
 			strings.TrimSpace(product.Name),
 			strings.TrimSpace(product.Slug),

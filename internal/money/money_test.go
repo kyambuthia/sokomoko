@@ -63,3 +63,31 @@ func TestMulBasisPoints(t *testing.T) {
 		}
 	}
 }
+
+func TestFormat(t *testing.T) {
+	cases := []struct {
+		amount Cents
+		code   string
+		want   string
+	}{
+		{1250, "USD", "$12.50"},
+		{125000, "KES", "KES 1,250.00"},
+		{123456789, "NGN", "₦1,234,567.89"},
+		{5, "ZAR", "R 0.05"},
+		{-100000, "GBP", "-£1,000.00"},
+		{100, "xyz", "XYZ 1.00"},
+	}
+	for _, tc := range cases {
+		if got := Format(tc.amount, tc.code); got != tc.want {
+			t.Errorf("Format(%d, %q) = %q, want %q", tc.amount, tc.code, got, tc.want)
+		}
+	}
+}
+
+func TestWholeUnitsCeil(t *testing.T) {
+	for in, want := range map[Cents]int64{0: 0, 1: 1, 100: 1, 101: 2, 125000: 1250, -5: 0} {
+		if got := in.WholeUnitsCeil(); got != want {
+			t.Errorf("%d.WholeUnitsCeil() = %d, want %d", in, got, want)
+		}
+	}
+}

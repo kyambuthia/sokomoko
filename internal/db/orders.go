@@ -86,11 +86,11 @@ func createOrderTx(ctx context.Context, tx *sql.Tx, userID int, address, notice 
 
 	var orderID int64
 	if err := tx.QueryRowContext(ctx,
-		`INSERT INTO orders (user_id, subtotal_cents, shipping_cents, tax_cents, total_cents, delivery_address, delivery_notice)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO orders (user_id, subtotal_cents, shipping_cents, tax_cents, total_cents, delivery_address, delivery_notice, currency)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE(NULLIF($8, ''), (SELECT currency FROM commerce_settings WHERE id = 1)))
 		 RETURNING id`,
 		userID, int64(totals.Subtotal), int64(totals.ShippingFee), int64(totals.TaxAmount), int64(totals.Total),
-		strings.TrimSpace(address), strings.TrimSpace(notice),
+		strings.TrimSpace(address), strings.TrimSpace(notice), totals.Currency,
 	).Scan(&orderID); err != nil {
 		return 0, wrapDBError(err)
 	}

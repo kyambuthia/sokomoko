@@ -146,6 +146,7 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 			ShippingFee: checkout.ShippingFee,
 			TaxAmount:   checkout.TaxAmount,
 			Total:       checkout.TotalAmount,
+			Currency:    checkout.Currency,
 		}
 		orderID, err := createOrderTx(ctx, tx, userID, address, deliveryNotice, totals, lines,
 			allocation{userID: userID, reservationKey: key})
