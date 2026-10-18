@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kyambuthia/sokomoko/internal/db"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
@@ -68,6 +69,11 @@ type PaymentService interface {
 	HandleWebhook(ctx context.Context, providerID string, r *http.Request, body []byte) error
 	HandleCallback(ctx context.Context, providerID, token string, r *http.Request, body []byte) error
 	Providers() ([]paymentsvc.ProviderView, error)
+	PaymentExceptions() ([]db.PaymentException, error)
+	RequestRefund(context.Context, *paymentsvc.Actor, int, string) (*db.PaymentException, error)
+	RefreshRefund(context.Context, *paymentsvc.Actor, int) (*db.PaymentException, error)
+	ResolveRefund(*paymentsvc.Actor, int, string) (*db.PaymentException, error)
+	ExceptionsNeedingAttention(context.Context) (int, error)
 	SaveProvider(actor *paymentsvc.Actor, id string, input paymentsvc.ProviderInput) error
 	Pricing() (paymentsvc.Pricing, error)
 	SavePricing(actor *paymentsvc.Actor, input paymentsvc.PricingInput) (paymentsvc.Pricing, error)

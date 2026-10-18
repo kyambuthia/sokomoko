@@ -26,16 +26,19 @@ var testProviders *fakeProviders
 type fakeProviders struct {
 	server *httptest.Server
 
-	mu          sync.Mutex
-	stkResult   string // "processing", "paid", or "cancelled"
-	lastSTK     map[string]any
-	stkCount    int
-	paystackAmt map[string]int64 // reference -> amount initialized
-	paystackCur map[string]string
+	mu           sync.Mutex
+	stkResult    string // "processing", "paid", or "cancelled"
+	lastSTK      map[string]any
+	stkCount     int
+	paystackAmt  map[string]int64 // reference -> amount initialized
+	paystackCur  map[string]string
+	refundCount  int
+	refundStatus string
+	refundFail   bool // the refund endpoint answers 500
 }
 
 func newFakeProviders() *fakeProviders {
-	f := &fakeProviders{stkResult: "processing", paystackAmt: map[string]int64{}, paystackCur: map[string]string{}}
+	f := &fakeProviders{stkResult: "processing", refundStatus: "pending", paystackAmt: map[string]int64{}, paystackCur: map[string]string{}}
 	f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	return f
 }
@@ -44,6 +47,8 @@ func (f *fakeProviders) reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.stkResult, f.lastSTK, f.stkCount = "processing", nil, 0
+	f.refundCount, f.refundStatus, f.refundFail = 0, "pending", false
+	f.paystackAmt, f.paystackCur = map[string]int64{}, map[string]string{}
 }
 
 func (f *fakeProviders) serve(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +89,32 @@ func (f *fakeProviders) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fmt.Fprintf(w, `{"status":true,"data":{"status":"success","amount":%d,"currency":"%s","reference":"%s","id":7}}`, amount, f.paystackCur[ref], ref)
+	case r.Method == http.MethodPost && r.URL.Path == "/refund":
+		var body struct {
+			Transaction string `json:"transaction"`
+			Amount      int64  `json:"amount"`
+			Currency    string `json:"currency"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if f.refundFail {
+			f.refundCount++
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"status":false,"message":"upstream timeout"}`))
+			return
+		}
+		if body.Amount != f.paystackAmt[body.Transaction] || body.Currency != f.paystackCur[body.Transaction] {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"status":false,"message":"amount mismatch"}`))
+			return
+		}
+		f.refundCount++
+		fmt.Fprintf(w, `{"status":true,"data":{"id":88,"status":"%s","amount":%d,"currency":"%s"}}`, f.refundStatus, body.Amount, body.Currency)
+	case r.Method == http.MethodGet && r.URL.Path == "/refund/88":
+		for reference, amount := range f.paystackAmt {
+			fmt.Fprintf(w, `{"status":true,"data":{"id":88,"status":"%s","amount":%d,"currency":"%s"}}`, f.refundStatus, amount, f.paystackCur[reference])
+			return
+		}
+		http.NotFound(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -289,6 +320,8 @@ func TestIntegration_MpesaRetryPreservesOldCallback(t *testing.T) {
 	if resp, _ := makeRequest(http.MethodPost, "/payments/order/1", url.Values{"phone": {"0712345678"}}, []*http.Cookie{customer}, ""); resp.StatusCode != http.StatusSeeOther || testProviders.stkCount != 2 {
 		t.Fatalf("retry status=%d pushes=%d", resp.StatusCode, testProviders.stkCount)
 	}
+	secondURL, _ := testProviders.lastSTK["CallBackURL"].(string)
+	secondPath := strings.TrimPrefix(secondURL, "https://shop.example")
 
 	// A delayed success for the original request remains addressable after
 	// the retry. The paid attempt wins and the newer prompt is closed.
@@ -320,6 +353,17 @@ func TestIntegration_MpesaRetryPreservesOldCallback(t *testing.T) {
 	}
 	if len(statuses) != 2 || statuses[0] != "completed" || statuses[1] != "failed" {
 		t.Fatalf("attempt statuses = %v", statuses)
+	}
+	duplicate := `{"Body":{"stkCallback":{"MerchantRequestID":"m-2","CheckoutRequestID":"ws_CO_2","ResultCode":0,"ResultDesc":"ok","CallbackMetadata":{"Item":[{"Name":"Amount","Value":500},{"Name":"MpesaReceiptNumber","Value":"SECOND-RECEIPT"}]}}}}`
+	req = httptest.NewRequest(http.MethodPost, "http://localhost"+secondPath, strings.NewReader(duplicate))
+	rec = httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("duplicate callback status=%d", rec.Code)
+	}
+	var reason, receipt string
+	if err := testStore.DB.QueryRow("SELECT reason, receipt FROM payment_exceptions WHERE payment_id = 1").Scan(&reason, &receipt); err != nil || reason != "duplicate_charge" || receipt != "SECOND-RECEIPT" {
+		t.Fatalf("duplicate exception = %q %q, %v", reason, receipt, err)
 	}
 }
 
@@ -358,6 +402,113 @@ func TestIntegration_PaystackRedirectWebhookAndReturn(t *testing.T) {
 	resp, _ = makeRequest(http.MethodGet, "/payments/return?trxref="+reference+"&reference="+reference, nil, []*http.Cookie{customer}, "")
 	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/payments/order/1" {
 		t.Fatalf("return status=%d location=%q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}
+
+func TestIntegration_PaystackLateCaptureRefund(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
+	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
+	resp := placeOrder(t, customer, "paystack", nil)
+	reference := strings.TrimPrefix(resp.Header.Get("Location"), "https://checkout.paystack.test/")
+	if _, err := testStore.DB.Exec("UPDATE payments SET created_at = now() - interval '31 minutes'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testStore.DB.Exec("UPDATE payment_attempts SET created_at = now() - interval '31 minutes'"); err != nil {
+		t.Fatal(err)
+	}
+	if expired, err := testStore.ExpireUnpaidOrders(t.Context(), time.Now().Add(-db.UnpaidOrderTTL)); err != nil || expired != 1 {
+		t.Fatalf("expire = %d, %v", expired, err)
+	}
+	webhook := []byte(`{"event":"charge.success","data":{"reference":"` + reference + `"}}`)
+	mac := hmac.New(sha512.New, []byte("sk_test_paystack"))
+	mac.Write(webhook)
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/payments/webhooks/paystack", strings.NewReader(string(webhook)))
+	req.Header.Set("X-Paystack-Signature", hex.EncodeToString(mac.Sum(nil)))
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || paymentStatus(t, 1) != db.PaymentStatusCaptured {
+		t.Fatalf("late webhook status=%d payment=%s", rec.Code, paymentStatus(t, 1))
+	}
+	resp, body := makeRequest(http.MethodGet, "/payments", nil, []*http.Cookie{admin}, "admin.localhost")
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "After cancellation") || !strings.Contains(body, "Request refund") {
+		t.Fatalf("admin exception status=%d body=%s", resp.StatusCode, body)
+	}
+	form := url.Values{"action": {"refund"}, "exception_id": {"1"}}
+	resp, body = makeRequest(http.MethodPost, "/payments", form, []*http.Cookie{admin}, "admin.localhost")
+	if resp.StatusCode != http.StatusFound || testProviders.refundCount != 1 {
+		t.Fatalf("request refund status=%d count=%d body=%s", resp.StatusCode, testProviders.refundCount, body)
+	}
+	resp, _ = makeRequest(http.MethodPost, "/payments", form, []*http.Cookie{admin}, "admin.localhost")
+	if resp.StatusCode != http.StatusFound || testProviders.refundCount != 1 {
+		t.Fatalf("duplicate refund status=%d count=%d", resp.StatusCode, testProviders.refundCount)
+	}
+	testProviders.mu.Lock()
+	testProviders.refundStatus = "processed"
+	testProviders.mu.Unlock()
+	resp, body = makeRequest(http.MethodPost, "/payments", url.Values{"action": {"refund_refresh"}, "exception_id": {"1"}}, []*http.Cookie{admin}, "admin.localhost")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("refresh refund status=%d body=%s", resp.StatusCode, body)
+	}
+	var exceptionStatus string
+	if err := testStore.DB.QueryRow("SELECT status FROM payment_exceptions WHERE id = 1").Scan(&exceptionStatus); err != nil || exceptionStatus != "refunded" || paymentStatus(t, 1) != db.PaymentStatusRefunded {
+		t.Fatalf("refund status=%s payment=%s err=%v", exceptionStatus, paymentStatus(t, 1), err)
+	}
+}
+
+func TestIntegration_UncertainRefundIsResolvedByHand(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
+	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
+	resp := placeOrder(t, customer, "paystack", nil)
+	reference := strings.TrimPrefix(resp.Header.Get("Location"), "https://checkout.paystack.test/")
+	if _, err := testStore.DB.Exec("UPDATE payments SET created_at = now() - interval '31 minutes'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testStore.DB.Exec("UPDATE payment_attempts SET created_at = now() - interval '31 minutes'"); err != nil {
+		t.Fatal(err)
+	}
+	if expired, err := testStore.ExpireUnpaidOrders(t.Context(), time.Now().Add(-db.UnpaidOrderTTL)); err != nil || expired != 1 {
+		t.Fatalf("expire = %d, %v", expired, err)
+	}
+	webhook := []byte(`{"event":"charge.success","data":{"reference":"` + reference + `"}}`)
+	mac := hmac.New(sha512.New, []byte("sk_test_paystack"))
+	mac.Write(webhook)
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/payments/webhooks/paystack", strings.NewReader(string(webhook)))
+	req.Header.Set("X-Paystack-Signature", hex.EncodeToString(mac.Sum(nil)))
+	testHandler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if _, body := makeRequest(http.MethodGet, "/", nil, []*http.Cookie{admin}, "admin.localhost"); !strings.Contains(body, "1 payment exception needs") {
+		t.Fatalf("dashboard does not flag the exception")
+	}
+
+	testProviders.mu.Lock()
+	testProviders.refundFail = true
+	testProviders.mu.Unlock()
+	form := url.Values{"action": {"refund"}, "exception_id": {"1"}}
+	makeRequest(http.MethodPost, "/payments", form, []*http.Cookie{admin}, "admin.localhost")
+	makeRequest(http.MethodPost, "/payments", form, []*http.Cookie{admin}, "admin.localhost")
+	var status string
+	if err := testStore.DB.QueryRow("SELECT status FROM payment_exceptions WHERE id = 1").Scan(&status); err != nil || status != "review" || testProviders.refundCount != 1 {
+		t.Fatalf("after failed refund status=%s calls=%d err=%v", status, testProviders.refundCount, err)
+	}
+
+	// Closing by hand needs the provider's reference.
+	resp, _ = makeRequest(http.MethodPost, "/payments", url.Values{"action": {"refund_resolve"}, "exception_id": {"1"}}, []*http.Cookie{admin}, "admin.localhost")
+	if err := testStore.DB.QueryRow("SELECT status FROM payment_exceptions WHERE id = 1").Scan(&status); err != nil || resp.StatusCode == http.StatusFound || status != "review" {
+		t.Fatalf("resolve without reference status=%d exception=%s err=%v", resp.StatusCode, status, err)
+	}
+	resp, _ = makeRequest(http.MethodPost, "/payments", url.Values{"action": {"refund_resolve"}, "exception_id": {"1"}, "refund_reference": {"RF-123"}}, []*http.Cookie{admin}, "admin.localhost")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("resolve status=%d", resp.StatusCode)
+	}
+	var refundRef string
+	if err := testStore.DB.QueryRow("SELECT status, refund_reference FROM payment_exceptions WHERE id = 1").Scan(&status, &refundRef); err != nil || status != "refunded" || refundRef != "RF-123" || paymentStatus(t, 1) != db.PaymentStatusRefunded {
+		t.Fatalf("resolved status=%s ref=%s payment=%s err=%v", status, refundRef, paymentStatus(t, 1), err)
+	}
+	if testProviders.refundCount != 1 {
+		t.Fatalf("resolving by hand called the provider again")
+	}
+	if _, body := makeRequest(http.MethodGet, "/", nil, []*http.Cookie{admin}, "admin.localhost"); strings.Contains(body, "payment exception needs") {
+		t.Fatalf("dashboard still flags a resolved exception")
 	}
 }
 

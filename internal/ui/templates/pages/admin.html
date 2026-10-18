@@ -13,6 +13,9 @@
     <div class="stat"><dt>Admins</dt><dd>{{ .AdminCount }}</dd></div>
     <div class="stat"><dt>Sessions</dt><dd>{{ .SessionCount }}</dd></div>
   </dl>
+  {{ if .PaymentAttention }}
+  <a class="notice" href="/payments">{{ icon "info" }}<p>{{ .PaymentAttention }} payment {{ if eq .PaymentAttention 1 }}exception needs{{ else }}exceptions need{{ end }} a refund decision.</p></a>
+  {{ end }}
   {{ if and (eq .Role "admin") (not .OnlinePayments) }}
   <a class="notice" href="/payments">{{ icon "info" }}<p>Only cash on delivery is on. Set up M-Pesa or Paystack.</p></a>
   {{ end }}
@@ -439,6 +442,56 @@
   </section>
   {{ end }}
   <p class="tiny muted">Other providers (Flutterwave, Stripe, MTN MoMo) plug in the same way. See docs/payments.md.</p>
+
+  <h2 class="section-title">Payment exceptions</h2>
+  <p class="tiny muted">Confirmed charges after cancellation or a second charge for one order need a refund. Paystack refunds are requested here; record an M-Pesa reversal after completing it in the M-Pesa portal.</p>
+  {{ if .PaymentExceptions }}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Order</th><th>Charge</th><th>Issue</th><th>Status</th><th class="actions">Action</th></tr></thead>
+      <tbody>
+        {{ range .PaymentExceptions }}
+        <tr>
+          <td>#{{ .OrderID }}<div class="tiny muted">{{ .RequestReference }}</div></td>
+          <td>{{ .Currency }} {{ .Amount }}</td>
+          <td>{{ if eq .Reason "late_capture" }}After cancellation{{ else }}Second charge{{ end }}</td>
+          <td><span class="badge {{ if eq .Status "refunded" }}badge-solid{{ else }}badge-muted{{ end }}">{{ .Status }}</span>{{ if .LastError }}<div class="tiny muted">{{ .LastError }}</div>{{ end }}{{ if .RefundReference }}<div class="tiny muted">{{ .RefundReference }}</div>{{ end }}</td>
+          <td class="actions">
+            {{ if eq .Status "open" }}
+              <form method="POST" action="/payments" class="stack-sm" data-submit-once>
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <input type="hidden" name="action" value="refund">
+                <input type="hidden" name="exception_id" value="{{ .ID }}">
+                {{ if eq .Provider "mpesa" }}<label class="sr-only" for="refund-reference-{{ .ID }}">M-Pesa reversal receipt</label><input class="input" id="refund-reference-{{ .ID }}" name="refund_reference" placeholder="Reversal receipt" required>{{ end }}
+                <button type="submit" class="btn btn-sm">{{ if eq .Provider "mpesa" }}Record refund{{ else }}Request refund{{ end }}</button>
+              </form>
+            {{ else if and (eq .Provider "paystack") .RefundReference (ne .Status "refunded") }}
+              <form method="POST" action="/payments" data-submit-once>
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <input type="hidden" name="action" value="refund_refresh">
+                <input type="hidden" name="exception_id" value="{{ .ID }}">
+                <button type="submit" class="btn btn-sm">Check status</button>
+              </form>
+            {{ end }}
+            {{ if or (eq .Status "requested") (eq .Status "pending") (eq .Status "review") }}
+              <form method="POST" action="/payments" class="stack-sm" data-submit-once>
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <input type="hidden" name="action" value="refund_resolve">
+                <input type="hidden" name="exception_id" value="{{ .ID }}">
+                <label class="sr-only" for="resolve-reference-{{ .ID }}">Provider refund reference</label>
+                <input class="input" id="resolve-reference-{{ .ID }}" name="refund_reference" placeholder="Refund reference" required>
+                <button type="submit" class="btn btn-secondary btn-sm">Mark refunded</button>
+              </form>
+            {{ end }}
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ else }}
+  <p class="muted">No payment exceptions.</p>
+  {{ end }}
 {{ end }}
 
 {{ if eq .Title "Team Management" }}

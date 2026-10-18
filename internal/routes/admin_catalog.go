@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
@@ -174,6 +175,24 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 		if r.Method == http.MethodPost {
 			var message string
 			switch r.FormValue("action") {
+			case "refund", "refund_refresh", "refund_resolve":
+				var id int
+				id, err = strconv.Atoi(r.FormValue("exception_id"))
+				if err == nil && id > 0 {
+					switch r.FormValue("action") {
+					case "refund_refresh":
+						_, err = a.Payment.RefreshRefund(r.Context(), actor, id)
+						message = "Refund status checked"
+					case "refund_resolve":
+						_, err = a.Payment.ResolveRefund(actor, id, r.FormValue("refund_reference"))
+						message = "Refund marked as completed"
+					default:
+						_, err = a.Payment.RequestRefund(r.Context(), actor, id, r.FormValue("refund_reference"))
+						message = "Refund request recorded"
+					}
+				} else {
+					err = db.ErrPaymentExceptionNotFound
+				}
 			case "pricing":
 				var saved paymentsvc.Pricing
 				saved, err = a.Payment.SavePricing(actor, paymentsvc.PricingInput{
@@ -215,6 +234,13 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 				page.FormError = "Set SECRETS_KEY on the server to store payment credentials."
 			case errors.Is(err, paymentsvc.ErrLastMethod):
 				page.FormError = "Keep at least one payment method enabled, or customers cannot check out."
+			case errors.Is(err, paymentsvc.ErrRefundReferenceRequired):
+				page.FormError = "Enter the M-Pesa reversal receipt after completing the refund in M-Pesa."
+			case errors.Is(err, db.ErrPaymentExceptionNotFound):
+				page.FormError = "That payment exception no longer exists."
+			case errors.Is(err, paymentsvc.ErrRefundNotReady), errors.Is(err, paymentsvc.ErrRefundUnsupported),
+				errors.Is(err, paymentsvc.ErrRefundNotResolvable):
+				page.FormError = sentence(err)
 			case errors.Is(err, paymentsvc.ErrMissingFields), errors.Is(err, paymentsvc.ErrCurrencyMismatch),
 				errors.Is(err, paymentsvc.ErrInvalidPricing), errors.Is(err, paymentsvc.ErrUnknownProvider):
 				page.FormError = sentence(err)
@@ -232,6 +258,10 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 			return
 		}
 		if page.Providers, err = a.Payment.Providers(); err != nil {
+			serverError(w, r)
+			return
+		}
+		if page.PaymentExceptions, err = a.Payment.PaymentExceptions(); err != nil {
 			serverError(w, r)
 			return
 		}

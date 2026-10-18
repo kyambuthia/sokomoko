@@ -64,6 +64,11 @@ type store interface {
 	CapturePayment(attemptID int, confirmed money.Cents, currency, receipt string) (bool, error)
 	FailPaymentAttempt(attemptID int, reason string) error
 	LastPaymentError(paymentID int) (string, error)
+	ListPaymentExceptions(limit int) ([]db.PaymentException, error)
+	GetPaymentException(id int) (*db.PaymentException, error)
+	BeginRefund(id int) (*db.PaymentException, bool, error)
+	SetPaymentExceptionStatus(id int, status, refundReference, lastError string) error
+	PaymentExceptionCounts(ctx context.Context) (open, pending, review int, err error)
 }
 
 var _ store = (*db.Store)(nil)
@@ -463,6 +468,10 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 	case !s.IsOnline(payment.Method):
 		view.Status = "offline"
 		return view, nil
+	case payment.OrderStatus == db.OrderStatusCancelled && payment.Status == db.PaymentStatusRefunded:
+		view.Status = "cancelled"
+		view.Message = "The payment was refunded after this order was cancelled."
+		return view, nil
 	case payment.OrderStatus == db.OrderStatusCancelled && payment.Status == db.PaymentStatusCaptured:
 		view.Status = "cancelled"
 		view.Message = "Payment arrived after this order was cancelled. Contact the store for a refund."
@@ -537,6 +546,9 @@ func (s *Service) apply(payment *db.OnlinePayment, v payments.Verification) erro
 		if err != nil {
 			return err
 		}
+		if payment.Status == db.PaymentStatusCaptured && payment.AttemptStatus != db.PaymentAttemptStatusCompleted {
+			slog.Warn("duplicate payment captured; refund required", "payment_id", payment.ID, "attempt_id", payment.AttemptID)
+		}
 		if captured {
 			slog.Info("payment captured", "payment_id", payment.ID, "order_id", payment.OrderID, "provider", payment.Provider)
 			if payment.OrderStatus == db.OrderStatusCancelled {
@@ -560,7 +572,7 @@ func (s *Service) HandleReturn(ctx context.Context, userID int, reference string
 		return 0, db.ErrPaymentNotFound
 	}
 	payload, _ := s.store.PaymentPayload(payment.AttemptID)
-	if payment.Status != db.PaymentStatusCaptured {
+	if payment.AttemptStatus != db.PaymentAttemptStatusCompleted {
 		if err := s.verifyAndApply(ctx, payment, payload); err != nil {
 			return payment.OrderID, err
 		}
@@ -599,7 +611,7 @@ func (s *Service) HandleWebhook(ctx context.Context, providerID string, r *http.
 	if err != nil {
 		return err
 	}
-	if payment.Status == db.PaymentStatusCaptured {
+	if payment.AttemptStatus == db.PaymentAttemptStatusCompleted {
 		return nil
 	}
 	payload, _ := s.store.PaymentPayload(payment.AttemptID)
@@ -637,7 +649,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 			return err
 		}
 	}
-	if payment.Status == db.PaymentStatusCaptured || event.Result == nil {
+	if payment.AttemptStatus == db.PaymentAttemptStatusCompleted || event.Result == nil {
 		return nil
 	}
 	if event.Result.Status == payments.StatusFailed {

@@ -338,33 +338,32 @@ func (s *Store) PaymentPayload(attemptID int) (map[string]string, error) {
 	return payload, json.Unmarshal(raw, &payload)
 }
 
-// CapturePayment marks a pending payment captured after the provider
-// confirmed it. The confirmed amount (minor units) and currency must match
-// what was charged. Capturing an already captured payment is a no-op, so
-// webhooks and return redirects can race safely. It reports whether this call
-// performed the capture.
+// CapturePayment records a provider-confirmed charge. Repeated confirmation
+// of the same attempt is harmless; a second charged attempt or a charge after
+// cancellation enters the operator refund queue.
 func (s *Store) CapturePayment(attemptID int, confirmed money.Cents, currency, receipt string) (bool, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
 	captured := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
-		var paymentID int
-		var status, cur string
+		var paymentID, orderID int
+		var status, cur, provider, reference, attemptStatus string
 		var amount int64
 		var payload []byte
-		if err := tx.QueryRowContext(ctx, `SELECT p.id, p.status, p.currency, p.amount_cents, a.provider_payload
+		if err := tx.QueryRowContext(ctx, `SELECT p.id, p.order_id, p.status, p.currency, p.provider, p.amount_cents,
+		        a.request_reference, a.status, a.provider_payload
 			FROM payments p JOIN payment_attempts a ON a.payment_id = p.id
 			WHERE a.id = $1 FOR UPDATE OF p, a`, attemptID).
-			Scan(&paymentID, &status, &cur, &amount, &payload); err != nil {
+			Scan(&paymentID, &orderID, &status, &cur, &provider, &amount, &reference, &attemptStatus, &payload); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentNotFound
 			}
 			return err
 		}
-		if status == PaymentStatusCaptured {
+		if attemptStatus == PaymentAttemptStatusCompleted {
 			return nil
 		}
-		if status != PaymentStatusPending && status != PaymentStatusFailed {
+		if status != PaymentStatusPending && status != PaymentStatusFailed && status != PaymentStatusCaptured && status != PaymentStatusRefunded {
 			return fmt.Errorf("%w: payment is %s", ErrPaymentNotFound, status)
 		}
 		var data map[string]string
@@ -377,6 +376,32 @@ func (s *Store) CapturePayment(attemptID int, confirmed money.Cents, currency, r
 		}
 		if confirmed != expected || !strings.EqualFold(cur, currency) {
 			return ErrPaymentAmountMatch
+		}
+		var orderStatus string
+		if err := tx.QueryRowContext(ctx, "SELECT status FROM orders WHERE id = $1 FOR UPDATE", orderID).Scan(&orderStatus); err != nil {
+			return err
+		}
+		exceptionReason := ""
+		if status == PaymentStatusCaptured || status == PaymentStatusRefunded {
+			exceptionReason = "duplicate_charge"
+		} else if status == PaymentStatusFailed || orderStatus == OrderStatusCancelled {
+			exceptionReason = "late_capture"
+		}
+		if exceptionReason != "" {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO payment_exceptions
+				 (payment_id, attempt_id, reason, provider, currency, amount_cents, request_reference, receipt)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				 ON CONFLICT (attempt_id) DO NOTHING`,
+				paymentID, attemptID, exceptionReason, provider, cur, int64(confirmed), reference, receipt); err != nil {
+				return err
+			}
+		}
+		if status == PaymentStatusCaptured || status == PaymentStatusRefunded {
+			_, err := tx.ExecContext(ctx,
+				`UPDATE payment_attempts SET status = 'completed',
+				 external_reference = COALESCE(NULLIF($2, ''), external_reference) WHERE id = $1`, attemptID, receipt)
+			return err
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE payments SET status = 'captured', captured_at = now(),

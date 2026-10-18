@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
@@ -46,11 +47,13 @@ type AdminPageData struct {
 
 	Pricing           paymentsvc.Pricing
 	Providers         []paymentsvc.ProviderView
+	PaymentExceptions []db.PaymentException
 	Currencies        []money.Currency
 	SecretsConfigured bool
 	PublicBase        string
 	FormProvider      string // provider whose form produced FormError
 	OnlinePayments    bool   // an online payment method is enabled
+	PaymentAttention  int    // payment exceptions waiting on an admin
 }
 
 func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, status int, data AdminPageData) {
@@ -80,6 +83,12 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 		page := adminDashboardPage(metrics, adminRoleFromContext(r))
 		for _, option := range a.Payment.MethodOptions() {
 			page.OnlinePayments = page.OnlinePayments || option.Online
+		}
+		if page.Role == "admin" {
+			if page.PaymentAttention, err = a.Payment.ExceptionsNeedingAttention(r.Context()); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
 		}
 		renderAdminPage(a, w, r, http.StatusOK, page)
 	}
