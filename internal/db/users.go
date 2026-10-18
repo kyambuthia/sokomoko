@@ -94,6 +94,26 @@ func (s *Store) CountUsersByRole(role string) (int, error) {
 	return count, err
 }
 
+// DashboardCounts is the admin header summary, read in one round trip.
+type DashboardCounts struct {
+	Products, Sessions, Admins, Staff, Users int
+}
+
+func (s *Store) DashboardCounts() (DashboardCounts, error) {
+	ctx, cancel := s.ctx()
+	defer cancel()
+	var c DashboardCounts
+	err := s.DB.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM products WHERE deleted_at IS NULL),
+		(SELECT count(*) FROM sessions WHERE expires_at > now()),
+		count(*) FILTER (WHERE role = 'admin'),
+		count(*) FILTER (WHERE role = 'staff'),
+		count(*) FILTER (WHERE role = 'user')
+		FROM users WHERE deleted_at IS NULL`).
+		Scan(&c.Products, &c.Sessions, &c.Admins, &c.Staff, &c.Users)
+	return c, err
+}
+
 func (s *Store) HasAdminUser() (bool, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()

@@ -118,26 +118,14 @@ func newWithStore(store store) *Service {
 }
 
 func (s *Service) Metrics() (Metrics, error) {
-	var (
-		m   Metrics
-		err error
-	)
-	if m.ProductCount, err = s.store.CountProducts(); err != nil {
+	c, err := s.store.DashboardCounts()
+	if err != nil {
 		return Metrics{}, err
 	}
-	if m.SessionCount, err = s.store.CountActiveSessions(); err != nil {
-		return Metrics{}, err
-	}
-	if m.AdminCount, err = s.store.CountUsersByRole(db.RoleAdmin); err != nil {
-		return Metrics{}, err
-	}
-	if m.StaffCount, err = s.store.CountUsersByRole(db.RoleStaff); err != nil {
-		return Metrics{}, err
-	}
-	if m.UserCount, err = s.store.CountUsersByRole(db.RoleUser); err != nil {
-		return Metrics{}, err
-	}
-	return m, nil
+	return Metrics{
+		ProductCount: c.Products, SessionCount: c.Sessions,
+		AdminCount: c.Admins, StaffCount: c.Staff, UserCount: c.Users,
+	}, nil
 }
 
 func (s *Service) Products() ([]Product, error) {

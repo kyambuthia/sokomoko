@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"net/textproto"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -69,6 +70,7 @@ type Service struct {
 	store                    store
 	environment              string
 	adminSetupToken          string
+	resetEmailBackoff        []time.Duration // nil means defaultResetEmailBackoff
 	sessionCookieDomain      string
 	abuseLimiter             *authAbuseLimiter
 	passwordResetBaseURL     string
@@ -512,13 +514,35 @@ func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink st
 	}
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), resetEmailTimeout)
-		defer cancel()
-
-		if err := sender(ctx, recipientEmail, resetLink); err != nil {
+		var err error
+		backoff := s.resetEmailBackoff
+		if backoff == nil {
+			backoff = defaultResetEmailBackoff
+		}
+		for attempt := 0; attempt < len(backoff)+1; attempt++ {
+			if attempt > 0 {
+				time.Sleep(backoff[attempt-1])
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), resetEmailTimeout)
+			err = sender(ctx, recipientEmail, resetLink)
+			cancel()
+			if err == nil || permanentMailError(err) {
+				break
+			}
+		}
+		if err != nil {
 			log.Printf("password reset email send failed for user_id=%d: %v", userID, err)
 		}
 	}()
+}
+
+// defaultResetEmailBackoff is the wait before each retry of a reset email.
+var defaultResetEmailBackoff = []time.Duration{time.Second, 4 * time.Second}
+
+// permanentMailError reports an SMTP 5xx reply, which a retry cannot fix.
+func permanentMailError(err error) bool {
+	var reply *textproto.Error
+	return errors.As(err, &reply) && reply.Code >= 500
 }
 
 func isUniqueConstraintErr(err error) bool {

@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
 	"strings"
 	"testing"
@@ -208,5 +211,42 @@ func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
 
 	if again := submit(); again.Code != http.StatusFound || again.Header().Get("Location") != "/login" {
 		t.Fatalf("second setup status=%d location=%q, want redirect to /login", again.Code, again.Header().Get("Location"))
+	}
+}
+
+func TestDispatchPasswordResetEmail_RetriesTransientFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		failures  []error
+		wantCalls int
+	}{
+		{"succeeds after two transient failures", []error{errors.New("dial tcp: timeout"), errors.New("421 try later")}, 3},
+		{"gives up after three attempts", []error{errors.New("a"), errors.New("b"), errors.New("c"), errors.New("d")}, 3},
+		{"stops on a permanent rejection", []error{&textproto.Error{Code: 550, Msg: "no such user"}}, 1},
+	} {
+		calls := make(chan int, 10)
+		n := 0
+		svc := &Service{resetEmailBackoff: []time.Duration{time.Millisecond, time.Millisecond}, passwordResetEmailSender: func(context.Context, string, string) error {
+			n++
+			calls <- n
+			if n <= len(tc.failures) {
+				return tc.failures[n-1]
+			}
+			return nil
+		}}
+		svc.dispatchPasswordResetEmail("a@example.com", "https://shop.example/reset", 1)
+		got := 0
+		for got < tc.wantCalls {
+			select {
+			case got = <-calls:
+			case <-time.After(2 * time.Second):
+				t.Fatalf("%s: %d calls, want %d", tc.name, got, tc.wantCalls)
+			}
+		}
+		select {
+		case extra := <-calls:
+			t.Fatalf("%s: unexpected call %d", tc.name, extra)
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }

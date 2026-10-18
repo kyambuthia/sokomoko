@@ -252,6 +252,10 @@ func (c Config) ValidateDatabase() error {
 	if c.DBMaxOpenConns < 0 || c.DBMaxIdleConns < 0 || (c.DBMaxOpenConns > 0 && c.DBMaxIdleConns > c.DBMaxOpenConns) {
 		return errors.New("database pool requires 0 <= DB_MAX_IDLE_CONNS <= DB_MAX_OPEN_CONNS")
 	}
+	if c.DBMaxOpenConns == 1 {
+		// Maintenance holds a lock connection while its job borrows another.
+		return errors.New("DB_MAX_OPEN_CONNS must be at least 2")
+	}
 	for _, problem := range c.loadErrors {
 		if strings.HasPrefix(problem, "DB_") {
 			return errors.New(problem)

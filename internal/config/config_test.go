@@ -208,6 +208,7 @@ func TestValidate_RejectsUnsafeProductionSettings(t *testing.T) {
 		{"weak setup token", func(c *Config) { c.AdminSetupToken = "short" }, "ADMIN_SETUP_TOKEN"},
 		{"unrelated cookie domain", func(c *Config) { c.SessionCookieDomain = ".other.com" }, "SESSION_COOKIE_DOMAIN"},
 		{"inverted pool", func(c *Config) { c.DBMaxOpenConns = 2; c.DBMaxIdleConns = 4 }, "DB_MAX_IDLE_CONNS"},
+		{"single connection pool", func(c *Config) { c.DBMaxOpenConns = 1; c.DBMaxIdleConns = 1 }, "at least 2"},
 		{"zero rate window", func(c *Config) { c.PostRateLimitMax = 10 }, "POST_RATE_LIMIT_WINDOW_SECONDS"},
 		{"inverted auth backoff", func(c *Config) { c.AuthAbuseMaxFailures = 5; c.AuthAbuseBackoffBase = 10; c.AuthAbuseBackoffMax = 1 }, "AUTH_ABUSE"},
 	}

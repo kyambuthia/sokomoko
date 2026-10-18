@@ -7,7 +7,7 @@ import (
 )
 
 type store interface {
-	CountActiveSessions() (int, error)
+	DashboardCounts() (db.DashboardCounts, error)
 	CountProductsByCategory() (map[int]int, error)
 	CreateCategory(category db.Category) (int64, error)
 	CreatePartner(partner db.Partner) (int64, error)
@@ -19,8 +19,6 @@ type store interface {
 	ListPartnerAccounts() ([]db.PartnerAccount, error)
 	ListPartners() ([]db.Partner, error)
 	SetPartnerStatus(id int, status string) (bool, error)
-	CountProducts() (int, error)
-	CountUsersByRole(role string) (int, error)
 	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
 	DeleteUser(id int) error
 	GetAllProducts() ([]db.Product, error)

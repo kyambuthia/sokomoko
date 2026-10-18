@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -241,5 +242,72 @@ func TestBootstrapAdmin_ConcurrentCallsCreateOneAdmin(t *testing.T) {
 	}
 	if count, _ := s.CountUsersByRole(RoleStaff); count != 1 {
 		t.Fatalf("staff = %d, want 1 (no partial provisioning from losers)", count)
+	}
+}
+
+func TestDashboardCounts_MatchesIndividualCounts(t *testing.T) {
+	s := newTestStore(t)
+	roles := []string{RoleAdmin, RoleStaff, RoleStaff, RoleUser, RoleUser, RoleUser, RolePartner}
+	var lastUser int64
+	for i, role := range roles {
+		id, err := s.CreateUser(User{Username: fmt.Sprintf("dash%d", i), Email: fmt.Sprintf("dash%d@example.com", i), PasswordHash: "h", Role: role})
+		if err != nil {
+			t.Fatal(err)
+		}
+		lastUser = id
+	}
+	if err := s.CreateSession(Session{ID: "dash-session", UserID: int(lastUser), CSRFToken: "c", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	// A deactivated customer drops out of every count.
+	deleted, err := s.CreateUser(User{Username: "gone", Email: "gone@example.com", PasswordHash: "h", Role: RoleUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser(int(deleted)); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.DashboardCounts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	products, _ := s.CountProducts()
+	sessions, _ := s.CountActiveSessions()
+	want := DashboardCounts{Products: products, Sessions: sessions, Admins: 1, Staff: 2, Users: 3}
+	if got != want || sessions != 1 {
+		t.Fatalf("DashboardCounts = %+v, want %+v", got, want)
+	}
+}
+
+func TestRunExclusive_SecondHolderSkips(t *testing.T) {
+	s := newTestStore(t)
+	const key int64 = 0x7465737478636c75
+	inside := make(chan struct{})
+	leave := make(chan struct{})
+	done := make(chan bool)
+	go func() {
+		ran, err := s.RunExclusive(t.Context(), key, func(context.Context) {
+			close(inside)
+			<-leave
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		done <- ran
+	}()
+	<-inside
+	ran, err := s.RunExclusive(t.Context(), key, func(context.Context) { t.Error("second holder ran") })
+	if err != nil || ran {
+		t.Fatalf("second RunExclusive = %v, %v; want skipped", ran, err)
+	}
+	close(leave)
+	if !<-done {
+		t.Fatal("first holder did not run")
+	}
+	// The lock is released afterwards.
+	ran, err = s.RunExclusive(t.Context(), key, func(context.Context) {})
+	if err != nil || !ran {
+		t.Fatalf("RunExclusive after release = %v, %v", ran, err)
 	}
 }
