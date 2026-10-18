@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ var (
 	ErrPaymentNotFound    = errors.New("payment not found")
 	ErrCurrencyLocked     = errors.New("currency cannot change after orders exist")
 	ErrPaymentAmountMatch = errors.New("payment amount or currency does not match")
+	ErrAttemptInProgress  = errors.New("a payment attempt is already in progress")
 )
 
 // UnpaidOrderTTL is how long an online order waits for payment before
@@ -169,20 +171,26 @@ type OnlinePayment struct {
 	CallbackTokenHash string
 	OrderStatus       string
 	CreatedAt         time.Time
+	AttemptID         int
+	AttemptStatus     string
 }
 
 const onlinePaymentSelect = `
 SELECT p.id, p.order_id, p.user_id, u.email, p.method, p.provider, p.status, p.currency, p.amount_cents,
-       COALESCE(p.external_reference, ''), COALESCE(p.callback_token_hash, ''), o.status, p.created_at
+       COALESCE(a.request_reference, ''), COALESCE(a.callback_token_hash, ''), o.status, p.created_at,
+       COALESCE(a.id, 0), COALESCE(a.status, '')
 FROM payments p
 JOIN users u ON u.id = p.user_id
 JOIN orders o ON o.id = p.order_id`
+
+const latestAttemptJoin = ` LEFT JOIN payment_attempts a ON a.id = (
+    SELECT id FROM payment_attempts WHERE payment_id = p.id ORDER BY id DESC LIMIT 1)`
 
 func scanOnlinePayment(row interface{ Scan(...any) error }) (*OnlinePayment, error) {
 	var p OnlinePayment
 	var amount int64
 	err := row.Scan(&p.ID, &p.OrderID, &p.UserID, &p.UserEmail, &p.Method, &p.Provider, &p.Status, &p.Currency, &amount,
-		&p.ExternalReference, &p.CallbackTokenHash, &p.OrderStatus, &p.CreatedAt)
+		&p.ExternalReference, &p.CallbackTokenHash, &p.OrderStatus, &p.CreatedAt, &p.AttemptID, &p.AttemptStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrPaymentNotFound
 	}
@@ -198,23 +206,23 @@ func (s *Store) GetOrderPayment(userID, orderID int) (*OnlinePayment, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
 	return scanOnlinePayment(s.DB.QueryRowContext(ctx,
-		onlinePaymentSelect+" WHERE p.order_id = $1 AND p.user_id = $2 ORDER BY p.id DESC LIMIT 1", orderID, userID))
+		onlinePaymentSelect+latestAttemptJoin+" WHERE p.order_id = $1 AND p.user_id = $2 ORDER BY p.id DESC LIMIT 1", orderID, userID))
 }
 
 func (s *Store) GetPaymentByID(paymentID int) (*OnlinePayment, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
-	return scanOnlinePayment(s.DB.QueryRowContext(ctx, onlinePaymentSelect+" WHERE p.id = $1", paymentID))
+	return scanOnlinePayment(s.DB.QueryRowContext(ctx, onlinePaymentSelect+latestAttemptJoin+" WHERE p.id = $1", paymentID))
 }
 
 func (s *Store) GetPaymentByReference(provider, reference string) (*OnlinePayment, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
 	return scanOnlinePayment(s.DB.QueryRowContext(ctx,
-		onlinePaymentSelect+" WHERE p.provider = $1 AND p.external_reference = $2", provider, reference))
+		onlinePaymentSelect+" JOIN payment_attempts a ON a.payment_id = p.id WHERE p.provider = $1 AND a.request_reference = $2", provider, reference))
 }
 
-// GetPaymentByCallbackToken finds the payment whose current attempt was given
+// GetPaymentByCallbackToken finds the attempt that was given
 // the callback token with this SHA-256 hash.
 func (s *Store) GetPaymentByCallbackToken(provider, tokenHash string) (*OnlinePayment, error) {
 	if strings.TrimSpace(tokenHash) == "" {
@@ -223,23 +231,43 @@ func (s *Store) GetPaymentByCallbackToken(provider, tokenHash string) (*OnlinePa
 	ctx, cancel := s.ctx()
 	defer cancel()
 	return scanOnlinePayment(s.DB.QueryRowContext(ctx,
-		onlinePaymentSelect+" WHERE p.provider = $1 AND p.callback_token_hash = $2", provider, tokenHash))
+		onlinePaymentSelect+" JOIN payment_attempts a ON a.payment_id = p.id WHERE p.provider = $1 AND a.callback_token_hash = $2", provider, tokenHash))
 }
 
 // StartPaymentAttempt records that a provider request is being made for a
 // pending payment: the new external reference, the hashed callback token,
 // and the provider payload (for example M-Pesa request IDs).
-func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash string, payload map[string]string) error {
+func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash string, payload map[string]string) (int, error) {
 	if payload == nil {
 		payload = map[string]string{} // a JSON null would turn later merges into arrays
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	ctx, cancel := s.ctx()
 	defer cancel()
-	return s.withTx(ctx, func(tx *sql.Tx) error {
+	var attemptID int
+	err = s.withTx(ctx, func(tx *sql.Tx) error {
+		var status, orderStatus string
+		if err := tx.QueryRowContext(ctx, `SELECT p.status, o.status FROM payments p JOIN orders o ON o.id = p.order_id
+			WHERE p.id = $1 FOR UPDATE OF p`, paymentID).Scan(&status, &orderStatus); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrPaymentNotFound
+			}
+			return err
+		}
+		if status != PaymentStatusPending || orderStatus == OrderStatusCancelled {
+			return ErrPaymentNotFound
+		}
+		var active int
+		err := tx.QueryRowContext(ctx, `SELECT id FROM payment_attempts WHERE payment_id = $1 AND status = 'pending'`, paymentID).Scan(&active)
+		if err == nil {
+			return ErrAttemptInProgress
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 		result, err := tx.ExecContext(ctx,
 			`UPDATE payments SET external_reference = $1, callback_token_hash = NULLIF($2, ''), provider_payload = $3
 			 WHERE id = $4 AND status = 'pending'`,
@@ -253,16 +281,17 @@ func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash 
 			}
 			return err
 		}
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO payment_attempts (payment_id, status, request_reference, external_reference)
-			 VALUES ($1, 'pending', $2, $2)`, paymentID, reference)
-		return err
+		return tx.QueryRowContext(ctx,
+			`INSERT INTO payment_attempts (payment_id, status, request_reference, external_reference, callback_token_hash, provider_payload)
+			 VALUES ($1, 'pending', $2, $2, NULLIF($3, ''), $4) RETURNING id`,
+			paymentID, reference, callbackTokenHash, raw).Scan(&attemptID)
 	})
+	return attemptID, err
 }
 
 // UpdatePaymentPayload merges provider identifiers into the payment, for
 // example the M-Pesa CheckoutRequestID returned after an STK push.
-func (s *Store) UpdatePaymentPayload(paymentID int, payload map[string]string) error {
+func (s *Store) UpdatePaymentPayload(attemptID int, payload map[string]string) error {
 	if payload == nil {
 		payload = map[string]string{}
 	}
@@ -272,16 +301,27 @@ func (s *Store) UpdatePaymentPayload(paymentID int, payload map[string]string) e
 	}
 	ctx, cancel := s.ctx()
 	defer cancel()
-	_, err = s.DB.ExecContext(ctx, "UPDATE payments SET provider_payload = provider_payload || $1::jsonb WHERE id = $2", raw, paymentID)
-	return err
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		var paymentID int
+		if err := tx.QueryRowContext(ctx,
+			`UPDATE payment_attempts SET provider_payload = provider_payload || $1::jsonb WHERE id = $2 RETURNING payment_id`,
+			raw, attemptID).Scan(&paymentID); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx,
+			`UPDATE payments SET provider_payload = provider_payload || $1::jsonb WHERE id = $2
+			 AND external_reference = (SELECT request_reference FROM payment_attempts WHERE id = $3)`,
+			raw, paymentID, attemptID)
+		return err
+	})
 }
 
 // PaymentPayload returns the stored provider identifiers.
-func (s *Store) PaymentPayload(paymentID int) (map[string]string, error) {
+func (s *Store) PaymentPayload(attemptID int) (map[string]string, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
 	var raw []byte
-	if err := s.DB.QueryRowContext(ctx, "SELECT provider_payload FROM payments WHERE id = $1", paymentID).Scan(&raw); err != nil {
+	if err := s.DB.QueryRowContext(ctx, "SELECT provider_payload FROM payment_attempts WHERE id = $1", attemptID).Scan(&raw); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPaymentNotFound
 		}
@@ -296,15 +336,19 @@ func (s *Store) PaymentPayload(paymentID int) (map[string]string, error) {
 // what was charged. Capturing an already captured payment is a no-op, so
 // webhooks and return redirects can race safely. It reports whether this call
 // performed the capture.
-func (s *Store) CapturePayment(paymentID int, confirmed money.Cents, currency, receipt string) (bool, error) {
+func (s *Store) CapturePayment(attemptID int, confirmed money.Cents, currency, receipt string) (bool, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
 	captured := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		var paymentID int
 		var status, cur string
 		var amount int64
-		if err := tx.QueryRowContext(ctx, "SELECT status, currency, amount_cents FROM payments WHERE id = $1 FOR UPDATE", paymentID).
-			Scan(&status, &cur, &amount); err != nil {
+		var payload []byte
+		if err := tx.QueryRowContext(ctx, `SELECT p.id, p.status, p.currency, p.amount_cents, a.provider_payload
+			FROM payments p JOIN payment_attempts a ON a.payment_id = p.id
+			WHERE a.id = $1 FOR UPDATE OF p, a`, attemptID).
+			Scan(&paymentID, &status, &cur, &amount, &payload); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentNotFound
 			}
@@ -313,10 +357,18 @@ func (s *Store) CapturePayment(paymentID int, confirmed money.Cents, currency, r
 		if status == PaymentStatusCaptured {
 			return nil
 		}
-		if status != PaymentStatusPending {
+		if status != PaymentStatusPending && status != PaymentStatusFailed {
 			return fmt.Errorf("%w: payment is %s", ErrPaymentNotFound, status)
 		}
-		if confirmed < money.Cents(amount) || !strings.EqualFold(cur, currency) {
+		var data map[string]string
+		if err := json.Unmarshal(payload, &data); err != nil {
+			return err
+		}
+		expected := money.Cents(amount)
+		if charged, err := strconv.ParseInt(data["charged_cents"], 10, 64); err == nil && charged > 0 {
+			expected = money.Cents(charged)
+		}
+		if confirmed != expected || !strings.EqualFold(cur, currency) {
 			return ErrPaymentAmountMatch
 		}
 		if _, err := tx.ExecContext(ctx,
@@ -327,7 +379,12 @@ func (s *Store) CapturePayment(paymentID int, confirmed money.Cents, currency, r
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE payment_attempts SET status = 'completed', external_reference = COALESCE(NULLIF($2, ''), external_reference)
-			 WHERE payment_id = $1 AND status = 'pending'`, paymentID, receipt); err != nil {
+			 WHERE id = $1`, attemptID, receipt); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE payment_attempts SET status = 'failed', error_message = 'another attempt completed'
+			 WHERE payment_id = $1 AND id <> $2 AND status = 'pending'`, paymentID, attemptID); err != nil {
 			return err
 		}
 		captured = true
@@ -338,12 +395,12 @@ func (s *Store) CapturePayment(paymentID int, confirmed money.Cents, currency, r
 
 // FailPaymentAttempt records a failed provider attempt. The payment stays
 // pending so the customer can retry until the unpaid order expires.
-func (s *Store) FailPaymentAttempt(paymentID int, reason string) error {
+func (s *Store) FailPaymentAttempt(attemptID int, reason string) error {
 	ctx, cancel := s.ctx()
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		`UPDATE payment_attempts SET status = 'failed', error_message = $2
-		 WHERE payment_id = $1 AND status = 'pending'`, paymentID, truncateText(reason, 500))
+		 WHERE id = $1 AND status = 'pending'`, attemptID, truncateText(reason, 500))
 	return err
 }
 
@@ -373,6 +430,8 @@ func (s *Store) ExpireUnpaidOrders(ctx context.Context, cutoff time.Time) (int, 
 		rows, err := tx.QueryContext(ctx,
 			`SELECT p.id, p.order_id FROM payments p
 			 WHERE p.status = 'pending' AND p.method <> 'cash_on_delivery' AND p.created_at < $1
+			   AND NOT EXISTS (SELECT 1 FROM payment_attempts a WHERE a.payment_id = p.id
+			                   AND a.status = 'pending' AND a.created_at >= $1)
 			 ORDER BY p.order_id FOR UPDATE SKIP LOCKED`, cutoff.UTC())
 		if err != nil {
 			return err

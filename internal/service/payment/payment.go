@@ -58,11 +58,11 @@ type store interface {
 	GetOrderPayment(userID, orderID int) (*db.OnlinePayment, error)
 	GetPaymentByReference(provider, reference string) (*db.OnlinePayment, error)
 	GetPaymentByCallbackToken(provider, tokenHash string) (*db.OnlinePayment, error)
-	StartPaymentAttempt(paymentID int, reference, callbackTokenHash string, payload map[string]string) error
-	UpdatePaymentPayload(paymentID int, payload map[string]string) error
-	PaymentPayload(paymentID int) (map[string]string, error)
-	CapturePayment(paymentID int, confirmed money.Cents, currency, receipt string) (bool, error)
-	FailPaymentAttempt(paymentID int, reason string) error
+	StartPaymentAttempt(paymentID int, reference, callbackTokenHash string, payload map[string]string) (int, error)
+	UpdatePaymentPayload(attemptID int, payload map[string]string) error
+	PaymentPayload(attemptID int) (map[string]string, error)
+	CapturePayment(attemptID int, confirmed money.Cents, currency, receipt string) (bool, error)
+	FailPaymentAttempt(attemptID int, reason string) error
 	LastPaymentError(paymentID int) (string, error)
 }
 
@@ -276,6 +276,13 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 	if err != nil {
 		return StartOutcome{}, err
 	}
+	if payment.AttemptStatus == db.PaymentStatusPending {
+		payload, err := s.store.PaymentPayload(payment.AttemptID)
+		if err != nil {
+			return StartOutcome{}, err
+		}
+		return StartOutcome{RedirectURL: payload["redirect_url"]}, nil
+	}
 	suffix, err := randomToken(6)
 	if err != nil {
 		return StartOutcome{}, err
@@ -286,7 +293,24 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 	}
 	reference := fmt.Sprintf("skm-%d-%s", payment.ID, suffix)
 	base := strings.TrimRight(req.BaseURL, "/")
-	if err := s.store.StartPaymentAttempt(payment.ID, reference, hashToken(token), nil); err != nil {
+	initial := map[string]string{}
+	if payment.Provider == "mpesa" {
+		initial["charged_cents"] = strconv.FormatInt(payment.Amount.WholeUnitsCeil()*100, 10)
+		initial["phone"] = req.Phone
+	}
+	attemptID, err := s.store.StartPaymentAttempt(payment.ID, reference, hashToken(token), initial)
+	if errors.Is(err, db.ErrAttemptInProgress) {
+		current, lookupErr := s.store.GetOrderPayment(req.UserID, req.OrderID)
+		if lookupErr != nil {
+			return StartOutcome{}, lookupErr
+		}
+		payload, lookupErr := s.store.PaymentPayload(current.AttemptID)
+		if lookupErr != nil {
+			return StartOutcome{}, lookupErr
+		}
+		return StartOutcome{RedirectURL: payload["redirect_url"]}, nil
+	}
+	if err != nil {
 		return StartOutcome{}, err
 	}
 	result, err := provider.Start(ctx, cfg, payments.StartRequest{
@@ -301,7 +325,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 		CallbackURL: base + "/payments/callback/" + payment.Provider + "/" + token,
 	})
 	if err != nil {
-		_ = s.store.FailPaymentAttempt(payment.ID, customerReason(err))
+		_ = s.store.FailPaymentAttempt(attemptID, customerReason(err))
 		return StartOutcome{}, err
 	}
 	data := result.Data
@@ -311,7 +335,10 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 	if result.Charged > 0 {
 		data["charged_cents"] = strconv.FormatInt(int64(result.Charged), 10)
 	}
-	if err := s.store.UpdatePaymentPayload(payment.ID, data); err != nil {
+	if result.RedirectURL != "" {
+		data["redirect_url"] = result.RedirectURL
+	}
+	if err := s.store.UpdatePaymentPayload(attemptID, data); err != nil {
 		return StartOutcome{}, err
 	}
 	return StartOutcome{RedirectURL: result.RedirectURL}, nil
@@ -380,7 +407,7 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 	if p, ok := s.registry.Get(payment.Method); ok {
 		view.NeedsPhone = p.Descriptor().NeedsPhone
 	}
-	payload, _ := s.store.PaymentPayload(payment.ID)
+	payload, _ := s.store.PaymentPayload(payment.AttemptID)
 	view.Phone = payload["phone"]
 	if charged, err := strconv.ParseInt(payload["charged_cents"], 10, 64); err == nil {
 		view.Charged = money.Cents(charged)
@@ -389,6 +416,10 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 	switch {
 	case !s.IsOnline(payment.Method):
 		view.Status = "offline"
+		return view, nil
+	case payment.OrderStatus == db.OrderStatusCancelled && payment.Status == db.PaymentStatusCaptured:
+		view.Status = "cancelled"
+		view.Message = "Payment arrived after this order was cancelled. Contact the store for a refund."
 		return view, nil
 	case payment.Status == db.PaymentStatusCaptured:
 		view.Status = "paid"
@@ -456,15 +487,18 @@ func (s *Service) apply(payment *db.OnlinePayment, v payments.Verification) erro
 		if currency == "" {
 			currency = payment.Currency
 		}
-		captured, err := s.store.CapturePayment(payment.ID, v.Amount, currency, v.Receipt)
+		captured, err := s.store.CapturePayment(payment.AttemptID, v.Amount, currency, v.Receipt)
 		if err != nil {
 			return err
 		}
 		if captured {
 			slog.Info("payment captured", "payment_id", payment.ID, "order_id", payment.OrderID, "provider", payment.Provider)
+			if payment.OrderStatus == db.OrderStatusCancelled {
+				slog.Warn("payment captured after order cancellation; refund required", "payment_id", payment.ID, "order_id", payment.OrderID)
+			}
 		}
 	case payments.StatusFailed:
-		return s.store.FailPaymentAttempt(payment.ID, v.Reason)
+		return s.store.FailPaymentAttempt(payment.AttemptID, v.Reason)
 	}
 	return nil
 }
@@ -479,8 +513,8 @@ func (s *Service) HandleReturn(ctx context.Context, userID int, reference string
 	if payment.UserID != userID {
 		return 0, db.ErrPaymentNotFound
 	}
-	payload, _ := s.store.PaymentPayload(payment.ID)
-	if payment.Status == db.PaymentStatusPending {
+	payload, _ := s.store.PaymentPayload(payment.AttemptID)
+	if payment.Status != db.PaymentStatusCaptured {
 		if err := s.verifyAndApply(ctx, payment, payload); err != nil {
 			return payment.OrderID, err
 		}
@@ -519,10 +553,10 @@ func (s *Service) HandleWebhook(ctx context.Context, providerID string, r *http.
 	if err != nil {
 		return err
 	}
-	if payment.Status != db.PaymentStatusPending {
+	if payment.Status == db.PaymentStatusCaptured {
 		return nil
 	}
-	payload, _ := s.store.PaymentPayload(payment.ID)
+	payload, _ := s.store.PaymentPayload(payment.AttemptID)
 	return s.verifyAndApply(ctx, payment, payload)
 }
 
@@ -547,15 +581,21 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if err != nil {
 		return err
 	}
-	payload, _ := s.store.PaymentPayload(payment.ID)
-	if id := event.Data["checkout_request_id"]; id == "" || id != payload["checkout_request_id"] {
+	payload, _ := s.store.PaymentPayload(payment.AttemptID)
+	if id := event.Data["checkout_request_id"]; id == "" || payload["checkout_request_id"] != "" && id != payload["checkout_request_id"] {
 		return fmt.Errorf("%w: callback does not match the stored request", db.ErrPaymentNotFound)
 	}
-	if payment.Status != db.PaymentStatusPending || event.Result == nil {
+	if payload["checkout_request_id"] == "" {
+		payload["checkout_request_id"] = event.Data["checkout_request_id"]
+		if err := s.store.UpdatePaymentPayload(payment.AttemptID, map[string]string{"checkout_request_id": payload["checkout_request_id"]}); err != nil {
+			return err
+		}
+	}
+	if payment.Status == db.PaymentStatusCaptured || event.Result == nil {
 		return nil
 	}
 	if event.Result.Status == payments.StatusFailed {
-		return s.store.FailPaymentAttempt(payment.ID, event.Result.Reason)
+		return s.store.FailPaymentAttempt(payment.AttemptID, event.Result.Reason)
 	}
 	charged := payment.Amount
 	if c, err := strconv.ParseInt(payload["charged_cents"], 10, 64); err == nil && c > 0 {

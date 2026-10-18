@@ -268,6 +268,60 @@ func TestIntegration_MpesaStatusPollConfirmsWithoutCallback(t *testing.T) {
 	}
 }
 
+func TestIntegration_MpesaRetryPreservesOldCallback(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 50000)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	firstURL, _ := testProviders.lastSTK["CallBackURL"].(string)
+	firstPath := strings.TrimPrefix(firstURL, "https://shop.example")
+
+	// Repeating Start while the first STK prompt is active must not send a
+	// second prompt to the customer's phone.
+	if resp, _ := makeRequest(http.MethodPost, "/payments/order/1", url.Values{"phone": {"0712345678"}}, []*http.Cookie{customer}, ""); resp.StatusCode != http.StatusSeeOther || testProviders.stkCount != 1 {
+		t.Fatalf("duplicate start status=%d pushes=%d", resp.StatusCode, testProviders.stkCount)
+	}
+
+	testProviders.mu.Lock()
+	testProviders.stkResult = "cancelled"
+	testProviders.mu.Unlock()
+	makeAPIRequest(t, http.MethodGet, "/api/v1/account/orders/1/payment", nil, []*http.Cookie{customer}, false, nil)
+	if resp, _ := makeRequest(http.MethodPost, "/payments/order/1", url.Values{"phone": {"0712345678"}}, []*http.Cookie{customer}, ""); resp.StatusCode != http.StatusSeeOther || testProviders.stkCount != 2 {
+		t.Fatalf("retry status=%d pushes=%d", resp.StatusCode, testProviders.stkCount)
+	}
+
+	// A delayed success for the original request remains addressable after
+	// the retry. The paid attempt wins and the newer prompt is closed.
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+	callback := `{"Body":{"stkCallback":{"MerchantRequestID":"m-1","CheckoutRequestID":"ws_CO_1","ResultCode":0,"ResultDesc":"ok","CallbackMetadata":{"Item":[{"Name":"Amount","Value":500},{"Name":"MpesaReceiptNumber","Value":"OLD-RECEIPT"}]}}}}`
+	req := httptest.NewRequest(http.MethodPost, "http://localhost"+firstPath, strings.NewReader(callback))
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || paymentStatus(t, 1) != db.PaymentStatusCaptured {
+		t.Fatalf("old callback status=%d payment=%s", rec.Code, paymentStatus(t, 1))
+	}
+	rows, err := testStore.DB.Query("SELECT status FROM payment_attempts WHERE payment_id = 1 AND request_reference LIKE 'skm-%' ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var statuses []string
+	for rows.Next() {
+		var status string
+		if err := rows.Scan(&status); err != nil {
+			t.Fatal(err)
+		}
+		statuses = append(statuses, status)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 2 || statuses[0] != "completed" || statuses[1] != "failed" {
+		t.Fatalf("attempt statuses = %v", statuses)
+	}
+}
+
 func TestIntegration_PaystackRedirectWebhookAndReturn(t *testing.T) {
 	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
 	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
@@ -310,11 +364,22 @@ func TestIntegration_UnpaidOnlineOrderExpires(t *testing.T) {
 	customer, admin, productID := paymentsShop(t, "KES", 10000)
 	enableProvider(t, admin, "mpesa", mpesaFields)
 	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	callbackURL, _ := testProviders.lastSTK["CallBackURL"].(string)
+	callbackPath := strings.TrimPrefix(callbackURL, "https://shop.example")
 
 	if _, err := testStore.DB.Exec("UPDATE payments SET created_at = now() - interval '31 minutes'"); err != nil {
 		t.Fatal(err)
 	}
-	expired, err := testStore.ExpireUnpaidOrders(t.Context(), time.Now().Add(-db.UnpaidOrderTTL))
+	// A recent provider request gets its own settlement window even when the
+	// order was placed near the normal expiry deadline.
+	cutoff := time.Now().Add(-db.UnpaidOrderTTL)
+	if expired, err := testStore.ExpireUnpaidOrders(t.Context(), cutoff); err != nil || expired != 0 {
+		t.Fatalf("active attempt expired early: %d, %v", expired, err)
+	}
+	if _, err := testStore.DB.Exec("UPDATE payment_attempts SET created_at = now() - interval '31 minutes' WHERE status = 'pending'"); err != nil {
+		t.Fatal(err)
+	}
+	expired, err := testStore.ExpireUnpaidOrders(t.Context(), cutoff)
 	if err != nil || expired != 1 {
 		t.Fatalf("ExpireUnpaidOrders = %d, %v", expired, err)
 	}
@@ -332,6 +397,23 @@ func TestIntegration_UnpaidOnlineOrderExpires(t *testing.T) {
 	_, body := makeRequest(http.MethodGet, "/payments/order/1", nil, []*http.Cookie{customer}, "")
 	if !strings.Contains(body, "cancelled because payment was not completed") {
 		t.Fatal("payment page does not explain the cancellation")
+	}
+
+	// A late provider success is recorded for an operator refund, while the
+	// cancelled order stays out of the fulfillment queue.
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+	callback := `{"Body":{"stkCallback":{"MerchantRequestID":"m-1","CheckoutRequestID":"ws_CO_1","ResultCode":0,"ResultDesc":"ok","CallbackMetadata":{"Item":[{"Name":"Amount","Value":100},{"Name":"MpesaReceiptNumber","Value":"LATE-RECEIPT"}]}}}}`
+	req := httptest.NewRequest(http.MethodPost, "http://localhost"+callbackPath, strings.NewReader(callback))
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || paymentStatus(t, 1) != db.PaymentStatusCaptured || partnerQueueHasOrders(t, admin) {
+		t.Fatalf("late capture status=%d payment=%s fulfillable=%t", rec.Code, paymentStatus(t, 1), partnerQueueHasOrders(t, admin))
+	}
+	_, body = makeRequest(http.MethodGet, "/payments/order/1", nil, []*http.Cookie{customer}, "")
+	if !strings.Contains(body, "Contact the store for a refund") {
+		t.Fatal("late payment page does not explain refund")
 	}
 }
 
