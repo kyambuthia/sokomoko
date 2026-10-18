@@ -293,7 +293,11 @@ func (s *Store) orderItemsByOrderIDs(ctx context.Context, orderIDs []int) (map[i
 // GetOrderForUser returns one of the user's orders, or nil when it does not
 // exist or belongs to someone else.
 func (s *Store) GetOrderForUser(userID, orderID int) (*Order, error) {
-	ctx, cancel := s.ctx()
+	return s.GetOrderForUserContext(context.Background(), userID, orderID)
+}
+
+func (s *Store) GetOrderForUserContext(parent context.Context, userID, orderID int) (*Order, error) {
+	ctx, cancel := s.queryContext(parent)
 	defer cancel()
 	orders, err := s.listOrders(ctx, "WHERE o.id = $1 AND o.user_id = $2", orderID, userID)
 	if err != nil || len(orders) == 0 {
@@ -306,6 +310,18 @@ func (s *Store) ListOrdersByUser(userID int) ([]Order, error) {
 	ctx, cancel := s.ctx()
 	defer cancel()
 	return s.listOrders(ctx, "WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC", userID)
+}
+
+func (s *Store) ListOrdersByUserPageContext(parent context.Context, userID, limit, offset int) ([]Order, int, error) {
+	ctx, cancel := s.queryContext(parent)
+	defer cancel()
+	var total int
+	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders WHERE user_id = $1", userID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	orders, err := s.listOrders(ctx,
+		"WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC LIMIT $2 OFFSET $3", userID, limit, offset)
+	return orders, total, err
 }
 
 // ListOrdersForFulfillment returns every order that is not cancelled and is

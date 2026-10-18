@@ -2,6 +2,7 @@
 package account
 
 import (
+	"context"
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -60,9 +61,25 @@ func (s *Service) OrdersForUser(userID int) ([]Order, error) {
 	return mapped, nil
 }
 
+func (s *Service) OrdersForUserPageContext(ctx context.Context, userID, page, limit int) ([]Order, int, error) {
+	orders, total, err := s.store.ListOrdersByUserPageContext(ctx, userID, limit, (page-1)*limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	mapped := make([]Order, 0, len(orders))
+	for _, order := range orders {
+		mapped = append(mapped, mapOrder(order))
+	}
+	return mapped, total, nil
+}
+
 // OrderForUser returns one of the user's orders, or nil when it is not theirs.
 func (s *Service) OrderForUser(userID, orderID int) (*Order, error) {
-	order, err := s.store.GetOrderForUser(userID, orderID)
+	return s.OrderForUserContext(context.Background(), userID, orderID)
+}
+
+func (s *Service) OrderForUserContext(ctx context.Context, userID, orderID int) (*Order, error) {
+	order, err := s.store.GetOrderForUserContext(ctx, userID, orderID)
 	if err != nil || order == nil {
 		return nil, err
 	}

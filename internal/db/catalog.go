@@ -369,43 +369,20 @@ type ProductFilter struct {
 // the full-text index and falls back to substring matching so partial words
 // still match.
 func (s *Store) ListProducts(filter ProductFilter) ([]Product, error) {
-	ctx, cancel := s.ctx()
-	defer cancel()
+	return s.ListProductsContext(context.Background(), filter)
+}
 
-	var (
-		where   = []string{"p.deleted_at IS NULL"}
-		args    []any
-		orderBy = "lower(p.name), p.id"
-	)
+// ListProductsContext bounds the query by both the request deadline and the
+// store query timeout.
+func (s *Store) ListProductsContext(parent context.Context, filter ProductFilter) ([]Product, error) {
+	ctx, cancel := s.queryContext(parent)
+	defer cancel()
+	where, args, orderBy := productFilterSQL(filter)
 	addArg := func(value any) string {
 		args = append(args, value)
 		return fmt.Sprintf("$%d", len(args))
 	}
-
-	if query := strings.TrimSpace(filter.Query); query != "" {
-		tsArg := addArg(query)
-		likeArg := addArg("%" + escapeLike(query) + "%")
-		where = append(where, fmt.Sprintf(
-			"(p.search_vector @@ websearch_to_tsquery('simple', %[1]s) OR p.name ILIKE %[2]s OR p.description ILIKE %[2]s)",
-			tsArg, likeArg,
-		))
-		orderBy = fmt.Sprintf("ts_rank(p.search_vector, websearch_to_tsquery('simple', %s)) DESC, lower(p.name), p.id", tsArg)
-	}
-	if category := strings.TrimSpace(filter.Category); category != "" {
-		arg := addArg(category)
-		where = append(where, fmt.Sprintf("(c.slug = lower(%[1]s) OR lower(c.name) = lower(%[1]s))", arg))
-	}
-	if filter.PartnerID > 0 {
-		where = append(where, "p.partner_id = "+addArg(filter.PartnerID))
-	}
-	if filter.InStockOnly {
-		where = append(where, "stock.available_quantity > 0")
-	}
-	if filter.PublicOnly {
-		where = append(where, activePartnerSQL)
-	}
-
-	query := productSelect + " WHERE " + strings.Join(where, " AND ") + " ORDER BY " + orderBy
+	query := productSelect + " WHERE " + where + " ORDER BY " + orderBy
 	if filter.Limit > 0 {
 		query += " LIMIT " + addArg(filter.Limit)
 	}
@@ -441,6 +418,52 @@ func (s *Store) ListProducts(filter ProductFilter) ([]Product, error) {
 		products[i].Images = images[products[i].ID]
 	}
 	return products, nil
+}
+
+func productFilterSQL(filter ProductFilter) (string, []any, string) {
+	where := []string{"p.deleted_at IS NULL"}
+	var args []any
+	orderBy := "lower(p.name), p.id"
+	addArg := func(value any) string {
+		args = append(args, value)
+		return fmt.Sprintf("$%d", len(args))
+	}
+
+	if query := strings.TrimSpace(filter.Query); query != "" {
+		tsArg := addArg(query)
+		likeArg := addArg("%" + escapeLike(query) + "%")
+		where = append(where, fmt.Sprintf(
+			"(p.search_vector @@ websearch_to_tsquery('simple', %[1]s) OR p.name ILIKE %[2]s OR p.description ILIKE %[2]s)",
+			tsArg, likeArg,
+		))
+		orderBy = fmt.Sprintf("ts_rank(p.search_vector, websearch_to_tsquery('simple', %s)) DESC, lower(p.name), p.id", tsArg)
+	}
+	if category := strings.TrimSpace(filter.Category); category != "" {
+		arg := addArg(category)
+		where = append(where, fmt.Sprintf("(c.slug = lower(%[1]s) OR lower(c.name) = lower(%[1]s))", arg))
+	}
+	if filter.PartnerID > 0 {
+		where = append(where, "p.partner_id = "+addArg(filter.PartnerID))
+	}
+	if filter.InStockOnly {
+		where = append(where, "stock.available_quantity > 0")
+	}
+	if filter.PublicOnly {
+		where = append(where, activePartnerSQL)
+	}
+
+	return strings.Join(where, " AND "), args, orderBy
+}
+
+// CountFilteredProducts counts all matches without materializing them.
+func (s *Store) CountFilteredProductsContext(parent context.Context, filter ProductFilter) (int, error) {
+	ctx, cancel := s.queryContext(parent)
+	defer cancel()
+	where, args, _ := productFilterSQL(filter)
+	var count int
+	err := s.DB.QueryRowContext(ctx,
+		"SELECT count(*) FROM ("+productSelect+" WHERE "+where+") matches", args...).Scan(&count)
+	return count, err
 }
 
 // GetAllProducts returns every active product ordered by name.

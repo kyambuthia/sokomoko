@@ -48,27 +48,19 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 		writeData(w, http.StatusOK, catalogListDTO{Items: []productDTO{}, Page: 1, Limit: defaultPageSize, Total: 0})
 		return
 	}
-	products, err := h.app.Catalog.SearchInCategory(query, r.URL.Query().Get("category"))
+	page, limit := pageParams(r)
+	products, total, err := h.app.Catalog.SearchPage(r.Context(), query, r.URL.Query().Get("category"), page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search_unavailable", "Unable to search products")
 		return
 	}
-	page, limit := pageParams(r)
-	start := (page - 1) * limit
-	if start > len(products) {
-		start = len(products)
-	}
-	end := start + limit
-	if end > len(products) {
-		end = len(products)
-	}
-	items := make([]productDTO, 0, end-start)
-	for _, product := range products[start:end] {
+	items := make([]productDTO, 0, len(products))
+	for _, product := range products {
 		items = append(items, mapProduct(product))
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=15")
-	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: len(products)})
+	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: total})
 }
 
 func (h *Handler) catalogProduct(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +95,9 @@ func pageParams(r *http.Request) (int, int) {
 	limit := parseQueryInt(r, "limit", defaultPageSize)
 	if page < 1 {
 		page = 1
+	}
+	if page > 1_000_000 {
+		page = 1_000_000
 	}
 	if limit < 1 {
 		limit = defaultPageSize

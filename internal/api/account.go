@@ -38,7 +38,8 @@ func (h *Handler) accountOrders(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	orders, err := h.app.Account.OrdersForUser(uid)
+	page, limit := pageParams(r)
+	orders, total, err := h.app.Account.OrdersForUserPageContext(r.Context(), uid, page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "orders_unavailable", "Unable to load orders")
 		return
@@ -49,7 +50,10 @@ func (h *Handler) accountOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	writeData(w, http.StatusOK, struct {
 		Items []orderDTO `json:"items"`
-	}{Items: items})
+		Page  int        `json:"page"`
+		Limit int        `json:"limit"`
+		Total int        `json:"total"`
+	}{Items: items, Page: page, Limit: limit, Total: total})
 }
 
 func (h *Handler) accountOrder(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +76,7 @@ func (h *Handler) accountOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_order_id", "Order id must be a positive integer")
 		return
 	}
-	order, err := h.app.Account.OrderForUser(uid, id)
+	order, err := h.app.Account.OrderForUserContext(r.Context(), uid, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "orders_unavailable", "Unable to load order")
 		return

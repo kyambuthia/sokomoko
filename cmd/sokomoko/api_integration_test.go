@@ -221,6 +221,32 @@ func TestAPI_CheckoutPlacementIsIdempotent(t *testing.T) {
 	if len(account.Items) != 1 || account.Items[0].TotalAmount != 28.10 || account.Items[0].TotalAmountMinor != 2810 || account.Items[0].Currency != "USD" {
 		t.Fatalf("account amounts must include exact minor units: %#v", account.Items)
 	}
+	resp, body = makeAPIRequest(t, http.MethodGet, "/api/v1/account/orders?page=2&limit=1", nil, []*http.Cookie{cookie}, false, nil)
+	var secondPage struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &secondPage)
+	if resp.StatusCode != http.StatusOK || len(secondPage.Items) != 0 || secondPage.Total != 1 {
+		t.Fatalf("account pagination status=%d data=%+v", resp.StatusCode, secondPage)
+	}
+}
+
+func TestAPI_CatalogSearchPaginatesBeyondSixtyMatches(t *testing.T) {
+	clearAllTables()
+	for i := 0; i < 65; i++ {
+		createTestProduct(t, fmt.Sprintf("Paged Lamp %03d", i), fmt.Sprintf("paged-lamp-%03d", i), 1000, 1)
+	}
+	resp, body := makeAPIRequest(t, http.MethodGet, "/api/v1/catalog/search?q=Paged+Lamp&page=4&limit=20", nil, nil, false, nil)
+	var page struct {
+		Items []json.RawMessage `json:"items"`
+		Page  int               `json:"page"`
+		Total int               `json:"total"`
+	}
+	decodeAPIData(t, body, &page)
+	if resp.StatusCode != http.StatusOK || page.Page != 4 || page.Total != 65 || len(page.Items) != 5 {
+		t.Fatalf("search page status=%d page=%d total=%d items=%d", resp.StatusCode, page.Page, page.Total, len(page.Items))
+	}
 }
 
 func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {

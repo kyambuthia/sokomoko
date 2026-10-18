@@ -2,6 +2,7 @@
 package catalog
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -115,6 +116,36 @@ func (s *Service) SearchInCategory(query, category string) ([]Product, error) {
 		return []Product{}, nil
 	}
 	return s.Browse(Filter{Query: query, Category: category, Limit: defaultSearchLimit})
+}
+
+// SearchPage returns one bounded page and the total number of matches. The
+// query and image fetches stop when the HTTP request is cancelled.
+func (s *Service) SearchPage(ctx context.Context, query, category string, page, limit int) ([]Product, int, error) {
+	query = normalizeQuery(query)
+	if query == "" {
+		return []Product{}, 0, nil
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	category = strings.TrimSpace(category)
+	if strings.EqualFold(category, AllCategories) || strings.EqualFold(category, "all") {
+		category = ""
+	}
+	filter := db.ProductFilter{Query: query, Category: category, PublicOnly: true}
+	total, err := s.store.CountFilteredProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	filter.Limit, filter.Offset = limit, (page-1)*limit
+	products, err := s.store.ListProductsContext(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return mapProducts(products), total, nil
 }
 
 func (s *Service) ProductBySlug(slug string) (*Product, error) {

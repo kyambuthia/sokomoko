@@ -32,11 +32,14 @@ type CatalogService interface {
 	ProductBySlug(slug string) (*catalogsvc.Product, error)
 	Search(query string) ([]catalogsvc.Product, error)
 	SearchInCategory(query, category string) ([]catalogsvc.Product, error)
+	SearchPage(ctx context.Context, query, category string, page, limit int) ([]catalogsvc.Product, int, error)
 }
 
 type AccountService interface {
 	OrderForUser(userID, orderID int) (*accountsvc.Order, error)
+	OrderForUserContext(context.Context, int, int) (*accountsvc.Order, error)
 	OrdersForUser(userID int) ([]accountsvc.Order, error)
+	OrdersForUserPageContext(context.Context, int, int, int) ([]accountsvc.Order, int, error)
 }
 
 type CommerceService interface {
