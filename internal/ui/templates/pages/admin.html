@@ -238,7 +238,7 @@
           <td><span class="badge {{ if eq .Status "active" }}badge-solid{{ else }}badge-muted{{ end }}">{{ .Status }}</span></td>
           <td class="actions">
             {{ if eq .Status "active" }}
-            <ui-confirm title="Suspend {{ .Name }}?" message="Their products are hidden from customers and their logins see no partner data." confirm-label="Suspend">
+            <ui-confirm title="Suspend {{ .Name }}?" message="Their products are hidden from customers and their logins are signed out and blocked." confirm-label="Suspend">
               <form method="POST" action="/partners" class="inline-form">
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="action" value="status">

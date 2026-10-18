@@ -116,8 +116,12 @@ func TestIntegration_AdminPartnersOnboardingAndSuspension(t *testing.T) {
 	if _, body := makeRequest(http.MethodGet, "/", nil, nil, "localhost"); strings.Contains(body, "Maji Basket") {
 		t.Fatal("suspended partner product listed on the storefront")
 	}
-	if _, body := makeRequest(http.MethodGet, "/products", nil, []*http.Cookie{partnerCookie}, "partner.localhost"); strings.Contains(body, "Maji Basket") {
-		t.Fatal("suspended partner login still sees partner products")
+	if resp, body := makeRequest(http.MethodGet, "/products", nil, []*http.Cookie{partnerCookie}, "partner.localhost"); resp.StatusCode == http.StatusOK || strings.Contains(body, "Maji Basket") {
+		t.Fatalf("suspended partner session still works: status=%d", resp.StatusCode)
+	}
+	resp, body = makeRequest(http.MethodPost, "/login", url.Values{"username": {login}, "password": {"partnerpass123"}}, nil, "partner.localhost")
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(body, "vendor account is suspended") {
+		t.Fatalf("suspended partner login status=%d", resp.StatusCode)
 	}
 
 	resp, _ = makeRequest(http.MethodPost, "/partners", url.Values{"action": {"status"}, "status": {"active"}, "partner_id": {fmt.Sprint(partner.ID)}}, []*http.Cookie{adminCookie}, "admin.localhost")
@@ -125,4 +129,5 @@ func TestIntegration_AdminPartnersOnboardingAndSuspension(t *testing.T) {
 	if resp, _ := makeRequest(http.MethodGet, slugPath, nil, nil, "localhost"); resp.StatusCode != http.StatusOK {
 		t.Fatalf("reactivated partner product status=%d", resp.StatusCode)
 	}
+	loginAndGetSessionCookie(t, "partner.localhost", login, "partnerpass123")
 }

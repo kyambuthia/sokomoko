@@ -48,6 +48,7 @@ type store interface {
 	HasAdminUser() (bool, error)
 	BootstrapAdmin(admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
 	UsePasswordResetToken(token, passwordHash string) (bool, error)
+	PartnerIDForUser(userID int) (int, error)
 }
 
 type Config struct {
@@ -103,15 +104,21 @@ func normalizeIdentifierForAbuse(identifier string, preserveCase bool) string {
 
 // ClientIP returns the client address for rate limiting. X-Forwarded-For is
 // only honoured when trustProxy is set, otherwise any client could spoof it to
-// dodge throttling.
+// dodge throttling. Only the right-most entry is used: it is the one the
+// trusted proxy wrote, while entries to its left come from the client when the
+// proxy appends to the header.
 func ClientIP(r *http.Request, trustProxy bool) string {
 	if r == nil {
 		return "unknown"
 	}
 	if trustProxy {
-		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
-			first, _, _ := strings.Cut(forwarded, ",")
-			if candidate := strings.TrimSpace(first); candidate != "" {
+		values := r.Header.Values("X-Forwarded-For")
+		if len(values) > 0 {
+			last := values[len(values)-1]
+			if i := strings.LastIndex(last, ","); i >= 0 {
+				last = last[i+1:]
+			}
+			if candidate := strings.TrimSpace(last); candidate != "" {
 				return candidate
 			}
 		}
@@ -410,7 +417,15 @@ func containsRole(roles []string, role string) bool {
 	return false
 }
 
+// isLoopbackRequest reports whether the request came straight from this
+// machine. A request relayed by a reverse proxy on the same host also arrives
+// from loopback, so any forwarding header disqualifies it.
 func isLoopbackRequest(r *http.Request) bool {
+	for _, header := range []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-Ip", "Forwarded", "Via"} {
+		if len(r.Header.Values(header)) > 0 {
+			return false
+		}
+	}
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	if err != nil {
 		host = strings.TrimSpace(r.RemoteAddr)
@@ -769,6 +784,18 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 	}
 
 	s.clearAbuseFailures(cfg.abuseScope, username, false, r)
+	if user.Role == db.RolePartner {
+		partnerID, err := s.store.PartnerIDForUser(user.ID)
+		if err != nil {
+			log.Printf("partner lookup failed: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if partnerID == 0 {
+			renderWithStatus(w, cfg.tmpl, http.StatusForbidden, withError(data, "This vendor account is suspended. Contact the marketplace team."))
+			return
+		}
+	}
 	if err := s.startSession(w, r, user.ID); err != nil {
 		log.Printf("create session failed: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
