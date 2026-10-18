@@ -64,6 +64,16 @@ SMTP or host settings.
 When neither `SMTP_HOST` nor `SMTP_FROM` is set, no email is sent. Outside
 production the reset link is shown on the page instead.
 
+## Online payments
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `PUBLIC_BASE_URL` | `PASSWORD_RESET_BASE_URL` | Storefront origin for provider return and callback URLs. Production requires HTTPS and an allowed host. |
+| `SECRETS_KEY` | empty | Base64 encoding of 32 random bytes (`openssl rand -base64 32`). Required to save provider credentials; development uses a fixed local key when empty. |
+
+Keep `SECRETS_KEY` available when restoring the database. A different key
+cannot open credentials already stored in `payment_providers`.
+
 ## Tests
 
 | Variable | Notes |
