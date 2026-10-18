@@ -135,6 +135,7 @@ type AuthService interface {
 	PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc
 	SignUp(tmpl *template.Template) http.HandlerFunc
 	StaffSignUp(tmpl *template.Template) http.HandlerFunc
+	PasswordChange(tmpl *template.Template, action, backHref string) http.HandlerFunc
 	WorkspaceLogin(tmpl *template.Template) http.HandlerFunc
 }
 

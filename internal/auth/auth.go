@@ -50,6 +50,7 @@ type store interface {
 	BootstrapAdmin(admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
 	UsePasswordResetToken(token, passwordHash string) (bool, error)
 	PartnerIDForUser(userID int) (int, error)
+	UpdateUserPassword(userID int, passwordHash string) error
 }
 
 type Config struct {
@@ -1336,4 +1337,87 @@ func (s *Service) APIAuthMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, user)))
 	})
+}
+
+// PasswordChangePageData backs the signed-in password change form.
+type PasswordChangePageData struct {
+	Title     string
+	Username  string
+	Action    string
+	BackHref  string
+	Message   string
+	Error     string
+	CSRFToken string
+}
+
+// PasswordChange lets a signed-in user replace their password after proving
+// they know the current one. Every session for the account is revoked and the
+// browser gets a fresh one. Mount it behind AuthMiddleware.
+func (s *Service) PasswordChange(tmpl *template.Template, action, backHref string) http.HandlerFunc {
+	const scope = "password-change"
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetUserFromContext(r.Context())
+		if user == nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		data := PasswordChangePageData{
+			Title: "Change password", Username: user.Username, Action: action, BackHref: backHref,
+			CSRFToken: s.CSRFTokenForSession(r),
+		}
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			if r.URL.Query().Get("changed") == "1" {
+				data.Message = "Password changed. Other devices have been signed out."
+			}
+			renderWithStatus(w, tmpl, 0, data)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		identifier := strconv.Itoa(user.ID)
+		if s.checkAbuseLock(w, scope, identifier, true, r) {
+			data.Error = "Too many attempts. Please wait and try again."
+			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+			return
+		}
+		current := r.FormValue("current_password")
+		password := r.FormValue("password")
+		confirm := r.FormValue("confirm_password")
+		switch {
+		case current == "" || password == "" || confirm == "":
+			data.Error = "All fields are required"
+		case !checkPassword(user, current):
+			s.markAbuseFailure(scope, identifier, true, r)
+			data.Error = "Current password is incorrect"
+		case password != confirm:
+			data.Error = "New passwords do not match"
+		case !isStrongEnoughPassword(password):
+			data.Error = "Password must be 10 to 72 characters"
+		case password == current:
+			data.Error = "Choose a password you have not been using"
+		}
+		if data.Error != "" {
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		s.clearAbuseFailures(scope, identifier, true, r)
+		hash, err := hashPassword(password)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if err := s.store.UpdateUserPassword(user.ID, hash); err != nil {
+			log.Printf("password change failed for user_id=%d: %v", user.ID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if err := s.startSession(w, r, user.ID); err != nil {
+			log.Printf("create session after password change: %v", err)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, action+"?changed=1", http.StatusSeeOther)
+	}
 }

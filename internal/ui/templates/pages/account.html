@@ -8,10 +8,13 @@
       <h1>Account</h1>
       <p class="muted small">{{ .Viewer.Username }}</p>
     </div>
-    <form action="/logout" method="POST">
-      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
-      <button type="submit" class="btn btn-secondary btn-sm">{{ icon "logout" }}Sign out</button>
-    </form>
+    <div class="row">
+      <a class="btn btn-secondary btn-sm" href="/account/password">{{ icon "settings" }}Password</a>
+      <form action="/logout" method="POST">
+        {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+        <button type="submit" class="btn btn-secondary btn-sm">{{ icon "logout" }}Sign out</button>
+      </form>
+    </div>
   </div>
   {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
 
