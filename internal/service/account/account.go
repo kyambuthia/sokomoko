@@ -45,10 +45,6 @@ func New(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-func newWithStore(store store) *Service {
-	return &Service{store: store}
-}
-
 func (s *Service) OrdersForUser(userID int) ([]Order, error) {
 	orders, err := s.store.ListOrdersByUser(userID)
 	if err != nil {

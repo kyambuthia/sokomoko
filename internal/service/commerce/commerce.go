@@ -44,10 +44,6 @@ func New(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-func newWithStore(store store) *Service {
-	return &Service{store: store}
-}
-
 func (s *Service) GetCart(userID int) ([]CartItem, money.Cents, error) {
 	cart, err := s.Cart(userID)
 	return cart.Items, cart.Subtotal, err

@@ -11,7 +11,6 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
@@ -291,8 +290,4 @@ func mapPartnerProduct(product partnersvc.Product) productDTO {
 
 func mapAdminProduct(product adminsvc.Product) productDTO {
 	return productDTO{Name: product.Name, Category: product.Category, Price: product.Price.Float64(), PriceMinor: int64(product.Price), Currency: product.Currency, StockQuantity: product.StockQuantity}
-}
-
-func isNotFound(err error) bool {
-	return errors.Is(err, db.ErrOrderNotFound) || errors.Is(err, db.ErrCheckoutNotFound)
 }

@@ -363,6 +363,9 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 		t.Fatalf("cross-partner update status=%d body=%s", resp.StatusCode, body)
 	}
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/orders", nil, []*http.Cookie{cookie}, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("partner orders status=%d body=%s", resp.StatusCode, body)
+	}
 	var hiddenOrders struct {
 		Items []json.RawMessage `json:"items"`
 	}
@@ -393,6 +396,9 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp, body = makeAPIRequestOnHost(t, "partner.localhost", http.MethodGet, "/api/v1/partner/products", nil, []*http.Cookie{cookie}, false, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unassigned partner products status=%d body=%s", resp.StatusCode, body)
+	}
 	decodeAPIData(t, body, &products)
 	if len(products.Items) != 0 {
 		t.Fatalf("unassigned partner saw catalog: %s", body)

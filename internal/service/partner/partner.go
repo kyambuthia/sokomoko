@@ -34,12 +34,13 @@ var (
 	ErrUnableToCreateProductSlug = errors.New("unable to create product slug")
 )
 
+const maxProductPrice money.Cents = 10_000_000 // 100,000.00
+
 const (
-	maxProductPrice  money.Cents = 10_000_000 // 100,000.00
-	maxProductStock              = 1_000_000
-	maxProductName               = 200
-	maxNoticeLength              = 500
-	maxDescriptionLn             = 5000
+	maxProductStock  = 1_000_000
+	maxProductName   = 200
+	maxNoticeLength  = 500
+	maxDescriptionLn = 5000
 )
 
 type Service struct {
