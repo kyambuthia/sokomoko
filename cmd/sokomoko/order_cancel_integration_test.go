@@ -28,7 +28,7 @@ func TestIntegration_CustomerCancelsNewUnpaidOrder(t *testing.T) {
 	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 2); err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "1 Cancel Street")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(buyerID), "1 Cancel Street")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestIntegration_CustomerCannotCancelAcceptedOrder(t *testing.T) {
 	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "2 Late Street")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(buyerID), "2 Late Street")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestIntegration_APICancelReturnsUpdatedOrder(t *testing.T) {
 	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "3 API Street")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(buyerID), "3 API Street")
 	if err != nil {
 		t.Fatal(err)
 	}

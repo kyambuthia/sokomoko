@@ -34,8 +34,8 @@ type CommerceSettings struct {
 }
 
 // GetCommerceSettings returns the money settings. The migration seeds the row.
-func (s *Store) GetCommerceSettings() (CommerceSettings, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetCommerceSettings(ctx context.Context) (CommerceSettings, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var c CommerceSettings
 	var flat, free int64
@@ -49,8 +49,8 @@ func (s *Store) GetCommerceSettings() (CommerceSettings, error) {
 // UpdateCommerceSettings saves the money settings. The currency may only
 // change while no orders exist, because stored prices are minor units of the
 // old currency; product currencies follow the change.
-func (s *Store) UpdateCommerceSettings(c CommerceSettings) error {
-	ctx, cancel := s.ctx()
+func (s *Store) UpdateCommerceSettings(ctx context.Context, c CommerceSettings) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		var current string
@@ -116,8 +116,8 @@ func scanProviderConfig(row interface{ Scan(...any) error }) (*PaymentProviderCo
 
 const providerColumns = "provider, enabled, mode, settings, secrets, updated_at"
 
-func (s *Store) ListPaymentProviderConfigs() ([]PaymentProviderConfig, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListPaymentProviderConfigs(ctx context.Context) ([]PaymentProviderConfig, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx, "SELECT "+providerColumns+" FROM payment_providers ORDER BY provider")
 	if err != nil {
@@ -135,20 +135,20 @@ func (s *Store) ListPaymentProviderConfigs() ([]PaymentProviderConfig, error) {
 	return configs, rows.Err()
 }
 
-func (s *Store) GetPaymentProviderConfig(provider string) (*PaymentProviderConfig, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetPaymentProviderConfig(ctx context.Context, provider string) (*PaymentProviderConfig, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanProviderConfig(s.DB.QueryRowContext(ctx, "SELECT "+providerColumns+" FROM payment_providers WHERE provider = $1", provider))
 }
 
 // SavePaymentProviderConfig upserts a provider. A nil Secrets keeps the stored
 // secrets, so an admin can change settings without re-entering keys.
-func (s *Store) SavePaymentProviderConfig(c PaymentProviderConfig) error {
+func (s *Store) SavePaymentProviderConfig(ctx context.Context, c PaymentProviderConfig) error {
 	settings, err := json.Marshal(c.Settings)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err = s.DB.ExecContext(ctx,
 		`INSERT INTO payment_providers (provider, enabled, mode, settings, secrets)
@@ -209,21 +209,21 @@ func scanOnlinePayment(row interface{ Scan(...any) error }) (*OnlinePayment, err
 }
 
 // GetOrderPayment returns the newest payment of an order owned by userID.
-func (s *Store) GetOrderPayment(userID, orderID int) (*OnlinePayment, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetOrderPayment(ctx context.Context, userID, orderID int) (*OnlinePayment, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanOnlinePayment(s.DB.QueryRowContext(ctx,
 		onlinePaymentSelect+latestAttemptJoin+" WHERE p.order_id = $1 AND p.user_id = $2 ORDER BY p.id DESC LIMIT 1", orderID, userID))
 }
 
-func (s *Store) GetPaymentByID(paymentID int) (*OnlinePayment, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetPaymentByID(ctx context.Context, paymentID int) (*OnlinePayment, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanOnlinePayment(s.DB.QueryRowContext(ctx, onlinePaymentSelect+latestAttemptJoin+" WHERE p.id = $1", paymentID))
 }
 
-func (s *Store) GetPaymentByReference(provider, reference string) (*OnlinePayment, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetPaymentByReference(ctx context.Context, provider, reference string) (*OnlinePayment, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanOnlinePayment(s.DB.QueryRowContext(ctx,
 		onlinePaymentSelect+" JOIN payment_attempts a ON a.payment_id = p.id WHERE p.provider = $1 AND a.request_reference = $2", provider, reference))
@@ -231,11 +231,11 @@ func (s *Store) GetPaymentByReference(provider, reference string) (*OnlinePaymen
 
 // GetPaymentByCallbackToken finds the attempt that was given
 // the callback token with this SHA-256 hash.
-func (s *Store) GetPaymentByCallbackToken(provider, tokenHash string) (*OnlinePayment, error) {
+func (s *Store) GetPaymentByCallbackToken(ctx context.Context, provider, tokenHash string) (*OnlinePayment, error) {
 	if strings.TrimSpace(tokenHash) == "" {
 		return nil, ErrPaymentNotFound
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanOnlinePayment(s.DB.QueryRowContext(ctx,
 		onlinePaymentSelect+" JOIN payment_attempts a ON a.payment_id = p.id WHERE p.provider = $1 AND a.callback_token_hash = $2", provider, tokenHash))
@@ -244,7 +244,7 @@ func (s *Store) GetPaymentByCallbackToken(provider, tokenHash string) (*OnlinePa
 // StartPaymentAttempt records that a provider request is being made for a
 // pending payment: the new external reference, the hashed callback token,
 // and the provider payload (for example M-Pesa request IDs).
-func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash string, payload map[string]string) (int, error) {
+func (s *Store) StartPaymentAttempt(ctx context.Context, paymentID int, reference, callbackTokenHash string, payload map[string]string) (int, error) {
 	if payload == nil {
 		payload = map[string]string{} // a JSON null would turn later merges into arrays
 	}
@@ -252,7 +252,7 @@ func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash 
 	if err != nil {
 		return 0, err
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var attemptID int
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
@@ -298,7 +298,7 @@ func (s *Store) StartPaymentAttempt(paymentID int, reference, callbackTokenHash 
 
 // UpdatePaymentPayload merges provider identifiers into the payment, for
 // example the M-Pesa CheckoutRequestID returned after an STK push.
-func (s *Store) UpdatePaymentPayload(attemptID int, payload map[string]string) error {
+func (s *Store) UpdatePaymentPayload(ctx context.Context, attemptID int, payload map[string]string) error {
 	if payload == nil {
 		payload = map[string]string{}
 	}
@@ -306,7 +306,7 @@ func (s *Store) UpdatePaymentPayload(attemptID int, payload map[string]string) e
 	if err != nil {
 		return err
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		var paymentID int
@@ -324,8 +324,8 @@ func (s *Store) UpdatePaymentPayload(attemptID int, payload map[string]string) e
 }
 
 // PaymentPayload returns the stored provider identifiers.
-func (s *Store) PaymentPayload(attemptID int) (map[string]string, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) PaymentPayload(ctx context.Context, attemptID int) (map[string]string, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var raw []byte
 	if err := s.DB.QueryRowContext(ctx, "SELECT provider_payload FROM payment_attempts WHERE id = $1", attemptID).Scan(&raw); err != nil {
@@ -341,8 +341,8 @@ func (s *Store) PaymentPayload(attemptID int) (map[string]string, error) {
 // CapturePayment records a provider-confirmed charge. Repeated confirmation
 // of the same attempt is harmless; a second charged attempt or a charge after
 // cancellation enters the operator refund queue.
-func (s *Store) CapturePayment(attemptID int, confirmed money.Cents, currency, receipt string) (bool, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CapturePayment(ctx context.Context, attemptID int, confirmed money.Cents, currency, receipt string) (bool, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	captured := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
@@ -427,8 +427,8 @@ func (s *Store) CapturePayment(attemptID int, confirmed money.Cents, currency, r
 
 // FailPaymentAttempt records a failed provider attempt. The payment stays
 // pending so the customer can retry until the unpaid order expires.
-func (s *Store) FailPaymentAttempt(attemptID int, reason string) error {
-	ctx, cancel := s.ctx()
+func (s *Store) FailPaymentAttempt(ctx context.Context, attemptID int, reason string) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		`UPDATE payment_attempts SET status = 'failed', error_message = $2
@@ -438,8 +438,8 @@ func (s *Store) FailPaymentAttempt(attemptID int, reason string) error {
 
 // LastPaymentError returns the error message when the newest attempt failed,
 // or "" when it succeeded, is still pending, or none exist.
-func (s *Store) LastPaymentError(paymentID int) (string, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) LastPaymentError(ctx context.Context, paymentID int) (string, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var status string
 	var msg sql.NullString

@@ -53,31 +53,31 @@ type CommerceService interface {
 }
 
 type CheckoutService interface {
-	CheckoutWithPayment(userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, checkoutsvc.Summary, error)
-	PreparedCheckout(userID int, checkoutToken string) (checkoutsvc.PageState, error)
-	SaveDraft(userID int, checkoutToken string, deliveryAddress string, paymentMethod string) (checkoutsvc.PageState, error)
-	Prepare(userID int, reservationKey string) error
+	CheckoutWithPayment(ctx context.Context, userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, checkoutsvc.Summary, error)
+	PreparedCheckout(ctx context.Context, userID int, checkoutToken string) (checkoutsvc.PageState, error)
+	SaveDraft(ctx context.Context, userID int, checkoutToken string, deliveryAddress string, paymentMethod string) (checkoutsvc.PageState, error)
+	Prepare(ctx context.Context, userID int, reservationKey string) error
 }
 
 type PaymentService interface {
 	GenerateIdempotencyKey() (string, error)
 	MethodLabel(method string) string
-	MethodOptions() []paymentsvc.MethodOption
+	MethodOptions(ctx context.Context) []paymentsvc.MethodOption
 	IsOnline(method string) bool
 	Start(ctx context.Context, req paymentsvc.StartRequest) (paymentsvc.StartOutcome, error)
 	Status(ctx context.Context, userID, orderID int) (paymentsvc.StatusView, error)
 	HandleReturn(ctx context.Context, userID int, reference string) (int, error)
 	HandleWebhook(ctx context.Context, providerID string, r *http.Request, body []byte) error
 	HandleCallback(ctx context.Context, providerID, token string, r *http.Request, body []byte) error
-	Providers() ([]paymentsvc.ProviderView, error)
-	PaymentExceptions() ([]db.PaymentException, error)
+	Providers(ctx context.Context) ([]paymentsvc.ProviderView, error)
+	PaymentExceptions(ctx context.Context) ([]db.PaymentException, error)
 	RequestRefund(context.Context, *paymentsvc.Actor, int, string) (*db.PaymentException, error)
 	RefreshRefund(context.Context, *paymentsvc.Actor, int) (*db.PaymentException, error)
-	ResolveRefund(*paymentsvc.Actor, int, string) (*db.PaymentException, error)
+	ResolveRefund(context.Context, *paymentsvc.Actor, int, string) (*db.PaymentException, error)
 	ExceptionsNeedingAttention(context.Context) (int, error)
-	SaveProvider(actor *paymentsvc.Actor, id string, input paymentsvc.ProviderInput) error
-	Pricing() (paymentsvc.Pricing, error)
-	SavePricing(actor *paymentsvc.Actor, input paymentsvc.PricingInput) (paymentsvc.Pricing, error)
+	SaveProvider(ctx context.Context, actor *paymentsvc.Actor, id string, input paymentsvc.ProviderInput) error
+	Pricing(ctx context.Context) (paymentsvc.Pricing, error)
+	SavePricing(ctx context.Context, actor *paymentsvc.Actor, input paymentsvc.PricingInput) (paymentsvc.Pricing, error)
 	SecretsConfigured() bool
 }
 

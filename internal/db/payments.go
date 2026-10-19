@@ -43,18 +43,18 @@ func checkoutPlacementTx(ctx context.Context, q querier, userID int, key string)
 
 // GetCheckoutPlacementByIdempotency returns a previously completed placement for
 // the key, or nil.
-func (s *Store) GetCheckoutPlacementByIdempotency(userID int, idempotencyKey string) (*CheckoutPlacement, error) {
+func (s *Store) GetCheckoutPlacementByIdempotency(ctx context.Context, userID int, idempotencyKey string) (*CheckoutPlacement, error) {
 	key := strings.TrimSpace(idempotencyKey)
 	if key == "" {
 		return nil, nil
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return checkoutPlacementTx(ctx, s.DB, userID, key)
 }
 
-func (s *Store) ListPaymentsByOrderID(orderID int) ([]Payment, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListPaymentsByOrderID(ctx context.Context, orderID int) ([]Payment, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
@@ -84,7 +84,7 @@ func (s *Store) ListPaymentsByOrderID(orderID int) ([]Payment, error) {
 // turning its stock reservations into allocations and recording the payment.
 // The checkout token doubles as the idempotency key: repeating the call after
 // success returns the original placement with Reused set.
-func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken string, deliveryAddress string, deliveryNotice string, payment PaymentRecordInput) (CheckoutPlacement, error) {
+func (s *Store) PlaceOrderFromCheckoutWithPayment(ctx context.Context, userID int, checkoutToken string, deliveryAddress string, deliveryNotice string, payment PaymentRecordInput) (CheckoutPlacement, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
 		return CheckoutPlacement{}, ErrDeliveryAddressRequired
@@ -93,7 +93,7 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(userID int, checkoutToken stri
 	if key == "" {
 		return CheckoutPlacement{}, ErrCheckoutNotFound
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var placement CheckoutPlacement

@@ -1,15 +1,16 @@
 package db
 
 import (
+	"context"
 	"errors"
 	"strings"
 )
 
-func (s *Store) CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error {
+func (s *Store) CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error {
 	if strings.TrimSpace(action) == "" || strings.TrimSpace(targetType) == "" {
 		return errors.New("action and target_type are required")
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	_, err := s.DB.ExecContext(ctx,

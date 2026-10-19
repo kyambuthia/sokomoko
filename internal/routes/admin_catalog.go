@@ -226,7 +226,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 						_, err = a.Payment.RefreshRefund(r.Context(), actor, id)
 						message = "Refund status checked"
 					case "refund_resolve":
-						_, err = a.Payment.ResolveRefund(actor, id, r.FormValue("refund_reference"))
+						_, err = a.Payment.ResolveRefund(r.Context(), actor, id, r.FormValue("refund_reference"))
 						message = "Refund marked as completed"
 					default:
 						_, err = a.Payment.RequestRefund(r.Context(), actor, id, r.FormValue("refund_reference"))
@@ -237,7 +237,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 				}
 			case "pricing":
 				var saved paymentsvc.Pricing
-				saved, err = a.Payment.SavePricing(actor, paymentsvc.PricingInput{
+				saved, err = a.Payment.SavePricing(r.Context(), actor, paymentsvc.PricingInput{
 					Currency:              r.FormValue("currency"),
 					ShippingFlat:          r.FormValue("shipping_flat"),
 					FreeShippingThreshold: r.FormValue("free_shipping_threshold"),
@@ -259,7 +259,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 						input.Values[field] = values[0]
 					}
 				}
-				err = a.Payment.SaveProvider(actor, id, input)
+				err = a.Payment.SaveProvider(r.Context(), actor, id, input)
 				message = "Payment method saved"
 				page.FormProvider = id
 			}
@@ -295,15 +295,15 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 			page.FormMessage = flash.Message
 		}
 
-		if page.Pricing, err = a.Payment.Pricing(); err != nil {
+		if page.Pricing, err = a.Payment.Pricing(r.Context()); err != nil {
 			serverError(w, r)
 			return
 		}
-		if page.Providers, err = a.Payment.Providers(); err != nil {
+		if page.Providers, err = a.Payment.Providers(r.Context()); err != nil {
 			serverError(w, r)
 			return
 		}
-		if page.PaymentExceptions, err = a.Payment.PaymentExceptions(); err != nil {
+		if page.PaymentExceptions, err = a.Payment.PaymentExceptions(r.Context()); err != nil {
 			serverError(w, r)
 			return
 		}

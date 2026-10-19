@@ -496,7 +496,7 @@ func (s *Service) UpdateProductForActor(actor *Actor, idRaw string, input Produc
 		}
 		return fmt.Errorf("update product: %w", err)
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "product.update", "product", product.ID,
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "product.update", "product", product.ID,
 		fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock))
 	return nil
 }
@@ -578,7 +578,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 			return err
 		}
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "partner.fulfillment.update", "order", orderID,
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.fulfillment.update", "order", orderID,
 		"partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }

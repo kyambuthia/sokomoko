@@ -84,7 +84,7 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 			return
 		}
 		page := adminDashboardPage(metrics, adminRoleFromContext(r))
-		for _, option := range a.Payment.MethodOptions() {
+		for _, option := range a.Payment.MethodOptions(r.Context()) {
 			page.OnlinePayments = page.OnlinePayments || option.Online
 		}
 		if page.Role == "admin" {

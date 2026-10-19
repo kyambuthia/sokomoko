@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -80,7 +81,7 @@ func (s *Service) CreateCategory(actor *Actor, input CategoryInput) error {
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "category.create", "category", int(id), "slug="+categorySlug)
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "category.create", "category", int(id), "slug="+categorySlug)
 	return nil
 }
 
@@ -115,7 +116,7 @@ func (s *Service) UpdateCategory(actor *Actor, idRaw string, input CategoryInput
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "category.update", "category", id, before+" -> "+name)
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "category.update", "category", id, before+" -> "+name)
 	return nil
 }
 
@@ -138,6 +139,6 @@ func (s *Service) DeleteCategory(actor *Actor, idRaw string) error {
 	if err := s.store.DeleteCategory(id); err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "category.delete", "category", id, "slug="+category.Slug)
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "category.delete", "category", id, "slug="+category.Slug)
 	return nil
 }

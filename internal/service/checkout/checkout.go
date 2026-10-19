@@ -52,9 +52,9 @@ func pricingFrom(settings db.CommerceSettings) Pricing {
 }
 
 type paymentService interface {
-	BuildRecord(method string, totalAmount money.Cents, currency string) (db.PaymentRecordInput, error)
+	BuildRecord(ctx context.Context, method string, totalAmount money.Cents, currency string) (db.PaymentRecordInput, error)
 	GenerateIdempotencyKey() (string, error)
-	IsSupportedMethod(method, currency string) bool
+	IsSupportedMethod(ctx context.Context, method, currency string) bool
 }
 
 type Summary struct {
@@ -118,10 +118,10 @@ func CalculateSummary(subtotal money.Cents, pricing Pricing) Summary {
 // PreparedCheckout returns the open checkout for checkoutToken, creating (and
 // reserving stock for) one when the token is empty, unknown, or no longer open.
 // With an empty token the user's latest open checkout is resumed.
-func (s *Service) PreparedCheckout(userID int, checkoutToken string) (PageState, error) {
+func (s *Service) PreparedCheckout(ctx context.Context, userID int, checkoutToken string) (PageState, error) {
 	key := strings.TrimSpace(checkoutToken)
 	if key == "" {
-		latest, err := s.store.GetLatestOpenCheckout(userID)
+		latest, err := s.store.GetLatestOpenCheckout(ctx, userID)
 		if err != nil {
 			return PageState{}, err
 		}
@@ -133,7 +133,7 @@ func (s *Service) PreparedCheckout(userID int, checkoutToken string) (PageState,
 		}
 	}
 
-	record, err := s.ensureOpen(userID, key)
+	record, err := s.ensureOpen(ctx, userID, key)
 	if err != nil {
 		return PageState{Token: key}, err
 	}
@@ -142,26 +142,26 @@ func (s *Service) PreparedCheckout(userID int, checkoutToken string) (PageState,
 
 // SaveDraft stores the delivery address and payment method on the checkout so
 // a failed submission does not lose what the customer typed.
-func (s *Service) SaveDraft(userID int, checkoutToken string, deliveryAddress string, paymentMethod string) (PageState, error) {
+func (s *Service) SaveDraft(ctx context.Context, userID int, checkoutToken string, deliveryAddress string, paymentMethod string) (PageState, error) {
 	key := strings.TrimSpace(checkoutToken)
 	if key == "" {
-		state, err := s.PreparedCheckout(userID, "")
+		state, err := s.PreparedCheckout(ctx, userID, "")
 		if err != nil {
 			return state, err
 		}
 		key = state.Token
 	}
-	if paymentMethod != "" && !s.payments.IsSupportedMethod(paymentMethod, "") {
+	if paymentMethod != "" && !s.payments.IsSupportedMethod(ctx, paymentMethod, "") {
 		paymentMethod = ""
 	}
 	address := truncate(strings.TrimSpace(deliveryAddress), maxDeliveryAddressLen)
 
-	record, err := s.store.UpdateCheckoutDraft(userID, key, address, paymentMethod)
+	record, err := s.store.UpdateCheckoutDraft(ctx, userID, key, address, paymentMethod)
 	if errors.Is(err, db.ErrCheckoutNotFound) {
-		if _, err = s.ensureOpen(userID, key); err != nil {
+		if _, err = s.ensureOpen(ctx, userID, key); err != nil {
 			return PageState{Token: key}, err
 		}
-		record, err = s.store.UpdateCheckoutDraft(userID, key, address, paymentMethod)
+		record, err = s.store.UpdateCheckoutDraft(ctx, userID, key, address, paymentMethod)
 	}
 	if err != nil {
 		return PageState{Token: key}, err
@@ -171,9 +171,9 @@ func (s *Service) SaveDraft(userID int, checkoutToken string, deliveryAddress st
 
 // Prepare reserves stock for the cart under reservationKey and snapshots the
 // priced cart into an open checkout.
-func (s *Service) Prepare(userID int, reservationKey string) error {
+func (s *Service) Prepare(ctx context.Context, userID int, reservationKey string) error {
 	for attempt := 0; attempt < 3; attempt++ {
-		err := s.prepareOnce(userID, reservationKey)
+		err := s.prepareOnce(ctx, userID, reservationKey)
 		if !errors.Is(err, db.ErrCheckoutCurrencyChanged) {
 			return err
 		}
@@ -181,14 +181,14 @@ func (s *Service) Prepare(userID int, reservationKey string) error {
 	return ErrCartEmpty
 }
 
-func (s *Service) prepareOnce(userID int, reservationKey string) error {
+func (s *Service) prepareOnce(ctx context.Context, userID int, reservationKey string) error {
 	key := strings.TrimSpace(reservationKey)
 	if key == "" {
 		return nil
 	}
 	expiresAt := s.now().UTC().Add(ReservationHoldTTL)
 
-	if err := s.store.ReserveCartForCheckout(userID, key, expiresAt); err != nil {
+	if err := s.store.ReserveCartForCheckout(ctx, userID, key, expiresAt); err != nil {
 		return mapStoreError(err)
 	}
 
@@ -213,13 +213,13 @@ func (s *Service) prepareOnce(userID int, reservationKey string) error {
 		})
 	}
 
-	settings, err := s.store.GetCommerceSettings()
+	settings, err := s.store.GetCommerceSettings(ctx)
 	if err != nil {
 		return err
 	}
 	pricing := pricingFrom(settings)
 	summary := CalculateSummary(subtotal, pricing)
-	_, err = s.store.UpsertCheckout(userID, db.CheckoutInput{
+	_, err = s.store.UpsertCheckout(ctx, userID, db.CheckoutInput{
 		Token:          key,
 		Currency:       pricing.Currency,
 		PaymentMethod:  defaultPaymentMethod,
@@ -239,7 +239,7 @@ func (s *Service) prepareOnce(userID int, reservationKey string) error {
 // CheckoutWithPayment places the order for the checkout identified by
 // idempotencyKey. Replaying a key that already produced an order returns that
 // order instead of creating another.
-func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, Summary, error) {
+func (s *Service) CheckoutWithPayment(ctx context.Context, userID int, deliveryAddress, paymentMethod, idempotencyKey string) (int64, Summary, error) {
 	address := strings.TrimSpace(deliveryAddress)
 	if address == "" {
 		return 0, Summary{}, ErrDeliveryAddress
@@ -250,13 +250,13 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	if method == "" {
 		method = defaultPaymentMethod
 	}
-	if !s.payments.IsSupportedMethod(method, "") {
+	if !s.payments.IsSupportedMethod(ctx, method, "") {
 		return 0, Summary{}, ErrInvalidPaymentMethod
 	}
 
 	key := strings.TrimSpace(idempotencyKey)
 	if key != "" {
-		existing, err := s.store.GetCheckoutPlacementByIdempotency(userID, key)
+		existing, err := s.store.GetCheckoutPlacementByIdempotency(ctx, userID, key)
 		if err != nil {
 			return 0, Summary{}, err
 		}
@@ -271,16 +271,16 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 		key = generated
 	}
 
-	record, err := s.ensureOpen(userID, key)
+	record, err := s.ensureOpen(ctx, userID, key)
 	if err != nil {
 		return 0, Summary{}, err
 	}
 
 	summary := summaryFromCheckout(record)
-	if !s.payments.IsSupportedMethod(method, record.Currency) {
+	if !s.payments.IsSupportedMethod(ctx, method, record.Currency) {
 		return 0, Summary{}, ErrInvalidPaymentMethod
 	}
-	paymentRecord, err := s.payments.BuildRecord(method, summary.Total, record.Currency)
+	paymentRecord, err := s.payments.BuildRecord(ctx, method, summary.Total, record.Currency)
 	if err != nil {
 		return 0, Summary{}, err
 	}
@@ -288,7 +288,7 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 	// notice is only the customer-facing fulfillment message.
 	notice := deliveryNoticePrefix
 
-	placement, err := s.store.PlaceOrderFromCheckoutWithPayment(userID, key, address, notice, paymentRecord)
+	placement, err := s.store.PlaceOrderFromCheckoutWithPayment(ctx, userID, key, address, notice, paymentRecord)
 	if err != nil {
 		return 0, Summary{}, mapStoreError(err)
 	}
@@ -300,8 +300,8 @@ func (s *Service) CheckoutWithPayment(userID int, deliveryAddress, paymentMethod
 
 // ensureOpen returns the open checkout for key, re-preparing it when it is
 // missing, expired, or was invalidated by a cart change.
-func (s *Service) ensureOpen(userID int, key string) (*db.Checkout, error) {
-	record, err := s.store.GetCheckoutByToken(userID, key)
+func (s *Service) ensureOpen(ctx context.Context, userID int, key string) (*db.Checkout, error) {
+	record, err := s.store.GetCheckoutByToken(ctx, userID, key)
 	if err != nil {
 		return nil, err
 	}
@@ -309,10 +309,10 @@ func (s *Service) ensureOpen(userID int, key string) (*db.Checkout, error) {
 		return nil, ErrCartEmpty
 	}
 	if !s.isOpen(record) {
-		if err := s.Prepare(userID, key); err != nil {
+		if err := s.Prepare(ctx, userID, key); err != nil {
 			return nil, err
 		}
-		if record, err = s.store.GetCheckoutByToken(userID, key); err != nil {
+		if record, err = s.store.GetCheckoutByToken(ctx, userID, key); err != nil {
 			return nil, err
 		}
 	}

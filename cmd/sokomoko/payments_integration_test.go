@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
@@ -17,6 +18,9 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/lifecycle"
+	"github.com/kyambuthia/sokomoko/internal/payments"
+	"github.com/kyambuthia/sokomoko/internal/secret"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
 var testProviders *fakeProviders
@@ -34,7 +38,8 @@ type fakeProviders struct {
 	paystackCur  map[string]string
 	refundCount  int
 	refundStatus string
-	refundFail   bool // the refund endpoint answers 500
+	refundFail   bool   // the refund endpoint answers 500
+	onInitialize func() // runs while a Paystack initialization is in flight
 }
 
 func newFakeProviders() *fakeProviders {
@@ -49,6 +54,7 @@ func (f *fakeProviders) reset() {
 	f.stkResult, f.lastSTK, f.stkCount = "processing", nil, 0
 	f.refundCount, f.refundStatus, f.refundFail = 0, "pending", false
 	f.paystackAmt, f.paystackCur = map[string]int64{}, map[string]string{}
+	f.onInitialize = nil
 }
 
 func (f *fakeProviders) serve(w http.ResponseWriter, r *http.Request) {
@@ -78,6 +84,9 @@ func (f *fakeProviders) serve(w http.ResponseWriter, r *http.Request) {
 			Reference string `json:"reference"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if f.onInitialize != nil {
+			f.onInitialize()
+		}
 		f.paystackAmt[body.Reference], f.paystackCur[body.Reference] = body.Amount, body.Currency
 		fmt.Fprintf(w, `{"status":true,"data":{"authorization_url":"https://checkout.paystack.test/%s","access_code":"ac","reference":"%s"}}`, body.Reference, body.Reference)
 	case strings.HasPrefix(r.URL.Path, "/transaction/verify/"):
@@ -405,6 +414,50 @@ func TestIntegration_PaystackRedirectWebhookAndReturn(t *testing.T) {
 	}
 }
 
+// A customer who closes the tab while the provider is starting a payment must
+// not leave the new attempt without its redirect URL: the attempt already
+// exists, so a retry would only hand back the empty payload.
+func TestIntegration_PaymentStartSurvivesClientDisconnect(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
+	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
+	placeOrder(t, customer, "paystack", nil)
+
+	var userID int
+	if err := testStore.DB.QueryRow("SELECT id FROM users WHERE username = 'pay_customer'").Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	first, err := testStore.GetOrderPayment(t.Context(), userID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testStore.FailPaymentAttempt(t.Context(), first.AttemptID, "declined"); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, disconnect := context.WithCancel(t.Context())
+	defer disconnect()
+	testProviders.mu.Lock()
+	testProviders.onInitialize = disconnect
+	testProviders.mu.Unlock()
+
+	svc := paymentsvc.New(testStore, payments.NewRegistry(payments.Options{PaystackURL: testProviders.server.URL}), secret.Development())
+	outcome, err := svc.Start(ctx, paymentsvc.StartRequest{UserID: userID, OrderID: 1, BaseURL: "http://localhost"})
+	if err != nil {
+		t.Fatalf("start after disconnect: %v", err)
+	}
+	retry, err := testStore.GetOrderPayment(t.Context(), userID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := testStore.PaymentPayload(t.Context(), retry.AttemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retry.AttemptID == first.AttemptID || outcome.RedirectURL == "" || payload["redirect_url"] != outcome.RedirectURL {
+		t.Fatalf("attempt %d (first %d) payload %v outcome %q", retry.AttemptID, first.AttemptID, payload, outcome.RedirectURL)
+	}
+}
+
 func TestIntegration_PaystackLateCaptureRefund(t *testing.T) {
 	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
 	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
@@ -625,7 +678,7 @@ func TestIntegration_CurrencyChangeInvalidatesOpenCheckout(t *testing.T) {
 	if err := testStore.DB.QueryRow("SELECT id FROM users WHERE username = 'pay_customer'").Scan(&customerID); err != nil {
 		t.Fatal(err)
 	}
-	_, err := testStore.PlaceOrderFromCheckoutWithPayment(customerID, oldToken, "1 Pay Street", "", db.PaymentRecordInput{
+	_, err := testStore.PlaceOrderFromCheckoutWithPayment(t.Context(), customerID, oldToken, "1 Pay Street", "", db.PaymentRecordInput{
 		Method: "cash_on_delivery", Provider: "manual_cash_on_delivery", Status: db.PaymentStatusPending, Currency: "USD",
 	})
 	if !errors.Is(err, db.ErrCheckoutCurrencyChanged) {

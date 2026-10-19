@@ -165,11 +165,11 @@ func clearCartTx(ctx context.Context, tx *sql.Tx, userID int) error {
 // PlaceOrderFromCart places an order for the whole cart at current prices with
 // no shipping or tax. The checkout service uses PlaceOrderFromCheckoutWithPayment
 // instead; this path exists for operational tooling and tests.
-func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, error) {
+func (s *Store) PlaceOrderFromCart(ctx context.Context, userID int, deliveryAddress string) (int64, error) {
 	if strings.TrimSpace(deliveryAddress) == "" {
 		return 0, ErrDeliveryAddressRequired
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var orderID int64

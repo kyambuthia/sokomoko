@@ -18,8 +18,8 @@ var (
 	ErrRefundNotResolvable     = errors.New("only a refund under review or awaiting the provider can be closed by hand")
 )
 
-func (s *Service) PaymentExceptions() ([]db.PaymentException, error) {
-	return s.store.ListPaymentExceptions(50)
+func (s *Service) PaymentExceptions(ctx context.Context) ([]db.PaymentException, error) {
+	return s.store.ListPaymentExceptions(ctx, 50)
 }
 
 // RequestRefund either initiates a Paystack refund once or records an M-Pesa
@@ -29,7 +29,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return nil, ErrForbidden
 	}
-	e, err := s.store.GetPaymentException(id)
+	e, err := s.store.GetPaymentException(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 			return nil, ErrRefundReferenceRequired
 		}
 	case "paystack":
-		provider, config, err := s.providerFor(e.Provider)
+		provider, config, err := s.providerFor(ctx, e.Provider)
 		if err != nil {
 			return nil, err
 		}
@@ -55,34 +55,38 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	default:
 		return nil, ErrRefundUnsupported
 	}
-	e, claimed, err := s.store.BeginRefund(id)
+	e, claimed, err := s.store.BeginRefund(ctx, id)
 	if err != nil || !claimed {
 		return e, err
 	}
+	// The refund is claimed and is never sent twice, so finish recording it
+	// even if the admin's browser goes away. Provider calls keep their own
+	// timeout.
+	ctx = context.WithoutCancel(ctx)
 	if e.Provider == "mpesa" {
-		if err := s.store.SetPaymentExceptionStatus(id, "refunded", manualReference, ""); err != nil {
+		if err := s.store.SetPaymentExceptionStatus(ctx, id, "refunded", manualReference, ""); err != nil {
 			return nil, err
 		}
-		_ = s.store.CreateAuditLog(actor.ID, "payments.refund.manual", "payment_exception", id, "M-Pesa reversal recorded")
-		return s.store.GetPaymentException(id)
+		_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.refund.manual", "payment_exception", id, "M-Pesa reversal recorded")
+		return s.store.GetPaymentException(ctx, id)
 	}
 	result, err := refundProvider.CreateRefund(ctx, cfg, e.RequestReference, e.Amount, e.Currency)
 	if err != nil {
-		_ = s.store.SetPaymentExceptionStatus(id, "review", "", "Refund request outcome unknown; reconcile in Paystack before retrying.")
+		_ = s.store.SetPaymentExceptionStatus(ctx, id, "review", "", "Refund request outcome unknown; reconcile in Paystack before retrying.")
 		slog.Error("refund request requires reconciliation", "exception_id", id, "error", err)
 		return nil, err
 	}
-	if err := s.recordRefundResult(e, result); err != nil {
+	if err := s.recordRefundResult(ctx, e, result); err != nil {
 		return nil, err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "payments.refund.request", "payment_exception", id, "Paystack refund initiated")
-	return s.store.GetPaymentException(id)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.refund.request", "payment_exception", id, "Paystack refund initiated")
+	return s.store.GetPaymentException(ctx, id)
 }
 
 // ResolveRefund closes an exception the operator reconciled in the provider
 // dashboard after an uncertain or failed automatic refund. Open exceptions go
 // through RequestRefund so a Paystack refund is never skipped by mistake.
-func (s *Service) ResolveRefund(actor *Actor, id int, reference string) (*db.PaymentException, error) {
+func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, reference string) (*db.PaymentException, error) {
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return nil, ErrForbidden
 	}
@@ -90,7 +94,7 @@ func (s *Service) ResolveRefund(actor *Actor, id int, reference string) (*db.Pay
 	if reference == "" {
 		return nil, ErrRefundReferenceRequired
 	}
-	e, err := s.store.GetPaymentException(id)
+	e, err := s.store.GetPaymentException(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -101,11 +105,11 @@ func (s *Service) ResolveRefund(actor *Actor, id int, reference string) (*db.Pay
 	default:
 		return nil, ErrRefundNotResolvable
 	}
-	if err := s.store.SetPaymentExceptionStatus(id, "refunded", reference, ""); err != nil {
+	if err := s.store.SetPaymentExceptionStatus(ctx, id, "refunded", reference, ""); err != nil {
 		return nil, err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "payments.refund.resolve", "payment_exception", id, "Refund reconciled by hand: "+truncate(reference, 100))
-	return s.store.GetPaymentException(id)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.refund.resolve", "payment_exception", id, "Refund reconciled by hand: "+truncate(reference, 100))
+	return s.store.GetPaymentException(ctx, id)
 }
 
 // ExceptionsNeedingAttention counts exceptions an admin must act on.
@@ -125,7 +129,7 @@ func (s *Service) RefreshRefund(ctx context.Context, actor *Actor, id int) (*db.
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return nil, ErrForbidden
 	}
-	e, err := s.store.GetPaymentException(id)
+	e, err := s.store.GetPaymentException(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +142,7 @@ func (s *Service) RefreshRefund(ctx context.Context, actor *Actor, id int) (*db.
 	if e.Status == "refunded" {
 		return e, nil
 	}
-	provider, cfg, err := s.providerFor(e.Provider)
+	provider, cfg, err := s.providerFor(ctx, e.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -153,13 +157,13 @@ func (s *Service) RefreshRefund(ctx context.Context, actor *Actor, id int) (*db.
 	if result.ID != e.RefundReference {
 		return nil, fmt.Errorf("%w: refund reference mismatch", payments.ErrProviderFailure)
 	}
-	if err := s.recordRefundResult(e, result); err != nil {
+	if err := s.recordRefundResult(ctx, e, result); err != nil {
 		return nil, err
 	}
-	return s.store.GetPaymentException(id)
+	return s.store.GetPaymentException(ctx, id)
 }
 
-func (s *Service) recordRefundResult(e *db.PaymentException, result payments.RefundResult) error {
+func (s *Service) recordRefundResult(ctx context.Context, e *db.PaymentException, result payments.RefundResult) error {
 	if result.Amount != e.Amount || !strings.EqualFold(result.Currency, e.Currency) {
 		return fmt.Errorf("%w: refund amount or currency mismatch", payments.ErrProviderFailure)
 	}
@@ -174,5 +178,5 @@ func (s *Service) recordRefundResult(e *db.PaymentException, result payments.Ref
 	case "failed":
 		status, detail = "review", "Provider reports a failed refund."
 	}
-	return s.store.SetPaymentExceptionStatus(e.ID, status, result.ID, detail)
+	return s.store.SetPaymentExceptionStatus(ctx, e.ID, status, result.ID, detail)
 }

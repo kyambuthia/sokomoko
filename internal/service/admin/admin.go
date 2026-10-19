@@ -288,7 +288,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 			return err
 		}
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "order.update", "order", orderID,
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "order.update", "order", orderID,
 		"status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }
@@ -329,7 +329,7 @@ func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 	if err := s.store.DeleteUser(userID); err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
 	return nil
 }
 
@@ -363,7 +363,7 @@ func (s *Service) ReactivateUser(actor *Actor, userIDRaw string) error {
 	if !found {
 		return ErrUserNotFound
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
 	return nil
 }
 

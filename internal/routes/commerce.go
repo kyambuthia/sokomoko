@@ -223,8 +223,8 @@ func checkoutPaymentOptions(paymentOptions []paymentsvc.MethodOption) []PaymentM
 }
 
 // findMethod returns the checkout option for method, if offered.
-func findMethod(a *app.App, method string) (paymentsvc.MethodOption, bool) {
-	for _, option := range a.Payment.MethodOptions() {
+func findMethod(ctx context.Context, a *app.App, method string) (paymentsvc.MethodOption, bool) {
+	for _, option := range a.Payment.MethodOptions(ctx) {
 		if option.Value == method {
 			return option, true
 		}
@@ -237,7 +237,7 @@ func checkoutPage(a *app.App, r *http.Request, state checkoutsvc.PageState, paym
 	if selected == "" {
 		selected = state.PaymentMethod
 	}
-	options := checkoutPaymentOptions(a.Payment.MethodOptions())
+	options := checkoutPaymentOptions(a.Payment.MethodOptions(r.Context()))
 	if !hasOption(options, selected) && len(options) > 0 {
 		selected = options[0].Value
 	}
@@ -311,7 +311,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		switch r.Method {
 		case http.MethodGet, http.MethodHead:
-			state, err := a.Checkout.PreparedCheckout(userID, r.URL.Query().Get("checkout"))
+			state, err := a.Checkout.PreparedCheckout(r.Context(), userID, r.URL.Query().Get("checkout"))
 			data := checkoutPage(a, r, state, paymentMethod)
 			if err != nil {
 				message, known := checkoutErrorMessage(err)
@@ -339,14 +339,14 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		phone := strings.TrimSpace(r.FormValue("phone"))
 		var err error
-		if option, ok := findMethod(a, paymentMethod); ok && option.NeedsPhone {
+		if option, ok := findMethod(r.Context(), a, paymentMethod); ok && option.NeedsPhone {
 			if _, phoneErr := payments.NormalizePhone(phone); phoneErr != nil {
 				err = errInvalidPhone
 			}
 		}
 		var orderID int64
 		if err == nil {
-			orderID, _, err = a.Checkout.CheckoutWithPayment(userID, address, paymentMethod, key)
+			orderID, _, err = a.Checkout.CheckoutWithPayment(r.Context(), userID, address, paymentMethod, key)
 		}
 		if err != nil {
 			message, known := checkoutErrorMessage(err)
@@ -354,7 +354,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 				log.Printf("checkout place order: %v", err)
 				message = "We could not place your order. Please try again."
 			}
-			state, stateErr := a.Checkout.SaveDraft(userID, key, address, paymentMethod)
+			state, stateErr := a.Checkout.SaveDraft(r.Context(), userID, key, address, paymentMethod)
 			if stateErr != nil {
 				if _, known := checkoutErrorMessage(stateErr); !known {
 					log.Printf("checkout save draft: %v", stateErr)

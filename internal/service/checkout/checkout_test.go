@@ -71,11 +71,11 @@ func TestCheckout_ValidationErrors(t *testing.T) {
 
 	userID, _ := createUserAndProduct(t, store, 3)
 
-	if _, _, err := svc.CheckoutWithPayment(userID, " ", "", ""); err != ErrDeliveryAddress {
+	if _, _, err := svc.CheckoutWithPayment(t.Context(), userID, " ", "", ""); err != ErrDeliveryAddress {
 		t.Fatalf("delivery error = %v, want %v", err, ErrDeliveryAddress)
 	}
 
-	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "", ""); err != ErrCartEmpty {
+	if _, _, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", "", ""); err != ErrCartEmpty {
 		t.Fatalf("cart error = %v, want %v", err, ErrCartEmpty)
 	}
 }
@@ -106,7 +106,7 @@ func TestCheckoutWithPayment_InvalidMethod(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "wire_transfer", ""); err != ErrInvalidPaymentMethod {
+	if _, _, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", "wire_transfer", ""); err != ErrInvalidPaymentMethod {
 		t.Fatalf("error = %v, want %v", err, ErrInvalidPaymentMethod)
 	}
 }
@@ -121,11 +121,11 @@ func TestPrepare_CreatesCheckoutReservations(t *testing.T) {
 	}
 
 	key := "reservation-key"
-	if err := svc.Prepare(userID, key); err != nil {
+	if err := svc.Prepare(t.Context(), userID, key); err != nil {
 		t.Fatalf("prepare error = %v", err)
 	}
 
-	reservations, err := store.ListActiveStockReservationsByKey(userID, key)
+	reservations, err := store.ListActiveStockReservationsByKey(t.Context(), userID, key)
 	if err != nil {
 		t.Fatalf("list reservations error = %v", err)
 	}
@@ -144,7 +144,7 @@ func TestPrepare_CreatesCheckoutReservations(t *testing.T) {
 		t.Fatalf("projected stock = %d, want 1", product.StockQuantity)
 	}
 
-	checkout, err := store.GetCheckoutByToken(userID, key)
+	checkout, err := store.GetCheckoutByToken(t.Context(), userID, key)
 	if err != nil {
 		t.Fatalf("get checkout error = %v", err)
 	}
@@ -171,7 +171,7 @@ func TestPreparedCheckout_ReturnsPersistedSnapshotState(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	state, err := svc.PreparedCheckout(userID, "")
+	state, err := svc.PreparedCheckout(t.Context(), userID, "")
 	if err != nil {
 		t.Fatalf("prepared checkout error = %v", err)
 	}
@@ -191,7 +191,7 @@ func TestPreparedCheckout_ReturnsPersistedSnapshotState(t *testing.T) {
 		t.Fatalf("summary total = %s, want 28.10", state.Summary.Total)
 	}
 
-	checkout, err := store.GetCheckoutByToken(userID, state.Token)
+	checkout, err := store.GetCheckoutByToken(t.Context(), userID, state.Token)
 	if err != nil {
 		t.Fatalf("get checkout error = %v", err)
 	}
@@ -209,12 +209,12 @@ func TestSaveDraft_PersistsDeliveryAddressAndReusesOpenCheckout(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	initialState, err := svc.PreparedCheckout(userID, "")
+	initialState, err := svc.PreparedCheckout(t.Context(), userID, "")
 	if err != nil {
 		t.Fatalf("prepared checkout error = %v", err)
 	}
 
-	draftState, err := svc.SaveDraft(userID, initialState.Token, "Saved Nairobi Lane", paymentsvc.MethodCashOnDelivery)
+	draftState, err := svc.SaveDraft(t.Context(), userID, initialState.Token, "Saved Nairobi Lane", paymentsvc.MethodCashOnDelivery)
 	if err != nil {
 		t.Fatalf("save draft error = %v", err)
 	}
@@ -228,7 +228,7 @@ func TestSaveDraft_PersistsDeliveryAddressAndReusesOpenCheckout(t *testing.T) {
 		t.Fatalf("draft payment method = %q, want %q", draftState.PaymentMethod, paymentsvc.MethodCashOnDelivery)
 	}
 
-	refreshedState, err := svc.PreparedCheckout(userID, "")
+	refreshedState, err := svc.PreparedCheckout(t.Context(), userID, "")
 	if err != nil {
 		t.Fatalf("refreshed checkout error = %v", err)
 	}
@@ -252,7 +252,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
-	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, "")
+	orderID, summary, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", paymentsvc.MethodCashOnDelivery, "")
 	if err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}
@@ -274,7 +274,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatal("expected delivery notice to include payment/price context")
 	}
 
-	payments, err := store.ListPaymentsByOrderID(int(orderID))
+	payments, err := store.ListPaymentsByOrderID(t.Context(), int(orderID))
 	if err != nil {
 		t.Fatalf("list payments error = %v", err)
 	}
@@ -285,7 +285,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 		t.Fatalf("payment status = %q, want %q", payments[0].Status, db.PaymentStatusPending)
 	}
 
-	stocks, err := store.ListInventoryStocksByProductID(productID)
+	stocks, err := store.ListInventoryStocksByProductID(t.Context(), productID)
 	if err != nil {
 		t.Fatalf("list stocks error = %v", err)
 	}
@@ -310,15 +310,15 @@ func TestCheckoutWithPayment_ConvertsActiveReservations(t *testing.T) {
 	}
 
 	key := "convert-key"
-	if err := svc.Prepare(userID, key); err != nil {
+	if err := svc.Prepare(t.Context(), userID, key); err != nil {
 		t.Fatalf("prepare error = %v", err)
 	}
 
-	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key); err != nil {
+	if _, _, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key); err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}
 
-	reservations, err := store.ListActiveStockReservationsByKey(userID, key)
+	reservations, err := store.ListActiveStockReservationsByKey(t.Context(), userID, key)
 	if err != nil {
 		t.Fatalf("list reservations error = %v", err)
 	}
@@ -326,7 +326,7 @@ func TestCheckoutWithPayment_ConvertsActiveReservations(t *testing.T) {
 		t.Fatalf("active reservations length = %d, want 0", len(reservations))
 	}
 
-	stocks, err := store.ListInventoryStocksByProductID(productID)
+	stocks, err := store.ListInventoryStocksByProductID(t.Context(), productID)
 	if err != nil {
 		t.Fatalf("list stocks error = %v", err)
 	}
@@ -355,11 +355,11 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 		t.Fatalf("generate key error = %v", err)
 	}
 
-	orderID, _, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
+	orderID, _, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
 	if err != nil {
 		t.Fatalf("first checkout error = %v", err)
 	}
-	replayedOrderID, replaySummary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
+	replayedOrderID, replaySummary, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
 	if err != nil {
 		t.Fatalf("replay checkout error = %v", err)
 	}
@@ -378,7 +378,7 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 		t.Fatalf("orders length = %d, want 1", len(orders))
 	}
 
-	payments, err := store.ListPaymentsByOrderID(int(orderID))
+	payments, err := store.ListPaymentsByOrderID(t.Context(), int(orderID))
 	if err != nil {
 		t.Fatalf("list payments error = %v", err)
 	}
@@ -399,7 +399,7 @@ func TestCheckoutWithPayment_RepricesAfterCartChange(t *testing.T) {
 	}
 
 	key := "snapshot-key"
-	if err := svc.Prepare(userID, key); err != nil {
+	if err := svc.Prepare(t.Context(), userID, key); err != nil {
 		t.Fatalf("prepare error = %v", err)
 	}
 
@@ -407,7 +407,7 @@ func TestCheckoutWithPayment_RepricesAfterCartChange(t *testing.T) {
 		t.Fatalf("update cart quantity error = %v", err)
 	}
 
-	orderID, summary, err := svc.CheckoutWithPayment(userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
+	orderID, summary, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", paymentsvc.MethodCashOnDelivery, key)
 	if err != nil {
 		t.Fatalf("checkout error = %v", err)
 	}
@@ -432,7 +432,7 @@ func TestCheckoutWithPayment_RepricesAfterCartChange(t *testing.T) {
 		t.Fatalf("order quantity = %d, want 1", orders[0].Items[0].Quantity)
 	}
 
-	checkout, err := store.GetCheckoutByToken(userID, key)
+	checkout, err := store.GetCheckoutByToken(t.Context(), userID, key)
 	if err != nil {
 		t.Fatalf("get checkout error = %v", err)
 	}
@@ -454,10 +454,10 @@ func TestCheckoutWithPayment_CompletedTokenCannotBeReused(t *testing.T) {
 	userID, productID := createUserAndProduct(t, store, 5)
 	_ = store.AddToCart(t.Context(), userID, productID, 1)
 	key := "single-use"
-	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "", key); err != nil {
+	if _, _, err := svc.CheckoutWithPayment(t.Context(), userID, "Nairobi", "", key); err != nil {
 		t.Fatalf("first checkout: %v", err)
 	}
-	state, err := svc.PreparedCheckout(userID, key)
+	state, err := svc.PreparedCheckout(t.Context(), userID, key)
 	if err != ErrCartEmpty {
 		t.Fatalf("prepared completed checkout = %+v, %v; want ErrCartEmpty", state, err)
 	}

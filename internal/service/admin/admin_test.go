@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -70,7 +71,9 @@ func (s *categoryStore) CreateCategory(c db.Category) (int64, error) {
 	return 1, s.err
 }
 
-func (s *categoryStore) CreateAuditLog(int, string, string, int, string) error { return nil }
+func (s *categoryStore) CreateAuditLog(context.Context, int, string, string, int, string) error {
+	return nil
+}
 
 func TestCreateCategory(t *testing.T) {
 	staff := &Actor{ID: 2, Role: "staff"}

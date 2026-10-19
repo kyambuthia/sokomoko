@@ -67,11 +67,11 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	}
 	if cfg.IsProduction() {
 		paymentService := paymentsvc.New(store, payments.NewRegistry(payments.Options{}), secrets)
-		if err := paymentService.ValidateProduction(cfg.PublicBaseURL); err != nil {
+		if err := paymentService.ValidateProduction(context.Background(), cfg.PublicBaseURL); err != nil {
 			return wrapCommandError(commandServe, "validate payment providers", err)
 		}
 	}
-	if commerce, err := store.GetCommerceSettings(); err == nil {
+	if commerce, err := store.GetCommerceSettings(context.Background()); err == nil {
 		ui.SetCurrency(commerce.Currency)
 	} else {
 		return wrapCommandError(commandServe, "load commerce settings", err)

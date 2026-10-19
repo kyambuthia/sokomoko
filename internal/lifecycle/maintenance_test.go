@@ -8,7 +8,7 @@ import (
 
 type blockingMaintenance struct{ started chan struct{} }
 
-func (s *blockingMaintenance) ReleaseExpiredReservationsContext(ctx context.Context) (int, error) {
+func (s *blockingMaintenance) ReleaseExpiredReservations(ctx context.Context) (int, error) {
 	close(s.started)
 	<-ctx.Done()
 	return 0, ctx.Err()
@@ -58,7 +58,7 @@ func (s *lockedMaintenance) RunExclusive(ctx context.Context, _ int64, fn func(c
 	fn(ctx)
 	return true, nil
 }
-func (s *lockedMaintenance) ReleaseExpiredReservationsContext(context.Context) (int, error) {
+func (s *lockedMaintenance) ReleaseExpiredReservations(context.Context) (int, error) {
 	s.ran++
 	return 0, nil
 }
@@ -79,7 +79,7 @@ func TestExclusive_SkipsWhileAnotherReplicaHoldsTheLock(t *testing.T) {
 		{"held elsewhere", &lockedMaintenance{held: true}, 0},
 		{"lock check failed", &lockedMaintenance{failed: true}, 1},
 	} {
-		job := func(ctx context.Context) { _, _ = tc.store.ReleaseExpiredReservationsContext(ctx) }
+		job := func(ctx context.Context) { _, _ = tc.store.ReleaseExpiredReservations(ctx) }
 		exclusive(ctx, tc.store, reservationsJobLockKey, job)()
 		if tc.store.ran != tc.wantRan {
 			t.Errorf("%s: job ran %d times, want %d", tc.name, tc.store.ran, tc.wantRan)

@@ -280,7 +280,7 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	if err := testStore.AddToCart(t.Context(), int(customerID), int(productB), 1); err != nil {
 		t.Fatalf("add customer cart: %v", err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(customerID), "Partner API Lane")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(customerID), "Partner API Lane")
 	if err != nil {
 		t.Fatalf("create partner-scoping order: %v", err)
 	}

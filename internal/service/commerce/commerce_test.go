@@ -121,7 +121,7 @@ func TestAddToCart_OwnCheckoutHoldCountsAsAvailable(t *testing.T) {
 	if err := svc.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add: %v", err)
 	}
-	if err := store.ReserveCartForCheckout(userID, "hold", time.Now().Add(time.Minute)); err != nil {
+	if err := store.ReserveCartForCheckout(t.Context(), userID, "hold", time.Now().Add(time.Minute)); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
 	if err := svc.AddToCart(t.Context(), userID, productID, 1); err != nil {

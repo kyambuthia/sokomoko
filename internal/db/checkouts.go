@@ -65,19 +65,19 @@ func (s *Store) loadCheckout(ctx context.Context, q querier, where string, args 
 	return checkout, nil
 }
 
-func (s *Store) GetCheckoutByToken(userID int, token string) (*Checkout, error) {
+func (s *Store) GetCheckoutByToken(ctx context.Context, userID int, token string) (*Checkout, error) {
 	key := strings.TrimSpace(token)
 	if key == "" {
 		return nil, nil
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.loadCheckout(ctx, s.DB, "WHERE user_id = $1 AND token = $2", userID, key)
 }
 
 // GetLatestOpenCheckout returns the user's most recent unexpired open checkout.
-func (s *Store) GetLatestOpenCheckout(userID int) (*Checkout, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetLatestOpenCheckout(ctx context.Context, userID int) (*Checkout, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.loadCheckout(ctx, s.DB,
 		`WHERE user_id = $1 AND status = 'open' AND expires_at > now()
@@ -88,7 +88,7 @@ func (s *Store) GetLatestOpenCheckout(userID int) (*Checkout, error) {
 
 // UpsertCheckout creates or refreshes the open checkout identified by token,
 // replacing its lines. Other open checkouts for the user are cancelled.
-func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, error) {
+func (s *Store) UpsertCheckout(ctx context.Context, userID int, input CheckoutInput) (*Checkout, error) {
 	token := strings.TrimSpace(input.Token)
 	if token == "" {
 		return nil, errors.New("checkout token is required")
@@ -106,7 +106,7 @@ func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, erro
 		expiresAt = time.Now().UTC()
 	}
 
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var checkout *Checkout
@@ -180,12 +180,12 @@ func (s *Store) UpsertCheckout(userID int, input CheckoutInput) (*Checkout, erro
 
 // UpdateCheckoutDraft saves the delivery address and payment method entered on
 // an open checkout. An empty payment method keeps the current one.
-func (s *Store) UpdateCheckoutDraft(userID int, token string, deliveryAddress string, paymentMethod string) (*Checkout, error) {
+func (s *Store) UpdateCheckoutDraft(ctx context.Context, userID int, token string, deliveryAddress string, paymentMethod string) (*Checkout, error) {
 	key := strings.TrimSpace(token)
 	if key == "" {
 		return nil, ErrCheckoutNotFound
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var checkout *Checkout

@@ -91,7 +91,7 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 		t.Fatalf("unexpected delivery notice %q", orders[0].DeliveryNotice)
 	}
 
-	payments, err := testStore.ListPaymentsByOrderID(orders[0].ID)
+	payments, err := testStore.ListPaymentsByOrderID(t.Context(), orders[0].ID)
 	if err != nil {
 		t.Fatalf("list payments failed: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 		t.Fatalf("expected 1 order after replay, got %d", len(orders))
 	}
 
-	payments, err := testStore.ListPaymentsByOrderID(orders[0].ID)
+	payments, err := testStore.ListPaymentsByOrderID(t.Context(), orders[0].ID)
 	if err != nil {
 		t.Fatalf("list payments failed: %v", err)
 	}

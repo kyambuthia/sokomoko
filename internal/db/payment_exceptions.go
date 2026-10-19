@@ -50,11 +50,11 @@ func scanPaymentException(row interface{ Scan(...any) error }) (*PaymentExceptio
 	return &e, nil
 }
 
-func (s *Store) ListPaymentExceptions(limit int) ([]PaymentException, error) {
+func (s *Store) ListPaymentExceptions(ctx context.Context, limit int) ([]PaymentException, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx, paymentExceptionSelect+
 		" ORDER BY (e.status = 'refunded'), e.created_at DESC, e.id DESC LIMIT $1", limit)
@@ -73,16 +73,16 @@ func (s *Store) ListPaymentExceptions(limit int) ([]PaymentException, error) {
 	return result, rows.Err()
 }
 
-func (s *Store) GetPaymentException(id int) (*PaymentException, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetPaymentException(ctx context.Context, id int) (*PaymentException, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanPaymentException(s.DB.QueryRowContext(ctx, paymentExceptionSelect+" WHERE e.id = $1", id))
 }
 
 // BeginRefund claims an open exception before any provider request. Repeated
 // submissions never send a second refund, including after an unknown timeout.
-func (s *Store) BeginRefund(id int) (*PaymentException, bool, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) BeginRefund(ctx context.Context, id int) (*PaymentException, bool, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	claimed := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
@@ -105,12 +105,12 @@ func (s *Store) BeginRefund(id int) (*PaymentException, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	e, err := s.GetPaymentException(id)
+	e, err := s.GetPaymentException(ctx, id)
 	return e, claimed, err
 }
 
-func (s *Store) SetPaymentExceptionStatus(id int, status, refundReference, lastError string) error {
-	ctx, cancel := s.ctx()
+func (s *Store) SetPaymentExceptionStatus(ctx context.Context, id int, status, refundReference, lastError string) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		var paymentID int

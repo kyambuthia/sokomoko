@@ -9,7 +9,7 @@ import (
 type store interface {
 	PartnerIDForUser(userID int) (int, error)
 	CountProducts() (int, error)
-	CreateAuditLog(actorUserID int, action, targetType string, targetID int, details string) error
+	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
 	CreateProduct(product db.Product) (int64, error)
 	GetProductByID(id int) (*db.Product, error)
 	UpdateProduct(product db.Product) error

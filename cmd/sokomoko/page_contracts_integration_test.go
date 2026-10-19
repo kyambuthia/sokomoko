@@ -23,7 +23,7 @@ func TestIntegration_PageContracts(t *testing.T) {
 	if err := testStore.AddToCart(t.Context(), userID, int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testStore.PlaceOrderFromCart(userID, "Page Lane"); err != nil {
+	if _, err := testStore.PlaceOrderFromCart(t.Context(), userID, "Page Lane"); err != nil {
 		t.Fatal(err)
 	}
 	if err := testStore.AddToCart(t.Context(), userID, int(productID), 1); err != nil {

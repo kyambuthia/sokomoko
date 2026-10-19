@@ -35,7 +35,7 @@ func TestIntegration_PartnerEditsOwnProductOnly(t *testing.T) {
 	if err := testStore.AddToCart(t.Context(), int(buyer), int(mine), 2); err != nil {
 		t.Fatal(err)
 	}
-	if err := testStore.ReserveCartForCheckout(int(buyer), "edit-test", time.Now().Add(15*time.Minute)); err != nil {
+	if err := testStore.ReserveCartForCheckout(t.Context(), int(buyer), "edit-test", time.Now().Add(15*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 

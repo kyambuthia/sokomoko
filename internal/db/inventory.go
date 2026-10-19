@@ -134,12 +134,12 @@ func releaseReservationsTx(ctx context.Context, tx *sql.Tx, newStatus, predicate
 // ReserveCartForCheckout holds stock for every cart line under reservationKey
 // until expiresAt. Any reservations the user already holds are released first,
 // so a user only ever holds stock for one checkout.
-func (s *Store) ReserveCartForCheckout(userID int, reservationKey string, expiresAt time.Time) error {
+func (s *Store) ReserveCartForCheckout(ctx context.Context, userID int, reservationKey string, expiresAt time.Time) error {
 	key := strings.TrimSpace(reservationKey)
 	if key == "" {
 		return errors.New("reservation key is required")
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -192,12 +192,8 @@ func (s *Store) ReserveCartForCheckout(userID int, reservationKey string, expire
 
 // ReleaseExpiredReservations returns expired reservation holds to available
 // stock and expires their open checkouts. It is run periodically.
-func (s *Store) ReleaseExpiredReservations() (int, error) {
-	return s.ReleaseExpiredReservationsContext(context.Background())
-}
-
-func (s *Store) ReleaseExpiredReservationsContext(parent context.Context) (int, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) ReleaseExpiredReservations(ctx context.Context) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	released := 0
@@ -219,8 +215,8 @@ func (s *Store) ReleaseExpiredReservationsContext(parent context.Context) (int, 
 // ReleaseUserReservations drops the user's stock holds and cancels their open
 // checkouts. It runs whenever the cart changes so a checkout never places an
 // order for a stale snapshot of the cart.
-func (s *Store) ReleaseUserReservations(userID int) error {
-	ctx, cancel := s.ctx()
+func (s *Store) ReleaseUserReservations(ctx context.Context, userID int) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		return invalidateCheckoutsTx(ctx, tx, userID)
@@ -238,8 +234,8 @@ func invalidateCheckoutsTx(ctx context.Context, tx *sql.Tx, userID int) error {
 	return err
 }
 
-func (s *Store) ListActiveStockReservationsByKey(userID int, reservationKey string) ([]StockReservation, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListActiveStockReservationsByKey(ctx context.Context, userID int, reservationKey string) ([]StockReservation, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
@@ -265,8 +261,8 @@ func (s *Store) ListActiveStockReservationsByKey(userID int, reservationKey stri
 	return reservations, rows.Err()
 }
 
-func (s *Store) ListInventoryStocksByProductID(productID int) ([]InventoryStock, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListInventoryStocksByProductID(ctx context.Context, productID int) ([]InventoryStock, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
@@ -293,8 +289,8 @@ func (s *Store) ListInventoryStocksByProductID(productID int) ([]InventoryStock,
 	return stocks, rows.Err()
 }
 
-func (s *Store) ListStockMovementsByProductID(productID int) ([]StockMovement, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListStockMovementsByProductID(ctx context.Context, productID int) ([]StockMovement, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,

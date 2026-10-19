@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"net/mail"
 	"strings"
@@ -107,7 +108,7 @@ func (s *Service) CreatePartner(actor *Actor, input PartnerInput) error {
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "partner.create", "partner", int(id), "slug="+partnerSlug)
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.create", "partner", int(id), "slug="+partnerSlug)
 	return nil
 }
 
@@ -130,7 +131,7 @@ func (s *Service) SetPartnerStatus(actor *Actor, idRaw, status string) error {
 	if !found {
 		return ErrPartnerNotFound
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "partner.status", "partner", id, "status="+status)
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.status", "partner", id, "status="+status)
 	return nil
 }
 
@@ -160,7 +161,7 @@ func (s *Service) UpdatePartner(actor *Actor, idRaw string, input PartnerInput) 
 	if !found {
 		return ErrPartnerNotFound
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "partner.update", "partner", id, "name="+name)
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.update", "partner", id, "name="+name)
 	return nil
 }
 
@@ -196,6 +197,6 @@ func (s *Service) CreatePartnerAccount(actor *Actor, input PartnerAccountInput) 
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "partner.account.create", "user", int(userID), "partner="+partner.Slug)
+	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.account.create", "user", int(userID), "partner="+partner.Slug)
 	return nil
 }

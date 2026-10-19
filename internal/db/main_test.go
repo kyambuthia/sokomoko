@@ -63,7 +63,7 @@ func mustCreateProduct(t *testing.T, s *Store, price money.Cents, stock int) int
 
 func mustStock(t *testing.T, s *Store, productID int) InventoryStock {
 	t.Helper()
-	stocks, err := s.ListInventoryStocksByProductID(productID)
+	stocks, err := s.ListInventoryStocksByProductID(t.Context(), productID)
 	if err != nil {
 		t.Fatalf("list stocks: %v", err)
 	}

@@ -49,7 +49,7 @@ func TestCreateProduct_InitializesInventory(t *testing.T) {
 	if stock.OnHandQuantity != 7 || stock.ReservedQuantity != 0 || stock.AllocatedQuantity != 0 {
 		t.Fatalf("stock = %+v", stock)
 	}
-	movements, _ := s.ListStockMovementsByProductID(int(id))
+	movements, _ := s.ListStockMovementsByProductID(t.Context(), int(id))
 	if len(movements) != 1 || movements[0].MovementType != stockMovementInitial || movements[0].QuantityDelta != 7 {
 		t.Fatalf("movements = %+v", movements)
 	}
@@ -83,7 +83,7 @@ func TestUpdateProduct_SetsAvailableAroundHolds(t *testing.T) {
 	if err := s.AddToCart(t.Context(), userID, productID, 3); err != nil {
 		t.Fatalf("add to cart: %v", err)
 	}
-	if err := s.ReserveCartForCheckout(userID, "hold", timeNow().Add(time.Minute)); err != nil {
+	if err := s.ReserveCartForCheckout(t.Context(), userID, "hold", timeNow().Add(time.Minute)); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
 
