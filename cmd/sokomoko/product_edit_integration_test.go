@@ -61,7 +61,7 @@ func TestIntegration_PartnerEditsOwnProductOnly(t *testing.T) {
 		"name": {"Kikapu Basket Large"}, "description": {"Hand woven"}, "price": {"31.50"}, "stock_quantity": {"5"},
 	}, []*http.Cookie{cookie}, "partner.localhost")
 	assertFlashRedirect(t, resp, "/products", "Product updated")
-	product, err := testStore.GetProductByID(int(mine))
+	product, err := testStore.GetProductByID(t.Context(), int(mine))
 	if err != nil || product == nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestIntegration_PartnerEditsOwnProductOnly(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("cross-partner save status=%d", resp.StatusCode)
 	}
-	if p, _ := testStore.GetProductByID(int(theirs)); p == nil || p.Name != "Other Stool" {
+	if p, _ := testStore.GetProductByID(t.Context(), int(theirs)); p == nil || p.Name != "Other Stool" {
 		t.Fatalf("other partner's product changed: %+v", p)
 	}
 	if resp, _ := makeRequest(http.MethodGet, "/products/999999/edit", nil, []*http.Cookie{cookie}, "partner.localhost"); resp.StatusCode != http.StatusNotFound {
@@ -100,7 +100,7 @@ func TestIntegration_PartnerEditsOwnProductOnly(t *testing.T) {
 	admin := loginAndGetSessionCookie(t, "partner.localhost", fmt.Sprintf("root_%d", suffix), "AdminPass12345")
 	resp, _ = makeRequest(http.MethodPost, otherPath, url.Values{"name": {"Other Stool"}, "price": {"45.00"}, "stock_quantity": {"3"}}, []*http.Cookie{admin}, "partner.localhost")
 	assertFlashRedirect(t, resp, "/products", "Product updated")
-	if p, _ := testStore.GetProductByID(int(theirs)); p == nil || p.Price != 4500 {
+	if p, _ := testStore.GetProductByID(t.Context(), int(theirs)); p == nil || p.Price != 4500 {
 		t.Fatalf("admin edit not saved: %+v", p)
 	}
 
@@ -110,7 +110,7 @@ func TestIntegration_PartnerEditsOwnProductOnly(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("API patch status=%d body=%s", resp.StatusCode, raw)
 	}
-	if p, _ := testStore.GetProductByID(int(mine)); p == nil || p.Price != 2900 || p.Name != "Kikapu Basket Large" || p.StockQuantity != 5 {
+	if p, _ := testStore.GetProductByID(t.Context(), int(mine)); p == nil || p.Price != 2900 || p.Name != "Kikapu Basket Large" || p.StockQuantity != 5 {
 		t.Fatalf("API patch result = %+v", p)
 	}
 	resp, _ = makeAPIRequestOnHost(t, "partner.localhost", http.MethodPatch, fmt.Sprintf("/api/v1/partner/products/%d", theirs), map[string]string{"price": "1.00"}, []*http.Cookie{cookie}, true, nil)

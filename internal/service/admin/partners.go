@@ -62,12 +62,12 @@ func canManagePartners(actor *Actor) bool {
 }
 
 // Partners lists every partner and every active partner login.
-func (s *Service) Partners() ([]Partner, []PartnerAccount, error) {
-	partners, err := s.store.ListPartners()
+func (s *Service) Partners(ctx context.Context) ([]Partner, []PartnerAccount, error) {
+	partners, err := s.store.ListPartners(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	accounts, err := s.store.ListPartnerAccounts()
+	accounts, err := s.store.ListPartnerAccounts(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,7 +83,7 @@ func (s *Service) Partners() ([]Partner, []PartnerAccount, error) {
 }
 
 // CreatePartner onboards a vendor. An empty slug is derived from the name.
-func (s *Service) CreatePartner(actor *Actor, input PartnerInput) error {
+func (s *Service) CreatePartner(ctx context.Context, actor *Actor, input PartnerInput) error {
 	if !canManagePartners(actor) {
 		return ErrForbiddenPartnerAction
 	}
@@ -101,19 +101,19 @@ func (s *Service) CreatePartner(actor *Actor, input PartnerInput) error {
 			return ErrInvalidPartner
 		}
 	}
-	id, err := s.store.CreatePartner(db.Partner{Name: name, Slug: partnerSlug, ContactEmail: email})
+	id, err := s.store.CreatePartner(ctx, db.Partner{Name: name, Slug: partnerSlug, ContactEmail: email})
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicatePartner
 	}
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.create", "partner", int(id), "slug="+partnerSlug)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.create", "partner", int(id), "slug="+partnerSlug)
 	return nil
 }
 
 // SetPartnerStatus suspends or reactivates a partner.
-func (s *Service) SetPartnerStatus(actor *Actor, idRaw, status string) error {
+func (s *Service) SetPartnerStatus(ctx context.Context, actor *Actor, idRaw, status string) error {
 	if !canManagePartners(actor) {
 		return ErrForbiddenPartnerAction
 	}
@@ -124,19 +124,19 @@ func (s *Service) SetPartnerStatus(actor *Actor, idRaw, status string) error {
 	if err != nil {
 		return ErrPartnerNotFound
 	}
-	found, err := s.store.SetPartnerStatus(id, status)
+	found, err := s.store.SetPartnerStatus(ctx, id, status)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return ErrPartnerNotFound
 	}
-	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.status", "partner", id, "status="+status)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.status", "partner", id, "status="+status)
 	return nil
 }
 
 // UpdatePartner renames a partner and changes its contact email.
-func (s *Service) UpdatePartner(actor *Actor, idRaw string, input PartnerInput) error {
+func (s *Service) UpdatePartner(ctx context.Context, actor *Actor, idRaw string, input PartnerInput) error {
 	if !canManagePartners(actor) {
 		return ErrForbiddenPartnerAction
 	}
@@ -154,19 +154,19 @@ func (s *Service) UpdatePartner(actor *Actor, idRaw string, input PartnerInput) 
 			return ErrInvalidPartner
 		}
 	}
-	found, err := s.store.UpdatePartnerDetails(id, name, email)
+	found, err := s.store.UpdatePartnerDetails(ctx, id, name, email)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return ErrPartnerNotFound
 	}
-	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.update", "partner", id, "name="+name)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.update", "partner", id, "name="+name)
 	return nil
 }
 
 // CreatePartnerAccount creates a partner-role login tied to one partner.
-func (s *Service) CreatePartnerAccount(actor *Actor, input PartnerAccountInput) error {
+func (s *Service) CreatePartnerAccount(ctx context.Context, actor *Actor, input PartnerAccountInput) error {
 	if !canManagePartners(actor) {
 		return ErrForbiddenPartnerAction
 	}
@@ -174,7 +174,7 @@ func (s *Service) CreatePartnerAccount(actor *Actor, input PartnerAccountInput) 
 	if err != nil {
 		return ErrPartnerNotFound
 	}
-	partner, err := s.store.GetPartnerByID(partnerID)
+	partner, err := s.store.GetPartnerByID(ctx, partnerID)
 	if err != nil {
 		return err
 	}
@@ -190,13 +190,13 @@ func (s *Service) CreatePartnerAccount(actor *Actor, input PartnerAccountInput) 
 	if err != nil {
 		return err
 	}
-	userID, err := s.store.CreatePartnerUser(db.User{Username: username, Email: email, PasswordHash: hash}, partnerID)
+	userID, err := s.store.CreatePartnerUser(ctx, db.User{Username: username, Email: email, PasswordHash: hash}, partnerID)
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateAccount
 	}
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "partner.account.create", "user", int(userID), "partner="+partner.Slug)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.account.create", "user", int(userID), "partner="+partner.Slug)
 	return nil
 }

@@ -50,7 +50,7 @@ func TestCSRFMiddleware_StaleSessionCookieIsTreatedAsAnonymous(t *testing.T) {
 func TestCSRFMiddleware_ValidSessionRequiresToken(t *testing.T) {
 	clearAuthTables()
 	user := createTestUser("csrfuser", "csrf@example.com", "password123", db.RoleUser)
-	_ = testStore.CreateSession(db.Session{ID: "live", UserID: user.ID, CSRFToken: "expected", ExpiresAt: time.Now().Add(time.Hour)})
+	_ = testStore.CreateSession(t.Context(), db.Session{ID: "live", UserID: user.ID, CSRFToken: "expected", ExpiresAt: time.Now().Add(time.Hour)})
 	svc := newTestService(Config{})
 	handler := svc.CSRFMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
@@ -204,7 +204,7 @@ func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "[staff01:") || !strings.Contains(rr.Body.String(), "[staff02:") {
 		t.Fatalf("first setup status=%d body=%q", rr.Code, rr.Body.String())
 	}
-	staff, _ := testStore.GetUserByUsername("staff01")
+	staff, _ := testStore.GetUserByUsername(t.Context(), "staff01")
 	if staff == nil || staff.Role != db.RoleStaff {
 		t.Fatalf("staff01 = %+v", staff)
 	}

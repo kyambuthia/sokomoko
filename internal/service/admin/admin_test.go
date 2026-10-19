@@ -11,7 +11,7 @@ import (
 func TestUpdateOrder_NonAdmin_ReturnsForbidden(t *testing.T) {
 	svc := newWithStore(nil)
 
-	err := svc.UpdateOrder(nil, UpdateOrderInput{OrderID: "1"})
+	err := svc.UpdateOrder(t.Context(), nil, UpdateOrderInput{OrderID: "1"})
 	if !errors.Is(err, ErrForbiddenOrderUpdate) {
 		t.Fatalf("expected ErrForbiddenOrderUpdate, got %v", err)
 	}
@@ -20,7 +20,7 @@ func TestUpdateOrder_NonAdmin_ReturnsForbidden(t *testing.T) {
 func TestDeactivateUser_InvalidID_ReturnsError(t *testing.T) {
 	svc := newWithStore(nil)
 
-	err := svc.DeactivateUser(&Actor{ID: 1, Role: "admin"}, "abc")
+	err := svc.DeactivateUser(t.Context(), &Actor{ID: 1, Role: "admin"}, "abc")
 	if !errors.Is(err, ErrInvalidUserID) {
 		t.Fatalf("expected ErrInvalidUserID, got %v", err)
 	}
@@ -32,7 +32,7 @@ type ordersStore struct {
 	orders []db.Order
 }
 
-func (s ordersStore) ListAllOrders() ([]db.Order, error) { return s.orders, nil }
+func (s ordersStore) ListAllOrders(ctx context.Context) ([]db.Order, error) { return s.orders, nil }
 
 func TestDeliveries_CountsOpenOrdersAndListsOldestFirst(t *testing.T) {
 	// ListAllOrders returns newest first.
@@ -43,7 +43,7 @@ func TestDeliveries_CountsOpenOrdersAndListsOldestFirst(t *testing.T) {
 		{ID: 2, Status: "shipped", DeliveryStatus: "shipped"},
 		{ID: 1, Status: "pending", DeliveryStatus: "queued"},
 	}})
-	board, err := svc.Deliveries()
+	board, err := svc.Deliveries(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ type categoryStore struct {
 	err     error
 }
 
-func (s *categoryStore) CreateCategory(c db.Category) (int64, error) {
+func (s *categoryStore) CreateCategory(ctx context.Context, c db.Category) (int64, error) {
 	s.created = append(s.created, c)
 	return 1, s.err
 }
@@ -80,15 +80,15 @@ func TestCreateCategory(t *testing.T) {
 	fake := &categoryStore{}
 	svc := newWithStore(fake)
 
-	if err := svc.CreateCategory(&Actor{ID: 3, Role: "partner"}, CategoryInput{Name: "X"}); !errors.Is(err, ErrForbiddenCatalogAction) {
+	if err := svc.CreateCategory(t.Context(), &Actor{ID: 3, Role: "partner"}, CategoryInput{Name: "X"}); !errors.Is(err, ErrForbiddenCatalogAction) {
 		t.Fatalf("partner create = %v", err)
 	}
 	for _, input := range []CategoryInput{{}, {Name: "Ok", Slug: "Not Valid"}, {Name: "!!!"}} {
-		if err := svc.CreateCategory(staff, input); !errors.Is(err, ErrInvalidCategory) {
+		if err := svc.CreateCategory(t.Context(), staff, input); !errors.Is(err, ErrInvalidCategory) {
 			t.Errorf("CreateCategory(%+v) = %v, want ErrInvalidCategory", input, err)
 		}
 	}
-	if err := svc.CreateCategory(staff, CategoryInput{Name: " Home & Garden "}); err != nil {
+	if err := svc.CreateCategory(t.Context(), staff, CategoryInput{Name: " Home & Garden "}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.created) != 1 || fake.created[0].Slug != "home-garden" || fake.created[0].Name != "Home & Garden" {
@@ -96,7 +96,7 @@ func TestCreateCategory(t *testing.T) {
 	}
 
 	fake.err = db.ErrUniqueConstraint
-	if err := svc.CreateCategory(staff, CategoryInput{Name: "Again"}); !errors.Is(err, ErrDuplicateCategory) {
+	if err := svc.CreateCategory(t.Context(), staff, CategoryInput{Name: "Again"}); !errors.Is(err, ErrDuplicateCategory) {
 		t.Fatalf("duplicate = %v", err)
 	}
 }

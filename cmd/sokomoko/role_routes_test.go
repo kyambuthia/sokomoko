@@ -27,7 +27,7 @@ func expectRouteStatus(t *testing.T, method, path, host string, data url.Values,
 
 func setupPartnerStore(t *testing.T, suffix int64) {
 	t.Helper()
-	err := testStore.UpsertStoreSettings(db.StoreSettings{
+	err := testStore.UpsertStoreSettings(t.Context(), db.StoreSettings{
 		StoreName:    fmt.Sprintf("Ops Store %d", suffix),
 		StoreSlug:    fmt.Sprintf("ops-store-%d", suffix),
 		Description:  "integration test store",
@@ -123,7 +123,7 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 		[]*http.Cookie{adminCookie},
 		http.StatusFound,
 	)
-	deactivated, err := testStore.GetUserByID(int(staffToDeactivateID))
+	deactivated, err := testStore.GetUserByID(t.Context(), int(staffToDeactivateID))
 	if err != nil {
 		t.Fatalf("failed to load deactivated user: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestIntegration_AdminCanAccessAdminAndStaffOperationalRoutes(t *testing.T) 
 		[]*http.Cookie{adminCookie},
 		http.StatusOK,
 	)
-	createdStaff, err := testStore.GetUserByUsername(newStaffUsername)
+	createdStaff, err := testStore.GetUserByUsername(t.Context(), newStaffUsername)
 	if err != nil {
 		t.Fatalf("failed to load newly created staff: %v", err)
 	}

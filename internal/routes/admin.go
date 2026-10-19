@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -64,8 +65,8 @@ func renderAdminPage(a *app.App, w http.ResponseWriter, r *http.Request, status 
 	a.RenderStatus(w, a.Templates.Admin, status, data)
 }
 
-func loadAdminMetrics(svc app.AdminService) (adminsvc.Metrics, error) {
-	return svc.Metrics()
+func loadAdminMetrics(ctx context.Context, svc app.AdminService) (adminsvc.Metrics, error) {
+	return svc.Metrics(ctx)
 }
 
 // AdminDashboard serves the main admin dashboard.
@@ -78,7 +79,7 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -107,13 +108,13 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		products, err := svc.Products()
+		products, err := svc.Products(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -133,7 +134,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -142,7 +143,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 
 		responseStatus := http.StatusOK
 		if r.Method == http.MethodPost {
-			err := svc.UpdateOrder(adminActorFromContext(r), adminsvc.UpdateOrderInput{
+			err := svc.UpdateOrder(r.Context(), adminActorFromContext(r), adminsvc.UpdateOrderInput{
 				OrderID:        r.FormValue("order_id"),
 				Status:         r.FormValue("status"),
 				PartnerStatus:  r.FormValue("partner_status"),
@@ -173,7 +174,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			page.OrderMessage = flash.Message
 		}
 
-		orders, err := svc.Orders()
+		orders, err := svc.Orders(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -194,13 +195,13 @@ func AdminReports(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		report, err := svc.Reports()
+		report, err := svc.Reports(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -220,12 +221,12 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		board, err := svc.Deliveries()
+		board, err := svc.Deliveries(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -244,7 +245,7 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -255,9 +256,9 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			reactivate := r.FormValue("action") == "reactivate"
 			var err error
 			if reactivate {
-				err = svc.ReactivateUser(adminActorFromContext(r), r.FormValue("user_id"))
+				err = svc.ReactivateUser(r.Context(), adminActorFromContext(r), r.FormValue("user_id"))
 			} else {
-				err = svc.DeactivateUser(adminActorFromContext(r), r.FormValue("user_id"))
+				err = svc.DeactivateUser(r.Context(), adminActorFromContext(r), r.FormValue("user_id"))
 			}
 			switch {
 			case errors.Is(err, adminsvc.ErrForbiddenUserAction):
@@ -284,13 +285,13 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			page.TeamMessage = flash.Message
 		}
 
-		teamMembers, err := svc.TeamMembers()
+		teamMembers, err := svc.TeamMembers(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		page.TeamMembers = teamMembers
-		if page.Deactivated, err = svc.DeactivatedMembers(); err != nil {
+		if page.Deactivated, err = svc.DeactivatedMembers(r.Context()); err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -307,13 +308,13 @@ func AdminAudit(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		logs, err := svc.AuditLogs(100)
+		logs, err := svc.AuditLogs(r.Context(), 100)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

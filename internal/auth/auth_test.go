@@ -71,7 +71,7 @@ func createTestUser(username, email, password, role string) *db.User {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	user.PasswordHash = string(hashedPassword)
 
-	id, err := testStore.CreateUser(user)
+	id, err := testStore.CreateUser(context.Background(), user)
 	if err != nil {
 		panic(err)
 	}
@@ -103,7 +103,7 @@ func TestSignUp(t *testing.T) {
 		t.Errorf("handler returned wrong redirect location: got %v want %v", location, "/login")
 	}
 
-	user, err := testStore.GetUserByUsername("testuser1")
+	user, err := testStore.GetUserByUsername(t.Context(), "testuser1")
 	if err != nil || user == nil {
 		t.Fatalf("User not found after signup: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestPasswordResetRequest_SendsEmailWithConfiguredBaseURL(t *testing.T) {
 	if token == "" {
 		t.Fatal("expected reset token in sent link")
 	}
-	resetToken, err := testStore.GetValidPasswordResetToken(token)
+	resetToken, err := testStore.GetValidPasswordResetToken(t.Context(), token)
 	if err != nil {
 		t.Fatalf("get reset token from db: %v", err)
 	}
@@ -609,7 +609,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test access with valid session
 	sessionToken := "valid_session_token"
-	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour)})
+	_ = testStore.CreateSession(t.Context(), db.Session{ID: sessionToken, UserID: user.ID, CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()
@@ -638,7 +638,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test access with expired session
 	sessionToken = "expired_session_token"
-	_ = testStore.CreateSession(db.Session{ID: sessionToken, UserID: user.ID, CSRFToken: "csrf", ExpiresAt: time.Now().Add(-time.Hour)})
+	_ = testStore.CreateSession(t.Context(), db.Session{ID: sessionToken, UserID: user.ID, CSRFToken: "csrf", ExpiresAt: time.Now().Add(-time.Hour)})
 	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rr = httptest.NewRecorder()

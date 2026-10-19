@@ -77,7 +77,7 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 		t.Fatalf("checkout redirect location=%q expected account success redirect", got)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 		t.Fatalf("second POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestIntegration_CheckoutRejectsSimulatedPayments(t *testing.T) {
 			t.Fatalf("%s: status=%d, expected payment validation error", method, resp.StatusCode)
 		}
 	}
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil || len(orders) != 0 {
 		t.Fatalf("unsupported payments created orders: count=%d error=%v", len(orders), err)
 	}
@@ -222,7 +222,7 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 		t.Fatalf("GET /checkout A status=%d expected=%d", resp.StatusCode, http.StatusOK)
 	}
 
-	product, err := testStore.GetProductByID(int(productID))
+	product, err := testStore.GetProductByID(t.Context(), int(productID))
 	if err != nil {
 		t.Fatalf("get product failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 		t.Fatalf("expected stock reservation error in body, got %q", body)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userBID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userBID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestIntegration_CheckoutCanResumeFromQueryToken(t *testing.T) {
 		t.Fatalf("POST /checkout?checkout=token status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}

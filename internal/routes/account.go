@@ -27,7 +27,7 @@ func Account(a *app.App) http.HandlerFunc {
 			return
 		}
 		userID, _ := requestUserID(r)
-		orders, err := a.Account.OrdersForUser(userID)
+		orders, err := a.Account.OrdersForUser(r.Context(), userID)
 		if err != nil {
 			log.Printf("account orders: %v", err)
 			serverError(w, r)

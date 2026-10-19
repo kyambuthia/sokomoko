@@ -12,7 +12,7 @@ import (
 
 func availableStock(t *testing.T, productID int64) int {
 	t.Helper()
-	p, err := testStore.GetProductByID(int(productID))
+	p, err := testStore.GetProductByID(t.Context(), int(productID))
 	if err != nil || p == nil {
 		t.Fatalf("load product: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestIntegration_CustomerCannotCancelAcceptedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testStore.UpdateOrderFulfillment(int(orderID), "accepted", "processing", ""); err != nil {
+	if err := testStore.UpdateOrderFulfillment(t.Context(), int(orderID), "accepted", "processing", ""); err != nil {
 		t.Fatal(err)
 	}
 	cookie := loginAndGetSessionCookie(t, "localhost", buyer, "BuyerPass12345")

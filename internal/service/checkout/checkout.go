@@ -192,7 +192,7 @@ func (s *Service) prepareOnce(ctx context.Context, userID int, reservationKey st
 		return mapStoreError(err)
 	}
 
-	items, subtotal, err := s.store.GetCartItemsForCheckout(context.Background(), userID, key)
+	items, subtotal, err := s.store.GetCartItemsForCheckout(ctx, userID, key)
 	if err != nil {
 		return err
 	}

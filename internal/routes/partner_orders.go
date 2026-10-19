@@ -32,7 +32,7 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 		responseStatus := http.StatusOK
 
 		if r.Method == http.MethodPost {
-			err := svc.UpdateOrder(partnerActorFromContext(r), partnersvc.UpdateOrderInput{
+			err := svc.UpdateOrder(r.Context(), partnerActorFromContext(r), partnersvc.UpdateOrderInput{
 				OrderID:        r.FormValue("order_id"),
 				PartnerStatus:  r.FormValue("partner_status"),
 				DeliveryStatus: r.FormValue("delivery_status"),
@@ -72,7 +72,7 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		view, err := svc.OrdersForActor(partnerActorFromContext(r), strings.TrimSpace(r.URL.Query().Get("status")))
+		view, err := svc.OrdersForActor(r.Context(), partnerActorFromContext(r), strings.TrimSpace(r.URL.Query().Get("status")))
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

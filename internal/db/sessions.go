@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-func (s *Store) CreateSession(sess Session) error {
-	ctx, cancel := s.ctx()
+func (s *Store) CreateSession(ctx context.Context, sess Session) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		"INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES ($1, $2, $3, $4)",
@@ -18,8 +18,8 @@ func (s *Store) CreateSession(sess Session) error {
 }
 
 // GetSession returns the unexpired session for a raw cookie token.
-func (s *Store) GetSession(id string) (*Session, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetSession(ctx context.Context, id string) (*Session, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	sess := &Session{}
@@ -38,45 +38,37 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	return sess, nil
 }
 
-func (s *Store) DeleteSession(id string) error {
-	ctx, cancel := s.ctx()
+func (s *Store) DeleteSession(ctx context.Context, id string) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx, "DELETE FROM sessions WHERE id = $1", hashOpaqueToken(id))
 	return err
 }
 
-func (s *Store) DeleteSessionsByUserID(userID int) error {
-	ctx, cancel := s.ctx()
+func (s *Store) DeleteSessionsByUserID(ctx context.Context, userID int) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", userID)
 	return err
 }
 
-func (s *Store) CleanupSessions() error {
-	return s.CleanupSessionsContext(context.Background())
-}
-
-func (s *Store) CleanupSessionsContext(parent context.Context) error {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) CleanupSessions(ctx context.Context) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at <= now()")
 	return err
 }
 
-func (s *Store) CountActiveSessions() (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CountActiveSessions(ctx context.Context) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var count int
 	err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM sessions WHERE expires_at > now()").Scan(&count)
 	return count, err
 }
 
-func (s *Store) CleanupPasswordResetTokens() error {
-	return s.CleanupPasswordResetTokensContext(context.Background())
-}
-
-func (s *Store) CleanupPasswordResetTokensContext(parent context.Context) error {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) CleanupPasswordResetTokens(ctx context.Context) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		"DELETE FROM password_reset_tokens WHERE used_at IS NOT NULL OR expires_at <= now()",
@@ -86,8 +78,8 @@ func (s *Store) CleanupPasswordResetTokensContext(parent context.Context) error 
 
 // CreatePasswordResetToken stores a new reset token, invalidating any earlier
 // tokens for the same user.
-func (s *Store) CreatePasswordResetToken(userID int, token string, expiresAt time.Time) error {
-	ctx, cancel := s.ctx()
+func (s *Store) CreatePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -102,8 +94,8 @@ func (s *Store) CreatePasswordResetToken(userID int, token string, expiresAt tim
 	})
 }
 
-func (s *Store) GetValidPasswordResetToken(token string) (*PasswordResetToken, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetValidPasswordResetToken(ctx context.Context, token string) (*PasswordResetToken, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	resetToken := &PasswordResetToken{}
@@ -132,8 +124,8 @@ func (s *Store) GetValidPasswordResetToken(token string) (*PasswordResetToken, e
 // UsePasswordResetToken atomically consumes a valid token, sets the new password
 // hash, and revokes all of the user's sessions. It reports false when the token
 // is unknown, used, or expired.
-func (s *Store) UsePasswordResetToken(token, passwordHash string) (bool, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) UsePasswordResetToken(ctx context.Context, token, passwordHash string) (bool, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	used := false

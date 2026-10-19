@@ -34,7 +34,7 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Retrieve session to get the CSRF token
-		sess, err := s.store.GetSession(cookie.Value)
+		sess, err := s.store.GetSession(r.Context(), cookie.Value)
 		if err != nil {
 			log.Printf("CSRF check: session lookup failed: %v", err)
 			if isAPIRequest(r) {
@@ -148,7 +148,7 @@ func (s *Service) CSRFTokenForSession(r *http.Request) string {
 		return ""
 	}
 
-	sess, err := s.store.GetSession(cookie.Value)
+	sess, err := s.store.GetSession(r.Context(), cookie.Value)
 	if err != nil || sess == nil {
 		return ""
 	}

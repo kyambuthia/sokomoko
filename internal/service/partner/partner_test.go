@@ -18,7 +18,7 @@ func TestSaveStoreSettings_Validation(t *testing.T) {
 	}
 	staff := &Actor{ID: 1, Role: "staff"}
 	for _, tc := range cases {
-		if _, err := svc.SaveStoreSettings(staff, tc.input); !errors.Is(err, tc.want) {
+		if _, err := svc.SaveStoreSettings(t.Context(), staff, tc.input); !errors.Is(err, tc.want) {
 			t.Errorf("SaveStoreSettings(%+v) = %v, want %v", tc.input, err, tc.want)
 		}
 	}
@@ -28,7 +28,7 @@ func TestSaveStoreSettings_RequiresPlatformRole(t *testing.T) {
 	svc := newWithStore(nil)
 	valid := StoreSettingsInput{StoreName: "S", StoreSlug: "good", ContactEmail: "a@b.co"}
 	for _, actor := range []*Actor{nil, {ID: 7, Role: "partner"}, {ID: 8, Role: "user"}} {
-		if _, err := svc.SaveStoreSettings(actor, valid); !errors.Is(err, ErrForbiddenSettingsUpdate) {
+		if _, err := svc.SaveStoreSettings(t.Context(), actor, valid); !errors.Is(err, ErrForbiddenSettingsUpdate) {
 			t.Errorf("SaveStoreSettings(%+v) = %v, want ErrForbiddenSettingsUpdate", actor, err)
 		}
 	}
@@ -36,10 +36,10 @@ func TestSaveStoreSettings_RequiresPlatformRole(t *testing.T) {
 
 func TestUpdateOrder_RequiresStaff(t *testing.T) {
 	svc := newWithStore(nil)
-	if err := svc.UpdateOrder(&Actor{ID: 1, Role: "user"}, UpdateOrderInput{OrderID: "1"}); !errors.Is(err, ErrForbiddenOrderUpdate) {
+	if err := svc.UpdateOrder(t.Context(), &Actor{ID: 1, Role: "user"}, UpdateOrderInput{OrderID: "1"}); !errors.Is(err, ErrForbiddenOrderUpdate) {
 		t.Fatalf("err = %v", err)
 	}
-	if err := svc.UpdateOrder(&Actor{ID: 1, Role: "staff"}, UpdateOrderInput{OrderID: "x"}); !errors.Is(err, ErrInvalidOrderID) {
+	if err := svc.UpdateOrder(t.Context(), &Actor{ID: 1, Role: "staff"}, UpdateOrderInput{OrderID: "x"}); !errors.Is(err, ErrInvalidOrderID) {
 		t.Fatalf("err = %v", err)
 	}
 }

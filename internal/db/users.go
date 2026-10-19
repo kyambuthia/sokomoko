@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -32,8 +33,8 @@ func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 
 // CreateUser inserts a new user. Emails are stored lower-cased; usernames keep
 // their case but are unique case-insensitively.
-func (s *Store) CreateUser(user User) (int64, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CreateUser(ctx context.Context, user User) (int64, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	role := strings.TrimSpace(user.Role)
@@ -57,8 +58,8 @@ func (s *Store) CreateUser(user User) (int64, error) {
 	return id, nil
 }
 
-func (s *Store) GetUserByUsername(username string) (*User, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanUser(s.DB.QueryRowContext(ctx,
 		"SELECT "+userColumns+" FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL",
@@ -66,8 +67,8 @@ func (s *Store) GetUserByUsername(username string) (*User, error) {
 	))
 }
 
-func (s *Store) GetUserByID(id int) (*User, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetUserByID(ctx context.Context, id int) (*User, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanUser(s.DB.QueryRowContext(ctx,
 		"SELECT "+userColumns+" FROM users WHERE id = $1 AND deleted_at IS NULL",
@@ -75,8 +76,8 @@ func (s *Store) GetUserByID(id int) (*User, error) {
 	))
 }
 
-func (s *Store) GetUserByEmail(email string) (*User, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanUser(s.DB.QueryRowContext(ctx,
 		"SELECT "+userColumns+" FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL",
@@ -84,8 +85,8 @@ func (s *Store) GetUserByEmail(email string) (*User, error) {
 	))
 }
 
-func (s *Store) CountUsersByRole(role string) (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CountUsersByRole(ctx context.Context, role string) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var count int
 	err := s.DB.QueryRowContext(ctx,
@@ -99,8 +100,8 @@ type DashboardCounts struct {
 	Products, Sessions, Admins, Staff, Users int
 }
 
-func (s *Store) DashboardCounts() (DashboardCounts, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) DashboardCounts(ctx context.Context) (DashboardCounts, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var c DashboardCounts
 	err := s.DB.QueryRowContext(ctx, `SELECT
@@ -114,8 +115,8 @@ func (s *Store) DashboardCounts() (DashboardCounts, error) {
 	return c, err
 }
 
-func (s *Store) HasAdminUser() (bool, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) HasAdminUser(ctx context.Context) (bool, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var exists bool
 	err := s.DB.QueryRowContext(ctx,
@@ -125,8 +126,8 @@ func (s *Store) HasAdminUser() (bool, error) {
 }
 
 // UpdateUserPassword replaces a password hash and revokes all sessions.
-func (s *Store) UpdateUserPassword(userID int, passwordHash string) error {
-	ctx, cancel := s.ctx()
+func (s *Store) UpdateUserPassword(ctx context.Context, userID int, passwordHash string) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -147,8 +148,8 @@ func (s *Store) UpdateUserPassword(userID int, passwordHash string) error {
 }
 
 // UpdateUser updates profile fields and role.
-func (s *Store) UpdateUser(user User) error {
-	ctx, cancel := s.ctx()
+func (s *Store) UpdateUser(ctx context.Context, user User) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		`UPDATE users SET username = $1, email = $2, password_hash = $3, role = $4
@@ -163,8 +164,8 @@ func (s *Store) UpdateUser(user User) error {
 }
 
 // DeleteUser soft-deletes a user and revokes their sessions.
-func (s *Store) DeleteUser(id int) error {
-	ctx, cancel := s.ctx()
+func (s *Store) DeleteUser(ctx context.Context, id int) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -180,11 +181,11 @@ func (s *Store) DeleteUser(id int) error {
 
 // ListDeactivatedUsers returns the most recently deactivated non-admin
 // accounts, newest first.
-func (s *Store) ListDeactivatedUsers(limit int) ([]User, error) {
+func (s *Store) ListDeactivatedUsers(ctx context.Context, limit int) ([]User, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx,
 		"SELECT "+userColumns+` FROM users
@@ -207,8 +208,8 @@ func (s *Store) ListDeactivatedUsers(limit int) ([]User, error) {
 
 // ReactivateUser restores a deactivated non-admin account. Usernames and
 // emails stay unique across deactivated rows, so restoring cannot collide.
-func (s *Store) ReactivateUser(id int) (bool, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ReactivateUser(ctx context.Context, id int) (bool, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	result, err := s.DB.ExecContext(ctx,
 		"UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL AND role <> 'admin'", id)
@@ -219,11 +220,11 @@ func (s *Store) ReactivateUser(id int) (bool, error) {
 	return n > 0, err
 }
 
-func (s *Store) ListUsersByRoles(roles []string) ([]User, error) {
+func (s *Store) ListUsersByRoles(ctx context.Context, roles []string) ([]User, error) {
 	if len(roles) == 0 {
 		return []User{}, nil
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
@@ -262,8 +263,8 @@ type StaffNamer func(i, attempt int) (username, email string)
 // fails with ErrAdminExists if an admin was created first, so first-run setup
 // can never leave a partial or duplicate set of privileged accounts.
 // staffPasswordHashes must have one entry per staff account.
-func (s *Store) BootstrapAdmin(admin User, staffPasswordHashes []string, name StaffNamer) ([]User, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) BootstrapAdmin(ctx context.Context, admin User, staffPasswordHashes []string, name StaffNamer) ([]User, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var created []User

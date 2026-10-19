@@ -203,8 +203,8 @@ func (s *Store) CheckSchema(ctx context.Context) error {
 
 // SchemaVersion reports the highest applied migration version, or 0 when the
 // database has not been migrated.
-func (s *Store) SchemaVersion() (int64, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) SchemaVersion(ctx context.Context) (int64, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var exists bool

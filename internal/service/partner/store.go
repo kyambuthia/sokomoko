@@ -7,26 +7,25 @@ import (
 )
 
 type store interface {
-	PartnerIDForUser(userID int) (int, error)
-	CountProducts() (int, error)
+	PartnerIDForUser(ctx context.Context, userID int) (int, error)
+	CountProducts(ctx context.Context) (int, error)
 	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
-	CreateProduct(product db.Product) (int64, error)
-	GetProductByID(id int) (*db.Product, error)
-	UpdateProduct(product db.Product) error
-	GetAllCategories() ([]db.Category, error)
-	GetPartnerOrderSummary() (db.PartnerOrderSummary, error)
-	GetStoreSettings() (*db.StoreSettings, error)
-	ListOrdersForFulfillment() ([]db.Order, error)
-	ListOrdersForPartner(partnerID int) ([]db.Order, error)
-	PartnerOwnsOrder(partnerID, orderID int) (bool, error)
-	ListPartners() ([]db.Partner, error)
-	ListProducts(filter db.ProductFilter) ([]db.Product, error)
-	ListProductsContext(context.Context, db.ProductFilter) ([]db.Product, error)
-	CountFilteredProductsContext(context.Context, db.ProductFilter) (int, error)
-	ListFulfillmentOrdersPageContext(context.Context, int, string, int, int) ([]db.Order, int, error)
-	FulfillmentSummaryContext(context.Context, int) (db.PartnerOrderSummary, error)
-	UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
-	UpsertStoreSettings(settings db.StoreSettings) error
+	CreateProduct(ctx context.Context, product db.Product) (int64, error)
+	GetProductByID(ctx context.Context, id int) (*db.Product, error)
+	UpdateProduct(ctx context.Context, product db.Product) error
+	GetAllCategories(ctx context.Context) ([]db.Category, error)
+	GetPartnerOrderSummary(ctx context.Context) (db.PartnerOrderSummary, error)
+	GetStoreSettings(ctx context.Context) (*db.StoreSettings, error)
+	ListOrdersForFulfillment(ctx context.Context) ([]db.Order, error)
+	ListOrdersForPartner(ctx context.Context, partnerID int) ([]db.Order, error)
+	PartnerOwnsOrder(ctx context.Context, partnerID, orderID int) (bool, error)
+	ListPartners(ctx context.Context) ([]db.Partner, error)
+	ListProducts(context.Context, db.ProductFilter) ([]db.Product, error)
+	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
+	ListFulfillmentOrdersPage(context.Context, int, string, int, int) ([]db.Order, int, error)
+	FulfillmentSummary(context.Context, int) (db.PartnerOrderSummary, error)
+	UpdateOrderFulfillment(ctx context.Context, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
+	UpsertStoreSettings(ctx context.Context, settings db.StoreSettings) error
 }
 
 var _ store = (*db.Store)(nil)

@@ -9,8 +9,8 @@ import (
 // MaintenanceStore defines the operations needed by the maintenance runner.
 type MaintenanceStore interface {
 	ReleaseExpiredReservations(context.Context) (int, error)
-	CleanupSessionsContext(context.Context) error
-	CleanupPasswordResetTokensContext(context.Context) error
+	CleanupSessions(context.Context) error
+	CleanupPasswordResetTokens(context.Context) error
 	ExpireUnpaidOrders(ctx context.Context, cutoff time.Time) (int, error)
 }
 
@@ -74,7 +74,7 @@ func Maintain(ctx context.Context, store MaintenanceStore) {
 		}
 	})
 	prune := exclusive(ctx, store, housekeepingJobLockKey, func(ctx context.Context) {
-		for _, cleanup := range []func(context.Context) error{store.CleanupSessionsContext, store.CleanupPasswordResetTokensContext} {
+		for _, cleanup := range []func(context.Context) error{store.CleanupSessions, store.CleanupPasswordResetTokens} {
 			if ctx.Err() != nil {
 				return
 			}

@@ -71,7 +71,7 @@ func TestCartAndDirectOrderFlow(t *testing.T) {
 		t.Fatalf("second order err = %v, want ErrCartEmpty", err)
 	}
 
-	orders, _ := s.ListOrdersByUser(userID)
+	orders, _ := s.ListOrdersByUser(t.Context(), userID)
 	if len(orders) != 1 || orders[0].ID != int(orderID) || orders[0].TotalAmount != 5997 || len(orders[0].Items) != 1 {
 		t.Fatalf("orders = %+v", orders)
 	}
@@ -88,7 +88,7 @@ func TestAddToCart_RemovesDeletedProductsFromCart(t *testing.T) {
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 100, 5)
 	_ = s.AddToCart(t.Context(), userID, productID, 1)
-	if err := s.DeleteProduct(productID); err != nil {
+	if err := s.DeleteProduct(t.Context(), productID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	if items, _, _ := s.GetCartItems(t.Context(), userID); len(items) != 0 {
@@ -184,7 +184,7 @@ func TestPlaceOrderFromCheckout_ConvertsHoldsAndIsIdempotent(t *testing.T) {
 	if stock.ReservedQuantity != 0 || stock.AllocatedQuantity != 2 || stock.AvailableQuantity != 2 {
 		t.Fatalf("stock = %+v", stock)
 	}
-	orders, _ := s.ListOrdersByUser(userID)
+	orders, _ := s.ListOrdersByUser(t.Context(), userID)
 	if len(orders) != 1 || orders[0].ShippingFee != 650 || orders[0].TaxAmount != 400 || orders[0].Subtotal != 5000 {
 		t.Fatalf("orders = %+v", orders)
 	}
@@ -249,22 +249,22 @@ func TestFulfillmentTransitionsMoveInventory(t *testing.T) {
 		t.Fatalf("allocated = %d, want 5", stock.AllocatedQuantity)
 	}
 
-	if err := s.UpdateOrderFulfillment(shipped, "dispatched", "shipped", ""); !errors.Is(err, ErrInvalidPartnerTransition) {
+	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "dispatched", "shipped", ""); !errors.Is(err, ErrInvalidPartnerTransition) {
 		t.Fatalf("skip-ahead err = %v", err)
 	}
 	for _, step := range []string{"accepted", "packing", "dispatched"} {
-		if err := s.UpdateOrderFulfillment(shipped, step, "processing", step); err != nil {
+		if err := s.UpdateOrderFulfillment(t.Context(), shipped, step, "processing", step); err != nil {
 			t.Fatalf("%s: %v", step, err)
 		}
 	}
-	if err := s.UpdateOrderFulfillment(shipped, "completed", "queued", ""); !errors.Is(err, ErrInvalidDeliveryTransition) {
+	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "completed", "queued", ""); !errors.Is(err, ErrInvalidDeliveryTransition) {
 		t.Fatalf("delivery regression err = %v", err)
 	}
-	if err := s.UpdateOrderFulfillment(shipped, "completed", "delivered", "done"); err != nil {
+	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "completed", "delivered", "done"); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 
-	if err := s.UpdateOrderFulfillment(cancelled, "cancelled", "queued", "out of stock"); err != nil {
+	if err := s.UpdateOrderFulfillment(t.Context(), cancelled, "cancelled", "queued", "out of stock"); err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
 
@@ -273,28 +273,28 @@ func TestFulfillmentTransitionsMoveInventory(t *testing.T) {
 		t.Fatalf("stock = %+v, want on_hand 8, allocated 0", stock)
 	}
 
-	if err := s.UpdateOrderByAdmin(cancelled, OrderStatusPending, "new", "queued", ""); !errors.Is(err, ErrInvalidOrderState) {
+	if err := s.UpdateOrderByAdmin(t.Context(), cancelled, OrderStatusPending, "new", "queued", ""); !errors.Is(err, ErrInvalidOrderState) {
 		t.Fatalf("reopen cancelled err = %v", err)
 	}
-	if err := s.UpdateOrderByAdmin(cancelled, "bogus", "new", "queued", ""); !errors.Is(err, ErrInvalidOrderState) {
+	if err := s.UpdateOrderByAdmin(t.Context(), cancelled, "bogus", "new", "queued", ""); !errors.Is(err, ErrInvalidOrderState) {
 		t.Fatalf("invalid status err = %v", err)
 	}
-	if err := s.UpdateOrderFulfillment(999999, "accepted", "queued", ""); !errors.Is(err, ErrOrderNotFound) {
+	if err := s.UpdateOrderFulfillment(t.Context(), 999999, "accepted", "queued", ""); !errors.Is(err, ErrOrderNotFound) {
 		t.Fatalf("missing order err = %v", err)
 	}
-	if err := s.UpdateOrderByAdmin(999999, OrderStatusPending, "new", "queued", ""); !errors.Is(err, ErrOrderNotFound) {
+	if err := s.UpdateOrderByAdmin(t.Context(), 999999, OrderStatusPending, "new", "queued", ""); !errors.Is(err, ErrOrderNotFound) {
 		t.Fatalf("missing order err = %v", err)
 	}
 
-	summary, err := s.GetPartnerOrderSummary()
+	summary, err := s.GetPartnerOrderSummary(t.Context())
 	if err != nil || summary.CompletedCount != 1 {
 		t.Fatalf("summary = %+v, %v", summary, err)
 	}
-	counts, _ := s.GetOrderStatusCounts()
+	counts, _ := s.GetOrderStatusCounts(t.Context())
 	if counts[OrderStatusDelivered] != 1 || counts[OrderStatusCancelled] != 1 {
 		t.Fatalf("counts = %+v", counts)
 	}
-	if revenue, _ := s.SumOrderRevenue(); revenue != 200 {
+	if revenue, _ := s.SumOrderRevenue(t.Context()); revenue != 200 {
 		t.Fatalf("revenue = %d, want 200", revenue)
 	}
 }
@@ -352,7 +352,7 @@ func TestAuditLogs(t *testing.T) {
 	if err := s.CreateAuditLog(t.Context(), 0, "", "order", 0, ""); err == nil {
 		t.Fatalf("expected validation error")
 	}
-	logs, err := s.ListAuditLogs(10)
+	logs, err := s.ListAuditLogs(t.Context(), 10)
 	if err != nil || len(logs) != 1 || logs[0].ActorName == "" || !logs[0].TargetID.Valid {
 		t.Fatalf("logs = %+v, %v", logs, err)
 	}
@@ -361,18 +361,18 @@ func TestAuditLogs(t *testing.T) {
 func TestSeed_IsIdempotent(t *testing.T) {
 	s := newTestStore(t)
 	for i := 0; i < 2; i++ {
-		s.SeedPartners()
-		s.SeedInitialCatalog()
+		s.SeedPartners(t.Context())
+		s.SeedInitialCatalog(t.Context())
 	}
-	count, _ := s.CountProducts()
+	count, _ := s.CountProducts(t.Context())
 	if count != len(demoCatalog) {
 		t.Fatalf("products = %d, want %d", count, len(demoCatalog))
 	}
-	partners, _ := s.ListPartners()
+	partners, _ := s.ListPartners(t.Context())
 	if len(partners) != len(demoPartners) {
 		t.Fatalf("partners = %d", len(partners))
 	}
-	product, _ := s.GetProductBySlug("flagship-smartphone")
+	product, _ := s.GetProductBySlug(t.Context(), "flagship-smartphone")
 	if product == nil || product.PartnerName != "Urban Goods" || product.Price != 99900 {
 		t.Fatalf("seeded product = %+v", product)
 	}
@@ -380,11 +380,11 @@ func TestSeed_IsIdempotent(t *testing.T) {
 
 func TestPartnerOrderOwnershipRequiresEveryLine(t *testing.T) {
 	s := newTestStore(t)
-	partnerA, err := s.UpsertPartner(Partner{Name: "Owner A", Slug: "owner_a_" + nextSuffix()})
+	partnerA, err := s.UpsertPartner(t.Context(), Partner{Name: "Owner A", Slug: "owner_a_" + nextSuffix()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	partnerB, err := s.UpsertPartner(Partner{Name: "Owner B", Slug: "owner_b_" + nextSuffix()})
+	partnerB, err := s.UpsertPartner(t.Context(), Partner{Name: "Owner B", Slug: "owner_b_" + nextSuffix()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,21 +426,21 @@ func TestPartnerOrderOwnershipRequiresEveryLine(t *testing.T) {
 		{"unassigned line", int(partnerA), unassigned, false},
 		{"no membership", 0, owned, false},
 	} {
-		got, err := s.PartnerOwnsOrder(tc.partnerID, tc.orderID)
+		got, err := s.PartnerOwnsOrder(t.Context(), tc.partnerID, tc.orderID)
 		if err != nil || got != tc.want {
 			t.Errorf("%s: PartnerOwnsOrder = %v, %v; want %v", tc.name, got, err, tc.want)
 		}
 	}
 
-	orders, err := s.ListOrdersForPartner(int(partnerA))
+	orders, err := s.ListOrdersForPartner(t.Context(), int(partnerA))
 	if err != nil || len(orders) != 1 || orders[0].ID != owned {
 		t.Fatalf("ListOrdersForPartner = %+v, %v; want only order %d", orders, err, owned)
 	}
 
-	if err := s.UpdateOrderFulfillment(owned, "cancelled", "queued", "cancelled"); err != nil {
+	if err := s.UpdateOrderFulfillment(t.Context(), owned, "cancelled", "queued", "cancelled"); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := s.PartnerOwnsOrder(int(partnerA), owned); got {
+	if got, _ := s.PartnerOwnsOrder(t.Context(), int(partnerA), owned); got {
 		t.Fatal("cancelled orders must not be partner fulfillment work")
 	}
 }

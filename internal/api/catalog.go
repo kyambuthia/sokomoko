@@ -23,7 +23,7 @@ func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page, limit := pageParams(r)
-	products, total, err := h.app.Catalog.Page(page, limit)
+	products, total, err := h.app.Catalog.Page(r.Context(), page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load products")
 		return
@@ -73,7 +73,7 @@ func (h *Handler) catalogProduct(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "product_not_found", "Product not found")
 		return
 	}
-	product, err := h.app.Catalog.ProductBySlug(slug)
+	product, err := h.app.Catalog.ProductBySlug(r.Context(), slug)
 	if errors.Is(err, catalogsvc.ErrInvalidProductSlug) {
 		writeError(w, http.StatusBadRequest, "invalid_product_slug", "Invalid product slug")
 		return

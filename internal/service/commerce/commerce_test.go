@@ -28,7 +28,7 @@ func newTestService(t *testing.T) (*Service, *db.Store, func()) {
 func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 	t.Helper()
 
-	userID64, err := store.CreateUser(db.User{
+	userID64, err := store.CreateUser(t.Context(), db.User{
 		Username:     "u_test",
 		Email:        "u_test@example.com",
 		PasswordHash: "hash",
@@ -38,7 +38,7 @@ func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 		t.Fatalf("create user: %v", err)
 	}
 
-	catID, err := store.CreateCategory(db.Category{
+	catID, err := store.CreateCategory(t.Context(), db.Category{
 		Name: "Cat A",
 		Slug: "cat-a",
 	})
@@ -46,7 +46,7 @@ func createUserAndProduct(t *testing.T, store *db.Store, stock int) (int, int) {
 		t.Fatalf("create category: %v", err)
 	}
 
-	productID64, err := store.CreateProduct(db.Product{
+	productID64, err := store.CreateProduct(t.Context(), db.Product{
 		Name:          "Product A",
 		Slug:          "product-a",
 		Description:   "desc",

@@ -7,35 +7,35 @@ import (
 )
 
 type store interface {
-	DashboardCounts() (db.DashboardCounts, error)
-	CountProductsByCategory() (map[int]int, error)
-	CreateCategory(category db.Category) (int64, error)
-	CreatePartner(partner db.Partner) (int64, error)
-	CreatePartnerUser(user db.User, partnerID int) (int64, error)
-	DeleteCategory(id int) error
-	UpdateCategory(category db.Category) error
-	UpdatePartnerDetails(id int, name, contactEmail string) (bool, error)
-	GetAllCategories() ([]db.Category, error)
-	GetCategoryByID(id int) (*db.Category, error)
-	GetPartnerByID(id int) (*db.Partner, error)
-	ListPartnerAccounts() ([]db.PartnerAccount, error)
-	ListPartners() ([]db.Partner, error)
-	SetPartnerStatus(id int, status string) (bool, error)
+	DashboardCounts(ctx context.Context) (db.DashboardCounts, error)
+	CountProductsByCategory(ctx context.Context) (map[int]int, error)
+	CreateCategory(ctx context.Context, category db.Category) (int64, error)
+	CreatePartner(ctx context.Context, partner db.Partner) (int64, error)
+	CreatePartnerUser(ctx context.Context, user db.User, partnerID int) (int64, error)
+	DeleteCategory(ctx context.Context, id int) error
+	UpdateCategory(ctx context.Context, category db.Category) error
+	UpdatePartnerDetails(ctx context.Context, id int, name, contactEmail string) (bool, error)
+	GetAllCategories(ctx context.Context) ([]db.Category, error)
+	GetCategoryByID(ctx context.Context, id int) (*db.Category, error)
+	GetPartnerByID(ctx context.Context, id int) (*db.Partner, error)
+	ListPartnerAccounts(ctx context.Context) ([]db.PartnerAccount, error)
+	ListPartners(ctx context.Context) ([]db.Partner, error)
+	SetPartnerStatus(ctx context.Context, id int, status string) (bool, error)
 	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
-	DeleteUser(id int) error
-	ListDeactivatedUsers(limit int) ([]db.User, error)
-	ReactivateUser(id int) (bool, error)
-	GetAllProducts() ([]db.Product, error)
-	ListProductsContext(context.Context, db.ProductFilter) ([]db.Product, error)
-	CountFilteredProductsContext(context.Context, db.ProductFilter) (int, error)
-	GetOrderStatusCounts() (map[string]int, error)
-	GetUserByID(id int) (*db.User, error)
-	ListAllOrders() ([]db.Order, error)
-	ListAllOrdersPageContext(context.Context, int, int) ([]db.Order, int, error)
-	ListAuditLogs(limit int) ([]db.AuditLog, error)
-	ListUsersByRoles(roles []string) ([]db.User, error)
-	SumOrderRevenue() (money.Cents, error)
-	UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
+	DeleteUser(ctx context.Context, id int) error
+	ListDeactivatedUsers(ctx context.Context, limit int) ([]db.User, error)
+	ReactivateUser(ctx context.Context, id int) (bool, error)
+	GetAllProducts(ctx context.Context) ([]db.Product, error)
+	ListProducts(context.Context, db.ProductFilter) ([]db.Product, error)
+	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
+	GetOrderStatusCounts(ctx context.Context) (map[string]int, error)
+	GetUserByID(ctx context.Context, id int) (*db.User, error)
+	ListAllOrders(ctx context.Context) ([]db.Order, error)
+	ListAllOrdersPage(context.Context, int, int) ([]db.Order, int, error)
+	ListAuditLogs(ctx context.Context, limit int) ([]db.AuditLog, error)
+	ListUsersByRoles(ctx context.Context, roles []string) ([]db.User, error)
+	SumOrderRevenue(ctx context.Context) (money.Cents, error)
+	UpdateOrderByAdmin(ctx context.Context, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
 }
 
 var _ store = (*db.Store)(nil)

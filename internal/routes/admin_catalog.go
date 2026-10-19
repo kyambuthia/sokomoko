@@ -24,7 +24,7 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			serverError(w, r)
 			return
@@ -37,18 +37,18 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 			var message string
 			switch r.FormValue("action") {
 			case "delete":
-				err = svc.DeleteCategory(actor, r.FormValue("category_id"))
+				err = svc.DeleteCategory(r.Context(), actor, r.FormValue("category_id"))
 				message = "Category deleted"
 			case "update":
 				page.CategoryForm = adminsvc.CategoryInput{Name: r.FormValue("name"), Description: r.FormValue("description")}
 				page.EditCategoryID, _ = strconv.Atoi(r.FormValue("category_id"))
-				err = svc.UpdateCategory(actor, r.FormValue("category_id"), page.CategoryForm)
+				err = svc.UpdateCategory(r.Context(), actor, r.FormValue("category_id"), page.CategoryForm)
 				message = "Category updated"
 			default:
 				page.CategoryForm = adminsvc.CategoryInput{
 					Name: r.FormValue("name"), Slug: r.FormValue("slug"), Description: r.FormValue("description"),
 				}
-				err = svc.CreateCategory(actor, page.CategoryForm)
+				err = svc.CreateCategory(r.Context(), actor, page.CategoryForm)
 				message = "Category created"
 			}
 			switch {
@@ -73,7 +73,7 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 			page.FormMessage = flash.Message
 		}
 
-		if page.Categories, err = svc.Categories(); err != nil {
+		if page.Categories, err = svc.Categories(r.Context()); err != nil {
 			serverError(w, r)
 			return
 		}
@@ -107,7 +107,7 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
-		metrics, err := loadAdminMetrics(svc)
+		metrics, err := loadAdminMetrics(r.Context(), svc)
 		if err != nil {
 			serverError(w, r)
 			return
@@ -121,7 +121,7 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 			switch r.FormValue("action") {
 			case "status":
 				newStatus := r.FormValue("status")
-				err = svc.SetPartnerStatus(actor, r.FormValue("partner_id"), newStatus)
+				err = svc.SetPartnerStatus(r.Context(), actor, r.FormValue("partner_id"), newStatus)
 				message = "Partner reactivated"
 				if newStatus == "suspended" {
 					message = "Partner suspended. Their products are hidden from customers."
@@ -129,7 +129,7 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 			case "update":
 				page.PartnerForm = adminsvc.PartnerInput{Name: r.FormValue("name"), ContactEmail: r.FormValue("contact_email")}
 				page.EditPartnerID, _ = strconv.Atoi(r.FormValue("partner_id"))
-				err = svc.UpdatePartner(actor, r.FormValue("partner_id"), page.PartnerForm)
+				err = svc.UpdatePartner(r.Context(), actor, r.FormValue("partner_id"), page.PartnerForm)
 				message = "Partner updated"
 			case "create_account":
 				page.AccountForm = adminsvc.PartnerAccountInput{
@@ -137,13 +137,13 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 				}
 				input := page.AccountForm
 				input.Password = r.FormValue("password")
-				err = svc.CreatePartnerAccount(actor, input)
+				err = svc.CreatePartnerAccount(r.Context(), actor, input)
 				message = "Partner login created"
 			default:
 				page.PartnerForm = adminsvc.PartnerInput{
 					Name: r.FormValue("name"), Slug: r.FormValue("slug"), ContactEmail: r.FormValue("contact_email"),
 				}
-				err = svc.CreatePartner(actor, page.PartnerForm)
+				err = svc.CreatePartner(r.Context(), actor, page.PartnerForm)
 				message = "Partner created"
 			}
 			var inputErr *adminsvc.AccountInputError
@@ -173,7 +173,7 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 			page.FormMessage = flash.Message
 		}
 
-		if page.Partners, page.PartnerAccounts, err = svc.Partners(); err != nil {
+		if page.Partners, page.PartnerAccounts, err = svc.Partners(r.Context()); err != nil {
 			serverError(w, r)
 			return
 		}
@@ -204,7 +204,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
-		metrics, err := loadAdminMetrics(a.Admin)
+		metrics, err := loadAdminMetrics(r.Context(), a.Admin)
 		if err != nil {
 			serverError(w, r)
 			return

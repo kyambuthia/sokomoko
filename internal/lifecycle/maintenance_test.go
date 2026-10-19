@@ -13,10 +13,10 @@ func (s *blockingMaintenance) ReleaseExpiredReservations(ctx context.Context) (i
 	<-ctx.Done()
 	return 0, ctx.Err()
 }
-func (s *blockingMaintenance) CleanupSessionsContext(context.Context) error {
+func (s *blockingMaintenance) CleanupSessions(context.Context) error {
 	panic("cleanup after cancellation")
 }
-func (s *blockingMaintenance) CleanupPasswordResetTokensContext(context.Context) error {
+func (s *blockingMaintenance) CleanupPasswordResetTokens(context.Context) error {
 	panic("cleanup after cancellation")
 }
 func (s *blockingMaintenance) ExpireUnpaidOrders(context.Context, time.Time) (int, error) {
@@ -62,8 +62,8 @@ func (s *lockedMaintenance) ReleaseExpiredReservations(context.Context) (int, er
 	s.ran++
 	return 0, nil
 }
-func (s *lockedMaintenance) CleanupSessionsContext(context.Context) error            { return nil }
-func (s *lockedMaintenance) CleanupPasswordResetTokensContext(context.Context) error { return nil }
+func (s *lockedMaintenance) CleanupSessions(context.Context) error            { return nil }
+func (s *lockedMaintenance) CleanupPasswordResetTokens(context.Context) error { return nil }
 func (s *lockedMaintenance) ExpireUnpaidOrders(context.Context, time.Time) (int, error) {
 	return 0, nil
 }

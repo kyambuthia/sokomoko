@@ -45,10 +45,6 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   process restart during that window loses it.
 - **No metrics or tracing endpoint.** Only structured logs and the health
   endpoints.
-- **Most store calls ignore request cancellation.** About a hundred store
-  methods build their context from `context.Background()` plus the query
-  timeout, so a disconnected client does not cancel its query. Newer methods
-  take a context.
 
 ## Performance
 

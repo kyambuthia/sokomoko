@@ -72,8 +72,6 @@ reachable.
 
 ## Later (not started)
 
-- Thread request contexts through every store method (about 100 call sites
-  still use `context.Background()` plus the query timeout).
 - Paginate the admin team page and the storefront account page in SQL.
 - Product image upload and deletion.
 - Shared rate limits for multiple replicas, an email outbox, and a metrics

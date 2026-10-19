@@ -68,8 +68,8 @@ func New(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) OrdersForUser(userID int) ([]Order, error) {
-	orders, err := s.store.ListOrdersByUser(userID)
+func (s *Service) OrdersForUser(ctx context.Context, userID int) ([]Order, error) {
+	orders, err := s.store.ListOrdersByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +80,8 @@ func (s *Service) OrdersForUser(userID int) ([]Order, error) {
 	return mapped, nil
 }
 
-func (s *Service) OrdersForUserPageContext(ctx context.Context, userID, page, limit int) ([]Order, int, error) {
-	orders, total, err := s.store.ListOrdersByUserPageContext(ctx, userID, limit, (page-1)*limit)
+func (s *Service) OrdersForUserPage(ctx context.Context, userID, page, limit int) ([]Order, int, error) {
+	orders, total, err := s.store.ListOrdersByUserPage(ctx, userID, limit, (page-1)*limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -93,12 +93,8 @@ func (s *Service) OrdersForUserPageContext(ctx context.Context, userID, page, li
 }
 
 // OrderForUser returns one of the user's orders, or nil when it is not theirs.
-func (s *Service) OrderForUser(userID, orderID int) (*Order, error) {
-	return s.OrderForUserContext(context.Background(), userID, orderID)
-}
-
-func (s *Service) OrderForUserContext(ctx context.Context, userID, orderID int) (*Order, error) {
-	order, err := s.store.GetOrderForUserContext(ctx, userID, orderID)
+func (s *Service) OrderForUser(ctx context.Context, userID, orderID int) (*Order, error) {
+	order, err := s.store.GetOrderForUser(ctx, userID, orderID)
 	if err != nil || order == nil {
 		return nil, err
 	}

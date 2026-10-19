@@ -41,12 +41,12 @@ func canManageCatalog(actor *Actor) bool {
 }
 
 // Categories lists active categories with their active product counts.
-func (s *Service) Categories() ([]Category, error) {
-	categories, err := s.store.GetAllCategories()
+func (s *Service) Categories(ctx context.Context) ([]Category, error) {
+	categories, err := s.store.GetAllCategories(ctx)
 	if err != nil {
 		return nil, err
 	}
-	counts, err := s.store.CountProductsByCategory()
+	counts, err := s.store.CountProductsByCategory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (s *Service) Categories() ([]Category, error) {
 }
 
 // CreateCategory adds a category. An empty slug is derived from the name.
-func (s *Service) CreateCategory(actor *Actor, input CategoryInput) error {
+func (s *Service) CreateCategory(ctx context.Context, actor *Actor, input CategoryInput) error {
 	if !canManageCatalog(actor) {
 		return ErrForbiddenCatalogAction
 	}
@@ -74,20 +74,20 @@ func (s *Service) CreateCategory(actor *Actor, input CategoryInput) error {
 	if name == "" || len([]rune(name)) > maxCategoryName || len([]rune(description)) > maxCategoryDescription || !slug.Valid(categorySlug) {
 		return ErrInvalidCategory
 	}
-	id, err := s.store.CreateCategory(db.Category{Name: name, Slug: categorySlug, Description: description})
+	id, err := s.store.CreateCategory(ctx, db.Category{Name: name, Slug: categorySlug, Description: description})
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateCategory
 	}
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "category.create", "category", int(id), "slug="+categorySlug)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "category.create", "category", int(id), "slug="+categorySlug)
 	return nil
 }
 
 // UpdateCategory changes a category's name and description. The slug stays
 // the same so category links keep working.
-func (s *Service) UpdateCategory(actor *Actor, idRaw string, input CategoryInput) error {
+func (s *Service) UpdateCategory(ctx context.Context, actor *Actor, idRaw string, input CategoryInput) error {
 	if !canManageCatalog(actor) {
 		return ErrForbiddenCatalogAction
 	}
@@ -100,7 +100,7 @@ func (s *Service) UpdateCategory(actor *Actor, idRaw string, input CategoryInput
 	if name == "" || len([]rune(name)) > maxCategoryName || len([]rune(description)) > maxCategoryDescription {
 		return ErrInvalidCategory
 	}
-	category, err := s.store.GetCategoryByID(id)
+	category, err := s.store.GetCategoryByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -109,19 +109,19 @@ func (s *Service) UpdateCategory(actor *Actor, idRaw string, input CategoryInput
 	}
 	before := category.Name
 	category.Name, category.Description = name, description
-	err = s.store.UpdateCategory(*category)
+	err = s.store.UpdateCategory(ctx, *category)
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateCategory
 	}
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "category.update", "category", id, before+" -> "+name)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "category.update", "category", id, before+" -> "+name)
 	return nil
 }
 
 // DeleteCategory soft-deletes a category. Its products become uncategorized.
-func (s *Service) DeleteCategory(actor *Actor, idRaw string) error {
+func (s *Service) DeleteCategory(ctx context.Context, actor *Actor, idRaw string) error {
 	if !canManageCatalog(actor) {
 		return ErrForbiddenCatalogAction
 	}
@@ -129,16 +129,16 @@ func (s *Service) DeleteCategory(actor *Actor, idRaw string) error {
 	if err != nil {
 		return ErrCategoryNotFound
 	}
-	category, err := s.store.GetCategoryByID(id)
+	category, err := s.store.GetCategoryByID(ctx, id)
 	if err != nil {
 		return err
 	}
 	if category == nil {
 		return ErrCategoryNotFound
 	}
-	if err := s.store.DeleteCategory(id); err != nil {
+	if err := s.store.DeleteCategory(ctx, id); err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(context.Background(), actor.ID, "category.delete", "category", id, "slug="+category.Slug)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "category.delete", "category", id, "slug="+category.Slug)
 	return nil
 }

@@ -40,7 +40,7 @@ func (h *Handler) accountOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, limit := pageParams(r)
-	orders, total, err := h.app.Account.OrdersForUserPageContext(r.Context(), uid, page, limit)
+	orders, total, err := h.app.Account.OrdersForUserPage(r.Context(), uid, page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "orders_unavailable", "Unable to load orders")
 		return
@@ -81,7 +81,7 @@ func (h *Handler) accountOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_order_id", "Order id must be a positive integer")
 		return
 	}
-	order, err := h.app.Account.OrderForUserContext(r.Context(), uid, id)
+	order, err := h.app.Account.OrderForUser(r.Context(), uid, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "orders_unavailable", "Unable to load order")
 		return
@@ -116,7 +116,7 @@ func (h *Handler) cancelAccountOrder(w http.ResponseWriter, r *http.Request, uid
 		writeError(w, http.StatusInternalServerError, "cancel_failed", "Unable to cancel the order")
 		return
 	}
-	order, err := h.app.Account.OrderForUserContext(r.Context(), uid, id)
+	order, err := h.app.Account.OrderForUser(r.Context(), uid, id)
 	if err != nil || order == nil {
 		writeError(w, http.StatusInternalServerError, "orders_unavailable", "Unable to load order")
 		return

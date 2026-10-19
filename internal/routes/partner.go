@@ -72,7 +72,7 @@ func PartnerRoot(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		settings, err := svc.StoreSettings()
+		settings, err := svc.StoreSettings(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -89,7 +89,7 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		existing, err := svc.StoreSettings()
+		existing, err := svc.StoreSettings(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -114,7 +114,7 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		settings, err := svc.SaveStoreSettings(partnerActorFromContext(r), partnersvc.StoreSettingsInput{
+		settings, err := svc.SaveStoreSettings(r.Context(), partnerActorFromContext(r), partnersvc.StoreSettingsInput{
 			StoreName:    r.FormValue("store_name"),
 			StoreSlug:    r.FormValue("store_slug"),
 			Description:  r.FormValue("description"),
@@ -158,7 +158,7 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		view, err := svc.DashboardForActor(partnerActorFromContext(r))
+		view, err := svc.DashboardForActor(r.Context(), partnerActorFromContext(r))
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
@@ -179,7 +179,7 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		view, err := svc.ProductsForActor(partnerActorFromContext(r))
+		view, err := svc.ProductsForActor(r.Context(), partnerActorFromContext(r))
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
@@ -206,7 +206,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		view, err := svc.ProductsForActor(partnerActorFromContext(r))
+		view, err := svc.ProductsForActor(r.Context(), partnerActorFromContext(r))
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
@@ -239,7 +239,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 		data.Form = input
 		data.DefaultName = strings.TrimSpace(input.Name)
 
-		err = svc.CreateProductForActor(partnerActorFromContext(r), input)
+		err = svc.CreateProductForActor(r.Context(), partnerActorFromContext(r), input)
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
@@ -277,7 +277,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		actor := partnerActorFromContext(r)
-		view, err := svc.ProductsForActor(actor)
+		view, err := svc.ProductsForActor(r.Context(), actor)
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
@@ -287,7 +287,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			return
 		}
 		idRaw := r.PathValue("id")
-		id, current, err := svc.ProductForEdit(actor, idRaw)
+		id, current, err := svc.ProductForEdit(r.Context(), actor, idRaw)
 		switch {
 		case errors.Is(err, partnersvc.ErrProductNotFound):
 			http.NotFound(w, r)
@@ -325,7 +325,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID}
 		data.DefaultName = strings.TrimSpace(input.Name)
 
-		err = svc.UpdateProductForActor(actor, idRaw, input)
+		err = svc.UpdateProductForActor(r.Context(), actor, idRaw, input)
 		status := http.StatusBadRequest
 		switch {
 		case err == nil:

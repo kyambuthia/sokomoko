@@ -36,21 +36,21 @@ var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
 type PasswordResetEmailSender func(ctx context.Context, recipientEmail string, resetLink string) error
 
 type store interface {
-	CreatePasswordResetToken(userID int, token string, expiresAt time.Time) error
-	CreateSession(sess db.Session) error
-	CreateUser(user db.User) (int64, error)
-	DeleteSession(id string) error
-	GetAllProducts() ([]db.Product, error)
-	GetSession(id string) (*db.Session, error)
-	GetUserByEmail(email string) (*db.User, error)
-	GetUserByID(id int) (*db.User, error)
-	GetUserByUsername(username string) (*db.User, error)
-	GetValidPasswordResetToken(token string) (*db.PasswordResetToken, error)
-	HasAdminUser() (bool, error)
-	BootstrapAdmin(admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
-	UsePasswordResetToken(token, passwordHash string) (bool, error)
-	PartnerIDForUser(userID int) (int, error)
-	UpdateUserPassword(userID int, passwordHash string) error
+	CreatePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) error
+	CreateSession(ctx context.Context, sess db.Session) error
+	CreateUser(ctx context.Context, user db.User) (int64, error)
+	DeleteSession(ctx context.Context, id string) error
+	GetAllProducts(ctx context.Context) ([]db.Product, error)
+	GetSession(ctx context.Context, id string) (*db.Session, error)
+	GetUserByEmail(ctx context.Context, email string) (*db.User, error)
+	GetUserByID(ctx context.Context, id int) (*db.User, error)
+	GetUserByUsername(ctx context.Context, username string) (*db.User, error)
+	GetValidPasswordResetToken(ctx context.Context, token string) (*db.PasswordResetToken, error)
+	HasAdminUser(ctx context.Context) (bool, error)
+	BootstrapAdmin(ctx context.Context, admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
+	UsePasswordResetToken(ctx context.Context, token, passwordHash string) (bool, error)
+	PartnerIDForUser(ctx context.Context, userID int) (int, error)
+	UpdateUserPassword(ctx context.Context, userID int, passwordHash string) error
 }
 
 type Config struct {
@@ -313,7 +313,7 @@ func checkPassword(user *db.User, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) == nil
 }
 
-func createUserWithPassword(store store, username, email, password, role string) (int64, error) {
+func createUserWithPassword(ctx context.Context, store store, username, email, password, role string) (int64, error) {
 	passwordHash, err := hashPassword(password)
 	if err != nil {
 		return 0, err
@@ -324,7 +324,7 @@ func createUserWithPassword(store store, username, email, password, role string)
 		PasswordHash: passwordHash,
 		Role:         role,
 	}
-	return store.CreateUser(user)
+	return store.CreateUser(ctx, user)
 }
 
 // startSession issues a fresh session, revoking any session the request
@@ -332,7 +332,7 @@ func createUserWithPassword(store store, username, email, password, role string)
 // fixation).
 func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int) error {
 	if existing, err := r.Cookie(sessionCookieName); err == nil && existing.Value != "" {
-		_ = s.store.DeleteSession(existing.Value)
+		_ = s.store.DeleteSession(r.Context(), existing.Value)
 	}
 	sessionToken, err := generateOpaqueToken(32)
 	if err != nil {
@@ -344,7 +344,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID in
 	}
 	expiresAt := time.Now().Add(sessionDuration)
 
-	err = s.store.CreateSession(db.Session{
+	err = s.store.CreateSession(r.Context(), db.Session{
 		ID:        sessionToken,
 		UserID:    userID,
 		CSRFToken: csrfToken,
@@ -564,12 +564,12 @@ func mapAccountCreationError(err error, conflictMessage string) (int, string) {
 	return http.StatusInternalServerError, "Unable to create account right now. Please retry."
 }
 
-func (s *Service) findUserByIdentifier(identifier string) (*db.User, error) {
+func (s *Service) findUserByIdentifier(ctx context.Context, identifier string) (*db.User, error) {
 	trimmed := strings.TrimSpace(identifier)
 	if strings.Contains(trimmed, "@") {
-		return s.store.GetUserByEmail(normalizeEmail(trimmed))
+		return s.store.GetUserByEmail(ctx, normalizeEmail(trimmed))
 	}
-	return s.store.GetUserByUsername(trimmed)
+	return s.store.GetUserByUsername(ctx, trimmed)
 }
 
 func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode int, data any) {
@@ -632,7 +632,7 @@ func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		_, err := createUserWithPassword(s.store, username, email, password, "user")
+		_, err := createUserWithPassword(r.Context(), s.store, username, email, password, "user")
 		if err != nil {
 			log.Printf("Error creating user: %v", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create user. Username or email might already exist.")
@@ -690,7 +690,7 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		_, err := createUserWithPassword(s.store, username, email, password, "staff")
+		_, err := createUserWithPassword(r.Context(), s.store, username, email, password, "staff")
 		if err != nil {
 			statusCode, message := mapAccountCreationError(err, "Failed to create staff account. Username or email may already exist.")
 			data.Error = message
@@ -743,7 +743,7 @@ func (s *Service) workspaceLogin(tmpl *template.Template, setupPath string) http
 		cfg.allowedRoles = append(cfg.allowedRoles, db.RolePartner)
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		hasAdmin, err := s.store.HasAdminUser()
+		hasAdmin, err := s.store.HasAdminUser(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -793,7 +793,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 		return
 	}
 
-	user, err := s.findUserByIdentifier(username)
+	user, err := s.findUserByIdentifier(r.Context(), username)
 	if err != nil {
 		log.Printf("login lookup failed: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -810,7 +810,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 
 	s.clearAbuseFailures(cfg.abuseScope, username, false, r)
 	if user.Role == db.RolePartner {
-		partnerID, err := s.store.PartnerIDForUser(user.ID)
+		partnerID, err := s.store.PartnerIDForUser(r.Context(), user.ID)
 		if err != nil {
 			log.Printf("partner lookup failed: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -847,7 +847,7 @@ func safeNextPath(raw string) string {
 // AdminSetup is the first-run bootstrap flow that creates the root admin and optional staff accounts.
 func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		hasAdmin, err := s.store.HasAdminUser()
+		hasAdmin, err := s.store.HasAdminUser(r.Context())
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -861,7 +861,7 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		products, err := s.store.GetAllProducts()
+		products, err := s.store.GetAllProducts(r.Context())
 		if err != nil {
 			products = []db.Product{}
 		}
@@ -949,7 +949,7 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
-		staffUsers, err := s.store.BootstrapAdmin(
+		staffUsers, err := s.store.BootstrapAdmin(r.Context(),
 			db.User{Username: adminUsername, Email: adminEmail, PasswordHash: adminHash},
 			staffHashes,
 			func(i, attempt int) (string, string) {
@@ -1020,7 +1020,7 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 			return
 		}
 
-		user, err := s.findUserByIdentifier(identifier)
+		user, err := s.findUserByIdentifier(r.Context(), identifier)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -1033,7 +1033,7 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-			if err := s.store.CreatePasswordResetToken(user.ID, resetToken, time.Now().Add(resetTokenDuration)); err != nil {
+			if err := s.store.CreatePasswordResetToken(r.Context(), user.ID, resetToken, time.Now().Add(resetTokenDuration)); err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
@@ -1081,7 +1081,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 				return
 			}
 
-			resetToken, err := s.store.GetValidPasswordResetToken(token)
+			resetToken, err := s.store.GetValidPasswordResetToken(r.Context(), token)
 			if err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
@@ -1093,7 +1093,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 				return
 			}
 
-			user, err := s.store.GetUserByID(resetToken.UserID)
+			user, err := s.store.GetUserByID(r.Context(), resetToken.UserID)
 			if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
 				s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 				data.Error = "Reset token is invalid for this account type"
@@ -1142,7 +1142,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 
-		resetToken, err := s.store.GetValidPasswordResetToken(token)
+		resetToken, err := s.store.GetValidPasswordResetToken(r.Context(), token)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -1154,7 +1154,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 
-		user, err := s.store.GetUserByID(resetToken.UserID)
+		user, err := s.store.GetUserByID(r.Context(), resetToken.UserID)
 		if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
 			s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
 			data.Error = "Reset token is invalid for this account type"
@@ -1168,7 +1168,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 
-		used, err := s.store.UsePasswordResetToken(token, passwordHash)
+		used, err := s.store.UsePasswordResetToken(r.Context(), token, passwordHash)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -1195,7 +1195,7 @@ func (s *Service) Logout() http.HandlerFunc {
 			return
 		}
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
-			_ = s.store.DeleteSession(cookie.Value)
+			_ = s.store.DeleteSession(r.Context(), cookie.Value)
 		}
 		s.clearSessionCookie(w, r)
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -1275,7 +1275,7 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
-	sess, err := s.store.GetSession(cookie.Value)
+	sess, err := s.store.GetSession(r.Context(), cookie.Value)
 	if err != nil {
 		log.Printf("session lookup failed: %v", err)
 		return nil
@@ -1283,13 +1283,13 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 	if sess == nil || !sess.ExpiresAt.After(time.Now()) {
 		return nil
 	}
-	user, err := s.store.GetUserByID(sess.UserID)
+	user, err := s.store.GetUserByID(r.Context(), sess.UserID)
 	if err != nil {
 		log.Printf("session user lookup failed for user_id=%d: %v", sess.UserID, err)
 		return nil
 	}
 	if user == nil {
-		_ = s.store.DeleteSession(cookie.Value)
+		_ = s.store.DeleteSession(r.Context(), cookie.Value)
 	}
 	return user
 }
@@ -1408,7 +1408,7 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		if err := s.store.UpdateUserPassword(user.ID, hash); err != nil {
+		if err := s.store.UpdateUserPassword(r.Context(), user.ID, hash); err != nil {
 			log.Printf("password change failed for user_id=%d: %v", user.ID, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

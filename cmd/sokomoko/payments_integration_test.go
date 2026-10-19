@@ -200,7 +200,7 @@ func paymentStatus(t *testing.T, orderID int) string {
 
 func partnerQueueHasOrders(t *testing.T, admin *http.Cookie) bool {
 	t.Helper()
-	orders, err := testStore.ListOrdersForFulfillment()
+	orders, err := testStore.ListOrdersForFulfillment(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,7 +595,7 @@ func TestIntegration_UnpaidOnlineOrderExpires(t *testing.T) {
 	if paymentStatus(t, 1) != "failed" {
 		t.Fatal("expired payment should be failed")
 	}
-	product, err := testStore.GetProductByID(int(productID))
+	product, err := testStore.GetProductByID(t.Context(), int(productID))
 	if err != nil || product.StockQuantity != 5 {
 		t.Fatalf("stock after expiry = %+v, %v", product, err)
 	}
@@ -727,7 +727,7 @@ func TestIntegration_CustomerCancelDuringMpesaPromptQueuesLateCharge(t *testing.
 	if err := testStore.DB.QueryRow("SELECT status FROM payment_attempts WHERE payment_id = 1 ORDER BY id DESC LIMIT 1").Scan(&attempt); err != nil || attempt != "failed" || paymentStatus(t, 1) != db.PaymentStatusFailed {
 		t.Fatalf("after cancel attempt=%s payment=%s err=%v", attempt, paymentStatus(t, 1), err)
 	}
-	if p, _ := testStore.GetProductByID(int(productID)); p == nil || p.StockQuantity != 5 {
+	if p, _ := testStore.GetProductByID(t.Context(), int(productID)); p == nil || p.StockQuantity != 5 {
 		t.Fatalf("stock after cancel = %+v", p)
 	}
 

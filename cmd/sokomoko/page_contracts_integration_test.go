@@ -16,7 +16,7 @@ func TestIntegration_PageContracts(t *testing.T) {
 	createTestUser(t, "page_admin", "page_admin@example.com", "strongpass123", "admin")
 	createTestUser(t, "page_buyer", "page_buyer@example.com", "strongpass123", "user")
 	productID := createTestProduct(t, "Page Contract Lamp", "page-contract-lamp", 2450, 10)
-	if err := testStore.UpsertStoreSettings(db.StoreSettings{StoreName: "Page Store", StoreSlug: "page-store", ContactEmail: "store@example.com"}); err != nil {
+	if err := testStore.UpsertStoreSettings(t.Context(), db.StoreSettings{StoreName: "Page Store", StoreSlug: "page-store", ContactEmail: "store@example.com"}); err != nil {
 		t.Fatal(err)
 	}
 	userID := int(mustUserID(t, "page_buyer"))

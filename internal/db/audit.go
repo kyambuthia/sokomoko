@@ -6,11 +6,13 @@ import (
 	"strings"
 )
 
+// CreateAuditLog records an action that has already happened, so a caller
+// whose request is cancelled still gets its entry written.
 func (s *Store) CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error {
 	if strings.TrimSpace(action) == "" || strings.TrimSpace(targetType) == "" {
 		return errors.New("action and target_type are required")
 	}
-	ctx, cancel := s.queryContext(ctx)
+	ctx, cancel := s.queryContext(context.WithoutCancel(ctx))
 	defer cancel()
 
 	_, err := s.DB.ExecContext(ctx,
@@ -21,11 +23,11 @@ func (s *Store) CreateAuditLog(ctx context.Context, actorUserID int, action, tar
 	return err
 }
 
-func (s *Store) ListAuditLogs(limit int) ([]AuditLog, error) {
+func (s *Store) ListAuditLogs(ctx context.Context, limit int) ([]AuditLog, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 50
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
