@@ -68,18 +68,6 @@ func New(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) OrdersForUser(ctx context.Context, userID int) ([]Order, error) {
-	orders, err := s.store.ListOrdersByUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	mapped := make([]Order, 0, len(orders))
-	for _, order := range orders {
-		mapped = append(mapped, mapOrder(order))
-	}
-	return mapped, nil
-}
-
 func (s *Service) OrdersForUserPage(ctx context.Context, userID, page, limit int) ([]Order, int, error) {
 	orders, total, err := s.store.ListOrdersByUserPage(ctx, userID, limit, (page-1)*limit)
 	if err != nil {

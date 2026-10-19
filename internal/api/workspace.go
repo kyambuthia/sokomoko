@@ -296,7 +296,8 @@ func (h *Handler) adminTeam(w http.ResponseWriter, r *http.Request, parts []stri
 		return
 	}
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		members, err := h.app.Admin.TeamMembers(r.Context())
+		page, limit := pageParams(r)
+		members, total, err := h.app.Admin.TeamMembers(r.Context(), r.URL.Query().Get("q"), page, limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load team")
 			return
@@ -305,7 +306,12 @@ func (h *Handler) adminTeam(w http.ResponseWriter, r *http.Request, parts []stri
 		for _, member := range members {
 			items = append(items, mapTeamMember(member))
 		}
-		writeData(w, http.StatusOK, items)
+		writeData(w, http.StatusOK, struct {
+			Items []teamMemberDTO `json:"items"`
+			Page  int             `json:"page"`
+			Limit int             `json:"limit"`
+			Total int             `json:"total"`
+		}{Items: items, Page: page, Limit: limit, Total: total})
 		return
 	}
 	if len(parts) != 2 || r.Method != http.MethodDelete {

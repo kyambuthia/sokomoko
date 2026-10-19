@@ -48,6 +48,17 @@
 </div>
 {{ end }}
 
+{{/* routes.Pager: Previous and Next links when a list has several pages. */}}
+{{ define "pager" }}
+{{ if gt .Pages 1 }}
+<nav class="row-between" aria-label="Pages">
+  {{ if .PrevHref }}<a class="btn btn-secondary btn-sm" href="{{ .PrevHref }}" rel="prev">Previous</a>{{ else }}<span></span>{{ end }}
+  <span class="small muted">Page {{ .Page }} of {{ .Pages }}</span>
+  {{ if .NextHref }}<a class="btn btn-secondary btn-sm" href="{{ .NextHref }}" rel="next">Next</a>{{ else }}<span></span>{{ end }}
+</nav>
+{{ end }}
+{{ end }}
+
 {{/* Minimal chrome for sign-in, sign-up, password reset, and first-run setup. */}}
 {{ define "auth-layout" }}
 <body>

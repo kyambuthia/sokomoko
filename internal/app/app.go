@@ -38,7 +38,6 @@ type CatalogService interface {
 
 type AccountService interface {
 	OrderForUser(context.Context, int, int) (*accountsvc.Order, error)
-	OrdersForUser(ctx context.Context, userID int) ([]accountsvc.Order, error)
 	OrdersForUserPage(context.Context, int, int, int) ([]accountsvc.Order, int, error)
 	CancelOrder(ctx context.Context, userID, orderID int) error
 }
@@ -101,7 +100,7 @@ type AdminService interface {
 	Products(ctx context.Context) ([]adminsvc.Product, error)
 	ProductsPage(context.Context, int, int) ([]adminsvc.Product, int, error)
 	Reports(ctx context.Context) (adminsvc.SalesReport, error)
-	TeamMembers(ctx context.Context) ([]adminsvc.TeamMember, error)
+	TeamMembers(ctx context.Context, query string, page, limit int) ([]adminsvc.TeamMember, int, error)
 	UpdateOrder(ctx context.Context, actor *adminsvc.Actor, input adminsvc.UpdateOrderInput) error
 }
 

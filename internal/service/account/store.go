@@ -8,7 +8,6 @@ import (
 
 type store interface {
 	GetOrderForUser(context.Context, int, int) (*db.Order, error)
-	ListOrdersByUser(ctx context.Context, userID int) ([]db.Order, error)
 	ListOrdersByUserPage(context.Context, int, int, int) ([]db.Order, int, error)
 	CancelOrderByCustomer(ctx context.Context, userID, orderID int) error
 }

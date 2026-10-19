@@ -33,7 +33,7 @@ type store interface {
 	ListAllOrders(ctx context.Context) ([]db.Order, error)
 	ListAllOrdersPage(context.Context, int, int) ([]db.Order, int, error)
 	ListAuditLogs(ctx context.Context, limit int) ([]db.AuditLog, error)
-	ListUsersByRoles(ctx context.Context, roles []string) ([]db.User, error)
+	ListUsersByRoles(ctx context.Context, search db.UserSearch) ([]db.User, int, error)
 	SumOrderRevenue(ctx context.Context) (money.Cents, error)
 	UpdateOrderByAdmin(ctx context.Context, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
 }

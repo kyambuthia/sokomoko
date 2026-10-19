@@ -72,7 +72,6 @@ reachable.
 
 ## Later (not started)
 
-- Paginate the admin team page and the storefront account page in SQL.
 - Product image upload and deletion.
 - Shared rate limits for multiple replicas, an email outbox, and a metrics
   endpoint.

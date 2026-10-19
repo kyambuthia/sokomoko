@@ -293,16 +293,26 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 	return nil
 }
 
-func (s *Service) TeamMembers(ctx context.Context) ([]TeamMember, error) {
-	users, err := s.store.ListUsersByRoles(ctx, []string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleUser})
+// TeamMembers returns one page of active accounts, optionally filtered by a
+// username or email search, and the total that match.
+func (s *Service) TeamMembers(ctx context.Context, query string, page, limit int) ([]TeamMember, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	users, total, err := s.store.ListUsersByRoles(ctx, db.UserSearch{
+		Roles:  []string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleUser},
+		Query:  query,
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	members := make([]TeamMember, 0, len(users))
 	for _, u := range users {
 		members = append(members, TeamMember{ID: u.ID, Username: u.Username, Email: u.Email, Role: u.Role, CreatedAt: u.CreatedAt})
 	}
-	return members, nil
+	return members, total, nil
 }
 
 func (s *Service) DeactivateUser(ctx context.Context, actor *Actor, userIDRaw string) error {

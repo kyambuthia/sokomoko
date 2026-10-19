@@ -133,7 +133,8 @@ Breakpoints: 40rem (wider grids), 48rem (tablet: desktop header, no tab bar),
 | `.page-head`, `.stack`, `.row`, `.split` | Layout primitives. |
 
 Template partials in `templates/base/partials.tmpl.html`: `product-card`,
-`product-grid`, `notice`, `empty`. Pass arguments with `dict`.
+`product-grid`, `notice`, `empty`, and `pager` (Previous and Next links for a
+`routes.Pager`; hidden on a single page). Pass arguments with `dict`.
 
 ### Icons
 

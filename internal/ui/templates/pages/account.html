@@ -55,6 +55,7 @@
       </li>
       {{ end }}
     </ul>
+    {{ template "pager" .Pager }}
     {{ else }}
     {{ template "empty" dict "Icon" "package" "Text" "No orders yet." "Href" "/" "Action" "Shop" }}
     {{ end }}

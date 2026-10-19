@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -11,6 +12,9 @@ import (
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
+
+// teamPageSize is how many accounts the team page lists at once.
+const teamPageSize = 50
 
 type AdminPageData struct {
 	Title           string
@@ -24,6 +28,8 @@ type AdminPageData struct {
 	UserCount       int
 	Products        []adminsvc.Product
 	TeamMembers     []adminsvc.TeamMember
+	TeamQuery       string
+	TeamPager       Pager
 	Deactivated     []adminsvc.TeamMember
 	Orders          []adminsvc.Order
 	Deliveries      adminsvc.DeliveryBoard
@@ -285,12 +291,19 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			page.TeamMessage = flash.Message
 		}
 
-		teamMembers, err := svc.TeamMembers(r.Context())
+		query := strings.TrimSpace(r.URL.Query().Get("q"))
+		pageNum := pageParam(r)
+		teamMembers, total, err := svc.TeamMembers(r.Context(), query, pageNum, teamPageSize)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		if redirectPastLastPage(w, r, pageNum, teamPageSize, total) {
+			return
+		}
 		page.TeamMembers = teamMembers
+		page.TeamQuery = query
+		page.TeamPager = newPager(r, pageNum, teamPageSize, total)
 		if page.Deactivated, err = svc.DeactivatedMembers(r.Context()); err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

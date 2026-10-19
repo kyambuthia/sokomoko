@@ -220,21 +220,43 @@ func (s *Store) ReactivateUser(ctx context.Context, id int) (bool, error) {
 	return n > 0, err
 }
 
-func (s *Store) ListUsersByRoles(ctx context.Context, roles []string) ([]User, error) {
-	if len(roles) == 0 {
-		return []User{}, nil
+// UserSearch selects active users by role, optionally matching query against
+// username or email, one page at a time.
+type UserSearch struct {
+	Roles  []string
+	Query  string
+	Limit  int
+	Offset int
+}
+
+// ListUsersByRoles returns one page of active users ordered by role and
+// username, and the total number that match.
+func (s *Store) ListUsersByRoles(ctx context.Context, search UserSearch) ([]User, int, error) {
+	if len(search.Roles) == 0 {
+		return []User{}, 0, nil
 	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
+	where := "role = ANY($1) AND deleted_at IS NULL"
+	args := []any{search.Roles}
+	if q := strings.TrimSpace(search.Query); q != "" {
+		args = append(args, "%"+escapeLike(q)+"%")
+		where += " AND (username ILIKE $2 OR email ILIKE $2)"
+	}
+
+	var total int
+	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	args = append(args, search.Limit, search.Offset)
 	rows, err := s.DB.QueryContext(ctx,
-		"SELECT "+userColumns+` FROM users
-		 WHERE role = ANY($1) AND deleted_at IS NULL
-		 ORDER BY role, lower(username)`,
-		roles,
+		"SELECT "+userColumns+" FROM users WHERE "+where+
+			fmt.Sprintf(" ORDER BY role, lower(username), id LIMIT $%d OFFSET $%d", len(args)-1, len(args)),
+		args...,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -242,11 +264,11 @@ func (s *Store) ListUsersByRoles(ctx context.Context, roles []string) ([]User, e
 	for rows.Next() {
 		user, err := scanUser(rows)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		users = append(users, *user)
 	}
-	return users, rows.Err()
+	return users, total, rows.Err()
 }
 
 // ErrAdminExists is returned by BootstrapAdmin when an admin already exists.

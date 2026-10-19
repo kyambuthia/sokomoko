@@ -45,9 +45,3 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   process restart during that window loses it.
 - **No metrics or tracing endpoint.** Only structured logs and the health
   endpoints.
-
-## Performance
-
-- The admin team page lists every account, customers included, without
-  pagination. The storefront account page loads every order of the customer;
-  the JSON API pages both in SQL.
