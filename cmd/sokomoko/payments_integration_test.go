@@ -752,3 +752,31 @@ func TestIntegration_CustomerCancelDuringMpesaPromptQueuesLateCharge(t *testing.
 		t.Fatalf("order status after late charge = %s, %v", status, err)
 	}
 }
+
+// A callback must not be checked against an attempt payload the store could
+// not read: the stored request id would look empty, so any request id would
+// pass and overwrite it.
+func TestIntegration_MpesaCallbackRejectedWhenPayloadUnreadable(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 97092)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712 345 678"}})
+	callbackURL, _ := testProviders.lastSTK["CallBackURL"].(string)
+	callbackPath := strings.TrimPrefix(callbackURL, "https://shop.example")
+
+	if _, err := testStore.DB.Exec(`UPDATE payment_attempts SET provider_payload = '["unreadable"]' WHERE id = (SELECT max(id) FROM payment_attempts)`); err != nil {
+		t.Fatal(err)
+	}
+	callback := `{"Body":{"stkCallback":{"MerchantRequestID":"m-9","CheckoutRequestID":"ws_CO_forged","ResultCode":1032,"ResultDesc":"cancelled"}}}`
+	req := httptest.NewRequest(http.MethodPost, "http://localhost"+callbackPath, strings.NewReader(callback))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	var payload, attempt string
+	if err := testStore.DB.QueryRow(`SELECT provider_payload::text, status FROM payment_attempts ORDER BY id DESC LIMIT 1`).Scan(&payload, &attempt); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code == http.StatusOK || payload != `["unreadable"]` || attempt != "pending" {
+		t.Fatalf("callback status=%d payload=%s attempt=%s", rec.Code, payload, attempt)
+	}
+}

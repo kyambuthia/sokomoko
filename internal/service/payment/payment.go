@@ -461,7 +461,12 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 	if p, ok := s.registry.Get(payment.Method); ok {
 		view.NeedsPhone = p.Descriptor().NeedsPhone
 	}
-	payload, _ := s.store.PaymentPayload(ctx, payment.AttemptID)
+	// An order with no attempt yet has no payload; any other failure must not
+	// pass for an empty one.
+	payload, err := s.store.PaymentPayload(ctx, payment.AttemptID)
+	if err != nil && !errors.Is(err, db.ErrPaymentNotFound) {
+		return StatusView{}, err
+	}
 	view.Phone = payload["phone"]
 	if charged, err := strconv.ParseInt(payload["charged_cents"], 10, 64); err == nil {
 		view.Charged = money.Cents(charged)
@@ -574,7 +579,10 @@ func (s *Service) HandleReturn(ctx context.Context, userID int, reference string
 	if payment.UserID != userID {
 		return 0, db.ErrPaymentNotFound
 	}
-	payload, _ := s.store.PaymentPayload(ctx, payment.AttemptID)
+	payload, err := s.store.PaymentPayload(ctx, payment.AttemptID)
+	if err != nil {
+		return payment.OrderID, err
+	}
 	if payment.AttemptStatus != db.PaymentAttemptStatusCompleted {
 		if err := s.verifyAndApply(ctx, payment, payload); err != nil {
 			return payment.OrderID, err
@@ -617,7 +625,10 @@ func (s *Service) HandleWebhook(ctx context.Context, providerID string, r *http.
 	if payment.AttemptStatus == db.PaymentAttemptStatusCompleted {
 		return nil
 	}
-	payload, _ := s.store.PaymentPayload(ctx, payment.AttemptID)
+	payload, err := s.store.PaymentPayload(ctx, payment.AttemptID)
+	if err != nil {
+		return err
+	}
 	return s.verifyAndApply(ctx, payment, payload)
 }
 
@@ -642,7 +653,10 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if err != nil {
 		return err
 	}
-	payload, _ := s.store.PaymentPayload(ctx, payment.AttemptID)
+	payload, err := s.store.PaymentPayload(ctx, payment.AttemptID)
+	if err != nil {
+		return err
+	}
 	if id := event.Data["checkout_request_id"]; id == "" || payload["checkout_request_id"] != "" && id != payload["checkout_request_id"] {
 		return fmt.Errorf("%w: callback does not match the stored request", db.ErrPaymentNotFound)
 	}
