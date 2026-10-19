@@ -54,7 +54,7 @@ func createPendingOrderForRoleTests(t *testing.T, suffix int64) int64 {
 		1999,
 		10,
 	)
-	if err := testStore.AddToCart(int(buyerID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 1); err != nil {
 		t.Fatalf("failed to add to cart: %v", err)
 	}
 	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "123 Route Matrix Ave")

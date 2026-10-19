@@ -14,7 +14,7 @@ func prepareCheckout(t *testing.T, s *Store, userID int, token string, ttl time.
 	if err := s.ReserveCartForCheckout(userID, token, timeNow().Add(ttl)); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
-	items, subtotal, err := s.GetCartItemsForCheckout(userID, token)
+	items, subtotal, err := s.GetCartItemsForCheckout(t.Context(), userID, token)
 	if err != nil {
 		t.Fatalf("cart items: %v", err)
 	}
@@ -46,17 +46,17 @@ func TestCartAndDirectOrderFlow(t *testing.T) {
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 1999, 5)
 
-	if err := s.AddToCart(userID, productID, 2); err != nil {
+	if err := s.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add: %v", err)
 	}
-	if err := s.AddToCart(userID, productID, 1); err != nil {
+	if err := s.AddToCart(t.Context(), userID, productID, 1); err != nil {
 		t.Fatalf("add again: %v", err)
 	}
-	items, subtotal, err := s.GetCartItems(userID)
+	items, subtotal, err := s.GetCartItems(t.Context(), userID)
 	if err != nil || len(items) != 1 || items[0].Quantity != 3 || subtotal != 5997 {
 		t.Fatalf("cart = %+v subtotal=%d err=%v", items, subtotal, err)
 	}
-	if count, _ := s.CartItemCount(userID); count != 3 {
+	if count, _ := s.CartItemCount(t.Context(), userID); count != 3 {
 		t.Fatalf("cart count = %d", count)
 	}
 
@@ -87,11 +87,11 @@ func TestAddToCart_RemovesDeletedProductsFromCart(t *testing.T) {
 	s := newTestStore(t)
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 100, 5)
-	_ = s.AddToCart(userID, productID, 1)
+	_ = s.AddToCart(t.Context(), userID, productID, 1)
 	if err := s.DeleteProduct(productID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if items, _, _ := s.GetCartItems(userID); len(items) != 0 {
+	if items, _, _ := s.GetCartItems(t.Context(), userID); len(items) != 0 {
 		t.Fatalf("deleted product still in cart")
 	}
 }
@@ -101,7 +101,7 @@ func TestReserveCartForCheckout_RefreshesHolds(t *testing.T) {
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 500, 6)
 
-	_ = s.AddToCart(userID, productID, 2)
+	_ = s.AddToCart(t.Context(), userID, productID, 2)
 	if err := s.ReserveCartForCheckout(userID, "first", timeNow().Add(time.Minute)); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
@@ -118,13 +118,13 @@ func TestReserveCartForCheckout_RefreshesHolds(t *testing.T) {
 	if active, _ := s.ListActiveStockReservationsByKey(userID, "first"); len(active) != 0 {
 		t.Fatalf("old reservation still active")
 	}
-	items, _, _ := s.GetCartItemsForCheckout(userID, "second")
+	items, _, _ := s.GetCartItemsForCheckout(t.Context(), userID, "second")
 	if len(items) != 1 || items[0].StockQuantity != 6 {
 		t.Fatalf("own hold should count as available: %+v", items)
 	}
 
 	other := mustCreateUser(t, s, RoleUser)
-	_ = s.AddToCart(other, productID, 5)
+	_ = s.AddToCart(t.Context(), other, productID, 5)
 	if err := s.ReserveCartForCheckout(other, "other", timeNow().Add(time.Minute)); !errors.Is(err, ErrInsufficientStock) {
 		t.Fatalf("over-reserve err = %v, want ErrInsufficientStock", err)
 	}
@@ -134,7 +134,7 @@ func TestReleaseExpiredReservations(t *testing.T) {
 	s := newTestStore(t)
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 500, 3)
-	_ = s.AddToCart(userID, productID, 3)
+	_ = s.AddToCart(t.Context(), userID, productID, 3)
 	checkout := prepareCheckout(t, s, userID, "soon", -time.Second)
 
 	released, err := s.ReleaseExpiredReservations()
@@ -157,7 +157,7 @@ func TestPlaceOrderFromCheckout_ConvertsHoldsAndIsIdempotent(t *testing.T) {
 	s := newTestStore(t)
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 2500, 4)
-	_ = s.AddToCart(userID, productID, 2)
+	_ = s.AddToCart(t.Context(), userID, productID, 2)
 	checkout := prepareCheckout(t, s, userID, "tok-1", 15*time.Minute)
 
 	if checkout.SubtotalAmount != 5000 || checkout.TaxAmount != 400 || checkout.TotalAmount != 6050 || len(checkout.Lines) != 1 {
@@ -192,7 +192,7 @@ func TestPlaceOrderFromCheckout_ConvertsHoldsAndIsIdempotent(t *testing.T) {
 	if len(payments) != 1 || payments[0].Amount != 6050 {
 		t.Fatalf("payments = %+v", payments)
 	}
-	if items, _, _ := s.GetCartItems(userID); len(items) != 0 {
+	if items, _, _ := s.GetCartItems(t.Context(), userID); len(items) != 0 {
 		t.Fatalf("cart not cleared")
 	}
 	completed, _ := s.GetCheckoutByToken(userID, "tok-1")
@@ -211,10 +211,10 @@ func TestCartChangeInvalidatesOpenCheckout(t *testing.T) {
 	userID := mustCreateUser(t, s, RoleUser)
 	a := mustCreateProduct(t, s, 100, 5)
 	b := mustCreateProduct(t, s, 100, 5)
-	_ = s.AddToCart(userID, a, 1)
+	_ = s.AddToCart(t.Context(), userID, a, 1)
 	checkout := prepareCheckout(t, s, userID, "stale", 15*time.Minute)
 
-	if err := s.AddToCart(userID, b, 1); err != nil {
+	if err := s.AddToCart(t.Context(), userID, b, 1); err != nil {
 		t.Fatalf("add: %v", err)
 	}
 	reloaded, _ := s.GetCheckoutByToken(userID, checkout.Token)
@@ -235,7 +235,7 @@ func TestFulfillmentTransitionsMoveInventory(t *testing.T) {
 	productID := mustCreateProduct(t, s, 100, 10)
 
 	place := func(qty int) int {
-		_ = s.AddToCart(userID, productID, qty)
+		_ = s.AddToCart(t.Context(), userID, productID, qty)
 		id, err := s.PlaceOrderFromCart(userID, "addr")
 		if err != nil {
 			t.Fatalf("place: %v", err)
@@ -307,7 +307,7 @@ func TestConcurrentCheckoutNeverOversells(t *testing.T) {
 	userIDs := make([]int, buyers)
 	for i := range userIDs {
 		userIDs[i] = mustCreateUser(t, s, RoleUser)
-		if err := s.AddToCart(userIDs[i], productID, 1); err != nil {
+		if err := s.AddToCart(t.Context(), userIDs[i], productID, 1); err != nil {
 			t.Fatalf("add: %v", err)
 		}
 	}
@@ -400,7 +400,7 @@ func TestPartnerOrderOwnershipRequiresEveryLine(t *testing.T) {
 	placeOrder := func(products ...int) int {
 		userID := mustCreateUser(t, s, RoleUser)
 		for _, productID := range products {
-			if err := s.AddToCart(userID, productID, 1); err != nil {
+			if err := s.AddToCart(t.Context(), userID, productID, 1); err != nil {
 				t.Fatal(err)
 			}
 		}

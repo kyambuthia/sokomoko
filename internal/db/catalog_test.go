@@ -80,7 +80,7 @@ func TestUpdateProduct_SetsAvailableAroundHolds(t *testing.T) {
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 1000, 10)
 
-	if err := s.AddToCart(userID, productID, 3); err != nil {
+	if err := s.AddToCart(t.Context(), userID, productID, 3); err != nil {
 		t.Fatalf("add to cart: %v", err)
 	}
 	if err := s.ReserveCartForCheckout(userID, "hold", timeNow().Add(time.Minute)); err != nil {

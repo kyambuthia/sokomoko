@@ -160,7 +160,7 @@ func TestIntegration_CheckoutRejectsSimulatedPayments(t *testing.T) {
 	userID := createTestUser(t, "no_fake_payments", "no_fake@example.com", "strongpass123", "user")
 	cookie := loginAndGetSessionCookie(t, "", "no_fake_payments", "strongpass123")
 	productID := createTestProduct(t, "Payment Safety Product", "payment-safety", 1400, 10)
-	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(userID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
 	key := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
@@ -179,7 +179,7 @@ func TestIntegration_CheckoutRejectsSimulatedPayments(t *testing.T) {
 	if err != nil || len(orders) != 0 {
 		t.Fatalf("unsupported payments created orders: count=%d error=%v", len(orders), err)
 	}
-	items, _, err := testStore.GetCartItems(int(userID))
+	items, _, err := testStore.GetCartItems(t.Context(), int(userID))
 	if err != nil || len(items) != 1 {
 		t.Fatalf("cart changed after payment rejection: count=%d error=%v", len(items), err)
 	}

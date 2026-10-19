@@ -3,6 +3,7 @@
 package checkout
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -191,7 +192,7 @@ func (s *Service) prepareOnce(userID int, reservationKey string) error {
 		return mapStoreError(err)
 	}
 
-	items, subtotal, err := s.store.GetCartItemsForCheckout(userID, key)
+	items, subtotal, err := s.store.GetCartItemsForCheckout(context.Background(), userID, key)
 	if err != nil {
 		return err
 	}

@@ -753,7 +753,7 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	createTestUser(t, fmt.Sprintf("staff_%d", suffix), fmt.Sprintf("staff_%d@example.com", suffix), "staffpass123", "staff")
 
 	productID := createTestProduct(t, "Partner Queue Product", fmt.Sprintf("partner-queue-%d", suffix), 900, 5)
-	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(userID), int(productID), 1); err != nil {
 		t.Fatalf("add cart failed: %v", err)
 	}
 	orderID, err := testStore.PlaceOrderFromCart(int(userID), "456 Partner Lane")

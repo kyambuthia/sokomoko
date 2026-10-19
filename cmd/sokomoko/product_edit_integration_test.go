@@ -32,7 +32,7 @@ func TestIntegration_PartnerEditsOwnProductOnly(t *testing.T) {
 	}
 	// A customer holds two units in checkout; editing stock must not touch them.
 	buyer := createTestUser(t, fmt.Sprintf("buyer_%d", suffix), fmt.Sprintf("buyer_%d@example.com", suffix), "BuyerPass12345", "user")
-	if err := testStore.AddToCart(int(buyer), int(mine), 2); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyer), int(mine), 2); err != nil {
 		t.Fatal(err)
 	}
 	if err := testStore.ReserveCartForCheckout(int(buyer), "edit-test", time.Now().Add(15*time.Minute)); err != nil {

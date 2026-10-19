@@ -2,6 +2,7 @@
 package commerce
 
 import (
+	"context"
 	"errors"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -44,13 +45,13 @@ func New(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) GetCart(userID int) ([]CartItem, money.Cents, error) {
-	cart, err := s.Cart(userID)
+func (s *Service) GetCart(ctx context.Context, userID int) ([]CartItem, money.Cents, error) {
+	cart, err := s.Cart(ctx, userID)
 	return cart.Items, cart.Subtotal, err
 }
 
-func (s *Service) Cart(userID int) (Cart, error) {
-	items, subtotal, err := s.store.GetCartItems(userID)
+func (s *Service) Cart(ctx context.Context, userID int) (Cart, error) {
+	items, subtotal, err := s.store.GetCartItems(ctx, userID)
 	if err != nil {
 		return Cart{}, err
 	}
@@ -72,32 +73,32 @@ func (s *Service) Cart(userID int) (Cart, error) {
 }
 
 // ItemCount returns the total quantity in the user's cart.
-func (s *Service) ItemCount(userID int) (int, error) {
-	return s.store.CartItemCount(userID)
+func (s *Service) ItemCount(ctx context.Context, userID int) (int, error) {
+	return s.store.CartItemCount(ctx, userID)
 }
 
-func (s *Service) AddToCart(userID, productID, quantity int) error {
+func (s *Service) AddToCart(ctx context.Context, userID, productID, quantity int) error {
 	if productID <= 0 {
 		return ErrInvalidProduct
 	}
 	if quantity <= 0 || quantity > MaxLineQuantity {
 		return ErrInvalidQuantity
 	}
-	existing, err := s.store.CartQuantity(userID, productID)
+	existing, err := s.store.CartQuantity(ctx, userID, productID)
 	if err != nil {
 		return err
 	}
-	if err := s.checkStock(userID, productID, existing+quantity); err != nil {
+	if err := s.checkStock(ctx, userID, productID, existing+quantity); err != nil {
 		return err
 	}
 	if existing+quantity > MaxLineQuantity {
 		return ErrInvalidQuantity
 	}
-	return s.store.AddToCart(userID, productID, quantity)
+	return s.store.AddToCart(ctx, userID, productID, quantity)
 }
 
 // UpdateCartItem sets the quantity of a line; zero removes it.
-func (s *Service) UpdateCartItem(userID, productID, quantity int) error {
+func (s *Service) UpdateCartItem(ctx context.Context, userID, productID, quantity int) error {
 	if productID <= 0 {
 		return ErrInvalidProduct
 	}
@@ -105,22 +106,22 @@ func (s *Service) UpdateCartItem(userID, productID, quantity int) error {
 		return ErrInvalidQuantity
 	}
 	if quantity > 0 {
-		if err := s.checkStock(userID, productID, quantity); err != nil {
+		if err := s.checkStock(ctx, userID, productID, quantity); err != nil {
 			return err
 		}
 	}
-	return s.store.UpdateCartQuantity(userID, productID, quantity)
+	return s.store.UpdateCartQuantity(ctx, userID, productID, quantity)
 }
 
-func (s *Service) RemoveFromCart(userID, productID int) error {
+func (s *Service) RemoveFromCart(ctx context.Context, userID, productID int) error {
 	if productID <= 0 {
 		return ErrInvalidProduct
 	}
-	return s.store.RemoveFromCart(userID, productID)
+	return s.store.RemoveFromCart(ctx, userID, productID)
 }
 
-func (s *Service) checkStock(userID, productID, wanted int) error {
-	available, err := s.store.AvailableForUser(userID, productID)
+func (s *Service) checkStock(ctx context.Context, userID, productID, wanted int) error {
+	available, err := s.store.AvailableForUser(ctx, userID, productID)
 	if errors.Is(err, db.ErrProductNotFound) {
 		return ErrProductNotFound
 	}

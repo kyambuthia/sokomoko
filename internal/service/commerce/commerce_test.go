@@ -66,7 +66,7 @@ func TestAddToCart_InvalidProduct(t *testing.T) {
 	defer cleanup()
 
 	userID, _ := createUserAndProduct(t, store, 3)
-	err := svc.AddToCart(userID, 0, 1)
+	err := svc.AddToCart(t.Context(), userID, 0, 1)
 	if err != ErrInvalidProduct {
 		t.Fatalf("error = %v, want %v", err, ErrInvalidProduct)
 	}
@@ -77,7 +77,7 @@ func TestAddToCart_OutOfStock(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 0)
-	err := svc.AddToCart(userID, productID, 1)
+	err := svc.AddToCart(t.Context(), userID, productID, 1)
 	if err != ErrOutOfStock {
 		t.Fatalf("error = %v, want %v", err, ErrOutOfStock)
 	}
@@ -88,11 +88,11 @@ func TestAddToCart_InsufficientStock(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 2)
-	if err := svc.AddToCart(userID, productID, 2); err != nil {
+	if err := svc.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("initial add error = %v", err)
 	}
 
-	err := svc.AddToCart(userID, productID, 1)
+	err := svc.AddToCart(t.Context(), userID, productID, 1)
 	if err != ErrInsufficientStock {
 		t.Fatalf("error = %v, want %v", err, ErrInsufficientStock)
 	}
@@ -103,11 +103,11 @@ func TestUpdateCartItem_InsufficientStock(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 3)
-	if err := svc.AddToCart(userID, productID, 1); err != nil {
+	if err := svc.AddToCart(t.Context(), userID, productID, 1); err != nil {
 		t.Fatalf("initial add error = %v", err)
 	}
 
-	err := svc.UpdateCartItem(userID, productID, 5)
+	err := svc.UpdateCartItem(t.Context(), userID, productID, 5)
 	if err != ErrInsufficientStock {
 		t.Fatalf("error = %v, want %v", err, ErrInsufficientStock)
 	}
@@ -118,16 +118,16 @@ func TestAddToCart_OwnCheckoutHoldCountsAsAvailable(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 3)
-	if err := svc.AddToCart(userID, productID, 2); err != nil {
+	if err := svc.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add: %v", err)
 	}
 	if err := store.ReserveCartForCheckout(userID, "hold", time.Now().Add(time.Minute)); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
-	if err := svc.AddToCart(userID, productID, 1); err != nil {
+	if err := svc.AddToCart(t.Context(), userID, productID, 1); err != nil {
 		t.Fatalf("adding the last unit while holding the rest: %v", err)
 	}
-	cart, err := svc.Cart(userID)
+	cart, err := svc.Cart(t.Context(), userID)
 	if err != nil || cart.ItemCount != 3 || cart.Subtotal != 3000 {
 		t.Fatalf("cart = %+v, %v", cart, err)
 	}

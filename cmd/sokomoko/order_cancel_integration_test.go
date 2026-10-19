@@ -25,7 +25,7 @@ func TestIntegration_CustomerCancelsNewUnpaidOrder(t *testing.T) {
 	buyer := fmt.Sprintf("canceller_%d", suffix)
 	buyerID := createTestUser(t, buyer, buyer+"@example.com", "BuyerPass12345", "user")
 	productID := createTestProduct(t, "Cancel Mug", fmt.Sprintf("cancel-mug-%d", suffix), 1200, 5)
-	if err := testStore.AddToCart(int(buyerID), int(productID), 2); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 2); err != nil {
 		t.Fatal(err)
 	}
 	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "1 Cancel Street")
@@ -80,7 +80,7 @@ func TestIntegration_CustomerCannotCancelAcceptedOrder(t *testing.T) {
 	buyer := fmt.Sprintf("late_%d", suffix)
 	buyerID := createTestUser(t, buyer, buyer+"@example.com", "BuyerPass12345", "user")
 	productID := createTestProduct(t, "Late Mug", fmt.Sprintf("late-mug-%d", suffix), 1200, 5)
-	if err := testStore.AddToCart(int(buyerID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
 	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "2 Late Street")
@@ -115,7 +115,7 @@ func TestIntegration_APICancelReturnsUpdatedOrder(t *testing.T) {
 	buyer := fmt.Sprintf("apicancel_%d", suffix)
 	buyerID := createTestUser(t, buyer, buyer+"@example.com", "BuyerPass12345", "user")
 	productID := createTestProduct(t, "API Mug", fmt.Sprintf("api-mug-%d", suffix), 1200, 5)
-	if err := testStore.AddToCart(int(buyerID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
 	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "3 API Street")

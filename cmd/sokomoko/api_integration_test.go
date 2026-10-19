@@ -277,7 +277,7 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	customer := fmt.Sprintf("partner_customer_%d", suffix)
 	createTestUser(t, customer, customer+"@example.com", password, "user")
 	customerID := mustUserID(t, customer)
-	if err := testStore.AddToCart(int(customerID), int(productB), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(customerID), int(productB), 1); err != nil {
 		t.Fatalf("add customer cart: %v", err)
 	}
 	orderID, err := testStore.PlaceOrderFromCart(int(customerID), "Partner API Lane")

@@ -20,13 +20,13 @@ func TestIntegration_PageContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	userID := int(mustUserID(t, "page_buyer"))
-	if err := testStore.AddToCart(userID, int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), userID, int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testStore.PlaceOrderFromCart(userID, "Page Lane"); err != nil {
 		t.Fatal(err)
 	}
-	if err := testStore.AddToCart(userID, int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), userID, int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
 	buyer := loginAndGetSessionCookie(t, "", "page_buyer", "strongpass123")

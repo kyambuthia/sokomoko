@@ -102,7 +102,7 @@ func TestCheckoutWithPayment_InvalidMethod(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 3)
-	if err := store.AddToCart(userID, productID, 1); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 1); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -116,7 +116,7 @@ func TestPrepare_CreatesCheckoutReservations(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 3)
-	if err := store.AddToCart(userID, productID, 2); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestPreparedCheckout_ReturnsPersistedSnapshotState(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 4)
-	if err := store.AddToCart(userID, productID, 2); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -205,7 +205,7 @@ func TestSaveDraft_PersistsDeliveryAddressAndReusesOpenCheckout(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 4)
-	if err := store.AddToCart(userID, productID, 2); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -248,7 +248,7 @@ func TestCheckoutWithPayment_PersistsComputedTotal(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 5)
-	if err := store.AddToCart(userID, productID, 2); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -305,7 +305,7 @@ func TestCheckoutWithPayment_ConvertsActiveReservations(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 5)
-	if err := store.AddToCart(userID, productID, 2); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -346,7 +346,7 @@ func TestCheckoutWithPayment_IdempotentReplayReturnsExistingOrder(t *testing.T) 
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 5)
-	if err := store.AddToCart(userID, productID, 2); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -394,7 +394,7 @@ func TestCheckoutWithPayment_RepricesAfterCartChange(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 5)
-	if err := store.AddToCart(userID, productID, 2); err != nil {
+	if err := store.AddToCart(t.Context(), userID, productID, 2); err != nil {
 		t.Fatalf("add to cart error = %v", err)
 	}
 
@@ -403,7 +403,7 @@ func TestCheckoutWithPayment_RepricesAfterCartChange(t *testing.T) {
 		t.Fatalf("prepare error = %v", err)
 	}
 
-	if err := store.UpdateCartQuantity(userID, productID, 1); err != nil {
+	if err := store.UpdateCartQuantity(t.Context(), userID, productID, 1); err != nil {
 		t.Fatalf("update cart quantity error = %v", err)
 	}
 
@@ -452,7 +452,7 @@ func TestCheckoutWithPayment_CompletedTokenCannotBeReused(t *testing.T) {
 	defer cleanup()
 
 	userID, productID := createUserAndProduct(t, store, 5)
-	_ = store.AddToCart(userID, productID, 1)
+	_ = store.AddToCart(t.Context(), userID, productID, 1)
 	key := "single-use"
 	if _, _, err := svc.CheckoutWithPayment(userID, "Nairobi", "", key); err != nil {
 		t.Fatalf("first checkout: %v", err)

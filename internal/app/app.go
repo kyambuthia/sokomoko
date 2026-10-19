@@ -45,11 +45,11 @@ type AccountService interface {
 }
 
 type CommerceService interface {
-	AddToCart(userID, productID, quantity int) error
-	Cart(userID int) (commerceSvc.Cart, error)
-	ItemCount(userID int) (int, error)
-	RemoveFromCart(userID, productID int) error
-	UpdateCartItem(userID, productID, quantity int) error
+	AddToCart(ctx context.Context, userID, productID, quantity int) error
+	Cart(ctx context.Context, userID int) (commerceSvc.Cart, error)
+	ItemCount(ctx context.Context, userID int) (int, error)
+	RemoveFromCart(ctx context.Context, userID, productID int) error
+	UpdateCartItem(ctx context.Context, userID, productID, quantity int) error
 }
 
 type CheckoutService interface {
