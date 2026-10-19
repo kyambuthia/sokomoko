@@ -77,7 +77,7 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 		t.Fatalf("checkout redirect location=%q expected account success redirect", got)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestIntegration_CheckoutAppliesPricingBreakdownAndPaymentMethod(t *testing.
 		t.Fatalf("unexpected delivery notice %q", orders[0].DeliveryNotice)
 	}
 
-	payments, err := testStore.ListPaymentsByOrderID(orders[0].ID)
+	payments, err := testStore.ListPaymentsByOrderID(t.Context(), orders[0].ID)
 	if err != nil {
 		t.Fatalf("list payments failed: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 		t.Fatalf("second POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestIntegration_CheckoutIsIdempotentBySubmissionKey(t *testing.T) {
 		t.Fatalf("expected 1 order after replay, got %d", len(orders))
 	}
 
-	payments, err := testStore.ListPaymentsByOrderID(orders[0].ID)
+	payments, err := testStore.ListPaymentsByOrderID(t.Context(), orders[0].ID)
 	if err != nil {
 		t.Fatalf("list payments failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestIntegration_CheckoutRejectsSimulatedPayments(t *testing.T) {
 	userID := createTestUser(t, "no_fake_payments", "no_fake@example.com", "strongpass123", "user")
 	cookie := loginAndGetSessionCookie(t, "", "no_fake_payments", "strongpass123")
 	productID := createTestProduct(t, "Payment Safety Product", "payment-safety", 1400, 10)
-	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(userID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
 	key := checkoutIdempotencyKey(t, []*http.Cookie{cookie})
@@ -175,11 +175,11 @@ func TestIntegration_CheckoutRejectsSimulatedPayments(t *testing.T) {
 			t.Fatalf("%s: status=%d, expected payment validation error", method, resp.StatusCode)
 		}
 	}
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil || len(orders) != 0 {
 		t.Fatalf("unsupported payments created orders: count=%d error=%v", len(orders), err)
 	}
-	items, _, err := testStore.GetCartItems(int(userID))
+	items, _, err := testStore.GetCartItems(t.Context(), int(userID))
 	if err != nil || len(items) != 1 {
 		t.Fatalf("cart changed after payment rejection: count=%d error=%v", len(items), err)
 	}
@@ -222,7 +222,7 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 		t.Fatalf("GET /checkout A status=%d expected=%d", resp.StatusCode, http.StatusOK)
 	}
 
-	product, err := testStore.GetProductByID(int(productID))
+	product, err := testStore.GetProductByID(t.Context(), int(productID))
 	if err != nil {
 		t.Fatalf("get product failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestIntegration_CheckoutReservationBlocksCompetingCheckout(t *testing.T) {
 		t.Fatalf("expected stock reservation error in body, got %q", body)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userBID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userBID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestIntegration_CheckoutCanResumeFromQueryToken(t *testing.T) {
 		t.Fatalf("POST /checkout?checkout=token status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}

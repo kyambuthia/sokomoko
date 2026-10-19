@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -16,8 +17,8 @@ import (
 // SeedAdmin creates the first admin account from ADMIN_USERNAME, ADMIN_EMAIL and
 // ADMIN_PASSWORD when no admin exists. Without ADMIN_PASSWORD it does nothing;
 // the admin host's /setup flow is then used instead.
-func (s *Store) SeedAdmin() {
-	hasAdmin, err := s.HasAdminUser()
+func (s *Store) SeedAdmin(ctx context.Context) {
+	hasAdmin, err := s.HasAdminUser(ctx)
 	if err != nil {
 		log.Printf("seed: check for admin user: %v", err)
 		return
@@ -50,7 +51,7 @@ func (s *Store) SeedAdmin() {
 		email = "admin@sokomoko.local"
 	}
 
-	if _, err := s.CreateUser(User{Username: username, Email: email, PasswordHash: string(hash), Role: RoleAdmin}); err != nil {
+	if _, err := s.CreateUser(ctx, User{Username: username, Email: email, PasswordHash: string(hash), Role: RoleAdmin}); err != nil {
 		log.Printf("seed: create admin user: %v", err)
 		return
 	}
@@ -72,9 +73,9 @@ var demoPartners = []seedPartner{
 
 // SeedPartners creates the demo vendor records. Partners are catalog entities,
 // not login accounts, so no credentials are created.
-func (s *Store) SeedPartners() {
+func (s *Store) SeedPartners(ctx context.Context) {
 	for _, p := range demoPartners {
-		if _, err := s.UpsertPartner(Partner{Name: p.Name, Slug: p.Slug, ContactEmail: p.Email}); err != nil {
+		if _, err := s.UpsertPartner(ctx, Partner{Name: p.Name, Slug: p.Slug, ContactEmail: p.Email}); err != nil {
 			log.Printf("seed: partner %s: %v", p.Slug, err)
 		}
 	}
@@ -130,16 +131,16 @@ var demoCatalog = []seedProduct{
 
 // SeedInitialCatalog creates the demo catalog. Existing products are left
 // untouched so the seed can be re-run safely.
-func (s *Store) SeedInitialCatalog() {
+func (s *Store) SeedInitialCatalog(ctx context.Context) {
 	for _, item := range demoCatalog {
-		if err := s.seedProduct(item); err != nil {
+		if err := s.seedProduct(ctx, item); err != nil {
 			log.Printf("seed: product %s: %v", item.Slug, err)
 		}
 	}
 }
 
-func (s *Store) seedProduct(item seedProduct) error {
-	existing, err := s.GetProductBySlug(item.Slug)
+func (s *Store) seedProduct(ctx context.Context, item seedProduct) error {
+	existing, err := s.GetProductBySlug(ctx, item.Slug)
 	if err != nil {
 		return err
 	}
@@ -147,7 +148,7 @@ func (s *Store) seedProduct(item seedProduct) error {
 		return nil
 	}
 
-	category, err := s.GetCategoryBySlug(item.CategorySlug)
+	category, err := s.GetCategoryBySlug(ctx, item.CategorySlug)
 	if err != nil {
 		return err
 	}
@@ -155,14 +156,14 @@ func (s *Store) seedProduct(item seedProduct) error {
 	if category != nil {
 		categoryID = int64(category.ID)
 	} else {
-		categoryID, err = s.CreateCategory(Category{Name: item.Category, Slug: item.CategorySlug, Description: item.Category + " products"})
+		categoryID, err = s.CreateCategory(ctx, Category{Name: item.Category, Slug: item.CategorySlug, Description: item.Category + " products"})
 		if err != nil {
 			return fmt.Errorf("create category: %w", err)
 		}
 	}
 
 	var partnerID sql.NullInt64
-	partner, err := s.GetPartnerBySlug(item.Partner)
+	partner, err := s.GetPartnerBySlug(ctx, item.Partner)
 	if err != nil {
 		return err
 	}
@@ -170,7 +171,7 @@ func (s *Store) seedProduct(item seedProduct) error {
 		partnerID = sql.NullInt64{Int64: int64(partner.ID), Valid: true}
 	}
 
-	_, err = s.CreateProduct(Product{
+	_, err = s.CreateProduct(ctx, Product{
 		Name:          item.Name,
 		Slug:          item.Slug,
 		Description:   item.Description,

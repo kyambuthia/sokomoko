@@ -34,7 +34,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/cart/update` | POST | signed in | `CartUpdate` | Quantity 0 removes the line |
 | `/cart/remove` | POST | signed in | `CartRemove` | |
 | `/checkout` | GET, POST | signed in | `Checkout` | See below |
-| `/account` | GET | signed in | `Account` | Order history |
+| `/account` | GET | signed in | `Account` | Order history, newest first, 20 per page (`?page=`) |
 | `/account/orders/<id>/cancel` | POST | signed in | `AccountOrderCancel` | Own order, while `pending`, partner status `new`, and unpaid |
 | `/account/password` | GET, POST | signed in | `auth.PasswordChange` | Needs the current password; revokes every session and issues a new one |
 | `/payments/order/<id>` | GET, POST | signed in | `PaymentPage` | Pay or retry an online payment for an own order |
@@ -72,7 +72,7 @@ address as a draft and re-renders the form with `422`.
 | `/reports` | GET | admin, staff | `AdminReports` |
 | `/deliveries` | GET | admin, staff | `AdminDeliveries` (delivery board) |
 | `/categories` | GET, POST | admin, staff | `AdminCategories` (list, create, rename with `action=update`, delete); `?edit=<id>` opens the edit form |
-| `/team` | GET, POST | admin | `AdminTeam` (POST deactivates a user, or reactivates one with `action=reactivate`) |
+| `/team` | GET, POST | admin | `AdminTeam` (GET lists 50 accounts per page, `?q=` searches username or email; POST deactivates a user, or reactivates one with `action=reactivate`) |
 | `/partners` | GET, POST | admin | `AdminPartners` (create, rename with `action=update`, suspend or reactivate, create partner logins); `?edit=<id>` opens the edit form |
 | `/payments` | GET, POST | admin | `AdminPayments` (pricing, providers, refund queue: `refund`, `refund_refresh`, `refund_resolve`) |
 | `/password` | GET, POST | admin, staff | `auth.PasswordChange` |
@@ -140,7 +140,7 @@ there are no API keys or bearer tokens.
 | `GET /admin/orders` | admin, staff | All orders |
 | `PATCH /admin/orders/<id>` | admin | Set `{status, partner_status, delivery_status, delivery_notice}` |
 | `GET /admin/reports` | admin, staff | Sales report |
-| `GET /admin/team` | admin | Team members |
+| `GET /admin/team` | admin | Team members: `{items, page, limit, total}`; `q` searches username or email |
 | `DELETE /admin/team/<id>` | admin | Deactivate a user |
 | `GET /admin/audit` | admin | Audit log |
 | `GET /partner/dashboard` | admin, staff, partner | Dashboard data |

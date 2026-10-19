@@ -31,8 +31,8 @@ func scanCategory(row interface{ Scan(...any) error }) (*Category, error) {
 	return category, nil
 }
 
-func (s *Store) CreateCategory(category Category) (int64, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CreateCategory(ctx context.Context, category Category) (int64, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var id int64
@@ -48,16 +48,16 @@ func (s *Store) CreateCategory(category Category) (int64, error) {
 	return id, wrapDBError(err)
 }
 
-func (s *Store) GetCategoryByID(id int) (*Category, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetCategoryByID(ctx context.Context, id int) (*Category, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanCategory(s.DB.QueryRowContext(ctx,
 		"SELECT "+categoryColumns+" FROM categories WHERE id = $1 AND deleted_at IS NULL", id,
 	))
 }
 
-func (s *Store) GetCategoryBySlug(slug string) (*Category, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetCategoryBySlug(ctx context.Context, slug string) (*Category, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return scanCategory(s.DB.QueryRowContext(ctx,
 		"SELECT "+categoryColumns+" FROM categories WHERE slug = $1 AND deleted_at IS NULL",
@@ -65,8 +65,8 @@ func (s *Store) GetCategoryBySlug(slug string) (*Category, error) {
 	))
 }
 
-func (s *Store) UpdateCategory(category Category) error {
-	ctx, cancel := s.ctx()
+func (s *Store) UpdateCategory(ctx context.Context, category Category) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		`UPDATE categories SET name = $1, slug = $2, description = $3, parent_id = $4
@@ -80,8 +80,8 @@ func (s *Store) UpdateCategory(category Category) error {
 	return wrapDBError(err)
 }
 
-func (s *Store) DeleteCategory(id int) error {
-	ctx, cancel := s.ctx()
+func (s *Store) DeleteCategory(ctx context.Context, id int) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx, "UPDATE categories SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id)
 	return err
@@ -89,8 +89,8 @@ func (s *Store) DeleteCategory(id int) error {
 
 // CountProductsByCategory returns the number of active products in each
 // category, keyed by category id.
-func (s *Store) CountProductsByCategory() (map[int]int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CountProductsByCategory(ctx context.Context) (map[int]int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx,
 		"SELECT category_id, count(*) FROM products WHERE deleted_at IS NULL AND category_id IS NOT NULL GROUP BY category_id",
@@ -110,8 +110,8 @@ func (s *Store) CountProductsByCategory() (map[int]int, error) {
 	return counts, rows.Err()
 }
 
-func (s *Store) GetAllCategories() ([]Category, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetAllCategories(ctx context.Context) ([]Category, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
@@ -181,8 +181,8 @@ func scanProduct(row interface{ Scan(...any) error }) (*Product, error) {
 
 // CreateProduct inserts a product, its opening stock in the default warehouse,
 // and any images in one transaction.
-func (s *Store) CreateProduct(product Product) (int64, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CreateProduct(ctx context.Context, product Product) (int64, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	if product.Price < 0 {
@@ -248,22 +248,22 @@ func (s *Store) CreateProduct(product Product) (int64, error) {
 	return id, nil
 }
 
-func (s *Store) GetProductByID(id int) (*Product, error) {
-	return s.getProduct("p.id = $1", id)
+func (s *Store) GetProductByID(ctx context.Context, id int) (*Product, error) {
+	return s.getProduct(ctx, "p.id = $1", id)
 }
 
-func (s *Store) GetProductBySlug(slug string) (*Product, error) {
-	return s.getProduct("p.slug = $1", strings.TrimSpace(slug))
+func (s *Store) GetProductBySlug(ctx context.Context, slug string) (*Product, error) {
+	return s.getProduct(ctx, "p.slug = $1", strings.TrimSpace(slug))
 }
 
 // GetPublicProductBySlug is GetProductBySlug restricted to products customers
 // may see: not deleted and not from a suspended partner.
-func (s *Store) GetPublicProductBySlug(slug string) (*Product, error) {
-	return s.getProduct("p.slug = $1 AND "+activePartnerSQL, strings.TrimSpace(slug))
+func (s *Store) GetPublicProductBySlug(ctx context.Context, slug string) (*Product, error) {
+	return s.getProduct(ctx, "p.slug = $1 AND "+activePartnerSQL, strings.TrimSpace(slug))
 }
 
-func (s *Store) getProduct(predicate string, arg any) (*Product, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) getProduct(ctx context.Context, predicate string, arg any) (*Product, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	product, err := scanProduct(s.DB.QueryRowContext(ctx,
@@ -284,8 +284,8 @@ func (s *Store) getProduct(predicate string, arg any) (*Product, error) {
 // UpdateProduct updates catalog fields and sets the available quantity in the
 // default warehouse to product.StockQuantity, keeping reserved and allocated
 // stock untouched.
-func (s *Store) UpdateProduct(product Product) error {
-	ctx, cancel := s.ctx()
+func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	if product.StockQuantity < 0 {
@@ -341,8 +341,8 @@ func (s *Store) UpdateProduct(product Product) error {
 }
 
 // DeleteProduct soft-deletes a product and removes it from carts.
-func (s *Store) DeleteProduct(id int) error {
-	ctx, cancel := s.ctx()
+func (s *Store) DeleteProduct(ctx context.Context, id int) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -368,14 +368,10 @@ type ProductFilter struct {
 // ListProducts returns active products matching the filter. A text query uses
 // the full-text index and falls back to substring matching so partial words
 // still match.
-func (s *Store) ListProducts(filter ProductFilter) ([]Product, error) {
-	return s.ListProductsContext(context.Background(), filter)
-}
-
-// ListProductsContext bounds the query by both the request deadline and the
+// ListProducts bounds the query by both the request deadline and the
 // store query timeout.
-func (s *Store) ListProductsContext(parent context.Context, filter ProductFilter) ([]Product, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) ListProducts(ctx context.Context, filter ProductFilter) ([]Product, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	where, args, orderBy := productFilterSQL(filter)
 	addArg := func(value any) string {
@@ -456,8 +452,8 @@ func productFilterSQL(filter ProductFilter) (string, []any, string) {
 }
 
 // CountFilteredProducts counts all matches without materializing them.
-func (s *Store) CountFilteredProductsContext(parent context.Context, filter ProductFilter) (int, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) CountFilteredProducts(ctx context.Context, filter ProductFilter) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	where, args, _ := productFilterSQL(filter)
 	var count int
@@ -467,60 +463,33 @@ func (s *Store) CountFilteredProductsContext(parent context.Context, filter Prod
 }
 
 // GetAllProducts returns every active product ordered by name.
-func (s *Store) GetAllProducts() ([]Product, error) {
-	return s.ListProducts(ProductFilter{})
+func (s *Store) GetAllProducts(ctx context.Context) ([]Product, error) {
+	return s.ListProducts(ctx, ProductFilter{})
 }
 
 // SearchProducts matches products by name or description.
-func (s *Store) SearchProducts(query string) ([]Product, error) {
+func (s *Store) SearchProducts(ctx context.Context, query string) ([]Product, error) {
 	if strings.TrimSpace(query) == "" {
 		return []Product{}, nil
 	}
-	return s.ListProducts(ProductFilter{Query: query})
+	return s.ListProducts(ctx, ProductFilter{Query: query})
 }
 
 // CountPublicProducts counts products customers may see.
-func (s *Store) CountPublicProducts() (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CountPublicProducts(ctx context.Context) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var count int
 	err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM products p WHERE p.deleted_at IS NULL AND "+activePartnerSQL).Scan(&count)
 	return count, err
 }
 
-func (s *Store) CountProducts() (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CountProducts(ctx context.Context) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var count int
 	err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM products WHERE deleted_at IS NULL").Scan(&count)
 	return count, err
-}
-
-func (s *Store) CreateProductImage(img ProductImage) (int64, error) {
-	ctx, cancel := s.ctx()
-	defer cancel()
-	var id int64
-	err := s.DB.QueryRowContext(ctx,
-		"INSERT INTO product_images (product_id, url, alt_text, position) VALUES ($1, $2, $3, $4) RETURNING id",
-		img.ProductID, strings.TrimSpace(img.URL), strings.TrimSpace(img.AltText), img.DisplayOrder,
-	).Scan(&id)
-	return id, wrapDBError(err)
-}
-
-func (s *Store) GetProductImages(productID int) ([]ProductImage, error) {
-	ctx, cancel := s.ctx()
-	defer cancel()
-	images, err := s.getProductImagesByProductIDs(ctx, []int{productID})
-	if err != nil {
-		return nil, err
-	}
-	return images[productID], nil
-}
-
-func (s *Store) GetProductImagesByProductIDs(productIDs []int) (map[int][]ProductImage, error) {
-	ctx, cancel := s.ctx()
-	defer cancel()
-	return s.getProductImagesByProductIDs(ctx, productIDs)
 }
 
 func (s *Store) getProductImagesByProductIDs(ctx context.Context, productIDs []int) (map[int][]ProductImage, error) {
@@ -549,11 +518,4 @@ func (s *Store) getProductImagesByProductIDs(ctx context.Context, productIDs []i
 		imagesByProduct[img.ProductID] = append(imagesByProduct[img.ProductID], img)
 	}
 	return imagesByProduct, rows.Err()
-}
-
-func (s *Store) DeleteProductImage(id int) error {
-	ctx, cancel := s.ctx()
-	defer cancel()
-	_, err := s.DB.ExecContext(ctx, "DELETE FROM product_images WHERE id = $1", id)
-	return err
 }

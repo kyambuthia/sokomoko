@@ -161,8 +161,8 @@ func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) StoreSettings() (*StoreSettings, error) {
-	settings, err := s.store.GetStoreSettings()
+func (s *Service) StoreSettings(ctx context.Context) (*StoreSettings, error) {
+	settings, err := s.store.GetStoreSettings(ctx)
 	if err != nil || settings == nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func CanEditStoreSettings(actor *Actor) bool {
 	return actor != nil && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff)
 }
 
-func (s *Service) SaveStoreSettings(actor *Actor, input StoreSettingsInput) (StoreSettings, error) {
+func (s *Service) SaveStoreSettings(ctx context.Context, actor *Actor, input StoreSettingsInput) (StoreSettings, error) {
 	if !CanEditStoreSettings(actor) {
 		return StoreSettings{}, ErrForbiddenSettingsUpdate
 	}
@@ -195,7 +195,7 @@ func (s *Service) SaveStoreSettings(actor *Actor, input StoreSettingsInput) (Sto
 	if addr, err := mail.ParseAddress(settings.ContactEmail); err != nil || addr.Address != settings.ContactEmail {
 		return settings, ErrInvalidContactEmail
 	}
-	err := s.store.UpsertStoreSettings(db.StoreSettings{
+	err := s.store.UpsertStoreSettings(ctx, db.StoreSettings{
 		StoreName:    settings.StoreName,
 		StoreSlug:    settings.StoreSlug,
 		Description:  settings.Description,
@@ -204,32 +204,24 @@ func (s *Service) SaveStoreSettings(actor *Actor, input StoreSettingsInput) (Sto
 	return settings, err
 }
 
-func (s *Service) Dashboard() (DashboardData, error) {
-	return s.DashboardForActor(nil)
-}
-
-func (s *Service) DashboardForActor(actor *Actor) (DashboardData, error) {
-	return s.DashboardForActorContext(context.Background(), actor)
-}
-
-func (s *Service) DashboardForActorContext(ctx context.Context, actor *Actor) (DashboardData, error) {
-	settings, err := s.requireStoreSettings()
+func (s *Service) DashboardForActor(ctx context.Context, actor *Actor) (DashboardData, error) {
+	settings, err := s.requireStoreSettings(ctx)
 	if err != nil {
 		return DashboardData{}, err
 	}
 
-	partnerID, err := s.partnerIDForActor(actor)
+	partnerID, err := s.partnerIDForActor(ctx, actor)
 	if err != nil {
 		return DashboardData{}, err
 	}
 	if actorIsPartner(actor) && partnerID == 0 {
 		return DashboardData{Settings: *settings}, nil
 	}
-	count, err := s.store.CountFilteredProductsContext(ctx, db.ProductFilter{PartnerID: partnerID})
+	count, err := s.store.CountFilteredProducts(ctx, db.ProductFilter{PartnerID: partnerID})
 	if err != nil {
 		return DashboardData{}, err
 	}
-	summary, err := s.store.FulfillmentSummaryContext(ctx, partnerID)
+	summary, err := s.store.FulfillmentSummary(ctx, partnerID)
 	if err != nil {
 		return DashboardData{}, err
 	}
@@ -240,34 +232,30 @@ func (s *Service) DashboardForActorContext(ctx context.Context, actor *Actor) (D
 	}, nil
 }
 
-func (s *Service) partnerIDForActor(actor *Actor) (int, error) {
+func (s *Service) partnerIDForActor(ctx context.Context, actor *Actor) (int, error) {
 	if !actorIsPartner(actor) {
 		return 0, nil
 	}
-	return s.store.PartnerIDForUser(actor.ID)
+	return s.store.PartnerIDForUser(ctx, actor.ID)
 }
 
-func (s *Service) Products() (ProductsData, error) {
-	return s.ProductsForActor(nil)
-}
-
-func (s *Service) ProductsForActor(actor *Actor) (ProductsData, error) {
-	data, _, err := s.productsForActorContext(context.Background(), actor, 0, 0)
+func (s *Service) ProductsForActor(ctx context.Context, actor *Actor) (ProductsData, error) {
+	data, _, err := s.productsForActor(ctx, actor, 0, 0)
 	return data, err
 }
 
-func (s *Service) ProductsPageForActorContext(ctx context.Context, actor *Actor, page, limit int) (ProductsData, int, error) {
-	return s.productsForActorContext(ctx, actor, limit, (page-1)*limit)
+func (s *Service) ProductsPageForActor(ctx context.Context, actor *Actor, page, limit int) (ProductsData, int, error) {
+	return s.productsForActor(ctx, actor, limit, (page-1)*limit)
 }
 
-func (s *Service) productsForActorContext(ctx context.Context, actor *Actor, limit, offset int) (ProductsData, int, error) {
-	settings, err := s.requireStoreSettings()
+func (s *Service) productsForActor(ctx context.Context, actor *Actor, limit, offset int) (ProductsData, int, error) {
+	settings, err := s.requireStoreSettings(ctx)
 	if err != nil {
 		return ProductsData{}, 0, err
 	}
 	filter := db.ProductFilter{Limit: limit, Offset: offset}
 	if actorIsPartner(actor) {
-		partnerID, err := s.partnerIDForActor(actor)
+		partnerID, err := s.partnerIDForActor(ctx, actor)
 		if err != nil {
 			return ProductsData{}, 0, err
 		}
@@ -276,19 +264,19 @@ func (s *Service) productsForActorContext(ctx context.Context, actor *Actor, lim
 		}
 		filter.PartnerID = partnerID
 	}
-	total, err := s.store.CountFilteredProductsContext(ctx, filter)
+	total, err := s.store.CountFilteredProducts(ctx, filter)
 	if err != nil {
 		return ProductsData{}, 0, err
 	}
-	products, err := s.store.ListProductsContext(ctx, filter)
+	products, err := s.store.ListProducts(ctx, filter)
 	if err != nil {
 		return ProductsData{}, 0, err
 	}
-	categories, err := s.store.GetAllCategories()
+	categories, err := s.store.GetAllCategories(ctx)
 	if err != nil {
 		return ProductsData{}, 0, err
 	}
-	partners, err := s.store.ListPartners()
+	partners, err := s.store.ListPartners(ctx)
 	if err != nil {
 		return ProductsData{}, 0, err
 	}
@@ -311,23 +299,23 @@ func (s *Service) productsForActorContext(ctx context.Context, actor *Actor, lim
 	return data, total, nil
 }
 
-func (s *Service) OrdersPageForActorContext(ctx context.Context, actor *Actor, filter string, page, limit int) (OrdersData, int, error) {
+func (s *Service) OrdersPageForActor(ctx context.Context, actor *Actor, filter string, page, limit int) (OrdersData, int, error) {
 	clean := strings.TrimSpace(filter)
 	if clean == "" {
 		clean = "all"
 	}
-	partnerID, err := s.partnerIDForActor(actor)
+	partnerID, err := s.partnerIDForActor(ctx, actor)
 	if err != nil {
 		return OrdersData{}, 0, err
 	}
 	if actorIsPartner(actor) && partnerID == 0 {
 		return OrdersData{Filter: clean}, 0, nil
 	}
-	orders, total, err := s.store.ListFulfillmentOrdersPageContext(ctx, partnerID, clean, limit, (page-1)*limit)
+	orders, total, err := s.store.ListFulfillmentOrdersPage(ctx, partnerID, clean, limit, (page-1)*limit)
 	if err != nil {
 		return OrdersData{}, 0, err
 	}
-	summary, err := s.store.FulfillmentSummaryContext(ctx, partnerID)
+	summary, err := s.store.FulfillmentSummary(ctx, partnerID)
 	if err != nil {
 		return OrdersData{}, 0, err
 	}
@@ -338,12 +326,8 @@ func (s *Service) OrdersPageForActorContext(ctx context.Context, actor *Actor, f
 	return OrdersData{Filter: clean, Orders: mapped, Summary: Summary(summary)}, total, nil
 }
 
-func (s *Service) CreateProduct(input CreateProductInput) error {
-	return s.CreateProductForActor(nil, input)
-}
-
-func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) error {
-	if _, err := s.requireStoreSettings(); err != nil {
+func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input CreateProductInput) error {
+	if _, err := s.requireStoreSettings(ctx); err != nil {
 		return err
 	}
 
@@ -377,7 +361,7 @@ func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) 
 	}
 
 	if actorIsPartner(actor) {
-		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		partnerID, err := s.store.PartnerIDForUser(ctx, actor.ID)
 		if err != nil {
 			return err
 		}
@@ -395,7 +379,7 @@ func (s *Service) CreateProductForActor(actor *Actor, input CreateProductInput) 
 		if attempt > 0 {
 			product.Slug = fmt.Sprintf("%s-%d-%d", slugBase, time.Now().Unix(), attempt)
 		}
-		_, err := s.store.CreateProduct(product)
+		_, err := s.store.CreateProduct(ctx, product)
 		if err == nil {
 			return nil
 		}
@@ -417,7 +401,7 @@ type ProductInput struct {
 
 // productForActor loads a product the actor may edit. A partner user may only
 // edit their own partner's products; anything else reads as not found.
-func (s *Service) productForActor(actor *Actor, idRaw string) (*db.Product, error) {
+func (s *Service) productForActor(ctx context.Context, actor *Actor, idRaw string) (*db.Product, error) {
 	if actor == nil || (actor.Role != db.RoleAdmin && actor.Role != db.RoleStaff && actor.Role != db.RolePartner) {
 		return nil, ErrProductNotFound
 	}
@@ -425,7 +409,7 @@ func (s *Service) productForActor(actor *Actor, idRaw string) (*db.Product, erro
 	if err != nil || id <= 0 {
 		return nil, ErrProductNotFound
 	}
-	product, err := s.store.GetProductByID(id)
+	product, err := s.store.GetProductByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +417,7 @@ func (s *Service) productForActor(actor *Actor, idRaw string) (*db.Product, erro
 		return nil, ErrProductNotFound
 	}
 	if actorIsPartner(actor) {
-		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		partnerID, err := s.store.PartnerIDForUser(ctx, actor.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -445,8 +429,8 @@ func (s *Service) productForActor(actor *Actor, idRaw string) (*db.Product, erro
 }
 
 // ProductForEdit returns the current values of a product for its edit form.
-func (s *Service) ProductForEdit(actor *Actor, idRaw string) (int, ProductInput, error) {
-	product, err := s.productForActor(actor, idRaw)
+func (s *Service) ProductForEdit(ctx context.Context, actor *Actor, idRaw string) (int, ProductInput, error) {
+	product, err := s.productForActor(ctx, actor, idRaw)
 	if err != nil {
 		return 0, ProductInput{}, err
 	}
@@ -464,8 +448,8 @@ func (s *Service) ProductForEdit(actor *Actor, idRaw string) (int, ProductInput,
 
 // UpdateProductForActor changes a product's details and sets its available
 // stock. The slug stays the same so product links keep working.
-func (s *Service) UpdateProductForActor(actor *Actor, idRaw string, input ProductInput) error {
-	product, err := s.productForActor(actor, idRaw)
+func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw string, input ProductInput) error {
+	product, err := s.productForActor(ctx, actor, idRaw)
 	if err != nil {
 		return err
 	}
@@ -490,38 +474,34 @@ func (s *Service) UpdateProductForActor(actor *Actor, idRaw string, input Produc
 	before := fmt.Sprintf("price=%s stock=%d", product.Price, product.StockQuantity)
 	product.Name, product.Description, product.Price, product.StockQuantity = name, description, price, stock
 	product.CategoryID = parseOptionalID(input.CategoryID)
-	if err := s.store.UpdateProduct(*product); err != nil {
+	if err := s.store.UpdateProduct(ctx, *product); err != nil {
 		if errors.Is(err, db.ErrProductNotFound) {
 			return ErrProductNotFound
 		}
 		return fmt.Errorf("update product: %w", err)
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "product.update", "product", product.ID,
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "product.update", "product", product.ID,
 		fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock))
 	return nil
 }
 
-func (s *Service) Orders(filter string) (OrdersData, error) {
-	return s.OrdersForActor(nil, filter)
-}
-
-func (s *Service) OrdersForActor(actor *Actor, filter string) (OrdersData, error) {
+func (s *Service) OrdersForActor(ctx context.Context, actor *Actor, filter string) (OrdersData, error) {
 	cleanFilter := strings.TrimSpace(filter)
 	if cleanFilter == "" {
 		cleanFilter = "all"
 	}
 	var orders []db.Order
 	if actorIsPartner(actor) {
-		partnerID, err := s.store.PartnerIDForUser(actor.ID)
+		partnerID, err := s.store.PartnerIDForUser(ctx, actor.ID)
 		if err != nil {
 			return OrdersData{}, err
 		}
-		if orders, err = s.store.ListOrdersForPartner(partnerID); err != nil {
+		if orders, err = s.store.ListOrdersForPartner(ctx, partnerID); err != nil {
 			return OrdersData{}, err
 		}
 	} else {
 		var err error
-		if orders, err = s.store.ListOrdersForFulfillment(); err != nil {
+		if orders, err = s.store.ListOrdersForFulfillment(ctx); err != nil {
 			return OrdersData{}, err
 		}
 	}
@@ -538,14 +518,14 @@ func (s *Service) OrdersForActor(actor *Actor, filter string) (OrdersData, error
 		}
 		return OrdersData{Filter: cleanFilter, Orders: filtered, Summary: summaryForOrders(mapped)}, nil
 	}
-	summary, err := s.store.GetPartnerOrderSummary()
+	summary, err := s.store.GetPartnerOrderSummary(ctx)
 	if err != nil {
 		return OrdersData{}, err
 	}
 	return OrdersData{Filter: cleanFilter, Orders: filtered, Summary: Summary(summary)}, nil
 }
 
-func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
+func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrderInput) error {
 	if actor == nil || (actor.Role != db.RoleAdmin && actor.Role != db.RoleStaff && actor.Role != db.RolePartner) {
 		return ErrForbiddenOrderUpdate
 	}
@@ -553,7 +533,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 	if err != nil || orderID <= 0 {
 		return ErrInvalidOrderID
 	}
-	if actorIsPartner(actor) && !s.orderBelongsToPartner(orderID, actor.ID) {
+	if actorIsPartner(actor) && !s.orderBelongsToPartner(ctx, orderID, actor.ID) {
 		return ErrForbiddenOrderUpdate
 	}
 
@@ -564,7 +544,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 		notice = string(runes[:maxNoticeLength])
 	}
 
-	if err := s.store.UpdateOrderFulfillment(orderID, partnerStatus, deliveryStatus, notice); err != nil {
+	if err := s.store.UpdateOrderFulfillment(ctx, orderID, partnerStatus, deliveryStatus, notice); err != nil {
 		switch {
 		case errors.Is(err, db.ErrOrderNotFound):
 			return ErrOrderNotFound
@@ -578,13 +558,13 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 			return err
 		}
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "partner.fulfillment.update", "order", orderID,
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.fulfillment.update", "order", orderID,
 		"partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }
 
-func (s *Service) requireStoreSettings() (*StoreSettings, error) {
-	settings, err := s.StoreSettings()
+func (s *Service) requireStoreSettings(ctx context.Context) (*StoreSettings, error) {
+	settings, err := s.StoreSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -662,11 +642,11 @@ func summaryForOrders(orders []Order) Summary {
 // orderBelongsToPartner reports whether the partner user may update orderID.
 // Only wholly owned orders can be updated through a partner account; orders
 // that mix partners remain an admin/staff operation.
-func (s *Service) orderBelongsToPartner(orderID, userID int) bool {
-	partnerID, err := s.store.PartnerIDForUser(userID)
+func (s *Service) orderBelongsToPartner(ctx context.Context, orderID, userID int) bool {
+	partnerID, err := s.store.PartnerIDForUser(ctx, userID)
 	if err != nil || partnerID == 0 {
 		return false
 	}
-	owned, err := s.store.PartnerOwnsOrder(partnerID, orderID)
+	owned, err := s.store.PartnerOwnsOrder(ctx, partnerID, orderID)
 	return err == nil && owned
 }

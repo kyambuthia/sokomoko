@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -94,7 +95,7 @@ func CartPage(a *app.App) http.HandlerFunc {
 			return
 		}
 		userID, _ := requestUserID(r)
-		cart, err := a.Commerce.Cart(userID)
+		cart, err := a.Commerce.Cart(r.Context(), userID)
 		if err != nil {
 			log.Printf("cart page: %v", err)
 			serverError(w, r)
@@ -113,7 +114,7 @@ func CartPage(a *app.App) http.HandlerFunc {
 	}
 }
 
-type cartMutation func(userID, productID, quantity int) error
+type cartMutation func(ctx context.Context, userID, productID, quantity int) error
 
 // cartAction handles the add/update/remove form posts. Browsers get a redirect
 // with a flash message; JSON clients get the updated cart.
@@ -141,7 +142,7 @@ func cartAction(a *app.App, mutate cartMutation, successMessage string, quantity
 			return
 		}
 
-		if err := mutate(userID, productID, quantity); err != nil {
+		if err := mutate(r.Context(), userID, productID, quantity); err != nil {
 			status, message := cartErrorMessage(err)
 			if status == http.StatusInternalServerError {
 				log.Printf("cart mutation: %v", err)
@@ -151,7 +152,7 @@ func cartAction(a *app.App, mutate cartMutation, successMessage string, quantity
 		}
 
 		if auth.WantsJSON(r) {
-			cart, err := a.Commerce.Cart(userID)
+			cart, err := a.Commerce.Cart(r.Context(), userID)
 			if err != nil {
 				app.JSON(w, http.StatusInternalServerError, cartJSON{Error: "cart unavailable"})
 				return
@@ -168,7 +169,7 @@ func cartAction(a *app.App, mutate cartMutation, successMessage string, quantity
 func respondCartError(a *app.App, w http.ResponseWriter, r *http.Request, userID, status int, message string) {
 	if auth.WantsJSON(r) {
 		body := cartJSON{Error: message, Lines: []cartLineDTO{}}
-		if cart, err := a.Commerce.Cart(userID); err == nil {
+		if cart, err := a.Commerce.Cart(r.Context(), userID); err == nil {
 			body = newCartJSON(cart)
 			body.OK = false
 			body.Error = message
@@ -205,8 +206,8 @@ func CartUpdate(a *app.App) http.HandlerFunc {
 }
 
 func CartRemove(a *app.App) http.HandlerFunc {
-	return cartAction(a, func(userID, productID, _ int) error {
-		return a.Commerce.RemoveFromCart(userID, productID)
+	return cartAction(a, func(ctx context.Context, userID, productID, _ int) error {
+		return a.Commerce.RemoveFromCart(ctx, userID, productID)
 	}, "Item removed", false)
 }
 
@@ -222,8 +223,8 @@ func checkoutPaymentOptions(paymentOptions []paymentsvc.MethodOption) []PaymentM
 }
 
 // findMethod returns the checkout option for method, if offered.
-func findMethod(a *app.App, method string) (paymentsvc.MethodOption, bool) {
-	for _, option := range a.Payment.MethodOptions() {
+func findMethod(ctx context.Context, a *app.App, method string) (paymentsvc.MethodOption, bool) {
+	for _, option := range a.Payment.MethodOptions(ctx) {
 		if option.Value == method {
 			return option, true
 		}
@@ -236,7 +237,7 @@ func checkoutPage(a *app.App, r *http.Request, state checkoutsvc.PageState, paym
 	if selected == "" {
 		selected = state.PaymentMethod
 	}
-	options := checkoutPaymentOptions(a.Payment.MethodOptions())
+	options := checkoutPaymentOptions(a.Payment.MethodOptions(r.Context()))
 	if !hasOption(options, selected) && len(options) > 0 {
 		selected = options[0].Value
 	}
@@ -310,7 +311,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		switch r.Method {
 		case http.MethodGet, http.MethodHead:
-			state, err := a.Checkout.PreparedCheckout(userID, r.URL.Query().Get("checkout"))
+			state, err := a.Checkout.PreparedCheckout(r.Context(), userID, r.URL.Query().Get("checkout"))
 			data := checkoutPage(a, r, state, paymentMethod)
 			if err != nil {
 				message, known := checkoutErrorMessage(err)
@@ -338,14 +339,14 @@ func Checkout(a *app.App) http.HandlerFunc {
 
 		phone := strings.TrimSpace(r.FormValue("phone"))
 		var err error
-		if option, ok := findMethod(a, paymentMethod); ok && option.NeedsPhone {
+		if option, ok := findMethod(r.Context(), a, paymentMethod); ok && option.NeedsPhone {
 			if _, phoneErr := payments.NormalizePhone(phone); phoneErr != nil {
 				err = errInvalidPhone
 			}
 		}
 		var orderID int64
 		if err == nil {
-			orderID, _, err = a.Checkout.CheckoutWithPayment(userID, address, paymentMethod, key)
+			orderID, _, err = a.Checkout.CheckoutWithPayment(r.Context(), userID, address, paymentMethod, key)
 		}
 		if err != nil {
 			message, known := checkoutErrorMessage(err)
@@ -353,7 +354,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 				log.Printf("checkout place order: %v", err)
 				message = "We could not place your order. Please try again."
 			}
-			state, stateErr := a.Checkout.SaveDraft(userID, key, address, paymentMethod)
+			state, stateErr := a.Checkout.SaveDraft(r.Context(), userID, key, address, paymentMethod)
 			if stateErr != nil {
 				if _, known := checkoutErrorMessage(stateErr); !known {
 					log.Printf("checkout save draft: %v", stateErr)

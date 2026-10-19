@@ -58,24 +58,24 @@ func New(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) AllProducts() ([]Product, error) {
-	return s.Browse(Filter{})
+func (s *Service) AllProducts(ctx context.Context) ([]Product, error) {
+	return s.Browse(ctx, Filter{})
 }
 
 // Page returns one page of the catalog in name order and the total number of
 // active products. page starts at 1.
-func (s *Service) Page(page, limit int) ([]Product, int, error) {
+func (s *Service) Page(ctx context.Context, page, limit int) ([]Product, int, error) {
 	if page < 1 {
 		page = 1
 	}
 	if limit < 1 {
 		limit = 1
 	}
-	total, err := s.store.CountPublicProducts()
+	total, err := s.store.CountPublicProducts(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
-	products, err := s.Browse(Filter{Limit: limit, Offset: (page - 1) * limit})
+	products, err := s.Browse(ctx, Filter{Limit: limit, Offset: (page - 1) * limit})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -83,13 +83,13 @@ func (s *Service) Page(page, limit int) ([]Product, int, error) {
 }
 
 // Browse lists products, optionally filtered by a search query and category.
-func (s *Service) Browse(filter Filter) ([]Product, error) {
+func (s *Service) Browse(ctx context.Context, filter Filter) ([]Product, error) {
 	query := normalizeQuery(filter.Query)
 	category := strings.TrimSpace(filter.Category)
 	if strings.EqualFold(category, AllCategories) || strings.EqualFold(category, "all") {
 		category = ""
 	}
-	products, err := s.store.ListProducts(db.ProductFilter{
+	products, err := s.store.ListProducts(ctx, db.ProductFilter{
 		Query:      query,
 		Category:   category,
 		Limit:      filter.Limit,
@@ -103,15 +103,15 @@ func (s *Service) Browse(filter Filter) ([]Product, error) {
 }
 
 // Search returns products matching query; a blank query matches nothing.
-func (s *Service) Search(query string) ([]Product, error) {
-	return s.SearchInCategory(query, "")
+func (s *Service) Search(ctx context.Context, query string) ([]Product, error) {
+	return s.SearchInCategory(ctx, query, "")
 }
 
-func (s *Service) SearchInCategory(query, category string) ([]Product, error) {
+func (s *Service) SearchInCategory(ctx context.Context, query, category string) ([]Product, error) {
 	if normalizeQuery(query) == "" {
 		return []Product{}, nil
 	}
-	return s.Browse(Filter{Query: query, Category: category, Limit: defaultSearchLimit})
+	return s.Browse(ctx, Filter{Query: query, Category: category, Limit: defaultSearchLimit})
 }
 
 // SearchPage returns one bounded page and the total number of matches. The
@@ -132,24 +132,24 @@ func (s *Service) SearchPage(ctx context.Context, query, category string, page, 
 		category = ""
 	}
 	filter := db.ProductFilter{Query: query, Category: category, PublicOnly: true}
-	total, err := s.store.CountFilteredProductsContext(ctx, filter)
+	total, err := s.store.CountFilteredProducts(ctx, filter)
 	if err != nil {
 		return nil, 0, err
 	}
 	filter.Limit, filter.Offset = limit, (page-1)*limit
-	products, err := s.store.ListProductsContext(ctx, filter)
+	products, err := s.store.ListProducts(ctx, filter)
 	if err != nil {
 		return nil, 0, err
 	}
 	return mapProducts(products), total, nil
 }
 
-func (s *Service) ProductBySlug(slug string) (*Product, error) {
+func (s *Service) ProductBySlug(ctx context.Context, slug string) (*Product, error) {
 	cleanSlug := strings.TrimSpace(slug)
 	if cleanSlug == "" || strings.Contains(cleanSlug, "/") || len(cleanSlug) > 200 {
 		return nil, ErrInvalidProductSlug
 	}
-	product, err := s.store.GetPublicProductBySlug(cleanSlug)
+	product, err := s.store.GetPublicProductBySlug(ctx, cleanSlug)
 	if err != nil || product == nil {
 		return nil, err
 	}
@@ -157,8 +157,8 @@ func (s *Service) ProductBySlug(slug string) (*Product, error) {
 	return &mapped, nil
 }
 
-func (s *Service) Categories() ([]Category, error) {
-	categories, err := s.store.GetAllCategories()
+func (s *Service) Categories(ctx context.Context) ([]Category, error) {
+	categories, err := s.store.GetAllCategories(ctx)
 	if err != nil {
 		return nil, err
 	}

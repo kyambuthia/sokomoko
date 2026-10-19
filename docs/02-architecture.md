@@ -142,8 +142,11 @@ HTTP server timeouts: read 15 s, read header 10 s, write 15 s, idle 60 s.
   inventory cannot oversell (`reserved + allocated <= on_hand`).
 - **Transactions retry.** `Store.withTx` retries serialization failures and
   deadlocks up to three times, so transaction bodies must be safe to re-run.
-- **Every store call is bounded.** Store methods derive a context with the
-  configured query timeout (default 10 s).
+- **Every store call is bounded and cancellable.** Store methods take the
+  caller's context and add the configured query timeout (default 10 s), so a
+  disconnected client cancels its query. Writes that record something already
+  done elsewhere (audit entries, a provider's answer to a payment start or a
+  claimed refund) use `context.WithoutCancel` so a disconnect cannot lose them.
 - **One binary, no runtime files.** Templates, assets, and migrations are
   embedded with `go:embed`. In development the static handler and the `asset`
   helper prefer files on disk so edits show without a rebuild.

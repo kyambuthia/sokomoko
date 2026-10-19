@@ -18,7 +18,7 @@ func TestProductionStartup_RequiresReleaseMigrationWithoutSeeding(t *testing.T) 
 	if err := prepareStore(cfg, store, false); err == nil || !strings.Contains(err.Error(), "migrate") {
 		t.Fatalf("unmigrated startup error = %v", err)
 	}
-	version, err := store.SchemaVersion()
+	version, err := store.SchemaVersion(t.Context())
 	if err != nil || version != 0 {
 		t.Fatalf("startup mutated schema: version=%d error=%v", version, err)
 	}
@@ -28,7 +28,7 @@ func TestProductionStartup_RequiresReleaseMigrationWithoutSeeding(t *testing.T) 
 	if err := prepareStore(cfg, store, false); err != nil {
 		t.Fatal(err)
 	}
-	count, err := store.CountProducts()
+	count, err := store.CountProducts(t.Context())
 	if err != nil || count != 0 {
 		t.Fatalf("production startup seeded data: products=%d error=%v", count, err)
 	}
@@ -131,7 +131,7 @@ func assertSchemaApplied(t *testing.T, dsn string) {
 	t.Helper()
 
 	store := openExistingStore(t, dsn)
-	version, err := store.SchemaVersion()
+	version, err := store.SchemaVersion(t.Context())
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
@@ -144,7 +144,7 @@ func countProducts(t *testing.T, dbPath string) int {
 	t.Helper()
 
 	store := openExistingStore(t, dbPath)
-	count, err := store.CountProducts()
+	count, err := store.CountProducts(t.Context())
 	if err != nil {
 		t.Fatalf("count products: %v", err)
 	}

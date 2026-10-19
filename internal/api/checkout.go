@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -63,24 +64,24 @@ func (h *Handler) checkout(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		state, err := h.app.Checkout.PreparedCheckout(uid, strings.TrimSpace(input.Token))
+		state, err := h.app.Checkout.PreparedCheckout(r.Context(), uid, strings.TrimSpace(input.Token))
 		if err != nil {
 			writeCheckoutError(w, err)
 			return
 		}
-		writeData(w, http.StatusCreated, h.checkoutDTO(state))
+		writeData(w, http.StatusCreated, h.checkoutDTO(r.Context(), state))
 	case http.MethodGet:
 		token := strings.TrimSpace(r.URL.Query().Get("token"))
 		if token == "" {
 			writeError(w, http.StatusBadRequest, "checkout_token_required", "Checkout token is required")
 			return
 		}
-		state, err := h.app.Checkout.PreparedCheckout(uid, token)
+		state, err := h.app.Checkout.PreparedCheckout(r.Context(), uid, token)
 		if err != nil {
 			writeCheckoutError(w, err)
 			return
 		}
-		writeData(w, http.StatusOK, h.checkoutDTO(state))
+		writeData(w, http.StatusOK, h.checkoutDTO(r.Context(), state))
 	default:
 		methodNotAllowed(w)
 	}
@@ -102,12 +103,12 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 	if len(parts) == 1 {
 		if r.Method != http.MethodPatch {
 			if r.Method == http.MethodGet {
-				state, err := h.app.Checkout.PreparedCheckout(uid, token)
+				state, err := h.app.Checkout.PreparedCheckout(r.Context(), uid, token)
 				if err != nil {
 					writeCheckoutError(w, err)
 					return
 				}
-				writeData(w, http.StatusOK, h.checkoutDTO(state))
+				writeData(w, http.StatusOK, h.checkoutDTO(r.Context(), state))
 				return
 			}
 			methodNotAllowed(w)
@@ -118,12 +119,12 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 			return
 		}
-		state, err := h.app.Checkout.SaveDraft(uid, token, input.DeliveryAddress, input.PaymentMethod)
+		state, err := h.app.Checkout.SaveDraft(r.Context(), uid, token, input.DeliveryAddress, input.PaymentMethod)
 		if err != nil {
 			writeCheckoutError(w, err)
 			return
 		}
-		writeData(w, http.StatusOK, h.checkoutDTO(state))
+		writeData(w, http.StatusOK, h.checkoutDTO(r.Context(), state))
 		return
 	}
 
@@ -142,7 +143,7 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 			return
 		}
-		orderID, summary, err := h.app.Checkout.CheckoutWithPayment(uid, input.DeliveryAddress, input.PaymentMethod, token)
+		orderID, summary, err := h.app.Checkout.CheckoutWithPayment(r.Context(), uid, input.DeliveryAddress, input.PaymentMethod, token)
 		if err != nil {
 			writeCheckoutError(w, err)
 			return
@@ -176,9 +177,9 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusNotFound, "checkout_not_found", "Checkout route not found")
 }
 
-func (h *Handler) checkoutDTO(state checkoutsvc.PageState) checkoutDTO {
+func (h *Handler) checkoutDTO(ctx context.Context, state checkoutsvc.PageState) checkoutDTO {
 	methods := make([]paymentMethodDTO, 0)
-	for _, option := range h.app.Payment.MethodOptions() {
+	for _, option := range h.app.Payment.MethodOptions(ctx) {
 		methods = append(methods, paymentMethodDTO{Value: option.Value, Label: option.Label, NeedsPhone: option.NeedsPhone})
 	}
 	return mapCheckout(state, methods)

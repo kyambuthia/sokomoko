@@ -108,13 +108,8 @@ func (s *Store) PingContext(ctx context.Context) error {
 	return s.DB.PingContext(ctx)
 }
 
-// ctx returns a context bounded by the store's query timeout. Store methods do
-// not take a caller context yet, so this keeps a slow query from pinning a
-// connection forever.
-func (s *Store) ctx() (context.Context, context.CancelFunc) {
-	return s.queryContext(context.Background())
-}
-
+// queryContext bounds a caller's context by the store's query timeout, so a
+// slow query cannot pin a connection even when the caller has no deadline.
 func (s *Store) queryContext(parent context.Context) (context.Context, context.CancelFunc) {
 	timeout := s.queryTimeout
 	if timeout <= 0 {

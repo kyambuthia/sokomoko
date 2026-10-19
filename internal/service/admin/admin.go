@@ -117,8 +117,8 @@ func newWithStore(store store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) Metrics() (Metrics, error) {
-	c, err := s.store.DashboardCounts()
+func (s *Service) Metrics(ctx context.Context) (Metrics, error) {
+	c, err := s.store.DashboardCounts(ctx)
 	if err != nil {
 		return Metrics{}, err
 	}
@@ -128,8 +128,8 @@ func (s *Service) Metrics() (Metrics, error) {
 	}, nil
 }
 
-func (s *Service) Products() ([]Product, error) {
-	products, err := s.store.GetAllProducts()
+func (s *Service) Products(ctx context.Context) ([]Product, error) {
+	products, err := s.store.GetAllProducts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -143,14 +143,14 @@ func (s *Service) Products() ([]Product, error) {
 	return mapped, nil
 }
 
-func (s *Service) ProductsPageContext(ctx context.Context, page, limit int) ([]Product, int, error) {
+func (s *Service) ProductsPage(ctx context.Context, page, limit int) ([]Product, int, error) {
 	filter := db.ProductFilter{}
-	total, err := s.store.CountFilteredProductsContext(ctx, filter)
+	total, err := s.store.CountFilteredProducts(ctx, filter)
 	if err != nil {
 		return nil, 0, err
 	}
 	filter.Limit, filter.Offset = limit, (page-1)*limit
-	products, err := s.store.ListProductsContext(ctx, filter)
+	products, err := s.store.ListProducts(ctx, filter)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -164,8 +164,8 @@ func (s *Service) ProductsPageContext(ctx context.Context, page, limit int) ([]P
 	return mapped, total, nil
 }
 
-func (s *Service) Orders() ([]Order, error) {
-	orders, err := s.store.ListAllOrders()
+func (s *Service) Orders(ctx context.Context) ([]Order, error) {
+	orders, err := s.store.ListAllOrders(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -176,8 +176,8 @@ func (s *Service) Orders() ([]Order, error) {
 	return mapped, nil
 }
 
-func (s *Service) OrdersPageContext(ctx context.Context, page, limit int) ([]Order, int, error) {
-	orders, total, err := s.store.ListAllOrdersPageContext(ctx, limit, (page-1)*limit)
+func (s *Service) OrdersPage(ctx context.Context, page, limit int) ([]Order, int, error) {
+	orders, total, err := s.store.ListAllOrdersPage(ctx, limit, (page-1)*limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -213,8 +213,8 @@ type DeliveryBoard struct {
 	Pending         []Order
 }
 
-func (s *Service) Deliveries() (DeliveryBoard, error) {
-	orders, err := s.Orders()
+func (s *Service) Deliveries(ctx context.Context) (DeliveryBoard, error) {
+	orders, err := s.Orders(ctx)
 	if err != nil {
 		return DeliveryBoard{}, err
 	}
@@ -243,12 +243,12 @@ func (s *Service) Deliveries() (DeliveryBoard, error) {
 	return board, nil
 }
 
-func (s *Service) Reports() (SalesReport, error) {
-	revenue, err := s.store.SumOrderRevenue()
+func (s *Service) Reports(ctx context.Context) (SalesReport, error) {
+	revenue, err := s.store.SumOrderRevenue(ctx)
 	if err != nil {
 		return SalesReport{}, err
 	}
-	counts, err := s.store.GetOrderStatusCounts()
+	counts, err := s.store.GetOrderStatusCounts(ctx)
 	if err != nil {
 		return SalesReport{}, err
 	}
@@ -265,7 +265,7 @@ func (s *Service) Reports() (SalesReport, error) {
 	return report, nil
 }
 
-func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
+func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrderInput) error {
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return ErrForbiddenOrderUpdate
 	}
@@ -278,7 +278,7 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 	deliveryStatus := strings.TrimSpace(input.DeliveryStatus)
 	notice := strings.TrimSpace(input.DeliveryNotice)
 
-	if err := s.store.UpdateOrderByAdmin(orderID, status, partnerStatus, deliveryStatus, notice); err != nil {
+	if err := s.store.UpdateOrderByAdmin(ctx, orderID, status, partnerStatus, deliveryStatus, notice); err != nil {
 		switch {
 		case errors.Is(err, db.ErrOrderNotFound):
 			return ErrOrderNotFound
@@ -288,24 +288,34 @@ func (s *Service) UpdateOrder(actor *Actor, input UpdateOrderInput) error {
 			return err
 		}
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "order.update", "order", orderID,
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "order.update", "order", orderID,
 		"status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }
 
-func (s *Service) TeamMembers() ([]TeamMember, error) {
-	users, err := s.store.ListUsersByRoles([]string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleUser})
+// TeamMembers returns one page of active accounts, optionally filtered by a
+// username or email search, and the total that match.
+func (s *Service) TeamMembers(ctx context.Context, query string, page, limit int) ([]TeamMember, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	users, total, err := s.store.ListUsersByRoles(ctx, db.UserSearch{
+		Roles:  []string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleUser},
+		Query:  query,
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	members := make([]TeamMember, 0, len(users))
 	for _, u := range users {
 		members = append(members, TeamMember{ID: u.ID, Username: u.Username, Email: u.Email, Role: u.Role, CreatedAt: u.CreatedAt})
 	}
-	return members, nil
+	return members, total, nil
 }
 
-func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
+func (s *Service) DeactivateUser(ctx context.Context, actor *Actor, userIDRaw string) error {
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return ErrForbiddenUserAction
 	}
@@ -316,7 +326,7 @@ func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 	if userID == actor.ID {
 		return ErrProtectedUser
 	}
-	target, err := s.store.GetUserByID(userID)
+	target, err := s.store.GetUserByID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -326,16 +336,16 @@ func (s *Service) DeactivateUser(actor *Actor, userIDRaw string) error {
 	if target.Role == db.RoleAdmin {
 		return ErrProtectedUser
 	}
-	if err := s.store.DeleteUser(userID); err != nil {
+	if err := s.store.DeleteUser(ctx, userID); err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
 	return nil
 }
 
 // DeactivatedMembers lists recently deactivated accounts an admin can restore.
-func (s *Service) DeactivatedMembers() ([]TeamMember, error) {
-	users, err := s.store.ListDeactivatedUsers(50)
+func (s *Service) DeactivatedMembers(ctx context.Context) ([]TeamMember, error) {
+	users, err := s.store.ListDeactivatedUsers(ctx, 50)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +358,7 @@ func (s *Service) DeactivatedMembers() ([]TeamMember, error) {
 
 // ReactivateUser restores a deactivated account. The user signs in again with
 // their existing password.
-func (s *Service) ReactivateUser(actor *Actor, userIDRaw string) error {
+func (s *Service) ReactivateUser(ctx context.Context, actor *Actor, userIDRaw string) error {
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return ErrForbiddenUserAction
 	}
@@ -356,19 +366,19 @@ func (s *Service) ReactivateUser(actor *Actor, userIDRaw string) error {
 	if err != nil {
 		return ErrInvalidUserID
 	}
-	found, err := s.store.ReactivateUser(userID)
+	found, err := s.store.ReactivateUser(ctx, userID)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return ErrUserNotFound
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
 	return nil
 }
 
-func (s *Service) AuditLogs(limit int) ([]AuditLog, error) {
-	logs, err := s.store.ListAuditLogs(limit)
+func (s *Service) AuditLogs(ctx context.Context, limit int) ([]AuditLog, error) {
+	logs, err := s.store.ListAuditLogs(ctx, limit)
 	if err != nil {
 		return nil, err
 	}

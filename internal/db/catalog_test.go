@@ -9,16 +9,16 @@ import (
 
 func TestCreateProduct_InitializesInventory(t *testing.T) {
 	s := newTestStore(t)
-	partnerID, err := s.UpsertPartner(Partner{Name: "Acme", Slug: "acme"})
+	partnerID, err := s.UpsertPartner(t.Context(), Partner{Name: "Acme", Slug: "acme"})
 	if err != nil {
 		t.Fatalf("partner: %v", err)
 	}
-	catID, err := s.CreateCategory(Category{Name: "Audio", Slug: "audio"})
+	catID, err := s.CreateCategory(t.Context(), Category{Name: "Audio", Slug: "audio"})
 	if err != nil {
 		t.Fatalf("category: %v", err)
 	}
 
-	id, err := s.CreateProduct(Product{
+	id, err := s.CreateProduct(t.Context(), Product{
 		Name:          "Speaker",
 		Slug:          "speaker",
 		Price:         4999,
@@ -31,7 +31,7 @@ func TestCreateProduct_InitializesInventory(t *testing.T) {
 		t.Fatalf("create product: %v", err)
 	}
 
-	product, err := s.GetProductBySlug("speaker")
+	product, err := s.GetProductBySlug(t.Context(), "speaker")
 	if err != nil || product == nil {
 		t.Fatalf("get by slug: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestCreateProduct_InitializesInventory(t *testing.T) {
 	if stock.OnHandQuantity != 7 || stock.ReservedQuantity != 0 || stock.AllocatedQuantity != 0 {
 		t.Fatalf("stock = %+v", stock)
 	}
-	movements, _ := s.ListStockMovementsByProductID(int(id))
+	movements, _ := s.ListStockMovementsByProductID(t.Context(), int(id))
 	if len(movements) != 1 || movements[0].MovementType != stockMovementInitial || movements[0].QuantityDelta != 7 {
 		t.Fatalf("movements = %+v", movements)
 	}
@@ -57,20 +57,20 @@ func TestCreateProduct_InitializesInventory(t *testing.T) {
 
 func TestCreateProduct_DuplicateSlugIsTypedConflict(t *testing.T) {
 	s := newTestStore(t)
-	if _, err := s.CreateProduct(Product{Name: "A", Slug: "dup", Price: 100}); err != nil {
+	if _, err := s.CreateProduct(t.Context(), Product{Name: "A", Slug: "dup", Price: 100}); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	_, err := s.CreateProduct(Product{Name: "B", Slug: "dup", Price: 100})
+	_, err := s.CreateProduct(t.Context(), Product{Name: "B", Slug: "dup", Price: 100})
 	if !errors.Is(err, ErrProductSlugConflict) {
 		t.Fatalf("err = %v, want ErrProductSlugConflict", err)
 	}
 
 	// A soft-deleted product frees its slug.
-	first, _ := s.GetProductBySlug("dup")
-	if err := s.DeleteProduct(first.ID); err != nil {
+	first, _ := s.GetProductBySlug(t.Context(), "dup")
+	if err := s.DeleteProduct(t.Context(), first.ID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := s.CreateProduct(Product{Name: "C", Slug: "dup", Price: 100}); err != nil {
+	if _, err := s.CreateProduct(t.Context(), Product{Name: "C", Slug: "dup", Price: 100}); err != nil {
 		t.Fatalf("recreate after delete: %v", err)
 	}
 }
@@ -80,18 +80,18 @@ func TestUpdateProduct_SetsAvailableAroundHolds(t *testing.T) {
 	userID := mustCreateUser(t, s, RoleUser)
 	productID := mustCreateProduct(t, s, 1000, 10)
 
-	if err := s.AddToCart(userID, productID, 3); err != nil {
+	if err := s.AddToCart(t.Context(), userID, productID, 3); err != nil {
 		t.Fatalf("add to cart: %v", err)
 	}
-	if err := s.ReserveCartForCheckout(userID, "hold", timeNow().Add(time.Minute)); err != nil {
+	if err := s.ReserveCartForCheckout(t.Context(), userID, "hold", timeNow().Add(time.Minute)); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
 
-	product, _ := s.GetProductByID(productID)
+	product, _ := s.GetProductByID(t.Context(), productID)
 	product.Name = "Renamed"
 	product.Price = 1250
 	product.StockQuantity = 4
-	if err := s.UpdateProduct(*product); err != nil {
+	if err := s.UpdateProduct(t.Context(), *product); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
@@ -99,23 +99,23 @@ func TestUpdateProduct_SetsAvailableAroundHolds(t *testing.T) {
 	if stock.AvailableQuantity != 4 || stock.ReservedQuantity != 3 || stock.OnHandQuantity != 7 {
 		t.Fatalf("stock = %+v", stock)
 	}
-	updated, _ := s.GetProductByID(productID)
+	updated, _ := s.GetProductByID(t.Context(), productID)
 	if updated.Name != "Renamed" || updated.Price != 1250 {
 		t.Fatalf("product = %+v", updated)
 	}
 
-	if err := s.UpdateProduct(Product{ID: 999999, Name: "x", Slug: "x"}); !errors.Is(err, ErrProductNotFound) {
+	if err := s.UpdateProduct(t.Context(), Product{ID: 999999, Name: "x", Slug: "x"}); !errors.Is(err, ErrProductNotFound) {
 		t.Fatalf("missing product err = %v", err)
 	}
 }
 
 func TestListProducts_SearchAndFilters(t *testing.T) {
 	s := newTestStore(t)
-	audio, _ := s.CreateCategory(Category{Name: "Audio", Slug: "audio"})
-	home, _ := s.CreateCategory(Category{Name: "Home & Kitchen", Slug: "home-kitchen"})
+	audio, _ := s.CreateCategory(t.Context(), Category{Name: "Audio", Slug: "audio"})
+	home, _ := s.CreateCategory(t.Context(), Category{Name: "Home & Kitchen", Slug: "home-kitchen"})
 	mk := func(name, slug, desc string, cat int64, stock int) {
 		t.Helper()
-		if _, err := s.CreateProduct(Product{Name: name, Slug: slug, Description: desc, Price: 100, StockQuantity: stock,
+		if _, err := s.CreateProduct(t.Context(), Product{Name: name, Slug: slug, Description: desc, Price: 100, StockQuantity: stock,
 			CategoryID: sql.NullInt64{Int64: cat, Valid: true}}); err != nil {
 			t.Fatalf("create %s: %v", slug, err)
 		}
@@ -139,7 +139,7 @@ func TestListProducts_SearchAndFilters(t *testing.T) {
 		{"limit", ProductFilter{Limit: 2}, 2},
 	}
 	for _, tc := range cases {
-		got, err := s.ListProducts(tc.filter)
+		got, err := s.ListProducts(t.Context(), tc.filter)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
@@ -148,7 +148,7 @@ func TestListProducts_SearchAndFilters(t *testing.T) {
 		}
 	}
 
-	if results, _ := s.SearchProducts("   "); len(results) != 0 {
+	if results, _ := s.SearchProducts(t.Context(), "   "); len(results) != 0 {
 		t.Fatalf("blank search returned %d", len(results))
 	}
 }

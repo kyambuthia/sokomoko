@@ -48,7 +48,7 @@ func makeAPIRequestOnHost(t *testing.T, host, method, path string, body any, coo
 			if cookie == nil || cookie.Name != "session_token" {
 				continue
 			}
-			session, err := testStore.GetSession(cookie.Value)
+			session, err := testStore.GetSession(t.Context(), cookie.Value)
 			if err == nil && session != nil {
 				req.Header.Set("X-CSRF-Token", session.CSRFToken)
 			}
@@ -196,7 +196,7 @@ func TestAPI_CheckoutPlacementIsIdempotent(t *testing.T) {
 		t.Fatalf("replayed summary = %+v", replay.Summary)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(mustUserID(t, username)))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(mustUserID(t, username)))
 	if err != nil {
 		t.Fatalf("list orders: %v", err)
 	}
@@ -277,10 +277,10 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 	customer := fmt.Sprintf("partner_customer_%d", suffix)
 	createTestUser(t, customer, customer+"@example.com", password, "user")
 	customerID := mustUserID(t, customer)
-	if err := testStore.AddToCart(int(customerID), int(productB), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(customerID), int(productB), 1); err != nil {
 		t.Fatalf("add customer cart: %v", err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(customerID), "Partner API Lane")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(customerID), "Partner API Lane")
 	if err != nil {
 		t.Fatalf("create partner-scoping order: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestAPI_PartnerWorkspaceIsScopedToPartnerIdentity(t *testing.T) {
 
 func mustUserID(t *testing.T, username string) int64 {
 	t.Helper()
-	user, err := testStore.GetUserByUsername(username)
+	user, err := testStore.GetUserByUsername(t.Context(), username)
 	if err != nil || user == nil {
 		t.Fatalf("find user: %v", err)
 	}
@@ -416,7 +416,7 @@ func mustUserID(t *testing.T, username string) int64 {
 
 func createAPITestPartner(t *testing.T, username string) int64 {
 	t.Helper()
-	id, err := testStore.UpsertPartner(db.Partner{Name: username, Slug: username, ContactEmail: username + "@example.com"})
+	id, err := testStore.UpsertPartner(t.Context(), db.Partner{Name: username, Slug: username, ContactEmail: username + "@example.com"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,11 +23,11 @@ func ensureCartTx(ctx context.Context, q querier, userID int) (int64, error) {
 
 // AddToCart adds quantity of a product to the user's cart, capping the line at
 // the maximum line quantity. Any open checkout is invalidated.
-func (s *Store) AddToCart(userID, productID, quantity int) error {
+func (s *Store) AddToCart(ctx context.Context, userID, productID, quantity int) error {
 	if quantity <= 0 {
 		return ErrInvalidQuantity
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -49,11 +49,11 @@ func (s *Store) AddToCart(userID, productID, quantity int) error {
 }
 
 // UpdateCartQuantity sets a line's quantity; zero or less removes the line.
-func (s *Store) UpdateCartQuantity(userID, productID, quantity int) error {
+func (s *Store) UpdateCartQuantity(ctx context.Context, userID, productID, quantity int) error {
 	if quantity > maxCartLineQuantity {
 		return ErrInvalidQuantity
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -76,27 +76,13 @@ func (s *Store) UpdateCartQuantity(userID, productID, quantity int) error {
 	})
 }
 
-func (s *Store) RemoveFromCart(userID, productID int) error {
-	return s.UpdateCartQuantity(userID, productID, 0)
-}
-
-func (s *Store) ClearCart(userID int) error {
-	ctx, cancel := s.ctx()
-	defer cancel()
-
-	return s.withTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			"DELETE FROM cart_items WHERE cart_id = (SELECT id FROM carts WHERE user_id = $1)", userID,
-		); err != nil {
-			return err
-		}
-		return invalidateCheckoutsTx(ctx, tx, userID)
-	})
+func (s *Store) RemoveFromCart(ctx context.Context, userID, productID int) error {
+	return s.UpdateCartQuantity(ctx, userID, productID, 0)
 }
 
 // CartItemCount returns the total quantity of active products in the cart.
-func (s *Store) CartItemCount(userID int) (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CartItemCount(ctx context.Context, userID int) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var count int
@@ -112,18 +98,18 @@ func (s *Store) CartItemCount(userID int) (int, error) {
 }
 
 // GetCartItems returns cart lines with current prices and available stock.
-func (s *Store) GetCartItems(userID int) ([]CartItem, money.Cents, error) {
-	return s.getCartItems(userID, "")
+func (s *Store) GetCartItems(ctx context.Context, userID int) ([]CartItem, money.Cents, error) {
+	return s.getCartItems(ctx, userID, "")
 }
 
 // GetCartItemsForCheckout is GetCartItems, except stock the user already holds
 // under reservationKey counts as available to them.
-func (s *Store) GetCartItemsForCheckout(userID int, reservationKey string) ([]CartItem, money.Cents, error) {
-	return s.getCartItems(userID, strings.TrimSpace(reservationKey))
+func (s *Store) GetCartItemsForCheckout(ctx context.Context, userID int, reservationKey string) ([]CartItem, money.Cents, error) {
+	return s.getCartItems(ctx, userID, strings.TrimSpace(reservationKey))
 }
 
-func (s *Store) getCartItems(userID int, reservationKey string) ([]CartItem, money.Cents, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) getCartItems(ctx context.Context, userID int, reservationKey string) ([]CartItem, money.Cents, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
@@ -217,8 +203,8 @@ func cartLinesTx(ctx context.Context, tx *sql.Tx, userID int) ([]cartLine, error
 // AvailableForUser returns how many units of a product the user may hold in
 // their cart: available stock plus whatever the user already has reserved.
 // It returns ErrProductNotFound for missing or deleted products.
-func (s *Store) AvailableForUser(userID, productID int) (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) AvailableForUser(ctx context.Context, userID, productID int) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var available int
@@ -239,8 +225,8 @@ func (s *Store) AvailableForUser(userID, productID int) (int, error) {
 }
 
 // CartQuantity returns the quantity of one product in the user's cart.
-func (s *Store) CartQuantity(userID, productID int) (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CartQuantity(ctx context.Context, userID, productID int) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var quantity int

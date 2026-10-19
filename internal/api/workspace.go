@@ -169,7 +169,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		metrics, err := h.app.Admin.Metrics()
+		metrics, err := h.app.Admin.Metrics(r.Context())
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load admin metrics")
 			return
@@ -184,7 +184,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		page, limit := pageParams(r)
-		products, total, err := h.app.Admin.ProductsPageContext(r.Context(), page, limit)
+		products, total, err := h.app.Admin.ProductsPage(r.Context(), page, limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load products")
 			return
@@ -206,7 +206,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		report, err := h.app.Admin.Reports()
+		report, err := h.app.Admin.Reports(r.Context())
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load sales report")
 			return
@@ -226,7 +226,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "forbidden", "Admin role is required")
 			return
 		}
-		logs, err := h.app.Admin.AuditLogs(100)
+		logs, err := h.app.Admin.AuditLogs(r.Context(), 100)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load audit log")
 			return
@@ -244,7 +244,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) adminOrders(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
 		page, limit := pageParams(r)
-		orders, total, err := h.app.Admin.OrdersPageContext(r.Context(), page, limit)
+		orders, total, err := h.app.Admin.OrdersPage(r.Context(), page, limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load orders")
 			return
@@ -279,7 +279,7 @@ func (h *Handler) adminOrders(w http.ResponseWriter, r *http.Request, parts []st
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	err := h.app.Admin.UpdateOrder(&adminsvc.Actor{ID: user.ID, Role: user.Role}, adminsvc.UpdateOrderInput{
+	err := h.app.Admin.UpdateOrder(r.Context(), &adminsvc.Actor{ID: user.ID, Role: user.Role}, adminsvc.UpdateOrderInput{
 		OrderID: parts[1], Status: input.Status, PartnerStatus: input.PartnerStatus,
 		DeliveryStatus: input.DeliveryStatus, DeliveryNotice: input.DeliveryNotice,
 	})
@@ -296,7 +296,8 @@ func (h *Handler) adminTeam(w http.ResponseWriter, r *http.Request, parts []stri
 		return
 	}
 	if len(parts) == 1 && r.Method == http.MethodGet {
-		members, err := h.app.Admin.TeamMembers()
+		page, limit := pageParams(r)
+		members, total, err := h.app.Admin.TeamMembers(r.Context(), r.URL.Query().Get("q"), page, limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load team")
 			return
@@ -305,7 +306,12 @@ func (h *Handler) adminTeam(w http.ResponseWriter, r *http.Request, parts []stri
 		for _, member := range members {
 			items = append(items, mapTeamMember(member))
 		}
-		writeData(w, http.StatusOK, items)
+		writeData(w, http.StatusOK, struct {
+			Items []teamMemberDTO `json:"items"`
+			Page  int             `json:"page"`
+			Limit int             `json:"limit"`
+			Total int             `json:"total"`
+		}{Items: items, Page: page, Limit: limit, Total: total})
 		return
 	}
 	if len(parts) != 2 || r.Method != http.MethodDelete {
@@ -317,7 +323,7 @@ func (h *Handler) adminTeam(w http.ResponseWriter, r *http.Request, parts []stri
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	if err := h.app.Admin.DeactivateUser(&adminsvc.Actor{ID: user.ID, Role: user.Role}, parts[1]); err != nil {
+	if err := h.app.Admin.DeactivateUser(r.Context(), &adminsvc.Actor{ID: user.ID, Role: user.Role}, parts[1]); err != nil {
 		writeAdminError(w, err)
 		return
 	}
@@ -354,7 +360,7 @@ func (h *Handler) partner(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		actor := partnerActor(r)
-		data, err := h.app.Partner.DashboardForActorContext(r.Context(), actor)
+		data, err := h.app.Partner.DashboardForActor(r.Context(), actor)
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -378,7 +384,7 @@ func (h *Handler) partner(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
 		page, limit := pageParams(r)
-		data, total, err := h.app.Partner.ProductsPageForActorContext(r.Context(), partnerActor(r), page, limit)
+		data, total, err := h.app.Partner.ProductsPageForActor(r.Context(), partnerActor(r), page, limit)
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -409,7 +415,7 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 		writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 		return
 	}
-	if err := h.app.Partner.CreateProductForActor(partnerActor(r), partnersvc.CreateProductInput{
+	if err := h.app.Partner.CreateProductForActor(r.Context(), partnerActor(r), partnersvc.CreateProductInput{
 		Name: input.Name, Description: input.Description, Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID,
 	}); err != nil {
 		writePartnerError(w, err)
@@ -425,7 +431,7 @@ func (h *Handler) patchPartnerProduct(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	actor := partnerActor(r)
-	_, input, err := h.app.Partner.ProductForEdit(actor, id)
+	_, input, err := h.app.Partner.ProductForEdit(r.Context(), actor, id)
 	if err != nil {
 		writePartnerError(w, err)
 		return
@@ -438,7 +444,7 @@ func (h *Handler) patchPartnerProduct(w http.ResponseWriter, r *http.Request, id
 			*field = *value
 		}
 	}
-	if err := h.app.Partner.UpdateProductForActor(actor, id, input); err != nil {
+	if err := h.app.Partner.UpdateProductForActor(r.Context(), actor, id, input); err != nil {
 		writePartnerError(w, err)
 		return
 	}
@@ -448,7 +454,7 @@ func (h *Handler) patchPartnerProduct(w http.ResponseWriter, r *http.Request, id
 func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 && r.Method == http.MethodGet {
 		page, limit := pageParams(r)
-		data, total, err := h.app.Partner.OrdersPageForActorContext(r.Context(), partnerActor(r), strings.TrimSpace(r.URL.Query().Get("status")), page, limit)
+		data, total, err := h.app.Partner.OrdersPageForActor(r.Context(), partnerActor(r), strings.TrimSpace(r.URL.Query().Get("status")), page, limit)
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -476,7 +482,7 @@ func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	err := h.app.Partner.UpdateOrder(&partnersvc.Actor{ID: user.ID, Role: user.Role}, partnersvc.UpdateOrderInput{
+	err := h.app.Partner.UpdateOrder(r.Context(), &partnersvc.Actor{ID: user.ID, Role: user.Role}, partnersvc.UpdateOrderInput{
 		OrderID: parts[1], PartnerStatus: input.PartnerStatus, DeliveryStatus: input.DeliveryStatus, DeliveryNotice: input.DeliveryNotice,
 	})
 	if err != nil {
@@ -489,7 +495,7 @@ func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []
 func (h *Handler) partnerSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		settings, err := h.app.Partner.StoreSettings()
+		settings, err := h.app.Partner.StoreSettings(r.Context())
 		if err != nil {
 			writePartnerError(w, err)
 			return
@@ -506,7 +512,7 @@ func (h *Handler) partnerSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		actor := partnerActor(r)
-		settings, err := h.app.Partner.SaveStoreSettings(actor, partnersvc.StoreSettingsInput{
+		settings, err := h.app.Partner.SaveStoreSettings(r.Context(), actor, partnersvc.StoreSettingsInput{
 			StoreName: input.StoreName, StoreSlug: input.StoreSlug,
 			Description: input.Description, ContactEmail: input.ContactEmail,
 		})

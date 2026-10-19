@@ -33,7 +33,7 @@ func nextSuffix() string {
 func mustCreateUser(t *testing.T, s *Store, role string) int {
 	t.Helper()
 	suffix := nextSuffix()
-	id, err := s.CreateUser(User{
+	id, err := s.CreateUser(t.Context(), User{
 		Username:     "user" + suffix,
 		Email:        "user" + suffix + "@example.com",
 		PasswordHash: "hash",
@@ -48,7 +48,7 @@ func mustCreateUser(t *testing.T, s *Store, role string) int {
 func mustCreateProduct(t *testing.T, s *Store, price money.Cents, stock int) int {
 	t.Helper()
 	suffix := nextSuffix()
-	id, err := s.CreateProduct(Product{
+	id, err := s.CreateProduct(t.Context(), Product{
 		Name:          "Product " + suffix,
 		Slug:          "product-" + suffix,
 		Description:   "test product",
@@ -63,7 +63,7 @@ func mustCreateProduct(t *testing.T, s *Store, price money.Cents, stock int) int
 
 func mustStock(t *testing.T, s *Store, productID int) InventoryStock {
 	t.Helper()
-	stocks, err := s.ListInventoryStocksByProductID(productID)
+	stocks, err := s.ListInventoryStocksByProductID(t.Context(), productID)
 	if err != nil {
 		t.Fatalf("list stocks: %v", err)
 	}
@@ -75,7 +75,7 @@ func mustStock(t *testing.T, s *Store, productID int) InventoryStock {
 
 func mustAvailable(t *testing.T, s *Store, productID int) int {
 	t.Helper()
-	product, err := s.GetProductByID(productID)
+	product, err := s.GetProductByID(t.Context(), productID)
 	if err != nil || product == nil {
 		t.Fatalf("get product %d: %v", productID, err)
 	}

@@ -22,7 +22,7 @@ func TestService_MigrateAndSeedAreIdempotent(t *testing.T) {
 	if err := svc.Seed(); err != nil {
 		t.Fatalf("seed failed: %v", err)
 	}
-	firstCount, err := store.CountProducts()
+	firstCount, err := store.CountProducts(t.Context())
 	if err != nil {
 		t.Fatalf("count products after first seed: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestService_MigrateAndSeedAreIdempotent(t *testing.T) {
 	if err := svc.Prepare(true); err != nil {
 		t.Fatalf("prepare with seed failed: %v", err)
 	}
-	secondCount, err := store.CountProducts()
+	secondCount, err := store.CountProducts(t.Context())
 	if err != nil {
 		t.Fatalf("count products after second seed: %v", err)
 	}

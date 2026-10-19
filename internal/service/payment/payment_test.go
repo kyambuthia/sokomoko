@@ -36,14 +36,14 @@ func mpesaInput(enabled bool) ProviderInput {
 
 func TestBuildRecordUsesEnabledMethods(t *testing.T) {
 	svc, _ := newTestService(t)
-	record, err := svc.BuildRecord(MethodCashOnDelivery, 4250, "USD")
+	record, err := svc.BuildRecord(t.Context(), MethodCashOnDelivery, 4250, "USD")
 	if err != nil || record.Provider != "manual_cash_on_delivery" || record.Status != db.PaymentStatusPending || record.Amount != 4250 {
 		t.Fatalf("cash record = %+v, %v", record, err)
 	}
-	if _, err := svc.BuildRecord("mpesa", 4250, "KES"); !errors.Is(err, ErrInvalidMethod) {
+	if _, err := svc.BuildRecord(t.Context(), "mpesa", 4250, "KES"); !errors.Is(err, ErrInvalidMethod) {
 		t.Fatalf("disabled mpesa = %v, want ErrInvalidMethod", err)
 	}
-	if _, err := svc.BuildRecord("wire_transfer", 20, "USD"); !errors.Is(err, ErrInvalidMethod) {
+	if _, err := svc.BuildRecord(t.Context(), "wire_transfer", 20, "USD"); !errors.Is(err, ErrInvalidMethod) {
 		t.Fatalf("unknown method = %v", err)
 	}
 }
@@ -51,24 +51,24 @@ func TestBuildRecordUsesEnabledMethods(t *testing.T) {
 func TestSaveProviderValidatesAndSealsSecrets(t *testing.T) {
 	svc, store := newTestService(t)
 
-	if err := svc.SaveProvider(&Actor{ID: 2, Role: db.RoleStaff}, "mpesa", mpesaInput(true)); !errors.Is(err, ErrForbidden) {
+	if err := svc.SaveProvider(t.Context(), &Actor{ID: 2, Role: db.RoleStaff}, "mpesa", mpesaInput(true)); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("staff save = %v", err)
 	}
-	if err := svc.SaveProvider(admin, "mpesa", mpesaInput(true)); !errors.Is(err, ErrCurrencyMismatch) {
+	if err := svc.SaveProvider(t.Context(), admin, "mpesa", mpesaInput(true)); !errors.Is(err, ErrCurrencyMismatch) {
 		t.Fatalf("mpesa with USD store = %v, want ErrCurrencyMismatch", err)
 	}
-	if _, err := svc.SavePricing(admin, PricingInput{Currency: "KES", ShippingFlat: "200", FreeShippingThreshold: "0", TaxRatePercent: "16"}); err != nil {
+	if _, err := svc.SavePricing(t.Context(), admin, PricingInput{Currency: "KES", ShippingFlat: "200", FreeShippingThreshold: "0", TaxRatePercent: "16"}); err != nil {
 		t.Fatal(err)
 	}
 	incomplete := mpesaInput(true)
 	delete(incomplete.Values, "passkey")
-	if err := svc.SaveProvider(admin, "mpesa", incomplete); !errors.Is(err, ErrMissingFields) {
+	if err := svc.SaveProvider(t.Context(), admin, "mpesa", incomplete); !errors.Is(err, ErrMissingFields) {
 		t.Fatalf("missing passkey = %v", err)
 	}
-	if err := svc.SaveProvider(admin, "mpesa", mpesaInput(true)); err != nil {
+	if err := svc.SaveProvider(t.Context(), admin, "mpesa", mpesaInput(true)); err != nil {
 		t.Fatal(err)
 	}
-	record, err := store.GetPaymentProviderConfig("mpesa")
+	record, err := store.GetPaymentProviderConfig(t.Context(), "mpesa")
 	if err != nil || record == nil || len(record.Secrets) == 0 || bytes.Contains(record.Secrets, []byte("cs-very-secret")) {
 		t.Fatalf("secrets not sealed: %+v %v", record, err)
 	}
@@ -82,10 +82,10 @@ func TestSaveProviderValidatesAndSealsSecrets(t *testing.T) {
 		keep.Values[k] = ""
 	}
 	keep.Values["shortcode"] = "600000"
-	if err := svc.SaveProvider(admin, "mpesa", keep); err != nil {
+	if err := svc.SaveProvider(t.Context(), admin, "mpesa", keep); err != nil {
 		t.Fatalf("save without re-entering secrets = %v", err)
 	}
-	views, err := svc.Providers()
+	views, err := svc.Providers(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,19 +105,19 @@ func TestSaveProviderValidatesAndSealsSecrets(t *testing.T) {
 			}
 		}
 	}
-	if !svc.IsSupportedMethod("mpesa", "") || svc.IsSupportedMethod("mpesa", "USD") {
+	if !svc.IsSupportedMethod(t.Context(), "mpesa", "") || svc.IsSupportedMethod(t.Context(), "mpesa", "USD") {
 		t.Fatal("mpesa support should follow the store currency")
 	}
 
 	// Switching currency away from KES is refused while M-Pesa is on.
-	if _, err := svc.SavePricing(admin, PricingInput{Currency: "USD", ShippingFlat: "1", TaxRatePercent: "0"}); !errors.Is(err, ErrCurrencyMismatch) {
+	if _, err := svc.SavePricing(t.Context(), admin, PricingInput{Currency: "USD", ShippingFlat: "1", TaxRatePercent: "0"}); !errors.Is(err, ErrCurrencyMismatch) {
 		t.Fatalf("currency switch with mpesa on = %v", err)
 	}
 }
 
 func TestSaveProviderKeepsOneMethod(t *testing.T) {
 	svc, _ := newTestService(t)
-	if err := svc.SaveProvider(admin, "cash_on_delivery", ProviderInput{Enabled: false}); !errors.Is(err, ErrLastMethod) {
+	if err := svc.SaveProvider(t.Context(), admin, "cash_on_delivery", ProviderInput{Enabled: false}); !errors.Is(err, ErrLastMethod) {
 		t.Fatalf("disabling the only method = %v, want ErrLastMethod", err)
 	}
 }
@@ -125,21 +125,21 @@ func TestSaveProviderKeepsOneMethod(t *testing.T) {
 func TestSaveProviderNeedsSecretsKey(t *testing.T) {
 	svc, _ := newTestService(t)
 	svc.box = nil
-	if _, err := svc.SavePricing(admin, PricingInput{Currency: "NGN", ShippingFlat: "0", TaxRatePercent: "7.5"}); err != nil {
+	if _, err := svc.SavePricing(t.Context(), admin, PricingInput{Currency: "NGN", ShippingFlat: "0", TaxRatePercent: "7.5"}); err != nil {
 		t.Fatal(err)
 	}
-	err := svc.SaveProvider(admin, "paystack", ProviderInput{Enabled: true, Mode: "test", Values: map[string]string{"secret_key": "sk_test_x"}})
+	err := svc.SaveProvider(t.Context(), admin, "paystack", ProviderInput{Enabled: true, Mode: "test", Values: map[string]string{"secret_key": "sk_test_x"}})
 	if !errors.Is(err, ErrSecretsKeyMissing) {
 		t.Fatalf("save without key = %v", err)
 	}
-	if err := svc.SaveProvider(admin, "paystack", ProviderInput{Enabled: true, Mode: "live", Values: map[string]string{"secret_key": "sk_test_x"}}); !errors.Is(err, ErrMissingFields) {
+	if err := svc.SaveProvider(t.Context(), admin, "paystack", ProviderInput{Enabled: true, Mode: "live", Values: map[string]string{"secret_key": "sk_test_x"}}); !errors.Is(err, ErrMissingFields) {
 		t.Fatalf("live mode with a test key = %v", err)
 	}
 }
 
 func TestSavePricingParsesInput(t *testing.T) {
 	svc, _ := newTestService(t)
-	saved, err := svc.SavePricing(admin, PricingInput{Currency: "kes", ShippingFlat: "250", FreeShippingThreshold: "5000", TaxRatePercent: "16.5"})
+	saved, err := svc.SavePricing(t.Context(), admin, PricingInput{Currency: "kes", ShippingFlat: "250", FreeShippingThreshold: "5000", TaxRatePercent: "16.5"})
 	if err != nil || saved.Currency != "KES" || saved.ShippingFlat != 25000 || saved.FreeShippingThreshold != 500000 || saved.TaxRateBP != 1650 {
 		t.Fatalf("SavePricing = %+v, %v", saved, err)
 	}
@@ -148,7 +148,7 @@ func TestSavePricingParsesInput(t *testing.T) {
 		{Currency: "USD", ShippingFlat: "-1", TaxRatePercent: "1"},
 		{Currency: "USD", ShippingFlat: "1", TaxRatePercent: "101"},
 	} {
-		if _, err := svc.SavePricing(admin, bad); !errors.Is(err, ErrInvalidPricing) {
+		if _, err := svc.SavePricing(t.Context(), admin, bad); !errors.Is(err, ErrInvalidPricing) {
 			t.Errorf("SavePricing(%+v) = %v, want ErrInvalidPricing", bad, err)
 		}
 	}
@@ -156,25 +156,25 @@ func TestSavePricingParsesInput(t *testing.T) {
 
 func TestValidateProductionPaymentReadiness(t *testing.T) {
 	svc, _ := newTestService(t)
-	if err := svc.ValidateProduction(""); err != nil {
+	if err := svc.ValidateProduction(t.Context(), ""); err != nil {
 		t.Fatalf("cash only startup = %v", err)
 	}
-	if _, err := svc.SavePricing(admin, PricingInput{Currency: "NGN", ShippingFlat: "0", TaxRatePercent: "0"}); err != nil {
+	if _, err := svc.SavePricing(t.Context(), admin, PricingInput{Currency: "NGN", ShippingFlat: "0", TaxRatePercent: "0"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.SaveProvider(admin, "paystack", ProviderInput{
+	if err := svc.SaveProvider(t.Context(), admin, "paystack", ProviderInput{
 		Enabled: true, Mode: "test", Values: map[string]string{"secret_key": "sk_test_ready"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ValidateProduction(""); !errors.Is(err, ErrNoPublicURL) {
+	if err := svc.ValidateProduction(t.Context(), ""); !errors.Is(err, ErrNoPublicURL) {
 		t.Fatalf("missing public URL = %v", err)
 	}
-	if err := svc.ValidateProduction("https://shop.example"); err != nil {
+	if err := svc.ValidateProduction(t.Context(), "https://shop.example"); err != nil {
 		t.Fatalf("ready provider = %v", err)
 	}
 	svc.box = nil
-	if err := svc.ValidateProduction("https://shop.example"); !errors.Is(err, ErrSecretsKeyMissing) {
+	if err := svc.ValidateProduction(t.Context(), "https://shop.example"); !errors.Is(err, ErrSecretsKeyMissing) {
 		t.Fatalf("missing secrets key = %v", err)
 	}
 	wrong, err := secret.New(base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)))
@@ -182,7 +182,7 @@ func TestValidateProductionPaymentReadiness(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc.box = wrong
-	if err := svc.ValidateProduction("https://shop.example"); !errors.Is(err, secret.ErrCorrupted) {
+	if err := svc.ValidateProduction(t.Context(), "https://shop.example"); !errors.Is(err, secret.ErrCorrupted) {
 		t.Fatalf("wrong secrets key = %v", err)
 	}
 }

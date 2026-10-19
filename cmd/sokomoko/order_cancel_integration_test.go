@@ -12,7 +12,7 @@ import (
 
 func availableStock(t *testing.T, productID int64) int {
 	t.Helper()
-	p, err := testStore.GetProductByID(int(productID))
+	p, err := testStore.GetProductByID(t.Context(), int(productID))
 	if err != nil || p == nil {
 		t.Fatalf("load product: %v", err)
 	}
@@ -25,10 +25,10 @@ func TestIntegration_CustomerCancelsNewUnpaidOrder(t *testing.T) {
 	buyer := fmt.Sprintf("canceller_%d", suffix)
 	buyerID := createTestUser(t, buyer, buyer+"@example.com", "BuyerPass12345", "user")
 	productID := createTestProduct(t, "Cancel Mug", fmt.Sprintf("cancel-mug-%d", suffix), 1200, 5)
-	if err := testStore.AddToCart(int(buyerID), int(productID), 2); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 2); err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "1 Cancel Street")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(buyerID), "1 Cancel Street")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,14 +80,14 @@ func TestIntegration_CustomerCannotCancelAcceptedOrder(t *testing.T) {
 	buyer := fmt.Sprintf("late_%d", suffix)
 	buyerID := createTestUser(t, buyer, buyer+"@example.com", "BuyerPass12345", "user")
 	productID := createTestProduct(t, "Late Mug", fmt.Sprintf("late-mug-%d", suffix), 1200, 5)
-	if err := testStore.AddToCart(int(buyerID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "2 Late Street")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(buyerID), "2 Late Street")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testStore.UpdateOrderFulfillment(int(orderID), "accepted", "processing", ""); err != nil {
+	if err := testStore.UpdateOrderFulfillment(t.Context(), int(orderID), "accepted", "processing", ""); err != nil {
 		t.Fatal(err)
 	}
 	cookie := loginAndGetSessionCookie(t, "localhost", buyer, "BuyerPass12345")
@@ -115,10 +115,10 @@ func TestIntegration_APICancelReturnsUpdatedOrder(t *testing.T) {
 	buyer := fmt.Sprintf("apicancel_%d", suffix)
 	buyerID := createTestUser(t, buyer, buyer+"@example.com", "BuyerPass12345", "user")
 	productID := createTestProduct(t, "API Mug", fmt.Sprintf("api-mug-%d", suffix), 1200, 5)
-	if err := testStore.AddToCart(int(buyerID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(buyerID), int(productID), 1); err != nil {
 		t.Fatal(err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(buyerID), "3 API Street")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(buyerID), "3 API Street")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,9 +22,9 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Catalog and vendor management
 
-- **No product deletion or image upload.** `DeleteProduct` and
-  `CreateProductImage` exist in `internal/db` but are called only by seed code
-  and tests. New products show a bundled fallback image.
+- **No product deletion or image upload.** `db.DeleteProduct` exists but only
+  tests call it; product images are written only with a new product (seed
+  data). New products show a bundled fallback image.
 - **A product's partner cannot be changed after creation.**
 
 ## Identity
@@ -45,13 +45,3 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   process restart during that window loses it.
 - **No metrics or tracing endpoint.** Only structured logs and the health
   endpoints.
-- **Most store calls ignore request cancellation.** About a hundred store
-  methods build their context from `context.Background()` plus the query
-  timeout, so a disconnected client does not cancel its query. Newer methods
-  take a context.
-
-## Performance
-
-- The admin team page lists every account, customers included, without
-  pagination. The storefront account page loads every order of the customer;
-  the JSON API pages both in SQL.

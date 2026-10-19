@@ -19,7 +19,7 @@ func TestIntegration_AdminCategories(t *testing.T) {
 
 	resp, _ := makeRequest(http.MethodPost, "/categories", url.Values{"name": {"Garden Tools"}, "description": {"Spades and rakes"}}, []*http.Cookie{cookie}, "admin.localhost")
 	assertFlashRedirect(t, resp, "/categories", "Category created")
-	category, err := testStore.GetCategoryBySlug("garden-tools")
+	category, err := testStore.GetCategoryBySlug(t.Context(), "garden-tools")
 	if err != nil || category == nil || category.Name != "Garden Tools" {
 		t.Fatalf("category not created with derived slug: %+v %v", category, err)
 	}
@@ -40,7 +40,7 @@ func TestIntegration_AdminCategories(t *testing.T) {
 
 	resp, _ = makeRequest(http.MethodPost, "/categories", url.Values{"action": {"delete"}, "category_id": {fmt.Sprint(category.ID)}}, []*http.Cookie{cookie}, "admin.localhost")
 	assertFlashRedirect(t, resp, "/categories", "Category deleted")
-	if category, _ := testStore.GetCategoryBySlug("garden-tools"); category != nil {
+	if category, _ := testStore.GetCategoryBySlug(t.Context(), "garden-tools"); category != nil {
 		t.Fatal("category was not deleted")
 	}
 
@@ -71,7 +71,7 @@ func TestIntegration_AdminPartnersOnboardingAndSuspension(t *testing.T) {
 	adminCookie := loginAndGetSessionCookie(t, "admin.localhost", admin, "adminpass123")
 	resp, _ := makeRequest(http.MethodPost, "/partners", url.Values{"name": {"Maji Crafts"}, "contact_email": {"hello@maji.example"}}, []*http.Cookie{adminCookie}, "admin.localhost")
 	assertFlashRedirect(t, resp, "/partners", "Partner created")
-	partner, err := testStore.GetPartnerBySlug("maji-crafts")
+	partner, err := testStore.GetPartnerBySlug(t.Context(), "maji-crafts")
 	if err != nil || partner == nil || partner.Status != "active" {
 		t.Fatalf("partner not created: %+v %v", partner, err)
 	}

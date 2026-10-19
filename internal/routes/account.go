@@ -11,10 +11,14 @@ import (
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 )
 
+// accountOrdersPerPage is how many orders the account page shows at once.
+const accountOrdersPerPage = 20
+
 type AccountPageData struct {
 	Title     string
 	Flash     Flash
 	Orders    []accountsvc.Order
+	Pager     Pager
 	Viewer    Viewer
 	CSRFToken string
 }
@@ -27,16 +31,21 @@ func Account(a *app.App) http.HandlerFunc {
 			return
 		}
 		userID, _ := requestUserID(r)
-		orders, err := a.Account.OrdersForUser(userID)
+		page := pageParam(r)
+		orders, total, err := a.Account.OrdersForUserPage(r.Context(), userID, page, accountOrdersPerPage)
 		if err != nil {
 			log.Printf("account orders: %v", err)
 			serverError(w, r)
+			return
+		}
+		if redirectPastLastPage(w, r, page, accountOrdersPerPage, total) {
 			return
 		}
 		a.Render(w, a.Templates.Account, AccountPageData{
 			Title:     "Your Account",
 			Flash:     popFlash(w, r),
 			Orders:    orders,
+			Pager:     newPager(r, page, accountOrdersPerPage, total),
 			Viewer:    viewerFromRequest(r),
 			CSRFToken: a.Auth.CSRFToken(r),
 		})

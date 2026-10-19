@@ -165,11 +165,11 @@ func clearCartTx(ctx context.Context, tx *sql.Tx, userID int) error {
 // PlaceOrderFromCart places an order for the whole cart at current prices with
 // no shipping or tax. The checkout service uses PlaceOrderFromCheckoutWithPayment
 // instead; this path exists for operational tooling and tests.
-func (s *Store) PlaceOrderFromCart(userID int, deliveryAddress string) (int64, error) {
+func (s *Store) PlaceOrderFromCart(ctx context.Context, userID int, deliveryAddress string) (int64, error) {
 	if strings.TrimSpace(deliveryAddress) == "" {
 		return 0, ErrDeliveryAddressRequired
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var orderID int64
@@ -292,12 +292,8 @@ func (s *Store) orderItemsByOrderIDs(ctx context.Context, orderIDs []int) (map[i
 
 // GetOrderForUser returns one of the user's orders, or nil when it does not
 // exist or belongs to someone else.
-func (s *Store) GetOrderForUser(userID, orderID int) (*Order, error) {
-	return s.GetOrderForUserContext(context.Background(), userID, orderID)
-}
-
-func (s *Store) GetOrderForUserContext(parent context.Context, userID, orderID int) (*Order, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) GetOrderForUser(ctx context.Context, userID, orderID int) (*Order, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	orders, err := s.listOrders(ctx, "WHERE o.id = $1 AND o.user_id = $2", orderID, userID)
 	if err != nil || len(orders) == 0 {
@@ -306,14 +302,14 @@ func (s *Store) GetOrderForUserContext(parent context.Context, userID, orderID i
 	return &orders[0], nil
 }
 
-func (s *Store) ListOrdersByUser(userID int) ([]Order, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListOrdersByUser(ctx context.Context, userID int) ([]Order, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.listOrders(ctx, "WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC", userID)
 }
 
-func (s *Store) ListOrdersByUserPageContext(parent context.Context, userID, limit, offset int) ([]Order, int, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) ListOrdersByUserPage(ctx context.Context, userID, limit, offset int) ([]Order, int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var total int
 	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders WHERE user_id = $1", userID).Scan(&total); err != nil {
@@ -326,8 +322,8 @@ func (s *Store) ListOrdersByUserPageContext(parent context.Context, userID, limi
 
 // ListOrdersForFulfillment returns every order that is not cancelled and is
 // either cash on delivery or paid online.
-func (s *Store) ListOrdersForFulfillment() ([]Order, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListOrdersForFulfillment(ctx context.Context) ([]Order, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.listOrders(ctx, "WHERE o.status <> 'cancelled' AND "+paymentSettledSQL+" ORDER BY o.created_at DESC, o.id DESC")
 }
@@ -340,22 +336,22 @@ const partnerOwnsOrderSQL = `o.status <> 'cancelled' AND ` + paymentSettledSQL +
 
 // ListOrdersForPartner returns the open orders wholly owned by one partner.
 // Orders that mix partners stay with admins and staff.
-func (s *Store) ListOrdersForPartner(partnerID int) ([]Order, error) {
+func (s *Store) ListOrdersForPartner(ctx context.Context, partnerID int) ([]Order, error) {
 	if partnerID <= 0 {
 		return []Order{}, nil
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.listOrders(ctx, "WHERE "+partnerOwnsOrderSQL+" ORDER BY o.created_at DESC, o.id DESC", partnerID)
 }
 
 // PartnerOwnsOrder reports whether orderID is an open order wholly owned by
 // partnerID.
-func (s *Store) PartnerOwnsOrder(partnerID, orderID int) (bool, error) {
+func (s *Store) PartnerOwnsOrder(ctx context.Context, partnerID, orderID int) (bool, error) {
 	if partnerID <= 0 || orderID <= 0 {
 		return false, nil
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var owned bool
 	err := s.DB.QueryRowContext(ctx,
@@ -365,14 +361,14 @@ func (s *Store) PartnerOwnsOrder(partnerID, orderID int) (bool, error) {
 	return owned, err
 }
 
-func (s *Store) ListAllOrders() ([]Order, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListAllOrders(ctx context.Context) ([]Order, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.listOrders(ctx, "ORDER BY o.created_at DESC, o.id DESC")
 }
 
-func (s *Store) ListAllOrdersPageContext(parent context.Context, limit, offset int) ([]Order, int, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) ListAllOrdersPage(ctx context.Context, limit, offset int) ([]Order, int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var total int
 	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders").Scan(&total); err != nil {
@@ -389,10 +385,10 @@ func fulfillmentPredicate(partnerID int) string {
 	return "o.status <> 'cancelled' AND " + paymentSettledSQL
 }
 
-// ListFulfillmentOrdersPageContext applies role scope and status filtering in
+// ListFulfillmentOrdersPage applies role scope and status filtering in
 // SQL before loading order lines. partnerID=0 is the admin/staff queue.
-func (s *Store) ListFulfillmentOrdersPageContext(parent context.Context, partnerID int, status string, limit, offset int) ([]Order, int, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, status string, limit, offset int) ([]Order, int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	predicate := fulfillmentPredicate(partnerID)
 	args := []any{}
@@ -414,8 +410,8 @@ func (s *Store) ListFulfillmentOrdersPageContext(parent context.Context, partner
 	return orders, total, err
 }
 
-func (s *Store) FulfillmentSummaryContext(parent context.Context, partnerID int) (PartnerOrderSummary, error) {
-	ctx, cancel := s.queryContext(parent)
+func (s *Store) FulfillmentSummary(ctx context.Context, partnerID int) (PartnerOrderSummary, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	args := []any{}
 	if partnerID > 0 {
@@ -458,7 +454,7 @@ func lockOrderTx(ctx context.Context, tx *sql.Tx, orderID int) (*lockedOrder, er
 // UpdateOrderFulfillment applies a partner fulfillment update. Partner status
 // drives the overall order status, and both partner and delivery statuses may
 // only move forward. Dispatching ships stock; cancelling releases it.
-func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
+func (s *Store) UpdateOrderFulfillment(ctx context.Context, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
 	nextStatus, ok := partnerStatusToOrderStatus[partnerStatus]
 	if !ok {
 		return ErrInvalidPartnerStatus
@@ -466,7 +462,7 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 	if !validDeliveryStatuses[deliveryStatus] {
 		return ErrInvalidDeliveryStatus
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -487,11 +483,11 @@ func (s *Store) UpdateOrderFulfillment(orderID int, partnerStatus, deliveryStatu
 // UpdateOrderByAdmin lets an admin set any valid combination of statuses, with
 // one guard: cancelled orders cannot be reopened because their stock has been
 // released.
-func (s *Store) UpdateOrderByAdmin(orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error {
+func (s *Store) UpdateOrderByAdmin(ctx context.Context, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error {
 	if !validOrderStatuses[status] || !validPartnerStatuses[partnerStatus] || !validDeliveryStatuses[deliveryStatus] {
 		return ErrInvalidOrderState
 	}
-	ctx, cancel := s.ctx()
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -518,8 +514,8 @@ func writeOrderStateTx(ctx context.Context, tx *sql.Tx, orderID int, current *lo
 	return applyOrderInventoryTransition(ctx, tx, orderID, current.InventoryState, inventoryStateFor(status, partnerStatus))
 }
 
-func (s *Store) GetPartnerOrderSummary() (PartnerOrderSummary, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetPartnerOrderSummary(ctx context.Context) (PartnerOrderSummary, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var summary PartnerOrderSummary
@@ -536,8 +532,8 @@ func (s *Store) GetPartnerOrderSummary() (PartnerOrderSummary, error) {
 	return summary, err
 }
 
-func (s *Store) GetOrderStatusCounts() (map[string]int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetOrderStatusCounts(ctx context.Context) (map[string]int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx, "SELECT status, count(*) FROM orders GROUP BY status")
@@ -562,8 +558,8 @@ func (s *Store) GetOrderStatusCounts() (map[string]int, error) {
 }
 
 // SumOrderRevenue totals non-cancelled orders.
-func (s *Store) SumOrderRevenue() (money.Cents, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) SumOrderRevenue(ctx context.Context) (money.Cents, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var total money.Cents
 	err := s.DB.QueryRowContext(ctx,

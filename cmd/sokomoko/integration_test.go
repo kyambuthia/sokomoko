@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
@@ -150,7 +151,7 @@ func makeRequest(method, path string, data url.Values, cookies []*http.Cookie, h
 	if testStore != nil {
 		for _, cookie := range cookies {
 			if cookie != nil && cookie.Name == "session_token" && strings.TrimSpace(cookie.Value) != "" {
-				sess, err := testStore.GetSession(cookie.Value)
+				sess, err := testStore.GetSession(context.Background(), cookie.Value)
 				if err == nil && sess != nil {
 					sessionCSRFToken = strings.TrimSpace(sess.CSRFToken)
 				}
@@ -233,7 +234,7 @@ func createTestUser(t *testing.T, username, email, password, role string) int64 
 		Role:         role,
 	}
 
-	userID, err := testStore.CreateUser(user)
+	userID, err := testStore.CreateUser(t.Context(), user)
 	if err != nil {
 		t.Fatalf("create user failed: %v", err)
 	}
@@ -262,7 +263,7 @@ func loginAndGetSessionCookie(t *testing.T, host, username, password string) *ht
 
 func createTestProduct(t *testing.T, name, slug string, price money.Cents, stock int) int64 {
 	t.Helper()
-	categoryID, err := testStore.CreateCategory(db.Category{
+	categoryID, err := testStore.CreateCategory(t.Context(), db.Category{
 		Name:        "Test Category " + slug,
 		Slug:        "test-category-" + slug,
 		Description: "test",
@@ -270,7 +271,7 @@ func createTestProduct(t *testing.T, name, slug string, price money.Cents, stock
 	if err != nil {
 		t.Fatalf("create category failed: %v", err)
 	}
-	productID, err := testStore.CreateProduct(db.Product{
+	productID, err := testStore.CreateProduct(t.Context(), db.Product{
 		Name:          name,
 		Slug:          slug,
 		Description:   "test product",
@@ -337,7 +338,7 @@ func TestIntegration_Signup(t *testing.T) {
 		t.Errorf("Expected redirect to /login, got %s", location)
 	}
 
-	user, err := testStore.GetUserByUsername(username)
+	user, err := testStore.GetUserByUsername(t.Context(), username)
 	if err != nil || user == nil {
 		t.Fatalf("User not created in database: %v", err)
 	}
@@ -391,7 +392,7 @@ func TestIntegration_Login(t *testing.T) {
 		Role:         "user",
 	}
 
-	testStore.CreateUser(user)
+	testStore.CreateUser(t.Context(), user)
 
 	data := url.Values{}
 	data.Set("username", username)
@@ -418,7 +419,7 @@ func TestIntegration_Login(t *testing.T) {
 		t.Error("Session cookie value is empty")
 	}
 
-	sess, err := testStore.GetSession(sessionCookie.Value)
+	sess, err := testStore.GetSession(t.Context(), sessionCookie.Value)
 	if err != nil || sess == nil {
 		t.Fatalf("Session not created in database: %v", err)
 	}
@@ -445,7 +446,7 @@ func TestIntegration_Login_WrongPassword(t *testing.T) {
 		Role:         "user",
 	}
 
-	testStore.CreateUser(user)
+	testStore.CreateUser(t.Context(), user)
 
 	data := url.Values{}
 	data.Set("username", username)
@@ -487,7 +488,7 @@ func TestIntegration_Logout(t *testing.T) {
 		Role:         "user",
 	}
 
-	testStore.CreateUser(user)
+	testStore.CreateUser(t.Context(), user)
 
 	loginData := url.Values{}
 	loginData.Set("username", username)
@@ -507,7 +508,7 @@ func TestIntegration_Logout(t *testing.T) {
 		t.Errorf("Expected redirect to /, got %s", location)
 	}
 
-	sess, err := testStore.GetSession(sessionCookie.Value)
+	sess, err := testStore.GetSession(t.Context(), sessionCookie.Value)
 	if err == nil && sess != nil {
 		t.Error("Session still exists in database after logout")
 	}
@@ -530,7 +531,7 @@ func TestIntegration_AdminLogin_Success(t *testing.T) {
 		Role:         "admin",
 	}
 
-	testStore.CreateUser(user)
+	testStore.CreateUser(t.Context(), user)
 
 	data := url.Values{}
 	data.Set("username", username)
@@ -567,7 +568,7 @@ func TestIntegration_AdminLogin_RegularUser(t *testing.T) {
 		PasswordHash: string(adminHashedPassword),
 		Role:         "admin",
 	}
-	testStore.CreateUser(adminUser)
+	testStore.CreateUser(t.Context(), adminUser)
 
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
@@ -578,7 +579,7 @@ func TestIntegration_AdminLogin_RegularUser(t *testing.T) {
 		Role:         "user",
 	}
 
-	testStore.CreateUser(user)
+	testStore.CreateUser(t.Context(), user)
 
 	data := url.Values{}
 	data.Set("username", username)
@@ -603,10 +604,10 @@ func TestIntegration_AdminDashboard_WithAdminSession(t *testing.T) {
 		Role:         "admin",
 	}
 
-	userID, _ := testStore.CreateUser(adminUser)
+	userID, _ := testStore.CreateUser(t.Context(), adminUser)
 
 	sessionToken := "test_admin_session"
-	_ = testStore.CreateSession(db.Session{
+	_ = testStore.CreateSession(t.Context(), db.Session{
 		ID:        sessionToken,
 		UserID:    int(userID),
 		CSRFToken: "test-csrf",
@@ -732,7 +733,7 @@ func TestIntegration_CartCheckoutFlow(t *testing.T) {
 		t.Fatalf("POST /checkout status=%d expected=%d", resp.StatusCode, http.StatusFound)
 	}
 
-	orders, err := testStore.ListOrdersByUser(int(userID))
+	orders, err := testStore.ListOrdersByUser(t.Context(), int(userID))
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -753,10 +754,10 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	createTestUser(t, fmt.Sprintf("staff_%d", suffix), fmt.Sprintf("staff_%d@example.com", suffix), "staffpass123", "staff")
 
 	productID := createTestProduct(t, "Partner Queue Product", fmt.Sprintf("partner-queue-%d", suffix), 900, 5)
-	if err := testStore.AddToCart(int(userID), int(productID), 1); err != nil {
+	if err := testStore.AddToCart(t.Context(), int(userID), int(productID), 1); err != nil {
 		t.Fatalf("add cart failed: %v", err)
 	}
-	orderID, err := testStore.PlaceOrderFromCart(int(userID), "456 Partner Lane")
+	orderID, err := testStore.PlaceOrderFromCart(t.Context(), int(userID), "456 Partner Lane")
 	if err != nil {
 		t.Fatalf("place order failed: %v", err)
 	}
@@ -765,7 +766,7 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	}
 
 	userSessionToken := fmt.Sprintf("user_session_%d", suffix)
-	if err := testStore.CreateSession(db.Session{ID: userSessionToken, UserID: int(userID), CSRFToken: "test-csrf", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+	if err := testStore.CreateSession(t.Context(), db.Session{ID: userSessionToken, UserID: int(userID), CSRFToken: "test-csrf", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
 		t.Fatalf("create user session failed: %v", err)
 	}
 
@@ -801,7 +802,7 @@ func TestIntegration_PartnerOrders_AuthzMatrix(t *testing.T) {
 	resp, _ = makeRequest(http.MethodPost, "/orders", goodUpdate, []*http.Cookie{staffCookie}, "partner.localhost")
 	assertFlashRedirect(t, resp, "/orders", "Order fulfillment updated")
 
-	orders, err := testStore.ListOrdersForFulfillment()
+	orders, err := testStore.ListOrdersForFulfillment(t.Context())
 	if err != nil {
 		t.Fatalf("list fulfillment orders failed: %v", err)
 	}

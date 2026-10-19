@@ -37,7 +37,7 @@ func (h *Handler) cartItemCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 		return
 	}
-	if err := h.app.Commerce.AddToCart(uid, input.ProductID, input.Quantity); err != nil {
+	if err := h.app.Commerce.AddToCart(r.Context(), uid, input.ProductID, input.Quantity); err != nil {
 		writeCommerceError(w, err)
 		return
 	}
@@ -65,12 +65,12 @@ func (h *Handler) cartItem(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 			return
 		}
-		if err := h.app.Commerce.UpdateCartItem(uid, productID, input.Quantity); err != nil {
+		if err := h.app.Commerce.UpdateCartItem(r.Context(), uid, productID, input.Quantity); err != nil {
 			writeCommerceError(w, err)
 			return
 		}
 	case http.MethodDelete:
-		if err := h.app.Commerce.RemoveFromCart(uid, productID); err != nil {
+		if err := h.app.Commerce.RemoveFromCart(r.Context(), uid, productID); err != nil {
 			writeCommerceError(w, err)
 			return
 		}
@@ -87,12 +87,12 @@ func (h *Handler) writeCart(w http.ResponseWriter, r *http.Request, status int) 
 		writeError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	cart, err := h.app.Commerce.Cart(uid)
+	cart, err := h.app.Commerce.Cart(r.Context(), uid)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "cart_unavailable", "Unable to load cart")
 		return
 	}
-	pricing, err := h.app.Payment.Pricing()
+	pricing, err := h.app.Payment.Pricing(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "cart_unavailable", "Unable to load cart")
 		return

@@ -54,7 +54,7 @@ func Root(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet, http.MethodHead)
 			return
 		}
-		products, err := a.Catalog.Browse(catalogsvc.Filter{Limit: homeProductLimit})
+		products, err := a.Catalog.Browse(r.Context(), catalogsvc.Filter{Limit: homeProductLimit})
 		if err != nil {
 			log.Printf("home: list products: %v", err)
 			serverError(w, r)
@@ -78,7 +78,7 @@ func ProductDetail(a *app.App) http.HandlerFunc {
 			return
 		}
 		slug := strings.TrimPrefix(r.URL.Path, "/products/")
-		product, err := a.Catalog.ProductBySlug(slug)
+		product, err := a.Catalog.ProductBySlug(r.Context(), slug)
 		if errors.Is(err, catalogsvc.ErrInvalidProductSlug) {
 			NotFound(w, r)
 			return
@@ -128,9 +128,9 @@ func Search(a *app.App) http.HandlerFunc {
 		)
 		switch {
 		case query != "":
-			products, err = a.Catalog.SearchInCategory(query, category)
+			products, err = a.Catalog.SearchInCategory(r.Context(), query, category)
 		case category != "":
-			products, err = a.Catalog.Browse(catalogsvc.Filter{Category: category})
+			products, err = a.Catalog.Browse(r.Context(), catalogsvc.Filter{Category: category})
 		}
 		if err != nil {
 			log.Printf("search %q: %v", query, err)
@@ -162,7 +162,7 @@ func CategoriesAPI(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet)
 			return
 		}
-		categories, err := a.Catalog.Categories()
+		categories, err := a.Catalog.Categories(r.Context())
 		if err != nil {
 			log.Printf("api categories: %v", err)
 			app.JSON(w, http.StatusInternalServerError, map[string]string{"error": "categories unavailable"})

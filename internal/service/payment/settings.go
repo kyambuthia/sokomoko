@@ -1,6 +1,7 @@
 package payment
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -35,12 +36,12 @@ type ProviderView struct {
 func (s *Service) SecretsConfigured() bool { return s.box != nil }
 
 // Providers lists every provider with its current setup.
-func (s *Service) Providers() ([]ProviderView, error) {
-	settings, err := s.store.GetCommerceSettings()
+func (s *Service) Providers(ctx context.Context) ([]ProviderView, error) {
+	settings, err := s.store.GetCommerceSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	configs, err := s.store.ListPaymentProviderConfigs()
+	configs, err := s.store.ListPaymentProviderConfigs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +94,7 @@ type ProviderInput struct {
 }
 
 // SaveProvider stores a provider's setup after validating it.
-func (s *Service) SaveProvider(actor *Actor, id string, input ProviderInput) error {
+func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, input ProviderInput) error {
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return ErrForbidden
 	}
@@ -109,7 +110,7 @@ func (s *Service) SaveProvider(actor *Actor, id string, input ProviderInput) err
 	if !d.Online {
 		mode = "live"
 	}
-	existing, err := s.store.GetPaymentProviderConfig(id)
+	existing, err := s.store.GetPaymentProviderConfig(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -149,7 +150,7 @@ func (s *Service) SaveProvider(actor *Actor, id string, input ProviderInput) err
 		if len(missing) > 0 {
 			return fmt.Errorf("%w: %s", ErrMissingFields, strings.Join(missing, ", "))
 		}
-		commerce, err := s.store.GetCommerceSettings()
+		commerce, err := s.store.GetCommerceSettings(ctx)
 		if err != nil {
 			return err
 		}
@@ -161,7 +162,7 @@ func (s *Service) SaveProvider(actor *Actor, id string, input ProviderInput) err
 				return fmt.Errorf("%w: %v", ErrMissingFields, err)
 			}
 		}
-	} else if err := s.ensureAnotherEnabled(id); err != nil {
+	} else if err := s.ensureAnotherEnabled(ctx, id); err != nil {
 		return err
 	}
 
@@ -180,20 +181,20 @@ func (s *Service) SaveProvider(actor *Actor, id string, input ProviderInput) err
 			return err
 		}
 	}
-	if err := s.store.SavePaymentProviderConfig(record); err != nil {
+	if err := s.store.SavePaymentProviderConfig(ctx, record); err != nil {
 		return err
 	}
 	state := "disabled"
 	if input.Enabled {
 		state = "enabled " + mode
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "payments.provider.update", "payment_provider", 0, id+": "+state)
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.provider.update", "payment_provider", 0, id+": "+state)
 	return nil
 }
 
 // ensureAnotherEnabled keeps checkout usable: some other method must remain.
-func (s *Service) ensureAnotherEnabled(id string) error {
-	providers, err := s.enabled()
+func (s *Service) ensureAnotherEnabled(ctx context.Context, id string) error {
+	providers, err := s.enabled(ctx)
 	if err != nil {
 		return err
 	}
@@ -213,8 +214,8 @@ type Pricing struct {
 	TaxRateBP             int64
 }
 
-func (s *Service) Pricing() (Pricing, error) {
-	c, err := s.store.GetCommerceSettings()
+func (s *Service) Pricing(ctx context.Context) (Pricing, error) {
+	c, err := s.store.GetCommerceSettings(ctx)
 	return Pricing(c), err
 }
 
@@ -228,7 +229,7 @@ type PricingInput struct {
 
 // SavePricing validates and stores currency and pricing. Switching currency
 // is refused when an enabled online provider cannot charge it.
-func (s *Service) SavePricing(actor *Actor, input PricingInput) (Pricing, error) {
+func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingInput) (Pricing, error) {
 	if actor == nil || actor.Role != db.RoleAdmin {
 		return Pricing{}, ErrForbidden
 	}
@@ -250,7 +251,7 @@ func (s *Service) SavePricing(actor *Actor, input PricingInput) (Pricing, error)
 	if err != nil || taxPct > 10000 {
 		return Pricing{}, fmt.Errorf("%w: tax rate must be 0 to 100%%", ErrInvalidPricing)
 	}
-	providers, err := s.enabled()
+	providers, err := s.enabled(ctx)
 	if err != nil {
 		return Pricing{}, err
 	}
@@ -260,10 +261,10 @@ func (s *Service) SavePricing(actor *Actor, input PricingInput) (Pricing, error)
 		}
 	}
 	settings := db.CommerceSettings{Currency: currency.Code, ShippingFlat: flat, FreeShippingThreshold: free, TaxRateBP: int64(taxPct)}
-	if err := s.store.UpdateCommerceSettings(settings); err != nil {
+	if err := s.store.UpdateCommerceSettings(ctx, settings); err != nil {
 		return Pricing{}, err
 	}
-	_ = s.store.CreateAuditLog(actor.ID, "payments.pricing.update", "commerce_settings", 1,
+	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.pricing.update", "commerce_settings", 1,
 		fmt.Sprintf("currency=%s shipping=%s free=%s tax_bp=%d", currency.Code, flat, free, taxPct))
 	return Pricing(settings), nil
 }

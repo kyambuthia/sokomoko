@@ -50,16 +50,16 @@ func TestIntegration_AdminRenamesCategoryAndPartner(t *testing.T) {
 	admin := loginAndGetSessionCookie(t, "admin.localhost", fmt.Sprintf("boss_%d", suffix), "AdminPass12345")
 
 	productID := createTestProduct(t, "Rename Lamp", fmt.Sprintf("rename-lamp-%d", suffix), 1000, 1)
-	product, _ := testStore.GetProductByID(int(productID))
+	product, _ := testStore.GetProductByID(t.Context(), int(productID))
 	categoryID := product.CategoryID.Int64
-	category, _ := testStore.GetCategoryByID(int(categoryID))
+	category, _ := testStore.GetCategoryByID(t.Context(), int(categoryID))
 
 	if _, body := makeRequest(http.MethodGet, fmt.Sprintf("/categories?edit=%d", categoryID), nil, []*http.Cookie{admin}, "admin.localhost"); !strings.Contains(body, "Edit category") || !strings.Contains(body, fmt.Sprintf(`name="category_id" value="%d"`, categoryID)) {
 		t.Fatal("category edit form not shown")
 	}
 	resp, _ := makeRequest(http.MethodPost, "/categories", url.Values{"action": {"update"}, "category_id": {fmt.Sprint(categoryID)}, "name": {"Lighting"}, "description": {"Lamps and bulbs"}}, []*http.Cookie{admin}, "admin.localhost")
 	assertFlashRedirect(t, resp, "/categories", "Category updated")
-	renamed, _ := testStore.GetCategoryByID(int(categoryID))
+	renamed, _ := testStore.GetCategoryByID(t.Context(), int(categoryID))
 	if renamed == nil || renamed.Name != "Lighting" || renamed.Description != "Lamps and bulbs" || renamed.Slug != category.Slug {
 		t.Fatalf("category after rename = %+v", renamed)
 	}
@@ -74,7 +74,7 @@ func TestIntegration_AdminRenamesCategoryAndPartner(t *testing.T) {
 	}
 	resp, _ = makeRequest(http.MethodPost, "/partners", url.Values{"action": {"update"}, "partner_id": {fmt.Sprint(partnerID)}, "name": {"Vendor Renamed"}, "contact_email": {"Sales@Vendor.example"}}, []*http.Cookie{admin}, "admin.localhost")
 	assertFlashRedirect(t, resp, "/partners", "Partner updated")
-	partner, err := testStore.GetPartnerByID(int(partnerID))
+	partner, err := testStore.GetPartnerByID(t.Context(), int(partnerID))
 	if err != nil || partner == nil || partner.Name != "Vendor Renamed" || partner.ContactEmail != "sales@vendor.example" || partner.Slug != fmt.Sprintf("vendor-%d", suffix) {
 		t.Fatalf("partner after rename = %+v, %v", partner, err)
 	}
@@ -86,7 +86,7 @@ func TestIntegration_AdminRenamesCategoryAndPartner(t *testing.T) {
 
 func createAPITestPartnerWithoutLogin(t *testing.T, slug string) int64 {
 	t.Helper()
-	id, err := testStore.UpsertPartner(db.Partner{Name: slug, Slug: slug, ContactEmail: slug + "@example.com"})
+	id, err := testStore.UpsertPartner(t.Context(), db.Partner{Name: slug, Slug: slug, ContactEmail: slug + "@example.com"})
 	if err != nil {
 		t.Fatal(err)
 	}

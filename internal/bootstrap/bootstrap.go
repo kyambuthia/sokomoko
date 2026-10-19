@@ -1,10 +1,12 @@
 package bootstrap
 
+import "context"
+
 type store interface {
 	ApplySchema() error
-	SeedAdmin()
-	SeedPartners()
-	SeedInitialCatalog()
+	SeedAdmin(ctx context.Context)
+	SeedPartners(ctx context.Context)
+	SeedInitialCatalog(ctx context.Context)
 }
 
 type Service struct {
@@ -26,9 +28,9 @@ func (s *Service) Seed() error {
 	if s == nil || s.store == nil {
 		return nil
 	}
-	s.store.SeedAdmin()
-	s.store.SeedPartners()
-	s.store.SeedInitialCatalog()
+	s.store.SeedAdmin(context.Background())
+	s.store.SeedPartners(context.Background())
+	s.store.SeedInitialCatalog(context.Background())
 	return nil
 }
 

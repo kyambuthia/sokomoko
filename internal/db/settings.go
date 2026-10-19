@@ -1,13 +1,14 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
 )
 
-func (s *Store) GetStoreSettings() (*StoreSettings, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetStoreSettings(ctx context.Context) (*StoreSettings, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	settings := &StoreSettings{}
@@ -32,8 +33,8 @@ func (s *Store) GetStoreSettings() (*StoreSettings, error) {
 	return settings, nil
 }
 
-func (s *Store) UpsertStoreSettings(settings StoreSettings) error {
-	ctx, cancel := s.ctx()
+func (s *Store) UpsertStoreSettings(ctx context.Context, settings StoreSettings) error {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	_, err := s.DB.ExecContext(ctx,
 		`INSERT INTO store_settings (id, store_name, store_slug, description, contact_email)
@@ -52,8 +53,8 @@ func (s *Store) UpsertStoreSettings(settings StoreSettings) error {
 }
 
 // UpsertPartner creates or updates a partner identified by slug and returns its id.
-func (s *Store) UpsertPartner(partner Partner) (int64, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) UpsertPartner(ctx context.Context, partner Partner) (int64, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	status := strings.TrimSpace(partner.Status)
@@ -77,8 +78,8 @@ func (s *Store) UpsertPartner(partner Partner) (int64, error) {
 	return id, wrapDBError(err)
 }
 
-func (s *Store) GetPartnerBySlug(slug string) (*Partner, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetPartnerBySlug(ctx context.Context, slug string) (*Partner, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	partner := &Partner{}
@@ -96,8 +97,8 @@ func (s *Store) GetPartnerBySlug(slug string) (*Partner, error) {
 	return partner, nil
 }
 
-func (s *Store) ListPartners() ([]Partner, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListPartners(ctx context.Context) ([]Partner, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	rows, err := s.DB.QueryContext(ctx,
@@ -121,8 +122,8 @@ func (s *Store) ListPartners() ([]Partner, error) {
 }
 
 // PartnerIDForUser resolves an explicitly assigned active partner membership.
-func (s *Store) PartnerIDForUser(userID int) (int, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) PartnerIDForUser(ctx context.Context, userID int) (int, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var id int
 	err := s.DB.QueryRowContext(ctx, `SELECT p.id FROM partners p
@@ -138,8 +139,8 @@ func (s *Store) PartnerIDForUser(userID int) (int, error) {
 
 // CreatePartner inserts a new active partner. A taken slug returns
 // ErrUniqueConstraint.
-func (s *Store) CreatePartner(partner Partner) (int64, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CreatePartner(ctx context.Context, partner Partner) (int64, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var id int64
 	err := s.DB.QueryRowContext(ctx,
@@ -151,8 +152,8 @@ func (s *Store) CreatePartner(partner Partner) (int64, error) {
 	return id, wrapDBError(err)
 }
 
-func (s *Store) GetPartnerByID(id int) (*Partner, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) GetPartnerByID(ctx context.Context, id int) (*Partner, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	partner := &Partner{}
 	err := s.DB.QueryRowContext(ctx,
@@ -172,8 +173,8 @@ func (s *Store) GetPartnerByID(id int) (*Partner, error) {
 // partner data. It reports false when the partner does not exist.
 // UpdatePartnerDetails renames a partner and changes its contact email. The
 // slug stays the same.
-func (s *Store) UpdatePartnerDetails(id int, name, contactEmail string) (bool, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) UpdatePartnerDetails(ctx context.Context, id int, name, contactEmail string) (bool, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	result, err := s.DB.ExecContext(ctx, "UPDATE partners SET name = $1, contact_email = $2 WHERE id = $3",
 		strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(contactEmail)), id)
@@ -186,8 +187,8 @@ func (s *Store) UpdatePartnerDetails(id int, name, contactEmail string) (bool, e
 
 // SetPartnerStatus changes a partner's status. Suspending also signs out the
 // partner's own logins in the same transaction.
-func (s *Store) SetPartnerStatus(id int, status string) (bool, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) SetPartnerStatus(ctx context.Context, id int, status string) (bool, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	found := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
@@ -212,8 +213,8 @@ func (s *Store) SetPartnerStatus(id int, status string) (bool, error) {
 
 // CreatePartnerUser creates a login with the partner role and links it to
 // partnerID in one transaction.
-func (s *Store) CreatePartnerUser(user User, partnerID int) (int64, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) CreatePartnerUser(ctx context.Context, user User, partnerID int) (int64, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var id int64
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
@@ -239,8 +240,8 @@ type PartnerAccount struct {
 }
 
 // ListPartnerAccounts returns active partner logins ordered by partner name.
-func (s *Store) ListPartnerAccounts() ([]PartnerAccount, error) {
-	ctx, cancel := s.ctx()
+func (s *Store) ListPartnerAccounts(ctx context.Context) ([]PartnerAccount, error) {
+	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx,
 		`SELECT u.id, u.username, u.email, p.id, p.name
