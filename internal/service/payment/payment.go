@@ -379,7 +379,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 		CallbackURL: base + "/payments/callback/" + payment.Provider + "/" + token,
 	})
 	if err != nil {
-		_ = s.store.FailPaymentAttempt(ctx, attemptID, customerReason(err))
+		if failErr := s.store.FailPaymentAttempt(ctx, attemptID, customerReason(err)); failErr != nil {
+			slog.Error("record failed payment start", "attempt_id", attemptID, "error", failErr)
+		}
 		return StartOutcome{}, err
 	}
 	data := result.Data

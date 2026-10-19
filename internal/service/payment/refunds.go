@@ -72,7 +72,9 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	}
 	result, err := refundProvider.CreateRefund(ctx, cfg, e.RequestReference, e.Amount, e.Currency)
 	if err != nil {
-		_ = s.store.SetPaymentExceptionStatus(ctx, id, "review", "", "Refund request outcome unknown; reconcile in Paystack before retrying.")
+		if markErr := s.store.SetPaymentExceptionStatus(ctx, id, "review", "", "Refund request outcome unknown; reconcile in Paystack before retrying."); markErr != nil {
+			slog.Error("mark refund for review", "exception_id", id, "error", markErr)
+		}
 		slog.Error("refund request requires reconciliation", "exception_id", id, "error", err)
 		return nil, err
 	}

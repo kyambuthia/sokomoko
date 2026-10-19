@@ -332,7 +332,9 @@ func createUserWithPassword(ctx context.Context, store store, username, email, p
 // fixation).
 func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int) error {
 	if existing, err := r.Cookie(sessionCookieName); err == nil && existing.Value != "" {
-		_ = s.store.DeleteSession(r.Context(), existing.Value)
+		if err := s.store.DeleteSession(r.Context(), existing.Value); err != nil {
+			log.Printf("sign-in: revoke previous session: %v", err)
+		}
 	}
 	sessionToken, err := generateOpaqueToken(32)
 	if err != nil {
@@ -1195,7 +1197,11 @@ func (s *Service) Logout() http.HandlerFunc {
 			return
 		}
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
-			_ = s.store.DeleteSession(r.Context(), cookie.Value)
+			// Revoke the session even if the browser stops waiting; clearing
+			// the cookie alone would leave a copied token valid.
+			if err := s.store.DeleteSession(context.WithoutCancel(r.Context()), cookie.Value); err != nil {
+				log.Printf("logout: revoke session: %v", err)
+			}
 		}
 		s.clearSessionCookie(w, r)
 		http.Redirect(w, r, "/", http.StatusFound)
