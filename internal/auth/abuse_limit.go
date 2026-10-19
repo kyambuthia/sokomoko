@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -111,4 +115,97 @@ func (l *authAbuseLimiter) cleanupLocked(now time.Time) {
 	}
 
 	l.lastCleanupAt = now
+}
+
+func normalizeIdentifierForAbuse(identifier string, preserveCase bool) string {
+	normalized := strings.TrimSpace(identifier)
+	if preserveCase {
+		return normalized
+	}
+	return strings.ToLower(normalized)
+}
+
+// ClientIP returns the client address for rate limiting. X-Forwarded-For is
+// only honoured when trustProxy is set, otherwise any client could spoof it to
+// dodge throttling. Only the right-most entry is used: it is the one the
+// trusted proxy wrote, while entries to its left come from the client when the
+// proxy appends to the header.
+func ClientIP(r *http.Request, trustProxy bool) string {
+	if r == nil {
+		return "unknown"
+	}
+	if trustProxy {
+		values := r.Header.Values("X-Forwarded-For")
+		if len(values) > 0 {
+			last := values[len(values)-1]
+			if i := strings.LastIndex(last, ","); i >= 0 {
+				last = last[i+1:]
+			}
+			if candidate := strings.TrimSpace(last); candidate != "" {
+				return candidate
+			}
+		}
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil {
+		host = strings.TrimSpace(r.RemoteAddr)
+	}
+	if host == "" {
+		return "unknown"
+	}
+	return host
+}
+
+func (s *Service) clientIP(r *http.Request) string {
+	return ClientIP(r, s.trustProxyHeaders)
+}
+
+func abuseScopeKey(scope, ip, identifier string) string {
+	return scope + "|" + ip + "|" + identifier
+}
+
+func (s *Service) throttleStatus(w http.ResponseWriter, retryAfter time.Duration) {
+	if retryAfter <= 0 {
+		retryAfter = time.Second
+	}
+	seconds := int(retryAfter.Seconds())
+	if retryAfter%time.Second != 0 {
+		seconds++
+	}
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+}
+
+func (s *Service) checkAbuseLock(w http.ResponseWriter, scope, identifier string, preserveCase bool, r *http.Request) bool {
+	if s.abuseLimiter == nil {
+		return false
+	}
+	ip := s.clientIP(r)
+	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
+	locked, retryAfter := s.abuseLimiter.IsLocked(key, time.Now())
+	if !locked {
+		return false
+	}
+	s.throttleStatus(w, retryAfter)
+	return true
+}
+
+func (s *Service) markAbuseFailure(scope, identifier string, preserveCase bool, r *http.Request) {
+	if s.abuseLimiter == nil {
+		return
+	}
+	ip := s.clientIP(r)
+	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
+	s.abuseLimiter.RecordFailure(key, time.Now())
+}
+
+func (s *Service) clearAbuseFailures(scope, identifier string, preserveCase bool, r *http.Request) {
+	if s.abuseLimiter == nil {
+		return
+	}
+	ip := s.clientIP(r)
+	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
+	s.abuseLimiter.RecordSuccess(key)
 }
