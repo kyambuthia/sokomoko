@@ -131,6 +131,7 @@ Breakpoints: 40rem (wider grids), 48rem (tablet: desktop header, no tab bar),
 | `.empty` | Centered empty state: icon, one line, optional action. |
 | `.products`, `.product` | Two to four column product grid; the whole card is the link. |
 | `.page-head`, `.stack`, `.row`, `.split` | Layout primitives. |
+| `.pager` | Previous, page label, Next; the label stays centred. |
 
 Template partials in `templates/base/partials.tmpl.html`: `product-card`,
 `product-grid`, `notice`, `empty`, and `pager` (Previous and Next links for a
