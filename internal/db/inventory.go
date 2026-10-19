@@ -212,17 +212,9 @@ func (s *Store) ReleaseExpiredReservations(ctx context.Context) (int, error) {
 	return released, err
 }
 
-// ReleaseUserReservations drops the user's stock holds and cancels their open
-// checkouts. It runs whenever the cart changes so a checkout never places an
-// order for a stale snapshot of the cart.
-func (s *Store) ReleaseUserReservations(ctx context.Context, userID int) error {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	return s.withTx(ctx, func(tx *sql.Tx) error {
-		return invalidateCheckoutsTx(ctx, tx, userID)
-	})
-}
-
+// invalidateCheckoutsTx drops the user's stock holds and cancels their open
+// checkouts. Every cart change calls it, so a checkout never places an order
+// for a stale snapshot of the cart.
 func invalidateCheckoutsTx(ctx context.Context, tx *sql.Tx, userID int) error {
 	if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased, "user_id = $2", userID); err != nil {
 		return err

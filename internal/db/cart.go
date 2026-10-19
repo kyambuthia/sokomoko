@@ -80,20 +80,6 @@ func (s *Store) RemoveFromCart(ctx context.Context, userID, productID int) error
 	return s.UpdateCartQuantity(ctx, userID, productID, 0)
 }
 
-func (s *Store) ClearCart(ctx context.Context, userID int) error {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-
-	return s.withTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			"DELETE FROM cart_items WHERE cart_id = (SELECT id FROM carts WHERE user_id = $1)", userID,
-		); err != nil {
-			return err
-		}
-		return invalidateCheckoutsTx(ctx, tx, userID)
-	})
-}
-
 // CartItemCount returns the total quantity of active products in the cart.
 func (s *Store) CartItemCount(ctx context.Context, userID int) (int, error) {
 	ctx, cancel := s.queryContext(ctx)

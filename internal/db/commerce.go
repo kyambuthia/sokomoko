@@ -216,12 +216,6 @@ func (s *Store) GetOrderPayment(ctx context.Context, userID, orderID int) (*Onli
 		onlinePaymentSelect+latestAttemptJoin+" WHERE p.order_id = $1 AND p.user_id = $2 ORDER BY p.id DESC LIMIT 1", orderID, userID))
 }
 
-func (s *Store) GetPaymentByID(ctx context.Context, paymentID int) (*OnlinePayment, error) {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	return scanOnlinePayment(s.DB.QueryRowContext(ctx, onlinePaymentSelect+latestAttemptJoin+" WHERE p.id = $1", paymentID))
-}
-
 func (s *Store) GetPaymentByReference(ctx context.Context, provider, reference string) (*OnlinePayment, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()

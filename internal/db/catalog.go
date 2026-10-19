@@ -492,33 +492,6 @@ func (s *Store) CountProducts(ctx context.Context) (int, error) {
 	return count, err
 }
 
-func (s *Store) CreateProductImage(ctx context.Context, img ProductImage) (int64, error) {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	var id int64
-	err := s.DB.QueryRowContext(ctx,
-		"INSERT INTO product_images (product_id, url, alt_text, position) VALUES ($1, $2, $3, $4) RETURNING id",
-		img.ProductID, strings.TrimSpace(img.URL), strings.TrimSpace(img.AltText), img.DisplayOrder,
-	).Scan(&id)
-	return id, wrapDBError(err)
-}
-
-func (s *Store) GetProductImages(ctx context.Context, productID int) ([]ProductImage, error) {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	images, err := s.getProductImagesByProductIDs(ctx, []int{productID})
-	if err != nil {
-		return nil, err
-	}
-	return images[productID], nil
-}
-
-func (s *Store) GetProductImagesByProductIDs(ctx context.Context, productIDs []int) (map[int][]ProductImage, error) {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	return s.getProductImagesByProductIDs(ctx, productIDs)
-}
-
 func (s *Store) getProductImagesByProductIDs(ctx context.Context, productIDs []int) (map[int][]ProductImage, error) {
 	imagesByProduct := map[int][]ProductImage{}
 	if len(productIDs) == 0 {
@@ -545,11 +518,4 @@ func (s *Store) getProductImagesByProductIDs(ctx context.Context, productIDs []i
 		imagesByProduct[img.ProductID] = append(imagesByProduct[img.ProductID], img)
 	}
 	return imagesByProduct, rows.Err()
-}
-
-func (s *Store) DeleteProductImage(ctx context.Context, id int) error {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	_, err := s.DB.ExecContext(ctx, "DELETE FROM product_images WHERE id = $1", id)
-	return err
 }

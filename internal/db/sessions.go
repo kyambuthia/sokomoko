@@ -45,13 +45,6 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 	return err
 }
 
-func (s *Store) DeleteSessionsByUserID(ctx context.Context, userID int) error {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	_, err := s.DB.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", userID)
-	return err
-}
-
 func (s *Store) CleanupSessions(ctx context.Context) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()

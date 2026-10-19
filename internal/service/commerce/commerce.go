@@ -45,11 +45,6 @@ func New(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) GetCart(ctx context.Context, userID int) ([]CartItem, money.Cents, error) {
-	cart, err := s.Cart(ctx, userID)
-	return cart.Items, cart.Subtotal, err
-}
-
 func (s *Service) Cart(ctx context.Context, userID int) (Cart, error) {
 	items, subtotal, err := s.store.GetCartItems(ctx, userID)
 	if err != nil {
