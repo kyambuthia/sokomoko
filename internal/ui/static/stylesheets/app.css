@@ -285,6 +285,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   flex: none;
   display: inline-flex;
   align-items: center;
+  gap: var(--s1);
   min-height: 32px;
   padding: 0 var(--s3);
   border: 1px solid var(--line-strong);

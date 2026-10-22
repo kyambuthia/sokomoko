@@ -123,7 +123,7 @@ export class UICategoryNav extends HTMLElement {
         const chip = document.createElement("a");
         chip.className = "chip";
         chip.href = category.url;
-        chip.textContent = category.name;
+        chip.append(icon(category.icon || "category"), document.createTextNode(category.name));
         if (category.slug === current) chip.setAttribute("aria-current", "page");
         nav.append(chip);
       }

@@ -11,17 +11,18 @@ import (
 
 func templateFuncs() template.FuncMap {
 	return template.FuncMap{
-		"asset":    AssetURL,
-		"icon":     Icon,
-		"list":     list,
-		"money":    FormatMoney,
-		"percent":  basisPoints,
-		"currency": Currency,
-		"field":    field,
-		"signedIn": signedIn,
-		"dict":     dict,
-		"json":     toJSON,
-		"rfc3339":  rfc3339,
+		"asset":        AssetURL,
+		"icon":         Icon,
+		"list":         list,
+		"money":        FormatMoney,
+		"percent":      basisPoints,
+		"currency":     Currency,
+		"categoryIcon": CategoryIcon,
+		"field":        field,
+		"signedIn":     signedIn,
+		"dict":         dict,
+		"json":         toJSON,
+		"rfc3339":      rfc3339,
 	}
 }
 

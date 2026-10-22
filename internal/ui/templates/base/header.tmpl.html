@@ -69,7 +69,7 @@
 <div class="container">
   <ui-category-nav current="{{ field . "Category" }}">
     <nav class="chips" aria-label="Categories">
-      <a class="chip" href="/" {{ if not (field . "Category") }}aria-current="page"{{ end }}>All</a>
+      <a class="chip" href="/" {{ if not (field . "Category") }}aria-current="page"{{ end }}>{{ icon "grid" }}All</a>
     </nav>
   </ui-category-nav>
 </div>

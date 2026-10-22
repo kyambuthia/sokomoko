@@ -1,5 +1,5 @@
 // Command iconsprite rebuilds internal/ui/static/icons/sprite.svg from a
-// pinned release of Tabler Icons (MIT). It needs network access and is run by
+// pinned release of Tabler Icons (MIT) on GitHub. It needs network access and is run by
 // hand when the icon list changes:
 //
 //	go run ./scripts/iconsprite
@@ -21,7 +21,7 @@ import (
 
 const (
 	version = "3.47.0"
-	source  = "https://cdn.jsdelivr.net/npm/@tabler/icons@" + version
+	source  = "https://raw.githubusercontent.com/tabler/tabler-icons/v" + version
 	output  = "internal/ui/static/icons/sprite.svg"
 	license = "internal/ui/static/icons/LICENSE-tabler.txt"
 )
@@ -29,9 +29,19 @@ const (
 // icons maps the name used in templates to the Tabler outline icon name.
 var icons = [][2]string{
 	{"alert", "alert-circle"},
+	{"apple", "apple"},
 	{"arrow-left", "arrow-left"},
 	{"audit", "shield-check"},
+	{"baby", "baby-carriage"},
+	{"backpack", "backpack"},
+	{"basketball", "ball-basketball"},
+	{"bed", "bed"},
+	{"bike", "bike"},
+	{"book", "book"},
 	{"box", "box"},
+	{"brush", "brush"},
+	{"camera", "camera"},
+	{"car", "car"},
 	{"cart", "shopping-bag"},
 	{"category", "tags"},
 	{"chart", "chart-bar"},
@@ -39,27 +49,49 @@ var icons = [][2]string{
 	{"chevron-down", "chevron-down"},
 	{"chevron-right", "chevron-right"},
 	{"clock", "clock"},
+	{"coffee", "coffee"},
 	{"copy", "copy"},
 	{"dashboard", "layout-dashboard"},
+	{"diamond", "diamond"},
+	{"dumbbell", "dumbbell"},
 	{"external", "external-link"},
 	{"eye", "eye"},
 	{"eye-off", "eye-off"},
+	{"fish", "fish"},
+	{"gamepad", "device-gamepad"},
+	{"gift", "gift"},
+	{"glasses", "eyeglass-2"},
+	{"grid", "layout-grid"},
+	{"headphones", "headphones"},
+	{"heart", "heart"},
 	{"home", "home"},
 	{"info", "info-circle"},
+	{"kitchen", "tools-kitchen-2"},
+	{"lamp", "lamp"},
+	{"laptop", "device-laptop"},
 	{"logout", "logout"},
 	{"map-pin", "map-pin"},
 	{"menu", "menu-2"},
 	{"minus", "minus"},
+	{"mobile", "device-mobile"},
 	{"moon", "moon"},
+	{"music", "music"},
 	{"orders", "clipboard-list"},
 	{"package", "package"},
+	{"palette", "palette"},
+	{"paw", "paw"},
 	{"pencil", "pencil"},
+	{"perfume", "perfume"},
+	{"plant", "plant"},
 	{"plus", "plus"},
 	{"search", "search"},
 	{"settings", "settings"},
+	{"shirt", "shirt"},
+	{"shoe", "shoe"},
 	{"store", "building-store"},
 	{"success", "circle-check"},
 	{"sun", "sun"},
+	{"tools", "tools"},
 	{"trash", "trash"},
 	{"truck", "truck-delivery"},
 	{"user", "user"},
@@ -67,6 +99,7 @@ var icons = [][2]string{
 	{"users", "users"},
 	{"wallet", "wallet"},
 	{"warning", "alert-triangle"},
+	{"watch", "device-watch"},
 	{"x", "x"},
 }
 

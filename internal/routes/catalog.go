@@ -8,6 +8,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
+	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
 const homeProductLimit = 48
@@ -156,6 +157,7 @@ func CategoriesAPI(a *app.App) http.HandlerFunc {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 		URL  string `json:"url"`
+		Icon string `json:"icon"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -170,7 +172,12 @@ func CategoriesAPI(a *app.App) http.HandlerFunc {
 		}
 		out := make([]categoryJSON, 0, len(categories))
 		for _, c := range categories {
-			out = append(out, categoryJSON{Name: c.Name, Slug: c.Slug, URL: "/search?category=" + urlQueryEscape(c.Slug)})
+			out = append(out, categoryJSON{
+				Name: c.Name,
+				Slug: c.Slug,
+				URL:  "/search?category=" + urlQueryEscape(c.Slug),
+				Icon: ui.CategoryIcon(c.Slug),
+			})
 		}
 		w.Header().Set("Cache-Control", "public, max-age=60")
 		app.JSON(w, http.StatusOK, map[string]any{"categories": out})
