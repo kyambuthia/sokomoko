@@ -830,6 +830,15 @@ dialog .row-between { margin-top: var(--s5); justify-content: flex-end; }
 }
 .footer a { text-decoration: none; }
 .footer a:hover { text-decoration: underline; }
+.footer__inner { display: flex; flex-direction: column; gap: var(--s5); }
+.footer__top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s6); }
+.footer__brand .brand__wordmark { height: 32px; }
+.footer__nav { display: flex; flex-wrap: wrap; gap: var(--s7); }
+.footer__col { display: flex; flex-direction: column; gap: var(--s2); min-width: 7rem; }
+.footer__col .section-title { margin: 0; }
+.footer__col a { color: var(--fg-2); }
+.footer__col a:hover { color: var(--fg); }
+.footer__note { margin: 0; padding-top: var(--s4); border-top: 1px solid var(--line); }
 
 /* Utilities -------------------------------------------------------------- */
 
