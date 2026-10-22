@@ -11,10 +11,27 @@
 </ui-search>
 {{ end }}
 
+{{/* The drawn mark and wordmark. The link around it carries the accessible name. */}}
+{{ define "brand" }}
+<svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+  <path d="M24 8H8V16H24V24H8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>
+<svg class="brand__wordmark" viewBox="0 0 264 32" aria-hidden="true" focusable="false">
+  <path d="M32 8H8V16H32V24H8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M40 8H64V24H40Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M72 8V24M72 16H80V8H96M72 16H80V24H96" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M104 8H128V24H104Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M136 24V8H148V24M148 8H160V24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M168 8H192V24H168Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M200 8V24M200 16H208V8H224M200 16H208V24H224" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M232 8H256V24H232Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>
+{{ end }}
+
 {{ define "storefront-header" }}
 <header class="bar">
   <div class="container bar__inner">
-    <a class="brand" href="/">sokomoko</a>
+    <a class="brand brand--bar" href="/" aria-label="sokomoko">{{ template "brand" . }}</a>
     <div class="bar__search">{{ template "search-form" . }}</div>
     <nav class="bar__actions" aria-label="Account">
       {{ template "theme-toggle" }}
@@ -32,7 +49,7 @@
 {{ define "workspace-header" }}
 <header class="bar">
   <div class="container bar__inner">
-    <a class="brand" href="/">sokomoko <span class="brand__tag">{{ .Tag }}</span></a>
+    <a class="brand brand--bar" href="/" aria-label="sokomoko {{ .Tag }}">{{ template "brand" . }}<span class="brand__tag">{{ .Tag }}</span></a>
     <div class="bar__actions">
       {{ template "theme-toggle" }}
       {{ if and .Page.CSRFToken (ne .Tag "workspace") }}
