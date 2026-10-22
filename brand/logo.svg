@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="264" height="32" viewBox="0 0 264 32">
+  <path d="M32 8H8V16H32V24H8" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M40 8H64V24H40Z" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M72 8V24M72 16H80V8H96M72 16H80V24H96" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M104 8H128V24H104Z" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M136 24V8H148V24M148 8H160V24" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M168 8H192V24H168Z" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M200 8V24M200 16H208V8H224M200 16H208V24H224" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M232 8H256V24H232Z" fill="none" stroke="#000" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>
