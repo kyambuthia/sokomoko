@@ -766,7 +766,6 @@ dialog .row-between { margin-top: var(--s5); justify-content: flex-end; }
   position: relative;
   aspect-ratio: 1;
   border-radius: var(--r-md);
-  background: var(--fill);
   overflow: hidden;
 }
 .product__media img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; padding: var(--s3); }
