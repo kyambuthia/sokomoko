@@ -1,5 +1,7 @@
 # Sokomoko
 
+![sokomoko wordmark](brand/logo.svg)
+
 Sokomoko is a server-rendered marketplace written in Go. One binary serves
 three web workspaces and a JSON API from a single PostgreSQL database:
 
