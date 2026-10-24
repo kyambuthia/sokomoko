@@ -48,7 +48,7 @@ func (s *Store) ListCourierUsers(ctx context.Context) ([]CourierUser, error) {
 // ListCourierDispatchOrders returns shipped orders awaiting delivery or
 // requiring a new courier after a failed attempt. It excludes payment fields.
 func (s *Store) ListCourierDispatchOrders(ctx context.Context) ([]CourierDelivery, error) {
-	return s.listCourierOrders(ctx, 0, true)
+	return s.listCourierOrders(ctx, 0, true, "all")
 }
 
 // ListCourierDeliveries returns only the deliveries assigned to courierUserID.
@@ -57,10 +57,23 @@ func (s *Store) ListCourierDeliveries(ctx context.Context, courierUserID int) ([
 	if courierUserID <= 0 {
 		return nil, ErrCourierDeliveryForbidden
 	}
-	return s.listCourierOrders(ctx, courierUserID, false)
+	return s.ListCourierDeliveriesByView(ctx, courierUserID, "all")
 }
 
-func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispatch bool) ([]CourierDelivery, error) {
+// ListCourierDeliveriesByView filters before applying the bounded job limit.
+func (s *Store) ListCourierDeliveriesByView(ctx context.Context, courierUserID int, view string) ([]CourierDelivery, error) {
+	if courierUserID <= 0 {
+		return nil, ErrCourierDeliveryForbidden
+	}
+	if view != "all" && view != "active" && view != "completed" {
+		return nil, ErrInvalidCourierView
+	}
+	return s.listCourierOrders(ctx, courierUserID, false, view)
+}
+
+const courierCompletedSQL = `COALESCE(cd.status, '') = 'delivered' OR o.status='delivered' OR o.delivery_status='delivered'`
+
+func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispatch bool, view string) ([]CourierDelivery, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
@@ -74,15 +87,24 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 		where = `cd.courier_user_id = $1 AND o.status <> 'cancelled'`
 	}
 
+	direction := "ASC"
+	if !dispatch && view == "active" {
+		where += " AND NOT (" + courierCompletedSQL + ")"
+	}
+	if !dispatch && view == "completed" {
+		where += " AND (" + courierCompletedSQL + ")"
+		direction = "DESC"
+	}
+
 	rows, err := s.DB.QueryContext(ctx,
 		`WITH selected AS (
 		 SELECT o.id,
-		        CASE WHEN COALESCE(cd.status, '') = 'delivered' OR o.status='delivered' OR o.delivery_status='delivered' THEN 1 ELSE 0 END AS delivery_rank,
+		        CASE WHEN `+courierCompletedSQL+` THEN 1 ELSE 0 END AS delivery_rank,
 		        COALESCE(cd.assigned_at, o.created_at) AS queued_at
 		 FROM orders o
 		 LEFT JOIN courier_deliveries cd ON cd.order_id = o.id
 		 WHERE `+where+`
-		 ORDER BY delivery_rank, queued_at, o.id
+		 ORDER BY delivery_rank, queued_at `+direction+`, o.id `+direction+`
 		 LIMIT 200
 		)
 		 SELECT COALESCE(cd.id, 0), o.id, COALESCE(cd.courier_user_id, 0),
@@ -97,7 +119,7 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 		 LEFT JOIN courier_deliveries cd ON cd.order_id = o.id
 		 LEFT JOIN users courier ON courier.id = cd.courier_user_id
 		 LEFT JOIN order_items oi ON oi.order_id = o.id
-		 ORDER BY selected.delivery_rank, selected.queued_at, o.id, oi.id`, args...)
+		 ORDER BY selected.delivery_rank, selected.queued_at `+direction+`, o.id `+direction+`, oi.id`, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -66,6 +67,26 @@ func TestCourierAPIStatusRetriesPreserveAuthorizationAndTimeline(t *testing.T) {
 	if !strings.Contains(string(bodyBefore), "Sample test address") {
 		t.Fatal("active delivery lost its address")
 	}
+	assertView := func(view string, want int) {
+		t.Helper()
+		response, raw := makeAPIRequestOnHost(t, "courier.localhost", http.MethodGet, "/api/v1/courier/deliveries?view="+view, nil, rider, false, nil)
+		messagingStatus(t, response, raw, http.StatusOK)
+		var selected []struct {
+			OrderID int `json:"order_id"`
+		}
+		decodeAPIData(t, raw, &selected)
+		if len(selected) != want || (want == 1 && selected[0].OrderID != int(order)) {
+			t.Fatalf("view %s: %+v", view, selected)
+		}
+	}
+	assertView("active", 1)
+	assertView("completed", 0)
+	invalidResponse, invalidBody := makeAPIRequestOnHost(t, "courier.localhost", http.MethodGet, "/api/v1/courier/deliveries?view=invalid", nil, rider, false, nil)
+	messagingStatus(t, invalidResponse, invalidBody, http.StatusBadRequest)
+	invalidPage, _ := makeRequest(http.MethodGet, "/deliveries?view=invalid", nil, rider, "courier.localhost")
+	if invalidPage.StatusCode != http.StatusBadRequest {
+		t.Fatal("invalid HTML view accepted")
+	}
 	path := fmt.Sprintf("/api/v1/courier/deliveries/%d", jobs[0].ID)
 	input := map[string]string{"status": db.CourierDeliveryPickedUp}
 	resp, body := makeAPIRequestOnHost(t, "courier.localhost", http.MethodPatch, path, input, rider, false, nil)
@@ -79,6 +100,8 @@ func TestCourierAPIStatusRetriesPreserveAuthorizationAndTimeline(t *testing.T) {
 			messagingStatus(t, resp, body, http.StatusOK)
 		}
 	}
+	assertView("active", 0)
+	assertView("completed", 1)
 	resp, body = makeAPIRequestOnHost(t, "courier.localhost", http.MethodGet, "/api/v1/courier/deliveries", nil, rider, false, nil)
 	messagingStatus(t, resp, body, http.StatusOK)
 	if strings.Contains(string(body), "Sample test address") || !strings.Contains(string(body), `"delivery_address":""`) {
@@ -87,6 +110,19 @@ func TestCourierAPIStatusRetriesPreserveAuthorizationAndTimeline(t *testing.T) {
 	pageResponse, page := makeRequest(http.MethodGet, "/deliveries", nil, rider, "courier.localhost")
 	if pageResponse.StatusCode != http.StatusOK || strings.Contains(page, "Sample test address") || !strings.Contains(page, "Address hidden after delivery completion") {
 		t.Fatal("completed HTML history exposed address")
+	}
+	completedResponse, completedHTML := makeRequest(http.MethodGet, "/deliveries?view=completed", nil, rider, "courier.localhost")
+	if completedResponse.StatusCode != http.StatusOK || !strings.Contains(completedHTML, `href="/deliveries?view=completed" aria-current="page"`) {
+		t.Fatal("completed view selection missing")
+	}
+	session, err := testStore.GetSession(t.Context(), rider[0].Value)
+	if err != nil || session == nil {
+		t.Fatalf("rider session unavailable: %v", err)
+	}
+	form := url.Values{"csrf_token": {session.CSRFToken}, "status": {db.CourierDeliveryDelivered}, "view": {"completed"}}
+	postResponse, _ := makeRequest(http.MethodPost, fmt.Sprintf("/deliveries/%d", jobs[0].ID), form, rider, "courier.localhost")
+	if postResponse.StatusCode != http.StatusFound || postResponse.Header.Get("Location") != "/deliveries?view=completed" {
+		t.Fatalf("view redirect=%d %s", postResponse.StatusCode, postResponse.Header.Get("Location"))
 	}
 	var storedAddress string
 	if err := testStore.DB.QueryRow(`SELECT delivery_address FROM orders WHERE id=$1`, order).Scan(&storedAddress); err != nil || storedAddress != "Sample test address" {

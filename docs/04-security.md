@@ -201,3 +201,9 @@ still fails; this is not a general request-idempotency-key system.
 
 References: [OWASP authorization guidance](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
 and [PostgreSQL 17 row locks](https://www.postgresql.org/docs/17/explicit-locking.html).
+
+Courier job views (`all`, `active`, `completed`) use the same ownership scope
+and completion checks. Filtering occurs before the 200-job limit. Completed
+history is ordered by newest assignment first; active work keeps oldest
+assignments first. Unknown views return 400. The default remains all jobs.
+Status forms retain only an allowlisted view value on their local redirect.

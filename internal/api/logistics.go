@@ -98,7 +98,7 @@ func (h *Handler) courierDeliveries(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	deliveries, err := h.app.Logistics.Jobs(r.Context(), logisticsActor(r))
+	deliveries, err := h.app.Logistics.JobsByView(r.Context(), logisticsActor(r), r.URL.Query().Get("view"))
 	if err != nil {
 		writeLogisticsError(w, err)
 		return
@@ -158,6 +158,8 @@ func logisticsActor(r *http.Request) *logisticsvc.Actor {
 
 func writeLogisticsError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, db.ErrInvalidCourierView):
+		writeError(w, http.StatusBadRequest, "invalid_delivery_view", "Choose all, active or completed deliveries")
 	case errors.Is(err, logisticsvc.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", "You do not have access to this delivery")
 	case errors.Is(err, logisticsvc.ErrInvalidOrderID), errors.Is(err, logisticsvc.ErrInvalidCourierID), errors.Is(err, logisticsvc.ErrInvalidDeliveryID):

@@ -32,6 +32,7 @@ var (
 	ErrDeliveryAlreadyStarted     = errors.New("courier delivery has already started")
 	ErrCourierDeliveryForbidden   = errors.New("courier cannot update this delivery")
 	ErrInvalidCourierTransition   = errors.New("invalid courier delivery transition")
+	ErrInvalidCourierView         = errors.New("invalid courier job view")
 	ErrCourierHasActiveDeliveries = errors.New("courier has active deliveries")
 )
 

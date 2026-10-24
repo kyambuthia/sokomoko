@@ -251,3 +251,57 @@ func TestCourierDeactivationIgnoresTerminalOrdersAndRevokesSessions(t *testing.T
 		})
 	}
 }
+
+func TestCourierViewsSeparateLiveWorkFromCompletedHistory(t *testing.T) {
+	s := newTestStore(t)
+	buyer, admin, rider, outsider := mustCreateUser(t, s, RoleUser), mustCreateUser(t, s, RoleAdmin), mustCreateUser(t, s, RoleCourier), mustCreateUser(t, s, RoleCourier)
+	product := mustCreateProduct(t, s, 100, 5)
+	var newest int
+	for _, state := range []string{"active", "failed", "order-completed", "delivery-completed", "cancelled"} {
+		chatMust(t, s.AddToCart(t.Context(), buyer, product, 1))
+		order, err := s.PlaceOrderFromCart(t.Context(), buyer, "fixture destination")
+		chatMust(t, err)
+		for _, step := range []string{"accepted", "packing", "dispatched"} {
+			chatMust(t, s.UpdateOrderFulfillment(t.Context(), int(order), step, "queued", ""))
+		}
+		chatMust(t, s.AssignCourierToOrder(t.Context(), int(order), rider, admin))
+		switch state {
+		case "failed":
+			var id int
+			chatMust(t, s.DB.QueryRow(`SELECT id FROM courier_deliveries WHERE order_id=$1`, order).Scan(&id))
+			chatMust(t, s.UpdateCourierDelivery(t.Context(), id, rider, CourierDeliveryFailed, "Address issue"))
+		case "order-completed":
+			chatMust(t, s.UpdateOrderByAdmin(t.Context(), int(order), "delivered", "completed", "shipped", ""))
+		case "delivery-completed":
+			chatMust(t, s.UpdateOrderByAdmin(t.Context(), int(order), "shipped", "dispatched", "delivered", ""))
+			newest = int(order)
+		case "cancelled":
+			chatMust(t, s.UpdateOrderByAdmin(t.Context(), int(order), "cancelled", "cancelled", "shipped", ""))
+		}
+	}
+	for view, want := range map[string]int{"all": 4, "active": 2, "completed": 2} {
+		jobs, err := s.ListCourierDeliveriesByView(t.Context(), rider, view)
+		chatMust(t, err)
+		if len(jobs) != want {
+			t.Fatalf("%s jobs=%d want=%d", view, len(jobs), want)
+		}
+		for _, job := range jobs {
+			if view == "active" && (job.Status == CourierDeliveryDelivered || job.DeliveryAddress == "") {
+				t.Fatal("active view included completed or redacted job")
+			}
+			if view == "completed" && (job.Status != CourierDeliveryDelivered || job.DeliveryAddress != "") {
+				t.Fatal("completed view exposed live work or address")
+			}
+		}
+		if view == "completed" && jobs[0].OrderID != newest {
+			t.Fatal("completed history did not show newest assignment first")
+		}
+		jobs, err = s.ListCourierDeliveriesByView(t.Context(), outsider, view)
+		chatMust(t, err)
+		if len(jobs) != 0 {
+			t.Fatal("view exposed another rider's jobs")
+		}
+	}
+	_, err := s.ListCourierDeliveriesByView(t.Context(), rider, "invalid")
+	chatWantError(t, err, ErrInvalidCourierView)
+}

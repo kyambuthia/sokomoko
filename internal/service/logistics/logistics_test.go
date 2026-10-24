@@ -22,11 +22,21 @@ func TestDispatchRejectsNonOperatorsBeforeStoreAccess(t *testing.T) {
 func TestCourierRejectsOtherRolesBeforeStoreAccess(t *testing.T) {
 	svc := New(nil)
 	for _, actor := range []*Actor{nil, {ID: 1, Role: db.RoleUser}, {ID: 1, Role: db.RolePartner}, {ID: 1, Role: db.RoleAdmin}, {ID: 1, Role: db.RoleStaff}, {ID: 1, Role: "unknown"}, {ID: 0, Role: db.RoleCourier}} {
+		if _, err := svc.JobsByView(t.Context(), actor, "active"); !errors.Is(err, ErrForbidden) {
+			t.Errorf("filtered jobs actor=%+v: %v", actor, err)
+		}
 		if _, err := svc.Jobs(t.Context(), actor); !errors.Is(err, ErrForbidden) {
 			t.Errorf("jobs actor=%+v: %v", actor, err)
 		}
 		if err := svc.Update(t.Context(), actor, "1", db.CourierDeliveryDelivered, ""); !errors.Is(err, ErrForbidden) {
 			t.Errorf("update actor=%+v: %v", actor, err)
 		}
+	}
+}
+
+func TestCourierRejectsInvalidViewBeforeStoreAccess(t *testing.T) {
+	_, err := New(nil).JobsByView(t.Context(), &Actor{ID: 1, Role: db.RoleCourier}, "unknown")
+	if !errors.Is(err, db.ErrInvalidCourierView) {
+		t.Fatal(err)
 	}
 }

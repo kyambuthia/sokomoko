@@ -40,7 +40,7 @@ type Actor struct {
 type store interface {
 	ListCourierUsers(context.Context) ([]db.CourierUser, error)
 	ListCourierDispatchOrders(context.Context) ([]db.CourierDelivery, error)
-	ListCourierDeliveries(context.Context, int) ([]db.CourierDelivery, error)
+	ListCourierDeliveriesByView(context.Context, int, string) ([]db.CourierDelivery, error)
 	AssignCourierToOrder(context.Context, int, int, int) error
 	UpdateCourierDelivery(context.Context, int, int, string, string) error
 }
@@ -106,7 +106,20 @@ func (s *Service) Jobs(ctx context.Context, actor *Actor) ([]db.CourierDelivery,
 	if actor == nil || actor.ID <= 0 || actor.Role != db.RoleCourier {
 		return nil, ErrForbidden
 	}
-	return s.store.ListCourierDeliveries(ctx, actor.ID)
+	return s.JobsByView(ctx, actor, "all")
+}
+
+func (s *Service) JobsByView(ctx context.Context, actor *Actor, view string) ([]db.CourierDelivery, error) {
+	if actor == nil || actor.ID <= 0 || actor.Role != db.RoleCourier {
+		return nil, ErrForbidden
+	}
+	if view == "" {
+		view = "all"
+	}
+	if view != "all" && view != "active" && view != "completed" {
+		return nil, db.ErrInvalidCourierView
+	}
+	return s.store.ListCourierDeliveriesByView(ctx, actor.ID, view)
 }
 
 func (s *Service) Update(ctx context.Context, actor *Actor, deliveryIDRaw, status, note string) error {

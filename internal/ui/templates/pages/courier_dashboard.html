@@ -11,10 +11,16 @@
 {{ define "main-area" }}
 <div class="stack">
   <h1>My deliveries</h1>
+  <nav class="row" aria-label="Delivery views">
+    <a class="btn btn-secondary btn-sm" href="/deliveries?view=active"{{ if eq .View "active" }} aria-current="page"{{ end }}>Active jobs</a>
+    <a class="btn btn-secondary btn-sm" href="/deliveries?view=completed"{{ if eq .View "completed" }} aria-current="page"{{ end }}>Completed</a>
+    <a class="btn btn-secondary btn-sm" href="/deliveries"{{ if eq .View "all" }} aria-current="page"{{ end }}>All jobs</a>
+  </nav>
   <p class="muted">Work assigned to your courier account appears here. Customer addresses are private; use them only to complete the assigned delivery.</p>
   {{ template "notice" dict "Kind" "success" "Text" .Message }}
   {{ template "notice" dict "Kind" "danger" "Text" .Error }}
 
+  {{ if eq (len .Deliveries) 200 }}<p class="notice">Showing up to 200 jobs in this view.</p>{{ end }}
   {{ if .Deliveries }}
     {{ range .Deliveries }}
     <article class="card stack">
@@ -32,13 +38,15 @@
 
       {{ if eq .Status "assigned" }}
       <div class="row">
-        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form" data-submit-once>
           <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="view" value="{{ $.View }}">
           <input type="hidden" name="status" value="picked_up">
           <button type="submit" class="btn">{{ icon "box" }}Picked up</button>
         </form>
-        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form" data-submit-once>
           <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="view" value="{{ $.View }}">
           <input type="hidden" name="status" value="delivery_failed">
           {{ template "courier-failure-reasons" . }}
           <button type="submit" class="btn btn-secondary">Report failed attempt</button>
@@ -46,13 +54,15 @@
       </div>
       {{ else if eq .Status "picked_up" }}
       <div class="row">
-        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form" data-submit-once>
           <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="view" value="{{ $.View }}">
           <input type="hidden" name="status" value="out_for_delivery">
           <button type="submit" class="btn">{{ icon "truck" }}Out for delivery</button>
         </form>
-        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form" data-submit-once>
           <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="view" value="{{ $.View }}">
           <input type="hidden" name="status" value="delivery_failed">
           {{ template "courier-failure-reasons" . }}
           <button type="submit" class="btn btn-secondary">Report failed attempt</button>
@@ -60,13 +70,15 @@
       </div>
       {{ else if eq .Status "out_for_delivery" }}
       <div class="row">
-        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form" data-submit-once>
           <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="view" value="{{ $.View }}">
           <input type="hidden" name="status" value="delivered">
           <button type="submit" class="btn">{{ icon "check" }}Mark delivered</button>
         </form>
-        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form" data-submit-once>
           <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="view" value="{{ $.View }}">
           <input type="hidden" name="status" value="delivery_failed">
           {{ template "courier-failure-reasons" . }}
           <button type="submit" class="btn btn-secondary">Report failed attempt</button>
@@ -80,7 +92,7 @@
     </article>
     {{ end }}
   {{ else }}
-    {{ template "empty" dict "Icon" "truck" "Text" "No deliveries assigned yet." }}
+    {{ if eq .View "completed" }}{{ template "empty" dict "Icon" "truck" "Text" "No completed deliveries yet." }}{{ else if eq .View "active" }}{{ template "empty" dict "Icon" "truck" "Text" "No active jobs. You are up to date." }}{{ else }}{{ template "empty" dict "Icon" "truck" "Text" "No deliveries assigned yet." }}{{ end }}
   {{ end }}
 </div>
 {{ end }}

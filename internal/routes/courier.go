@@ -12,6 +12,7 @@ import (
 )
 
 type CourierDashboardData struct {
+	View       string
 	Title      string
 	Username   string
 	CSRFToken  string
@@ -51,14 +52,22 @@ func CourierDeliveries(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet)
 			return
 		}
-		jobs, err := a.Logistics.Jobs(r.Context(), logisticsActorFromContext(r))
+		view := r.URL.Query().Get("view")
+		if view == "" {
+			view = "all"
+		}
+		jobs, err := a.Logistics.JobsByView(r.Context(), logisticsActorFromContext(r), view)
+		if errors.Is(err, db.ErrInvalidCourierView) {
+			http.Error(w, "Invalid delivery view", http.StatusBadRequest)
+			return
+		}
 		if err != nil {
 			http.Error(w, "Unable to load deliveries", http.StatusInternalServerError)
 			return
 		}
 		user := auth.GetUserFromContext(r.Context())
 		data := CourierDashboardData{
-			Title: "My Deliveries", CSRFToken: a.Auth.CSRFToken(r), Deliveries: jobs,
+			View: view, Title: "My Deliveries", CSRFToken: a.Auth.CSRFToken(r), Deliveries: jobs,
 		}
 		if user != nil {
 			data.Username = user.Username
@@ -80,6 +89,10 @@ func CourierDeliveryUpdate(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodPost)
 			return
 		}
+		destination := "/deliveries"
+		if view := r.FormValue("view"); view == "active" || view == "completed" {
+			destination += "?view=" + view
+		}
 		id := r.PathValue("id")
 		if id == "" {
 			id = strings.TrimPrefix(r.URL.Path, "/deliveries/")
@@ -87,7 +100,7 @@ func CourierDeliveryUpdate(a *app.App) http.HandlerFunc {
 		err := a.Logistics.Update(r.Context(), logisticsActorFromContext(r), id, r.FormValue("status"), r.FormValue("note"))
 		switch {
 		case err == nil:
-			redirectWithFlash(w, r, "/deliveries", "success", "Delivery status updated")
+			redirectWithFlash(w, r, destination, "success", "Delivery status updated")
 		case errors.Is(err, logisticsvc.ErrForbidden):
 			http.Error(w, "Forbidden", http.StatusForbidden)
 		case errors.Is(err, logisticsvc.ErrDeliveryNotFound):
@@ -95,9 +108,9 @@ func CourierDeliveryUpdate(a *app.App) http.HandlerFunc {
 		case errors.Is(err, logisticsvc.ErrInvalidDeliveryID):
 			http.Error(w, "Invalid delivery id", http.StatusBadRequest)
 		case errors.Is(err, logisticsvc.ErrFailureNoteRequired):
-			redirectWithFlash(w, r, "/deliveries", "danger", "Choose a reason before reporting a failed delivery")
+			redirectWithFlash(w, r, destination, "danger", "Choose a reason before reporting a failed delivery")
 		case errors.Is(err, logisticsvc.ErrInvalidTransition):
-			redirectWithFlash(w, r, "/deliveries", "danger", "That delivery update is not allowed")
+			redirectWithFlash(w, r, destination, "danger", "That delivery update is not allowed")
 		default:
 			http.Error(w, "Unable to update delivery", http.StatusInternalServerError)
 		}
