@@ -7,7 +7,7 @@
   {{ if demoMode }}<p class="notice">Demo services only. No real appointments, sales or payments.</p>{{ end }}
   {{ if .Listings }}
   <div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Area</th><th>State</th><th>Price</th><th>Action</th></tr></thead><tbody>
-    {{ range .Listings }}<tr><td>{{ .Title }}</td><td>{{ .PublicArea }}</td><td><span class="badge">{{ .State }}</span></td><td>{{ if eq .PriceMode "quote" }}Quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ .Currency }} {{ .PriceCents }}{{ end }}</td><td><a href="/services/{{ .ID }}/edit" aria-label="Edit {{ .Title }}">Edit</a> · <a href="/services/{{ .ID }}/preview" aria-label="Preview {{ .Title }}">Preview</a></td></tr>{{ end }}
+    {{ range .Listings }}<tr><td>{{ .Title }}</td><td>{{ .PublicArea }}</td><td><span class="badge">{{ .State }}</span></td><td>{{ if eq .PriceMode "quote" }}Quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</td><td><a href="/services/{{ .ID }}/edit" aria-label="Edit {{ .Title }}">Edit</a> · <a href="/services/{{ .ID }}/preview" aria-label="Preview {{ .Title }}">Preview</a></td></tr>{{ end }}
   </tbody></table></div>
   {{ else }}{{ template "empty" dict "Icon" "store" "Text" "No services yet. Start with a draft." "Href" "/services/new" "Action" "Add service" }}{{ end }}
   {{ template "pager" .Pager }}

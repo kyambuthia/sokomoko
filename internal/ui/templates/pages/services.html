@@ -19,7 +19,7 @@
   <article class="card stack">
     <div class="page-head"><h2><a href="/services/{{ .Slug }}">{{ .Title }}</a></h2><span class="badge">{{ .Category }}</span></div>
     <p class="muted">{{ .PartnerName }} · {{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote{{ end }}</p>
-    <p>{{ .DurationMinutes }} minutes · {{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ .Currency }} {{ .PriceCents }}{{ end }}</p>
+    <p>{{ .DurationMinutes }} minutes · {{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</p>
     <a href="/services/{{ .Slug }}">View service</a>
   </article>
   {{ else }}

@@ -14,7 +14,7 @@
   <div class="card stack">
     <p class="detail__desc">{{ .Description }}</p>
     <dl><dt>Duration</dt><dd>{{ .DurationMinutes }} minutes</dd>
-      <dt>Price</dt><dd>{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ .Currency }} {{ .PriceCents }}{{ end }}</dd>
+      <dt>Price</dt><dd>{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</dd>
       <dt>Location</dt><dd>{{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote service{{ end }}</dd>
     </dl>
   </div>

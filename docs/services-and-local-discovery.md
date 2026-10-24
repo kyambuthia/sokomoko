@@ -189,6 +189,11 @@ next version. Unknown JSON fields are rejected. Categories are `hair`, `beauty`,
 `dental`, `wellness`, `home` and `other`; delivery modes are `premises`, `mobile`
 and `remote`. Duration is 5–480 minutes; currencies are `KES` or `USD`.
 
+Service prices in the directory, detail page, private preview and seller list
+are formatted from minor units using the listing’s saved currency, independently
+of the marketplace currency setting. For example, `50000` cents in `KES` displays
+as `KES 500.00`; quote-only listings show a quote prompt instead of an amount.
+
 Price input is a decimal string in `price`; returned `price_cents` is an integer
 in minor currency units. Quote-only listings require zero price. No appointment,
 payment, location tracking or medical-data collection is performed by these
