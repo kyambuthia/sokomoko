@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -117,6 +118,42 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	response, pageHTML = makeRequest(http.MethodGet, "/services?area=Westlands", nil, nil, "localhost")
 	if response.StatusCode != http.StatusOK || !strings.Contains(pageHTML, listing.Slug) {
 		t.Fatalf("directory status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	// Server validation reports every failed field and retains malformed text.
+	form.Set("duration_minutes", "3e1")
+	form.Set("title", "x")
+	form.Set("price", "1.005")
+	response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid form status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	for _, snippet := range []string{`<title>Error:`, `href="#duration_minutes"`, `aria-describedby="duration_minutes-error"`, `id="price-error"`, `value="3e1"`, `value="x"`} {
+		if !strings.Contains(pageHTML, snippet) {
+			t.Fatalf("validation HTML missing %q", snippet)
+		}
+	}
+	bad := input
+	bad.Title = "x"
+	bad.DurationMinutes = 481
+	bad.Price = "1.005"
+	var invalid struct {
+		Error struct {
+			Code   string            `json:"code"`
+			Fields map[string]string `json:"fields"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(request(http.MethodPatch, item, bad, "seller", true, http.StatusBadRequest), &invalid); err != nil {
+		t.Fatal(err)
+	}
+	if invalid.Error.Code != "invalid_service" || len(invalid.Error.Fields) != 3 || invalid.Error.Fields["duration_minutes"] == "" {
+		t.Fatalf("validation response=%+v", invalid)
+	}
+	latest, err := testStore.OwnService(t.Context(), int(mustUserID(t, "service-seller")), listing.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Version != 4 || latest.Title != "<script>alert(1)</script>" {
+		t.Fatal("invalid fields changed the stored listing")
 	}
 	response, _ = makeRequest(http.MethodGet, editPath, nil, other, "partner.localhost")
 	if response.StatusCode != http.StatusNotFound {

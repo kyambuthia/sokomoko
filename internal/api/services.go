@@ -106,6 +106,15 @@ func writeServicePage(w http.ResponseWriter, items []db.ServiceListing, total, p
 	}{items, total, page, limit})
 }
 func writeServiceError(w http.ResponseWriter, err error) {
+	var validation *directorysvc.ValidationError
+	if errors.As(err, &validation) {
+		fields := make(map[string]string, len(validation.Fields))
+		for _, field := range validation.Fields {
+			fields[field.Field] = field.Message
+		}
+		writeJSON(w, http.StatusBadRequest, errorEnvelope{Error: errorBody{Code: "invalid_service", Message: "Check the highlighted service fields", Fields: fields}})
+		return
+	}
 	switch {
 	case errors.Is(err, directorysvc.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", "A seller account is required")

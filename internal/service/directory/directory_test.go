@@ -16,6 +16,9 @@ func TestDirectoryRejectsUnauthorizedActorsBeforeStore(t *testing.T) {
 		if _, err := s.Save(t.Context(), a, 0, validInput()); !errors.Is(err, ErrForbidden) {
 			t.Fatal(err)
 		}
+		if _, err := s.Edit(t.Context(), a, 1); !errors.Is(err, ErrForbidden) {
+			t.Fatal(err)
+		}
 		if _, _, err := s.Own(t.Context(), a, 1, 20); !errors.Is(err, ErrForbidden) {
 			t.Fatal(err)
 		}
@@ -42,5 +45,28 @@ func TestDirectoryBoundsUntrustedQueries(t *testing.T) {
 	}
 	if _, _, err := s.Browse(t.Context(), db.ServiceFilter{Limit: 20}, 1001); !errors.Is(err, ErrInvalid) {
 		t.Fatal(err)
+	}
+}
+
+func TestDirectoryReturnsAllFieldErrorsWithoutTouchingStore(t *testing.T) {
+	in := validInput()
+	in.Title = "x"
+	in.DurationMinutes = 481
+	in.Price = "not a price"
+	in.Currency = "EUR"
+	in.PublicArea = ""
+	_, err := New(nil).Save(t.Context(), &Actor{ID: 1, Role: db.RolePartner}, 0, in)
+	var validation *ValidationError
+	if !errors.Is(err, ErrInvalid) || !errors.As(err, &validation) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []string{"title", "duration_minutes", "price", "public_area", "currency"}
+	if len(validation.Fields) != len(expected) {
+		t.Fatalf("fields=%+v", validation.Fields)
+	}
+	for i, field := range validation.Fields {
+		if field.Field != expected[i] || field.Message == "" || strings.Contains(field.Message, "not a price") {
+			t.Fatalf("field=%+v", field)
+		}
 	}
 }

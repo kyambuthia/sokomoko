@@ -12,6 +12,9 @@ import (
 )
 
 type servicePage struct {
+	FieldErrors                   map[string]string
+	ValidationFields              []directorysvc.FieldError
+	Duration                      string
 	Title, Role, CSRFToken, Error string
 	Viewer                        Viewer
 	Listings                      []db.ServiceListing
@@ -117,6 +120,7 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 				}
 				data.Form = directorysvc.Input{Title: v.Title, Description: v.Description, Category: v.Category, DurationMinutes: v.DurationMinutes, PriceMode: v.PriceMode, Price: v.PriceCents.String(), Currency: v.Currency, PublicArea: v.PublicArea, DeliveryMode: v.DeliveryMode, State: v.State, Version: v.Version}
 			}
+			data.Duration = strconv.Itoa(data.Form.DurationMinutes)
 			a.Render(w, a.Templates.PartnerServiceEdit, data)
 			return
 		}
@@ -124,21 +128,31 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 			http.Error(w, "Invalid form", http.StatusBadRequest)
 			return
 		}
-		duration, durationErr := strconv.Atoi(r.PostForm.Get("duration_minutes"))
+		data.Duration = r.PostForm.Get("duration_minutes")
+		duration, durationErr := strconv.Atoi(data.Duration)
+		if durationErr != nil {
+			duration = 0
+		}
 		version, versionErr := strconv.Atoi(r.PostForm.Get("version"))
 		data.Form = directorysvc.Input{Title: r.PostForm.Get("title"), Description: r.PostForm.Get("description"), Category: r.PostForm.Get("category"), DurationMinutes: duration, PriceMode: r.PostForm.Get("price_mode"), Price: r.PostForm.Get("price"), Currency: r.PostForm.Get("currency"), PublicArea: r.PostForm.Get("public_area"), DeliveryMode: r.PostForm.Get("delivery_mode"), State: r.PostForm.Get("state"), Version: version}
-		var err error
-		if durationErr != nil || versionErr != nil {
-			err = directorysvc.ErrInvalid
-		} else {
-			_, err = a.Directory.Save(r.Context(), actor, id, data.Form)
+		if versionErr != nil {
+			data.Form.Version = -1
 		}
+		_, err := a.Directory.Save(r.Context(), actor, id, data.Form)
 		if err == nil {
 			http.Redirect(w, r, "/services", http.StatusSeeOther)
 			return
 		}
 		status := http.StatusBadRequest
-		data.Error = "Check all fields: title (3–120 characters), description (10–3000), duration (5–480 minutes), price and public area (2–120). Quote-only prices must be zero."
+		data.Error = "Check the highlighted fields and save again."
+		var validation *directorysvc.ValidationError
+		if errors.As(err, &validation) {
+			data.ValidationFields = validation.Fields
+			data.FieldErrors = make(map[string]string, len(validation.Fields))
+			for _, field := range validation.Fields {
+				data.FieldErrors[field.Field] = field.Message
+			}
+		}
 		if errors.Is(err, db.ErrServiceConflict) {
 			status = http.StatusConflict
 			data.Error = "Someone edited this listing. Your text is kept below. Open the current listing in another tab and review it before saving again."

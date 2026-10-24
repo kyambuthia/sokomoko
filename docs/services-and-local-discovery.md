@@ -226,3 +226,20 @@ enquiries only and do not confirm bookings. See [messaging](messaging.md#service
 
 Migration references: [PostgreSQL 17 ALTER TABLE](https://www.postgresql.org/docs/17/sql-altertable.html)
 and [partial indexes](https://www.postgresql.org/docs/17/indexes-partial.html).
+
+
+### Correcting invalid listings
+
+Service create/update validation returns HTTP 400 with stable field names in
+`error.fields`, alongside `error.code: "invalid_service"` and a general message.
+For example, an out-of-range duration includes
+`"fields":{"duration_minutes":"Duration must be a whole number from 5 to 480 minutes."}`.
+Multiple invalid fields are reported together; field messages contain corrective
+instructions rather than submitted content. Missing or invalid version values
+require reloading the form. A valid but stale version still returns 409.
+
+Seller forms present a linked summary, identify invalid controls with
+`aria-invalid` and connect them to inline text with `aria-describedby`. Error
+pages are identified in the document title. Submitted values, including malformed
+duration text, are retained for correction. No listing write occurs when field
+validation fails. This follows the [W3C form notification guidance](https://www.w3.org/WAI/tutorials/forms/notifications/).

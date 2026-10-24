@@ -117,8 +117,8 @@ func (s *Service) Save(ctx context.Context, a *Actor, id int, in Input) (*db.Ser
 		price = 0
 		err = nil
 	}
-	if id < 0 || (id > 0 && in.Version < 1) || (id == 0 && in.Version != 0) || err != nil || price < 0 || price > 100000000 || !text(in.Title, 3, 120, false) || !text(in.Description, 10, 3000, true) || !text(in.PublicArea, 2, 120, false) || !oneOf(in.Category, "hair", "beauty", "dental", "wellness", "home", "other") || in.DurationMinutes < 5 || in.DurationMinutes > 480 || !oneOf(in.PriceMode, "fixed", "from", "quote") || (in.PriceMode == "quote" && price != 0) || !oneOf(in.Currency, "KES", "USD") || !oneOf(in.DeliveryMode, "premises", "mobile", "remote") || !oneOf(in.State, "draft", "published", "archived") {
-		return nil, ErrInvalid
+	if validationErr := validateInput(id, in, price, err); validationErr != nil {
+		return nil, validationErr
 	}
 	v := db.ServiceListing{ID: id, Title: in.Title, Description: in.Description, Category: in.Category, DurationMinutes: in.DurationMinutes, PriceMode: in.PriceMode, PriceCents: price, Currency: in.Currency, PublicArea: in.PublicArea, DeliveryMode: in.DeliveryMode, State: in.State, Version: in.Version}
 	if id == 0 {
