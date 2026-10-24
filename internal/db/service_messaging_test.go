@@ -1,6 +1,7 @@
 package db
 
 import (
+	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
 	"strings"
 	"testing"
 )
@@ -102,4 +103,52 @@ func TestEncryptedServiceEnquiriesRespectVisibilityAndOwnership(t *testing.T) {
 	chatMust(t, err)
 	_, err = s.ChatThread(t.Context(), owner, id, 0, 0)
 	chatWantError(t, err, ErrChatNotFound)
+}
+
+// Exercise the upgrade with pre-existing conversations, rather than relying
+// solely on fresh databases where the new unique index starts empty.
+func TestServiceConversationMigrationPreservesExistingThreads(t *testing.T) {
+	s, err := OpenStore(dbtest.DSN(t))
+	chatMust(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	migrations, err := loadMigrations()
+	chatMust(t, err)
+	for _, m := range migrations {
+		if m.Version <= 10 {
+			_, err = s.DB.ExecContext(t.Context(), m.SQL)
+			chatMust(t, err)
+		}
+	}
+	partner, owner, product := chatShop(t, s)
+	buyer := mustCreateUser(t, s, RoleUser)
+	var generalID, productID int
+	chatMust(t, s.DB.QueryRowContext(t.Context(), `INSERT INTO chat_conversations(kind,customer_user_id,partner_id,requester_user_id,state) VALUES('seller',$1,$2,$1,'pending') RETURNING id`, buyer, partner).Scan(&generalID))
+	chatMust(t, s.DB.QueryRowContext(t.Context(), `INSERT INTO chat_conversations(kind,customer_user_id,partner_id,product_id,requester_user_id,state) VALUES('seller',$1,$2,$3,$1,'accepted') RETURNING id`, buyer, partner, product).Scan(&productID))
+	for _, m := range migrations {
+		if m.Version == 11 {
+			_, err = s.DB.ExecContext(t.Context(), m.SQL)
+			chatMust(t, err)
+		}
+	}
+	general, err := s.ChatContacts(t.Context(), buyer, ChatTarget{Handle: chatHandle(t, s, owner)})
+	chatMust(t, err)
+	products, err := s.ChatContacts(t.Context(), buyer, ChatTarget{ProductID: product})
+	chatMust(t, err)
+	if len(general) != 1 || general[0].ConversationID != generalID || len(products) != 1 || products[0].ConversationID != productID {
+		t.Fatal("migration changed existing conversation identity")
+	}
+	listing := serviceFixture("upgrade-service")
+	listing.State = "published"
+	v, err := s.SaveService(t.Context(), owner, listing)
+	chatMust(t, err)
+	device := newEncryptedTestDevice(t, s, buyer, 410)
+	serviceID := encryptedStart(t, s, device, ChatTarget{ServiceID: v.ID})
+	if serviceID == generalID || serviceID == productID {
+		t.Fatal("new context reused legacy thread")
+	}
+	general, err = s.ChatContacts(t.Context(), buyer, ChatTarget{Handle: chatHandle(t, s, owner)})
+	chatMust(t, err)
+	if len(general) != 1 || general[0].ConversationID != generalID {
+		t.Fatal("new service context shadowed general conversation")
+	}
 }
