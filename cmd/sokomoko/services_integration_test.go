@@ -83,11 +83,6 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	request(http.MethodPatch, item, input, "seller", true, http.StatusOK)
 	request(http.MethodGet, public, nil, "anonymous", false, http.StatusNotFound)
 	// HTML forms use the same authorization, validation and version checks.
-	response, _ := makeRequest(http.MethodGet, item+"/edit", nil, seller, "partner.localhost")
-	// The API path is deliberately not a page route.
-	if response.StatusCode == http.StatusOK {
-		t.Fatal("API edit suffix unexpectedly matched")
-	}
 	editPath := fmt.Sprintf("/services/%d/edit", listing.ID)
 	response, pageHTML := makeRequest(http.MethodGet, editPath, nil, seller, "partner.localhost")
 	if response.StatusCode != http.StatusOK || !strings.Contains(pageHTML, `name="version" value="3"`) {

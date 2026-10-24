@@ -174,3 +174,17 @@ updates, and require explicit review of the current version after a conflict.
 The pages reuse the storefront and workspace brand, font, navigation and form
 styles. Demo mode clearly marks offerings as samples with no appointments or
 payments.
+
+
+### Demo content
+
+The development-only `seed` command adds three sample services (haircut, mobile
+home maintenance and remote consultation) owned by the existing Urban Goods demo
+shop. Re-running it inserts missing samples by stable slug and preserves seller
+edits, archived state and version numbers. Migration and ordinary production
+startup never seed these listings. Existing installations need an explicit seed
+run to see the samples; creating listings through the seller workspace works
+without them.
+
+Implementation references: [PostgreSQL 17 INSERT and ON CONFLICT](https://www.postgresql.org/docs/17/sql-insert.html),
+[PostgreSQL 17 constraints](https://www.postgresql.org/docs/17/ddl-constraints.html).
