@@ -131,11 +131,21 @@ func TestEncryptedMessagesOrderingMembershipAndDisclosures(t *testing.T) {
 	if len(events.Events) != 2 || len(events.Sessions) != 1 {
 		t.Fatalf("events=%+v", events)
 	}
-	_, err = b.call(t, s, "report", map[string]any{"conversation_id": id, "event_id": first.ID, "reason": "spam", "disclosed_text": "selected recipient disclosure"})
+	for _, disclosed := range []string{" \n\t ", "text\x00here", "text\x1b[31mhere", "text\x7fhere", strings.Repeat("a", 4001)} {
+		_, err = b.call(t, s, "report", map[string]any{"conversation_id": id, "event_id": first.ID, "reason": "spam", "disclosed_text": disclosed})
+		chatWantError(t, err, ErrChatInvalid)
+	}
+	var reportCount int
+	chatMust(t, s.DB.QueryRow(`SELECT count(*) FROM chat_encrypted_reports`).Scan(&reportCount))
+	if reportCount != 0 {
+		t.Fatal("invalid disclosure was persisted")
+	}
+	const disclosure = "  selected recipient disclosure\r\n\t<script>quoted text</script>  "
+	_, err = b.call(t, s, "report", map[string]any{"conversation_id": id, "event_id": first.ID, "reason": "spam", "disclosed_text": disclosure})
 	chatMust(t, err)
 	reports, err := s.ChatReports(t.Context(), admin)
 	chatMust(t, err)
-	if len(reports) != 1 || !reports[0].Encrypted || reports[0].Body != "selected recipient disclosure" {
+	if len(reports) != 1 || !reports[0].Encrypted || reports[0].Body != disclosure {
 		t.Fatalf("reports=%+v", reports)
 	}
 	chatMust(t, s.ResolveChatReport(t.Context(), admin, -reports[0].ID))
@@ -200,5 +210,18 @@ func TestEncryptedExpiredPublicPackagesAreNotClaimed(t *testing.T) {
 	chatMust(t, err)
 	if len(claim.Packages) != 1 || claim.Packages[0].ID != chatNonce(133) {
 		t.Fatalf("claimed stale key package: %+v", claim.Packages)
+	}
+}
+
+func TestEncryptedDisclosureTextValidation(t *testing.T) {
+	for _, text := range []string{"hello", "  exact excerpt  ", "line one\r\n\tline two\n", strings.Repeat("😀", 4000)} {
+		if !validEncryptedDisclosure(text) {
+			t.Fatalf("valid excerpt rejected (%d bytes)", len(text))
+		}
+	}
+	for _, text := range []string{"", " \n\r\n\t", "a\x00b", "a\x1bb", "a\rb", "bad\xfftext", strings.Repeat("😀", 4001)} {
+		if validEncryptedDisclosure(text) {
+			t.Fatalf("invalid excerpt accepted (%d bytes)", len(text))
+		}
 	}
 }

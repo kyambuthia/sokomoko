@@ -158,6 +158,12 @@ received event in a session containing the reporting device. A shop teammate
 cannot report their own shop's messages as if they were the buyer. Moderator
 resolution is audited. There is no general admin conversation-decryption path.
 
+Disclosed report text must be valid UTF-8, contain non-whitespace content, and
+fit within 4000 Unicode code points and 16000 bytes. LF, CRLF and tabs are
+allowed; other control characters are rejected as invalid input before storage.
+Accepted excerpts are stored exactly as disclosed, including surrounding spaces
+and line endings. These checks do not independently verify authorship.
+
 ## Build and verification
 
 Generated JS/WASM and dependency notices live under `internal/ui/static/crypto`

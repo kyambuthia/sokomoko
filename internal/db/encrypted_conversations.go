@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -333,8 +334,23 @@ func encryptedEvents(ctx context.Context, tx *sql.Tx, c chatRecord, d ChatDevice
 	}
 	return nil
 }
+
+// Validate without rewriting a recipient's disclosed excerpt. CRLF, LF and tabs
+// are allowed; other controls (including PostgreSQL-incompatible NUL) are not.
+func validEncryptedDisclosure(text string) bool {
+	if strings.TrimSpace(text) == "" || len(text) > 16000 || !utf8.ValidString(text) || utf8.RuneCountInString(text) > 4000 {
+		return false
+	}
+	for _, r := range strings.ReplaceAll(text, "\r\n", "\n") {
+		if unicode.IsControl(r) && r != '\n' && r != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
 func reportEncrypted(ctx context.Context, tx *sql.Tx, userID int, c chatRecord, d ChatDevice, p encryptedConversationInput, out *EncryptedResponse) error {
-	if !validChatReportReason(p.Reason) || len(p.DisclosedText) == 0 || len(p.DisclosedText) > 16000 || !utf8.ValidString(p.DisclosedText) || utf8.RuneCountInString(p.DisclosedText) > 4000 {
+	if !validChatReportReason(p.Reason) || !validEncryptedDisclosure(p.DisclosedText) {
 		return ErrChatInvalid
 	}
 	var sender int
