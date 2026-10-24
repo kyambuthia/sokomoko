@@ -249,6 +249,69 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	if latest.Version != 4 || latest.Title != "<script>alert(1)</script>" || latest.Description != strings.ReplaceAll(multilineDescription, "\r\n", "\n") {
 		t.Fatal("invalid fields changed the stored listing")
 	}
+	// A conflict can be resolved in place only after explicitly reviewing the
+	// saved revision; another editor can still invalidate that revision.
+	latest.Title = "Another editor's title"
+	latest.Description = "Saved description with <script>saved</script>"
+	latest, err = testStore.SaveService(t.Context(), int(mustUserID(t, "service-seller")), *latest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Set("version", "4")
+	form.Set("duration_minutes", "45")
+	form.Set("price", "600.25")
+	form.Set("title", "My retained title")
+	for attempt := 0; attempt < 2; attempt++ {
+		response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
+		if response.StatusCode != http.StatusConflict {
+			t.Fatalf("unreviewed retry status=%d body=%s", response.StatusCode, pageHTML)
+		}
+		for _, snippet := range []string{`value="My retained title"`, `Current saved version 5`, `name="reviewed_version" value="5" required`, `Saved description with &lt;script&gt;saved&lt;/script&gt;`} {
+			if !strings.Contains(pageHTML, snippet) {
+				t.Fatalf("conflict missing %q: %s", snippet, pageHTML)
+			}
+		}
+		if strings.Contains(pageHTML, "<script>saved</script>") {
+			t.Fatal("conflict snapshot was not escaped")
+		}
+	}
+	form.Set("reviewed_version", "invalid")
+	response, _ = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("malformed acknowledgement status=%d", response.StatusCode)
+	}
+	latest.Title = "A newer intervening edit"
+	_, err = testStore.SaveService(t.Context(), int(mustUserID(t, "service-seller")), *latest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Set("reviewed_version", "5")
+	response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
+	if response.StatusCode != http.StatusConflict || !strings.Contains(pageHTML, `name="reviewed_version" value="6" required`) || !strings.Contains(pageHTML, `name="version" value="5"`) {
+		t.Fatalf("intervening edit status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	form.Set("version", "5")
+	form.Set("reviewed_version", "6")
+	response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("reviewed retry status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	latest, err = testStore.OwnService(t.Context(), int(mustUserID(t, "service-seller")), listing.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Version != 7 || latest.Title != "My retained title" || latest.DurationMinutes != 45 || latest.PriceCents != 60025 {
+		t.Fatalf("reviewed retry did not save retained values: %+v", latest)
+	}
+	otherSession, err := testStore.GetSession(t.Context(), other[0].Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Set("csrf_token", otherSession.CSRFToken)
+	response, pageHTML = makeRequest(http.MethodPost, editPath, form, other, "partner.localhost")
+	if response.StatusCode != http.StatusNotFound || strings.Contains(pageHTML, "Current saved version") {
+		t.Fatal("cross-shop conflict snapshot leak")
+	}
 	response, _ = makeRequest(http.MethodGet, editPath, nil, other, "partner.localhost")
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("cross-shop HTML status=%d", response.StatusCode)

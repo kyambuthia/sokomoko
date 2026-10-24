@@ -25,6 +25,23 @@
 <div class="field"><label class="label" for="currency">Currency</label><select class="select" id="currency"{{ if index .FieldErrors "currency" }} aria-invalid="true" aria-describedby="currency-error"{{ end }} name="currency"><option value="KES"{{ if eq .Form.Currency "KES" }} selected{{ end }}>KES</option><option value="USD"{{ if eq .Form.Currency "USD" }} selected{{ end }}>USD</option></select>{{ with index .FieldErrors "currency" }}<p class="small" id="currency-error">{{ . }}</p>{{ end }}</div>
 <div class="field"><label class="label" for="delivery_mode">Where the service happens</label><select class="select" id="delivery_mode"{{ if index .FieldErrors "delivery_mode" }} aria-invalid="true" aria-describedby="delivery_mode-error"{{ end }} name="delivery_mode"><option value="premises"{{ if eq .Form.DeliveryMode "premises" }} selected{{ end }}>At the business</option><option value="mobile"{{ if eq .Form.DeliveryMode "mobile" }} selected{{ end }}>Provider travels to customer</option><option value="remote"{{ if eq .Form.DeliveryMode "remote" }} selected{{ end }}>Remote</option></select>{{ with index .FieldErrors "delivery_mode" }}<p class="small" id="delivery_mode-error">{{ . }}</p>{{ end }}</div>
 <div class="field"><label class="label" for="state">Visibility</label><select class="select" id="state"{{ if index .FieldErrors "state" }} aria-invalid="true" aria-describedby="state-error"{{ end }} name="state"><option value="draft"{{ if eq .Form.State "draft" }} selected{{ end }}>Draft — private</option><option value="published"{{ if eq .Form.State "published" }} selected{{ end }}>Published — visible in the directory</option><option value="archived"{{ if eq .Form.State "archived" }} selected{{ end }}>Archived — hidden</option></select>{{ with index .FieldErrors "state" }}<p class="small" id="state-error">{{ . }}</p>{{ end }}</div>
+{{ with .ConflictListing }}
+<section class="card stack" aria-labelledby="service-conflict-title">
+<h2 id="service-conflict-title">Current saved version {{ .Version }}</h2>
+<p class="muted">Compare this saved listing with your form above. Saving replaces these values with the values in your form, including visibility.</p>
+<dl class="kv">
+<div><dt>Title</dt><dd>{{ .Title }}</dd></div>
+<div><dt>Description</dt><dd class="detail__desc">{{ .Description }}</dd></div>
+<div><dt>Category</dt><dd>{{ .Category }}</dd></div>
+<div><dt>Duration</dt><dd>{{ .DurationMinutes }} minutes</dd></div>
+<div><dt>Price</dt><dd>{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }} ({{ .Currency }})</dd></div>
+<div><dt>Public area</dt><dd>{{ .PublicArea }}</dd></div>
+<div><dt>Location type</dt><dd>{{ .DeliveryMode }}</dd></div>
+<div><dt>Visibility</dt><dd>{{ .State }}</dd></div>
+</dl>
+<label><input type="checkbox" name="reviewed_version" value="{{ .Version }}" required> I reviewed saved version {{ .Version }} and want to apply my form values.</label>
+</section>
+{{ end }}
 <div class="row"><button type="submit" class="btn">Save service</button><a href="/services" class="btn btn-secondary">Cancel</a></div>
 </form></div>
 {{ end }}

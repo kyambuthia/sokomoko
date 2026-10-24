@@ -206,7 +206,10 @@ payment, location tracking or medical-data collection is performed by these
 endpoints. The storefront supports `/services` and `/services/{slug}`. Sellers manage offerings
 on their workspace host at `/services`, `/services/new` and
 `/services/{id}/edit`. Forms preserve entered text on validation errors and stale
-updates, and require explicit review of the current version after a conflict.
+updates. After a conflict, the edit form shows the current saved listing beside
+an explicit review checkbox. The seller must acknowledge that saved version to
+apply the retained form values; the version check runs again on retry, and an
+intervening edit requires another review. No fields are merged automatically.
 The pages reuse the storefront and workspace brand, font, navigation and form
 styles. Demo mode clearly marks offerings as samples with no appointments or
 payments.

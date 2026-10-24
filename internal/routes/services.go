@@ -12,6 +12,7 @@ import (
 )
 
 type servicePage struct {
+	ConflictListing               *db.ServiceListing
 	State                         string
 	Preview                       bool
 	FieldErrors                   map[string]string
@@ -171,6 +172,16 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 		if versionErr != nil {
 			data.Form.Version = -1
 		}
+		// A conflict retry requires an explicit acknowledgement of the displayed
+		// saved version. The store still rejects a newer intervening revision.
+		if reviewed := r.PostForm.Get("reviewed_version"); reviewed != "" {
+			reviewedVersion, err := strconv.Atoi(reviewed)
+			if err != nil || id == 0 || versionErr != nil || reviewedVersion <= version {
+				data.Form.Version = -1
+			} else {
+				data.Form.Version = reviewedVersion
+			}
+		}
 		_, err := a.Directory.Save(r.Context(), actor, id, data.Form)
 		if err == nil {
 			http.Redirect(w, r, "/services", http.StatusSeeOther)
@@ -188,7 +199,12 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 		}
 		if errors.Is(err, db.ErrServiceConflict) {
 			status = http.StatusConflict
-			data.Error = "Someone edited this listing. Your text is kept below. Open the current listing in another tab and review it before saving again."
+			data.ConflictListing, err = a.Directory.Edit(r.Context(), actor, id)
+			if err != nil {
+				servicePageError(w, r, err)
+				return
+			}
+			data.Error = "Someone edited this listing. Your text is kept below. Review the current saved version before applying your changes."
 		} else if !errors.Is(err, directorysvc.ErrInvalid) {
 			servicePageError(w, r, err)
 			return
