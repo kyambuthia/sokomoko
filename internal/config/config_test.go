@@ -252,3 +252,26 @@ func TestValidate_SMTPRequiresHostAndFrom(t *testing.T) {
 		t.Fatalf("err = %v, want SMTP error", err)
 	}
 }
+
+func TestBindHost(t *testing.T) {
+	for _, host := range []string{"", "127.0.0.1", "0.0.0.0", "::1", "::"} {
+		t.Run("valid/"+host, func(t *testing.T) {
+			t.Setenv("BIND_HOST", "  "+host+"  ")
+			cfg := productionConfig()
+			cfg.BindHost = LoadFromEnv().BindHost
+			if cfg.BindHost != host {
+				t.Fatalf("BindHost = %q", cfg.BindHost)
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	for _, host := range []string{"localhost", "[::1]", "127.0.0.1:8080", "https://localhost", "invalid"} {
+		cfg := productionConfig()
+		cfg.BindHost = host
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "BIND_HOST") {
+			t.Fatalf("host %q: %v", host, err)
+		}
+	}
+}

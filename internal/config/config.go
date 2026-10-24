@@ -37,6 +37,7 @@ type Config struct {
 	loadErrors            []string
 	Environment           string
 	Port                  string
+	BindHost              string
 	DatabaseURL           string
 	DatabaseURLExplicit   bool
 	DBMaxOpenConns        int
@@ -83,6 +84,7 @@ func LoadFromEnv() Config {
 	cfg := Config{
 		Environment:           strings.ToLower(readEnv("ENV", defaultEnvironment)),
 		Port:                  readEnv("PORT", defaultPort),
+		BindHost:              strings.TrimSpace(os.Getenv("BIND_HOST")),
 		DatabaseURL:           databaseURL,
 		DatabaseURLExplicit:   databaseURL != "",
 		DBMaxOpenConns:        readInt("DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns),
@@ -136,6 +138,9 @@ func (c Config) IsProduction() bool {
 // database URL and trusted hosts must be set explicitly.
 func (c Config) Validate() error {
 	problems := append([]string{}, c.loadErrors...)
+	if c.BindHost != "" && net.ParseIP(c.BindHost) == nil {
+		problems = append(problems, "BIND_HOST must be an unbracketed IPv4 or IPv6 address")
+	}
 	if !validPort(c.Port) {
 		problems = append(problems, "PORT must be between 1 and 65535")
 	}

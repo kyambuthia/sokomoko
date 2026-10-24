@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
@@ -231,7 +232,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	return &httpServer{
 		Drain: readiness.Drain,
 		Server: &http.Server{
-			Addr:              ":" + cfg.Port,
+			Addr:              net.JoinHostPort(cfg.BindHost, cfg.Port),
 			Handler:           handler,
 			IdleTimeout:       60 * time.Second,
 			ReadTimeout:       15 * time.Second,
