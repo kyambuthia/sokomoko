@@ -1,6 +1,7 @@
 # Services and local discovery: proposed next phase
 
-Status: design proposal, not implemented. The demo must continue to say that
+Status: service-listing storage and validation are implemented in migration 10;
+booking and map integration below remain a design proposal. The demo must continue to say that
 listings, bookings and payments are illustrative; no real sale or appointment
 is confirmed.
 
@@ -136,3 +137,15 @@ abuse without exposing their home address.
 
 These sources support the geographic/platform constraints; the proposed product
 model and rollout are architectural recommendations for this repository.
+
+## Implemented foundation
+
+Service listings have a shop owner, stable slug, title, category, duration,
+fixed/from/quote pricing in KES or USD, broad public area, premises/mobile/remote
+mode and draft/published/archived state. They do not reserve stock, accept
+appointments, store precise coordinates or claim practitioner verification.
+Public queries include only published listings of active shops. Seller writes
+lock current membership and role, use optimistic versions to reject stale edits,
+and record an audit event in the same transaction. Search treats user text
+literally and bounds pagination. Owner IDs and slugs cannot be reassigned by an
+edit. Sensitive visit details and clinical notes do not belong in listings.
