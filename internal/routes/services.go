@@ -12,6 +12,7 @@ import (
 )
 
 type servicePage struct {
+	Preview                       bool
 	FieldErrors                   map[string]string
 	ValidationFields              []directorysvc.FieldError
 	Duration                      string
@@ -93,6 +94,29 @@ func ServiceDetail(a *app.App) http.HandlerFunc {
 		a.Render(w, a.Templates.ServiceDetail, servicePage{Title: listing.Title, Listing: listing, Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
 	}
 }
+
+// PartnerServicePreview renders saved listings without exposing private states publicly.
+func PartnerServicePreview(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			methodNotAllowed(w, http.MethodGet, http.MethodHead)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id < 1 {
+			NotFound(w, r)
+			return
+		}
+		listing, err := a.Directory.Edit(r.Context(), directoryActor(r), id)
+		if err != nil {
+			servicePageError(w, r, err)
+			return
+		}
+		a.Render(w, a.Templates.ServiceDetail, servicePage{Preview: true, Title: listing.Title, Role: db.RolePartner, Listing: listing, Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
+	}
+}
+
 func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {

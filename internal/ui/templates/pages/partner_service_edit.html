@@ -3,6 +3,7 @@
 {{ define "main-area" }}
 <div class="stack narrow">
 <h1>{{ if .EditID }}Edit{{ else }}Add{{ end }} service</h1>
+{{ if .EditID }}<a href="/services/{{ .EditID }}/preview" target="_blank" rel="noopener">Preview saved listing in a new tab</a>{{ end }}
 {{ if .ValidationFields }}
 <section class="notice notice-danger stack" role="alert" aria-labelledby="service-errors-title">
 <h2 id="service-errors-title">Check {{ len .ValidationFields }} service field{{ if ne (len .ValidationFields) 1 }}s{{ end }}</h2>

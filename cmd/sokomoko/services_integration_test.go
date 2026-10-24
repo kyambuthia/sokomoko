@@ -56,6 +56,30 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	item := fmt.Sprintf("%s/%d", collection, listing.ID)
 	public := "/api/v1/catalog/services/" + listing.Slug
 	request(http.MethodGet, public, nil, "anonymous", false, http.StatusNotFound)
+	preview := fmt.Sprintf("/services/%d/preview", listing.ID)
+	previewResponse, previewHTML := makeRequest(http.MethodGet, preview, nil, seller, "partner.localhost")
+	if previewResponse.StatusCode != http.StatusOK || previewResponse.Header.Get("Cache-Control") != "no-store" || !strings.Contains(previewHTML, "Private preview of the saved listing · draft") || !strings.Contains(previewHTML, listing.Title) || strings.Contains(previewHTML, "Message service provider") {
+		t.Fatalf("private preview status=%d body=%s", previewResponse.StatusCode, previewHTML)
+	}
+	crossResponse, _ := makeRequest(http.MethodGet, preview, nil, other, "partner.localhost")
+	if crossResponse.StatusCode != http.StatusNotFound {
+		t.Fatalf("cross-shop preview status=%d", crossResponse.StatusCode)
+	}
+	for _, cookies := range [][]*http.Cookie{buyer, nil} {
+		response, body := makeRequest(http.MethodGet, preview, nil, cookies, "partner.localhost")
+		if response.StatusCode == http.StatusOK || strings.Contains(body, listing.Title) {
+			t.Fatalf("private preview leaked: status=%d", response.StatusCode)
+		}
+	}
+	previewResponse, _ = makeRequest(http.MethodHead, preview, nil, seller, "partner.localhost")
+	if previewResponse.StatusCode != http.StatusOK {
+		t.Fatalf("HEAD preview status=%d", previewResponse.StatusCode)
+	}
+	previewResponse, _ = makeRequest(http.MethodGet, "/services/invalid/preview", nil, seller, "partner.localhost")
+	if previewResponse.StatusCode != http.StatusNotFound {
+		t.Fatalf("invalid preview status=%d", previewResponse.StatusCode)
+	}
+
 	request(http.MethodGet, item, nil, "other", false, http.StatusNotFound)
 	input.Version = listing.Version
 	input.State = "published"
@@ -101,6 +125,10 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	input.State = "archived"
 	request(http.MethodPatch, item, input, "seller", true, http.StatusOK)
 	request(http.MethodGet, public, nil, "anonymous", false, http.StatusNotFound)
+	previewResponse, previewHTML = makeRequest(http.MethodGet, preview, nil, seller, "partner.localhost")
+	if previewResponse.StatusCode != http.StatusOK || !strings.Contains(previewHTML, "Private preview of the saved listing · archived") {
+		t.Fatal("archived preview unavailable")
+	}
 	// HTML forms use the same authorization, validation and version checks.
 	editPath := fmt.Sprintf("/services/%d/edit", listing.ID)
 	response, pageHTML := makeRequest(http.MethodGet, editPath, nil, seller, "partner.localhost")

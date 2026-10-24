@@ -259,3 +259,12 @@ pagination keeps the chosen filters. Unknown mode values return 400. The mode
 is also shown on result cards so users can distinguish a business visit, a
 provider who travels to them and a remote offering. This filter does not request
 or infer the visitor's location.
+
+### Private seller previews
+
+The partner workspace links to `/services/{id}/preview` from the listing table
+and edit form. This renders the saved listing with the public detail design,
+its current draft/published/archived state and a private-preview notice. Unsaved
+edits are not included. Previewing does not publish a listing or open an enquiry.
+The route requires current membership in the owning active shop, sends
+`Cache-Control: no-store`, and leaves public draft/archived URLs unavailable.

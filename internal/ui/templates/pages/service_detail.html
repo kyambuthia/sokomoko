@@ -1,7 +1,12 @@
-{{ define "title" }}{{ .Title }} · services · sokomoko{{ end }}
+{{ define "layout" }}{{ if .Preview }}{{ template "partner-layout" . }}{{ else }}{{ template "storefront-layout" . }}{{ end }}{{ end }}
+{{ define "title" }}{{ if .Preview }}Preview: {{ end }}{{ .Title }} · services · sokomoko{{ end }}
 {{ define "main-area" }}
 <div class="stack narrow">
-  <a href="/services">← All services</a>
+  {{ if .Preview }}
+  <a href="/services">← Your services</a>
+  <p class="notice">Private preview of the saved listing · {{ .Listing.State }}. This preview does not publish the service.</p>
+  <a class="btn btn-secondary" href="/services/{{ .Listing.ID }}/edit">Edit service</a>
+  {{ else }}<a href="/services">← All services</a>{{ end }}
   {{ with .Listing }}
   <span class="badge">{{ .Category }}</span>
   <h1>{{ .Title }}</h1>
@@ -13,7 +18,7 @@
       <dt>Location</dt><dd>{{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote service{{ end }}</dd>
     </dl>
   </div>
-  <a class="btn" href="/messages/new?service_id={{ .ID }}">Message service provider</a>
+  {{ if not $.Preview }}<a class="btn" href="/messages/new?service_id={{ .ID }}">Message service provider</a>{{ end }}
   {{ end }}
   {{ if demoMode }}<p class="notice">Demo service only. No appointments, sales or payments are accepted.</p>{{ else }}<p class="muted">Directory listing only. Appointment booking is not available here.</p>{{ end }}
   <p class="tiny muted">Listing a service does not verify professional qualifications. Do not submit health information through this directory.</p>
