@@ -87,7 +87,7 @@ func orderChatContacts(ctx context.Context, tx *sql.Tx, actorID, orderID int) ([
 		var courier string
 		err := tx.QueryRowContext(ctx, `SELECT u.username FROM courier_deliveries d JOIN users u ON u.id=d.courier_user_id
           JOIN orders o ON o.id=d.order_id
-          WHERE d.order_id=$1 AND d.status<>'delivered' AND o.status<>'cancelled' AND u.deleted_at IS NULL AND u.role='courier'`, orderID).Scan(&courier)
+          WHERE d.order_id=$1 AND d.status<>'delivered' AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status<>'delivered' AND u.deleted_at IS NULL AND u.role='courier'`, orderID).Scan(&courier)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
@@ -189,7 +189,7 @@ func resolveChatTarget(ctx context.Context, tx *sql.Tx, actorID int, t ChatTarge
           FROM courier_deliveries d JOIN orders o ON o.id=d.order_id
           JOIN users cu ON cu.id=o.user_id AND cu.role='user' AND cu.deleted_at IS NULL
           JOIN users rider ON rider.id=d.courier_user_id AND rider.role='courier' AND rider.deleted_at IS NULL
-          WHERE d.id=$1 AND d.status<>'delivered' AND o.status<>'cancelled'
+          WHERE d.id=$1 AND d.status<>'delivered' AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status<>'delivered'
           AND (($3='user' AND o.user_id=$2) OR ($3='courier' AND d.courier_user_id=$2))`,
 			c.DeliveryID, actorID, role).Scan(&c.CustomerID, &c.CustomerName, &c.OtherID, &c.OtherName, &c.AssignmentID)
 	default:

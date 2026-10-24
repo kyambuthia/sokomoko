@@ -182,3 +182,9 @@ SOKOMOKO_REQUIRE_DB_TESTS=1 go test ./internal/db ./internal/service/messaging .
 The design follows the existing Go 1.26.10 `html/template` escaping rules,
 [PostgreSQL 17 row and advisory locking](https://www.postgresql.org/docs/17/explicit-locking.html),
 and [OWASP's requirement to check authorization on every request](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html).
+
+Delivery conversations close for sending and new contact lookup when the
+assignment, order status or order delivery status indicates completion. This
+includes administrative completion before a rider submits the final handoff.
+Authorized participants retain existing history. The normal retry of a rider's
+own already-recorded delivery confirmation remains idempotent.

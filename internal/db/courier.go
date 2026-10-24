@@ -21,8 +21,8 @@ func (s *Store) ListCourierUsers(ctx context.Context) ([]CourierUser, error) {
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx,
 		`SELECT u.id, u.username,
-         count(cd.id) FILTER (WHERE cd.status IN ('assigned','picked_up','out_for_delivery') AND o.status NOT IN ('cancelled','delivered')),
-         count(cd.id) FILTER (WHERE cd.status = 'delivery_failed' AND o.status NOT IN ('cancelled','delivered'))
+         count(cd.id) FILTER (WHERE cd.status IN ('assigned','picked_up','out_for_delivery') AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered'),
+         count(cd.id) FILTER (WHERE cd.status = 'delivery_failed' AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered')
          FROM users u
          LEFT JOIN courier_deliveries cd ON cd.courier_user_id=u.id
            AND cd.status IN ('assigned','picked_up','out_for_delivery','delivery_failed')
@@ -77,7 +77,7 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 	rows, err := s.DB.QueryContext(ctx,
 		`WITH selected AS (
 		 SELECT o.id,
-		        CASE WHEN COALESCE(cd.status, '') = 'delivered' THEN 1 ELSE 0 END AS delivery_rank,
+		        CASE WHEN COALESCE(cd.status, '') = 'delivered' OR o.status='delivered' OR o.delivery_status='delivered' THEN 1 ELSE 0 END AS delivery_rank,
 		        COALESCE(cd.assigned_at, o.created_at) AS queued_at
 		 FROM orders o
 		 LEFT JOIN courier_deliveries cd ON cd.order_id = o.id
@@ -87,8 +87,8 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 		)
 		 SELECT COALESCE(cd.id, 0), o.id, COALESCE(cd.courier_user_id, 0),
 		        COALESCE(courier.username, ''), COALESCE(cd.assigned_by_user_id, 0),
-		        customer.username, CASE WHEN cd.status='delivered' THEN '' ELSE o.delivery_address END, o.status, o.partner_status,
-		        o.delivery_status, COALESCE(cd.status, ''), COALESCE(cd.failure_note, ''),
+		        customer.username, CASE WHEN cd.status='delivered' OR o.status='delivered' OR o.delivery_status='delivered' THEN '' ELSE o.delivery_address END, o.status, o.partner_status,
+		        o.delivery_status, CASE WHEN o.status='delivered' OR o.delivery_status='delivered' THEN 'delivered' ELSE COALESCE(cd.status, '') END, COALESCE(cd.failure_note, ''),
 		        o.created_at, COALESCE(cd.assigned_at, o.created_at),
 	        COALESCE(cd.updated_at, o.updated_at), oi.product_name, oi.quantity
 		 FROM selected
@@ -249,6 +249,12 @@ func (s *Store) UpdateCourierDelivery(ctx context.Context, deliveryID, courierUs
 			return ErrCourierDeliveryForbidden
 		}
 		if currentOrder.Status == OrderStatusCancelled {
+			return ErrInvalidCourierTransition
+		}
+		// Administrative completion closes handoffs even if the assignment's
+		// last rider event predates it. Preserve genuine delivered retries.
+		if (currentOrder.Status == OrderStatusDelivered || currentOrder.DeliveryStatus == "delivered") &&
+			!(currentStatus == CourierDeliveryDelivered && nextStatus == CourierDeliveryDelivered) {
 			return ErrInvalidCourierTransition
 		}
 		// A repeated submission after a lost response is a no-op. Ownership is

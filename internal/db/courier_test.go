@@ -145,3 +145,57 @@ func TestCourierWorkloadExcludesTerminalJobsAndInactiveAccounts(t *testing.T) {
 		}
 	}
 }
+
+func TestCourierAdministrativeCompletionClosesAccessAndHandoffs(t *testing.T) {
+	for _, state := range []struct{ name, order, delivery string }{
+		{"order", "delivered", "shipped"}, {"delivery", "shipped", "delivered"}, {"both", "delivered", "delivered"},
+	} {
+		t.Run(state.name, func(t *testing.T) {
+			s := newTestStore(t)
+			buyer, admin, rider := mustCreateUser(t, s, RoleUser), mustCreateUser(t, s, RoleAdmin), mustCreateUser(t, s, RoleCourier)
+			product := mustCreateProduct(t, s, 100, 2)
+			chatMust(t, s.AddToCart(t.Context(), buyer, product, 1))
+			order, err := s.PlaceOrderFromCart(t.Context(), buyer, "private fixture address")
+			chatMust(t, err)
+			for _, step := range []string{"accepted", "packing", "dispatched"} {
+				chatMust(t, s.UpdateOrderFulfillment(t.Context(), int(order), step, "queued", ""))
+			}
+			chatMust(t, s.AssignCourierToOrder(t.Context(), int(order), rider, admin))
+			a, b := newEncryptedTestDevice(t, s, buyer, 900), newEncryptedTestDevice(t, s, rider, 901)
+			encryptedPublish(t, s, b, 902)
+			target := ChatTarget{DeliveryOrderID: int(order)}
+			id := encryptedStart(t, s, a, target)
+			session := encryptedNewSession(t, s, a, id, 903)
+			first, err := a.call(t, s, "send", encryptedSendInput(id, session, 0))
+			chatMust(t, err)
+			chatMust(t, s.UpdateOrderByAdmin(t.Context(), int(order), state.order, "completed", state.delivery, "Completed by operations."))
+			jobs, err := s.ListCourierDeliveries(t.Context(), rider)
+			chatMust(t, err)
+			if len(jobs) != 1 || jobs[0].Status != CourierDeliveryDelivered || jobs[0].DeliveryAddress != "" {
+				t.Fatalf("completed projection=%+v", jobs)
+			}
+			assertCourierWorkload(t, s, rider, 0, 0)
+			chatWantError(t, s.UpdateCourierDelivery(t.Context(), jobs[0].ID, rider, CourierDeliveryPickedUp, ""), ErrInvalidCourierTransition)
+			for _, actor := range []int{buyer, rider} {
+				_, err = s.ChatContacts(t.Context(), actor, target)
+				chatWantError(t, err, ErrChatNotFound)
+				thread, err := s.ChatThread(t.Context(), actor, id, 0, 0)
+				chatMust(t, err)
+				if thread.Conversation.CanSend || !thread.Conversation.Closed {
+					t.Fatal("completed delivery conversation remained open")
+				}
+			}
+			_, err = a.call(t, s, "send", encryptedSendInput(id, session, first.ID))
+			chatWantError(t, err, ErrChatClosed)
+			_, err = a.call(t, s, "start", map[string]any{"target": target})
+			chatWantError(t, err, ErrChatNotFound)
+			var storedStatus string
+			var events int
+			chatMust(t, s.DB.QueryRow(`SELECT status FROM courier_deliveries WHERE id=$1`, jobs[0].ID).Scan(&storedStatus))
+			chatMust(t, s.DB.QueryRow(`SELECT count(*) FROM courier_delivery_events WHERE delivery_id=$1`, jobs[0].ID).Scan(&events))
+			if storedStatus != CourierDeliveryAssigned || events != 1 {
+				t.Fatal("administrative completion fabricated a rider handoff")
+			}
+		})
+	}
+}

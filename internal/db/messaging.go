@@ -46,7 +46,7 @@ const chatSelectSQL = `SELECT c.id, c.kind, c.customer_user_id, COALESCE(c.other
    AND (c.product_id IS NULL OR (prod.deleted_at IS NULL AND prod.partner_id = c.partner_id))
    AND (c.order_id IS NULL OR EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = c.order_id AND oi.partner_id = c.partner_id))
  WHEN 'delivery' THEN ou.deleted_at IS NULL AND ou.role = 'courier'
-   AND d.courier_user_id = c.other_user_id AND d.status <> 'delivered' AND o.status <> 'cancelled'
+   AND d.courier_user_id = c.other_user_id AND d.status <> 'delivered' AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered'
    AND c.assignment_event_id = (SELECT e.id FROM courier_delivery_events e WHERE e.delivery_id = d.id
                               AND e.action IN ('assigned', 'reassigned') ORDER BY e.id DESC LIMIT 1)
  END, false),

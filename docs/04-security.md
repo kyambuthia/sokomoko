@@ -183,7 +183,12 @@ Courier dispatch operations and rider operations have separate role checks.
 Courier history retains completed jobs but the shared delivery query returns an
 empty address after completion, for both HTML and JSON responses. Active jobs
 and failed attempts retain the address for delivery work. This is a read
-projection; the original address remains in the order record.
+projection; the original address remains in the order record. Administrative
+completion through either the order status or delivery status also hides the
+address, removes the job from workload counts and closes courier messaging and
+handoff actions. Existing conversation history remains available to authorized
+participants. The courier event history is not rewritten to imply a rider
+confirmed an administrative completion.
 A status retry is a no-op only for the current owning courier, for the same
 current action state (pickup, out for delivery, delivery or failure), and with
 the same stored failure category. Ownership and cancellation are checked
