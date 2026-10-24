@@ -27,6 +27,16 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   data). New products show a bundled fallback image.
 - **A product's partner cannot be changed after creation.**
 
+## Services and local discovery
+
+- Service listings support discovery and seller management. They do not reserve
+  appointments, manage practitioner calendars, take deposits or confirm bookings.
+- Locality search matches seller-entered neighbourhood/town text. There is no
+  geocoding, map display, distance search or live location tracking.
+- Professional qualifications are not verified. The directory does not collect
+  clinical details, and a dental category is not an endorsement.
+- Service-context messaging and listing images are not implemented yet.
+
 ## Identity
 
 - No email verification and no multi-factor authentication. Profile details

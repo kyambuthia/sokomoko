@@ -16,6 +16,16 @@ From the header of `0001_initial_schema.sql`:
 - Rows with financial or audit history are not cascade-deleted from their user
   (`orders.user_id` and `payments.user_id` are `ON DELETE RESTRICT`).
 
+## Service listings
+
+Migration `0010_service_listings.sql` adds seller-owned `service_listings` beside
+products. Listings have a stable public slug, category, duration, price mode,
+minor-unit price, currency, broad public area and delivery mode. A version counter
+protects edits; an audit entry and the successful change commit together. Only
+published entries from active shops are public. Draft and archived entries remain
+available to their owning shop. The table has no appointment, precise location,
+practitioner or clinical-data fields. See [services](services-and-local-discovery.md).
+
 ## Tables
 
 | Area | Table | Purpose |

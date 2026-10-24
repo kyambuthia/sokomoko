@@ -24,6 +24,8 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/` | GET | public | `Root` | Home page and catalog |
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
 | `/search` | GET | public | `Search` | `q`, `category` |
+| `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `page`; 24 per page |
+| `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops only |
 | `/api/categories` | GET | public | `CategoriesAPI` | JSON `{categories}` for the header category nav |
 | `/login` | GET, POST | public | `auth.Login` | `user` role only; honours a safe `next` |
 | `/signup` | GET, POST | public | `auth.SignUp` | Creates a `user` and signs in |
@@ -105,6 +107,12 @@ address as a draft and re-renders the form with `422`.
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (`status` filter; POST updates fulfillment) |
 
+Seller-only service pages on the partner host are `GET /services`,
+`GET|POST /services/new` and `GET|POST /services/<id>/edit`. Admin and staff
+accounts cannot manage these offerings. POST requires CSRF, all editable fields
+and a version number (`0` for creation). Validation errors preserve the entered
+text; a stale edit returns 409 without overwriting the current record.
+
 Partners control order preparation through `dispatched`. Dispatching ships the
 order and starts the courier handoff. Courier accounts update delivery stages
 after that point; partner forms cannot mark a courier delivery complete.
@@ -151,6 +159,12 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | --- | --- | --- |
 | `GET /catalog/products` | public | Paginated product list: `{items, page, limit, total}` |
 | `GET /catalog/products/<slug>` | public | One product |
+| `GET /catalog/services?q=&category=&area=` | public | Published services; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
+| `GET /catalog/services/<slug>` | public | Published service details; 404 for private, archived or suspended-shop listings |
+| `GET /partner/services` | partner | Own shop listings including drafts; paginated |
+| `POST /partner/services` | partner | Create listing, version 0; owner derived from session |
+| `GET /partner/services/<id>` | partner | Own editable listing; another shop returns 404 |
+| `PATCH /partner/services/<id>` | partner | Full editable field replacement plus current version; stale version returns 409 |
 | `GET /catalog/search?q=&category=` | public | Search results |
 | `GET /me` | signed in | Current user |
 | `GET /cart` | signed in | Cart lines and subtotal |
@@ -206,3 +220,6 @@ Courier update retries for the same current action state and failure category
 succeed without duplicate timeline events. An old state submitted after a later
 handoff, a changed failure category, a cancelled order, or a request by a former
 courier still fails under the normal transition/authorization checks.
+
+Service request examples, validation rules, pricing and limitations are documented
+in [Services and local discovery](services-and-local-discovery.md#http-contract).

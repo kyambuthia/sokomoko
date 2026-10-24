@@ -25,4 +25,4 @@ the deeper implementation and operations reference for contributors.
 
 - [End-to-end encrypted messaging](encrypted-messaging.md) — device trust, MLS, browser storage, migration and verification.
 
-- [Services and local discovery proposal](services-and-local-discovery.md) — service listings, availability, bookings, map privacy and delivery sequence.
+- [Services and local discovery](services-and-local-discovery.md) — implemented seller listings and public discovery; proposed availability, bookings and map privacy.

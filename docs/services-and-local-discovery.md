@@ -1,6 +1,6 @@
-# Services and local discovery: proposed next phase
+# Services and local discovery
 
-Status: service-listing storage and validation are implemented in migration 10;
+Status: service listings, seller forms and public discovery are implemented with migration 10;
 booking and map integration below remain a design proposal. The demo must continue to say that
 listings, bookings and payments are illustrative; no real sale or appointment
 is confirmed.
@@ -163,6 +163,31 @@ header. Ownership is derived from the authenticated seller's active shop
 membership; clients cannot choose an owner or slug. A PATCH supplies all
 editable fields and the current `version`, rather than a partial field merge.
 Stale updates return 409, and another shop's records return 404.
+
+Example JSON for creating a draft (send with the authenticated partner session,
+`Content-Type: application/json` and `X-CSRF-Token`):
+
+```json
+{
+  "title": "Neighbourhood haircut",
+  "description": "A sample haircut service for the demo directory.",
+  "category": "hair",
+  "duration_minutes": 30,
+  "price_mode": "fixed",
+  "price": "500.00",
+  "currency": "KES",
+  "public_area": "Westlands, Nairobi",
+  "delivery_mode": "premises",
+  "state": "draft",
+  "version": 0
+}
+```
+
+For updates, send the same editable fields with the `version` returned by the
+latest read. The server generates `id`, `partner_id`, `slug`, timestamps and the
+next version. Unknown JSON fields are rejected. Categories are `hair`, `beauty`,
+`dental`, `wellness`, `home` and `other`; delivery modes are `premises`, `mobile`
+and `remote`. Duration is 5–480 minutes; currencies are `KES` or `USD`.
 
 Price input is a decimal string in `price`; returned `price_cents` is an integer
 in minor currency units. Quote-only listings require zero price. No appointment,
