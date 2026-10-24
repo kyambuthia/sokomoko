@@ -57,7 +57,7 @@ vuln: ## Check reachable vulnerabilities with a pinned scanner
 smoke-image: ## Verify a local production image using isolated disposable containers
 	bash scripts/smoke-image.sh sokomoko:local
 
-.PHONY: chat-crypto chat-crypto-test chat-crypto-check
+.PHONY: chat-crypto chat-crypto-test chat-crypto-check chat-crypto-audit
 chat-crypto: ## Rebuild pinned browser MLS assets and third-party notices
 	bash scripts/build-chat-crypto.sh
 
@@ -67,3 +67,6 @@ chat-crypto-test: ## Verify browser MLS protocol operations
 
 chat-crypto-check: ## Rebuild separately and verify checked-in encryption assets match
 	bash scripts/check-chat-crypto.sh
+
+chat-crypto-audit: ## Audit all locked Rust dependencies (requires cargo-audit 0.22.2)
+	bash scripts/audit-chat-crypto.sh

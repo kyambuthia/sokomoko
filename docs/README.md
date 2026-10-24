@@ -26,3 +26,5 @@ the deeper implementation and operations reference for contributors.
 - [End-to-end encrypted messaging](encrypted-messaging.md) — device trust, MLS, browser storage, migration and verification.
 
 - [Services and local discovery](services-and-local-discovery.md) — implemented seller listings and public discovery; proposed availability, bookings and map privacy.
+
+- [Dependency security review](dependency-security.md) — open Rust advisories, algorithm-boundary mitigation and repeatable audits.

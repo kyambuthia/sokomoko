@@ -82,6 +82,18 @@ fn members(group: &MlsGroup) -> Result<Vec<Member>> {
         })
         .collect()
 }
+// Check the serialized KeyPackage prefix before signature validation invokes a
+// provider algorithm. TLS encoding starts with protocol version and ciphersuite
+// (OpenMLS 0.9.2 KeyPackageTbsIn). Never negotiate another suite from peer input.
+fn supported_package(bytes: &[u8]) -> Result<KeyPackageIn> {
+    let mut prefix = bytes;
+    let version = ProtocolVersion::tls_deserialize(&mut prefix).map_err(err)?;
+    let suite = Ciphersuite::tls_deserialize(&mut prefix).map_err(err)?;
+    if version != ProtocolVersion::Mls10 || suite != SUITE {
+        return Err("Unsupported key package ciphersuite".into());
+    }
+    KeyPackageIn::tls_deserialize_exact(bytes).map_err(err)
+}
 fn run(req: Request) -> Result<Response> {
     let provider = OpenMlsRustCrypto::default();
     let mut state = match req.state {
@@ -98,6 +110,9 @@ fn run(req: Request) -> Result<Response> {
         }
         _ => return Err("Missing device state".into()),
     };
+    if state.signer.signature_scheme() != SUITE.signature_algorithm() {
+        return Err("Unsupported device signature scheme".into());
+    }
     for (k, v) in &state.storage {
         provider
             .storage()
@@ -163,8 +178,7 @@ fn run(req: Request) -> Result<Response> {
                 .packages
                 .iter()
                 .map(|p| {
-                    KeyPackageIn::tls_deserialize_exact(decode(p)?)
-                        .map_err(err)?
+                    supported_package(&decode(p)?)?
                         .validate(provider.crypto(), ProtocolVersion::Mls10)
                         .map_err(err)
                 })
@@ -189,6 +203,9 @@ fn run(req: Request) -> Result<Response> {
                 MlsMessageBodyIn::Welcome(w) => w,
                 _ => return Err("Expected Welcome".into()),
             };
+            if welcome.ciphersuite() != SUITE {
+                return Err("Unsupported Welcome ciphersuite".into());
+            }
             let group = StagedWelcome::new_from_welcome(
                 &provider,
                 &MlsGroupJoinConfig::default(),
@@ -207,6 +224,9 @@ fn run(req: Request) -> Result<Response> {
             let mut group = MlsGroup::load(provider.storage(), &group_id)
                 .map_err(err)?
                 .ok_or("Group is unavailable")?;
+            if group.ciphersuite() != SUITE {
+                return Err("Unsupported stored group ciphersuite".into());
+            }
             match req.action.as_str() {
                 "send" => {
                     if req.text.is_empty() || req.text.len() > 16000 {
@@ -315,6 +335,91 @@ mod tests {
         })
         .unwrap()
         .state
+    }
+    #[test]
+    fn rejects_alternate_algorithms_before_processing_peer_data() {
+        let provider = OpenMlsRustCrypto::default();
+        let alternate = Ciphersuite::MLS_128_DHKEMP256_AES128GCM_SHA256_P256;
+        let signer = SignatureKeyPair::new(alternate.signature_algorithm()).unwrap();
+        let bundle = KeyPackage::builder()
+            .build(
+                alternate,
+                &provider,
+                &signer,
+                credential("alternate", &signer),
+            )
+            .unwrap();
+        let bytes = bundle.key_package().tls_serialize_detached().unwrap();
+        assert_eq!(
+            supported_package(&bytes).unwrap_err(),
+            "Unsupported key package ciphersuite"
+        );
+        let result = run(request(
+            "create",
+            Some(identity("alice")),
+            "group",
+            "",
+            "",
+            vec![B64.encode(bytes)],
+        ));
+        assert!(matches!(result, Err(ref e) if e == "Unsupported key package ciphersuite"));
+        // Build an actual alternate-suite Welcome through the pinned library.
+        // The application must reject it before attempting HPKE processing.
+        let inviter = SignatureKeyPair::new(alternate.signature_algorithm()).unwrap();
+        let config = MlsGroupCreateConfig::builder()
+            .ciphersuite(alternate)
+            .use_ratchet_tree_extension(true)
+            .build();
+        let mut group = MlsGroup::new_with_group_id(
+            &provider,
+            &inviter,
+            &config,
+            GroupId::from_slice(b"alternate-group"),
+            credential("inviter", &inviter),
+        )
+        .unwrap();
+        let (_, welcome, _) = group
+            .add_members(&provider, &inviter, &[bundle.key_package().clone()])
+            .unwrap();
+        let result = run(request(
+            "join",
+            Some(identity("recipient")),
+            "alternate-group",
+            &B64.encode(welcome.tls_serialize_detached().unwrap()),
+            "",
+            vec![],
+        ));
+        assert!(matches!(result, Err(ref e) if e == "Unsupported Welcome ciphersuite"));
+        // Reject alternate-suite persisted group state before any send or update.
+        let mut stored = identity("stored-group");
+        stored.storage = provider
+            .storage()
+            .values
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (B64.encode(k), B64.encode(v)))
+            .collect();
+        let result = run(request(
+            "send",
+            Some(stored),
+            "alternate-group",
+            "",
+            "no fallback",
+            vec![],
+        ));
+        assert!(matches!(result, Err(ref e) if e == "Unsupported stored group ciphersuite"));
+        let mut state = identity("altered-state");
+        state.signer = signer;
+        let result = run(request(
+            "sign",
+            Some(state),
+            "",
+            "",
+            "must not sign",
+            vec![],
+        ));
+        assert!(matches!(result, Err(ref e) if e == "Unsupported device signature scheme"));
     }
     #[test]
     fn offline_join_encrypt_reply_update_and_tamper() {

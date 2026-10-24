@@ -188,3 +188,12 @@ Primary references:
 - [OpenMLS storage requirements](https://book.openmls.tech/user_manual/persistence.html)
 - [Web Locks](https://www.w3.org/TR/web-locks/)
 - [CSP and WebAssembly](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/script-src)
+
+
+## Dependency advisory status
+
+The 2026-10-24 Rust lockfile audit has unresolved advisories, including the
+RustCrypto provider's transitive `crypto-bigint` dependency. The application
+rejects unsupported algorithm negotiation, but this does not fix the dependency
+or prove complete non-reachability. See [dependency security](dependency-security.md)
+for exact findings, evidence, mitigation and the required upstream update.

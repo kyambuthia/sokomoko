@@ -1,0 +1,37 @@
+name: Scheduled dependency audit
+
+# Advisory databases change without a repository change. This separate report
+# surfaces new findings, including the unresolved Rust advisories documented in
+# docs/dependency-security.md. It does not hide them behind an ignore list.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check reachable Go vulnerabilities
+        run: make vuln
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Install pinned Rust advisory scanner
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Check complete Rust lockfile
+        run: make chat-crypto-audit
