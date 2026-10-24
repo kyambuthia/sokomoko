@@ -12,6 +12,7 @@ import (
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
+	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
 	messagingSvc "github.com/kyambuthia/sokomoko/internal/service/messaging"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
@@ -42,6 +43,7 @@ func Compose(opts ComposeOptions) *App {
 	return New(Dependencies{
 		Readiness:             opts.Store,
 		Catalog:               catalogsvc.New(opts.Store),
+		Directory:             directorysvc.New(opts.Store),
 		Account:               accountsvc.New(opts.Store),
 		Commerce:              commerceSvc.New(opts.Store),
 		Checkout:              checkoutService,

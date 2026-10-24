@@ -149,3 +149,22 @@ lock current membership and role, use optimistic versions to reject stale edits,
 and record an audit event in the same transaction. Search treats user text
 literally and bounds pagination. Owner IDs and slugs cannot be reassigned by an
 edit. Sensitive visit details and clinical notes do not belong in listings.
+
+### HTTP contract
+
+Public discovery uses `GET /api/v1/catalog/services` with `q`, `category`,
+`area`, `page` and `limit`; details use
+`GET /api/v1/catalog/services/{slug}`. Only published listings belonging to
+active shops are visible. Search terms are literal text, including `%` and `_`.
+
+Authenticated sellers use `GET|POST /api/v1/partner/services` and
+`GET|PATCH /api/v1/partner/services/{id}`. Writes require the session CSRF
+header. Ownership is derived from the authenticated seller's active shop
+membership; clients cannot choose an owner or slug. A PATCH supplies all
+editable fields and the current `version`, rather than a partial field merge.
+Stale updates return 409, and another shop's records return 404.
+
+Price input is a decimal string in `price`; returned `price_cents` is an integer
+in minor currency units. Quote-only listings require zero price. No appointment,
+payment, location tracking or medical-data collection is performed by these
+endpoints. The storefront and seller HTML forms are a subsequent increment.

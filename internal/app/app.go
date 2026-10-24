@@ -16,6 +16,7 @@ import (
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
+	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
 	messagingSvc "github.com/kyambuthia/sokomoko/internal/service/messaging"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
@@ -36,6 +37,14 @@ type CatalogService interface {
 	Search(ctx context.Context, query string) ([]catalogsvc.Product, error)
 	SearchInCategory(ctx context.Context, query, category string) ([]catalogsvc.Product, error)
 	SearchPage(ctx context.Context, query, category string, page, limit int) ([]catalogsvc.Product, int, error)
+}
+
+type DirectoryService interface {
+	Browse(context.Context, db.ServiceFilter, int) ([]db.ServiceListing, int, error)
+	Public(context.Context, string) (*db.ServiceListing, error)
+	Own(context.Context, *directorysvc.Actor, int, int) ([]db.ServiceListing, int, error)
+	Edit(context.Context, *directorysvc.Actor, int) (*db.ServiceListing, error)
+	Save(context.Context, *directorysvc.Actor, int, directorysvc.Input) (*db.ServiceListing, error)
 }
 
 type AccountService interface {
@@ -162,6 +171,7 @@ type AuthService interface {
 type Dependencies struct {
 	Readiness ReadinessChecker
 	Catalog   CatalogService
+	Directory DirectoryService
 	Account   AccountService
 	Commerce  CommerceService
 	Checkout  CheckoutService
@@ -184,6 +194,7 @@ type Dependencies struct {
 type App struct {
 	Readiness             ReadinessChecker
 	Catalog               CatalogService
+	Directory             DirectoryService
 	Account               AccountService
 	Commerce              CommerceService
 	Checkout              CheckoutService
@@ -205,6 +216,7 @@ func New(deps Dependencies) *App {
 	return &App{
 		Readiness:             deps.Readiness,
 		Catalog:               deps.Catalog,
+		Directory:             deps.Directory,
 		Account:               deps.Account,
 		Commerce:              deps.Commerce,
 		Checkout:              deps.Checkout,

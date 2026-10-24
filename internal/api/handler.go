@@ -36,6 +36,12 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix, h.notFound)
 	mux.HandleFunc(apiPrefix+"/", h.notFound)
 
+	// Service discovery and seller-owned offerings.
+	mux.HandleFunc(apiPrefix+"/catalog/services", h.serviceList)
+	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}", h.serviceDetail)
+	mux.Handle(apiPrefix+"/partner/services", h.role([]string{db.RolePartner}, http.HandlerFunc(h.ownServices)))
+	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{db.RolePartner}, http.HandlerFunc(h.ownService)))
+
 	// Public catalog reads.
 	mux.HandleFunc(apiPrefix+"/catalog/products", h.catalogProducts)
 	mux.HandleFunc(apiPrefix+"/catalog/products/", h.catalogProduct)
