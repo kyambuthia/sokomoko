@@ -136,6 +136,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE sokomoko_migrate IN SCHEMA public
 compose="docker compose --env-file .env.production -f deploy/compose.production.yml"
 
 $compose config --quiet                        # validate without printing secrets
+# For migration 0011, stop all old app replicas before migrating (see below).
 $compose --profile release run --rm migrate    # apply migrations
 $compose up -d app proxy                       # start or roll the app
 $compose ps
@@ -145,7 +146,18 @@ $compose exec -T app /usr/local/bin/sokomoko healthcheck
 The production app does not migrate on startup. It refuses to start if the
 database is behind the binary or has versions the binary does not know.
 Keep migrations additive so the previous binary keeps working while the new
-one rolls out.
+one rolls out. Review semantic compatibility as well as SQL compatibility:
+adding a new context to an existing query can change how an older process reads
+new rows even when its statements still execute.
+
+**Migration 0011 requires a coordinated application restart.** It adds service
+conversation identity to the shared seller-conversation index and lookup. An old
+process does not filter this new context and could resolve the wrong thread when
+opening a general shop conversation. Stop **all** old app replicas before running
+this migration, then start only the new image. In the single-host Compose setup,
+insert `$compose stop app` before the migration command above. This creates a
+brief maintenance interval. Do not perform a mixed-version rolling deployment
+for this release, and do not start an old binary against schema 11.
 
 First deployment only: open `/setup` on the admin host with the setup token,
 create the administrator, then remove `ADMIN_SETUP_TOKEN` and recreate the app

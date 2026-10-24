@@ -139,6 +139,9 @@ lowercase hex characters and must be reused when retrying an uncertain send.
 
 ## Service enquiries
 
+Migration 0011 requires a coordinated app restart; see the
+[release procedure](09-deployment.md#release-procedure).
+
 Migration `0011_service_conversations.sql` attaches a service context to a seller
 conversation. `GET /messages/new?service_id=<id>` resolves the published service
 to its active shop. The encrypted `start` payload is
