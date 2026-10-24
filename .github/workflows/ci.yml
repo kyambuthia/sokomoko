@@ -82,6 +82,9 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: Check shell syntax
+        run: bash scripts/check-shell.sh
+
       - name: Check Go formatting
         run: bash scripts/go-format.sh --check
 

@@ -46,7 +46,7 @@ templates are parsed once at startup from the embedded copy.
 | `make test` | `go test ./...` with database tests required |
 | `make test-race` | Same with `-race` |
 | `make test-isolated` | Full race suite with disposable PostgreSQL 17; requires local Docker |
-| `make lint` | `gofmt` check (including new files), `go vet`, pinned staticcheck and `node --check` on every script |
+| `make lint` | `gofmt` check (including new files), `go vet`, pinned staticcheck, JavaScript syntax and declared-interpreter shell syntax checks |
 | `make fmt` | `gofmt -w` |
 | `make vuln` | `govulncheck` (pinned v1.9.0) |
 | `make docker` | Build `sokomoko:local` |
@@ -54,6 +54,14 @@ templates are parsed once at startup from the embedded copy.
 | `make chat-crypto-test` | Check Rust formatting and run the MLS protocol test |
 | `make chat-crypto` | Regenerate embedded encryption assets and license notices |
 | `make chat-crypto-check` | Verify generated encryption assets match source without changing them |
+
+Shell syntax is checked by `bash scripts/check-shell.sh` in both `make lint`
+and CI. It includes tracked and untracked `.sh` files that are not Git-ignored,
+including deployment helpers. Bash scripts use `bash -n`; POSIX shell scripts
+use `sh -n`. The check does not execute their commands or load environment files.
+Unsupported interpreter declarations fail explicitly. This checks syntax rather
+than runtime behavior; keep integration checks for migrations, backups and
+container lifecycle behavior.
 
 ## Tests
 

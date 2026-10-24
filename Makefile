@@ -42,7 +42,8 @@ test-race: ## Run all tests with the race detector
 test-isolated: ## Run race tests with a disposable loopback PostgreSQL container
 	GO="$(GO)" bash scripts/test-isolated.sh
 
-lint: ## gofmt check, go vet, staticcheck, and JavaScript syntax check
+lint: ## Go formatting and analysis, JavaScript and shell syntax checks
+	bash scripts/check-shell.sh
 	bash scripts/go-format.sh --check
 	$(GO) vet ./...
 	$(GO) run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
