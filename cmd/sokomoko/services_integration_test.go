@@ -111,7 +111,8 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	form := url.Values{"csrf_token": {session.CSRFToken}, "version": {"3"}, "title": {"<script>alert(1)</script>"}, "description": {input.Description}, "category": {"hair"}, "duration_minutes": {"30"}, "price_mode": {"fixed"}, "price": {"500.00"}, "currency": {"KES"}, "public_area": {"Westlands"}, "delivery_mode": {"premises"}, "state": {"published"}}
+	multilineDescription := "Consultation and haircut.\r\n\r\nBring your preferred style.\r\n<script>untrusted</script>"
+	form := url.Values{"csrf_token": {session.CSRFToken}, "version": {"3"}, "title": {"<script>alert(1)</script>"}, "description": {multilineDescription}, "category": {"hair"}, "duration_minutes": {"30"}, "price_mode": {"fixed"}, "price": {"500.00"}, "currency": {"KES"}, "public_area": {"Westlands"}, "delivery_mode": {"premises"}, "state": {"published"}}
 	response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
 	if response.StatusCode != http.StatusSeeOther {
 		t.Fatalf("save status=%d body=%s", response.StatusCode, pageHTML)
@@ -119,6 +120,9 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	response, pageHTML = makeRequest(http.MethodGet, "/services/"+listing.Slug, nil, nil, "localhost")
 	if response.StatusCode != http.StatusOK || strings.Contains(pageHTML, "<script>alert(1)</script>") || !strings.Contains(pageHTML, "&lt;script&gt;") {
 		t.Fatalf("unsafe or missing service page status=%d", response.StatusCode)
+	}
+	if !strings.Contains(pageHTML, `class="detail__desc"`) || !strings.Contains(pageHTML, "Consultation and haircut.\n\nBring your preferred style.\n&lt;script&gt;untrusted&lt;/script&gt;") {
+		t.Fatal("multiline description was not preserved or escaped")
 	}
 	response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
 	if response.StatusCode != http.StatusConflict || !strings.Contains(pageHTML, "Your text is kept below") {
@@ -161,7 +165,7 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if latest.Version != 4 || latest.Title != "<script>alert(1)</script>" {
+	if latest.Version != 4 || latest.Title != "<script>alert(1)</script>" || latest.Description != strings.ReplaceAll(multilineDescription, "\r\n", "\n") {
 		t.Fatal("invalid fields changed the stored listing")
 	}
 	response, _ = makeRequest(http.MethodGet, editPath, nil, other, "partner.localhost")

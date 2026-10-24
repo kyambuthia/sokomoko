@@ -238,6 +238,11 @@ Multiple invalid fields are reported together; field messages contain corrective
 instructions rather than submitted content. Missing or invalid version values
 require reloading the form. A valid but stale version still returns 409.
 
+Service descriptions accept multiple lines. Browser form CRLF line endings are
+normalized to LF before validation and storage, so the 3000-character limit counts
+each line break once. Descriptions remain escaped plain text on public pages,
+with their line breaks preserved. Other control characters remain invalid.
+
 Seller forms present a linked summary, identify invalid controls with
 `aria-invalid` and connect them to inline text with `aria-describedby`. Error
 pages are identified in the document title. Submitted values, including malformed

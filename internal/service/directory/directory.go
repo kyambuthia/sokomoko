@@ -110,7 +110,9 @@ func (s *Service) Save(ctx context.Context, a *Actor, id int, in Input) (*db.Ser
 		return nil, ErrForbidden
 	}
 	in.Title = strings.TrimSpace(in.Title)
-	in.Description = strings.TrimSpace(in.Description)
+	// URL-encoded browser forms submit textarea line breaks as CRLF.
+	// Store canonical LF before checking length and control characters.
+	in.Description = strings.TrimSpace(strings.ReplaceAll(in.Description, "\r\n", "\n"))
 	in.PublicArea = strings.TrimSpace(in.PublicArea)
 	in.Currency = strings.ToUpper(strings.TrimSpace(in.Currency))
 	price, err := money.Parse(strings.TrimSpace(in.Price))

@@ -27,7 +27,7 @@ func TestDirectoryRejectsUnauthorizedActorsBeforeStore(t *testing.T) {
 func TestDirectoryRejectsInvalidListingBeforeStore(t *testing.T) {
 	s := New(nil)
 	a := &Actor{ID: 1, Role: db.RolePartner}
-	cases := []func(*Input){func(i *Input) { i.Title = "x" }, func(i *Input) { i.Title = "bad\x00title" }, func(i *Input) { i.Description = strings.Repeat("a", 3001) }, func(i *Input) { i.Description = "bad\xffdescription" }, func(i *Input) { i.DurationMinutes = 0 }, func(i *Input) { i.Price = "-1" }, func(i *Input) { i.Price = "1.001" }, func(i *Input) { i.PriceMode = "quote" }, func(i *Input) { i.Currency = "FAKE" }, func(i *Input) { i.Category = "unknown" }, func(i *Input) { i.State = "approved" }, func(i *Input) { i.PublicArea = "x" }, func(i *Input) { i.DeliveryMode = "unknown" }, func(i *Input) { i.Version = 1 }}
+	cases := []func(*Input){func(i *Input) { i.Title = "x" }, func(i *Input) { i.Title = "bad\x00title" }, func(i *Input) { i.Description = strings.Repeat("a", 3001) }, func(i *Input) { i.Description = "bad\xffdescription" }, func(i *Input) { i.Description = "bad\rdescription" }, func(i *Input) { i.DurationMinutes = 0 }, func(i *Input) { i.Price = "-1" }, func(i *Input) { i.Price = "1.001" }, func(i *Input) { i.PriceMode = "quote" }, func(i *Input) { i.Currency = "FAKE" }, func(i *Input) { i.Category = "unknown" }, func(i *Input) { i.State = "approved" }, func(i *Input) { i.PublicArea = "x" }, func(i *Input) { i.DeliveryMode = "unknown" }, func(i *Input) { i.Version = 1 }}
 	for n, mutate := range cases {
 		i := validInput()
 		mutate(&i)
