@@ -58,6 +58,18 @@ func TestEncryptedServiceEnquiriesRespectVisibilityAndOwnership(t *testing.T) {
 	if count != 0 {
 		t.Fatal("encrypted enquiry created plaintext content")
 	}
+	sellerDevice := newEncryptedTestDevice(t, s, owner, 401)
+	encryptedPublish(t, s, sellerDevice, 402)
+	session := encryptedNewSession(t, s, device, id, 403)
+	first, err := device.call(t, s, "send", encryptedSendInput(id, session, 0))
+	chatMust(t, err)
+	reply, err := sellerDevice.call(t, s, "send", encryptedSendInput(id, session, first.ID))
+	chatMust(t, err)
+	history, err := sellerDevice.call(t, s, "events", map[string]any{"conversation_id": id})
+	chatMust(t, err)
+	if len(history.Events) != 2 {
+		t.Fatalf("encrypted history events=%d", len(history.Events))
+	}
 	chatMust(t, s.ChatAction(t.Context(), owner, id, "block", 0, ""))
 	_, err = device.call(t, s, "start", map[string]any{"target": target})
 	chatWantError(t, err, ErrChatBlocked)
@@ -72,6 +84,13 @@ func TestEncryptedServiceEnquiriesRespectVisibilityAndOwnership(t *testing.T) {
 	}
 	_, err = device.call(t, s, "roster", map[string]any{"conversation_id": id})
 	chatMust(t, err)
+	_, err = sellerDevice.call(t, s, "send", encryptedSendInput(id, session, reply.ID))
+	chatWantError(t, err, ErrChatClosed)
+	history, err = sellerDevice.call(t, s, "events", map[string]any{"conversation_id": id})
+	chatMust(t, err)
+	if len(history.Events) != 2 {
+		t.Fatal("archiving removed encrypted history")
+	}
 	_, err = device.call(t, s, "claim", map[string]any{"conversation_id": id, "roster_hash": "irrelevant-after-closure"})
 	chatWantError(t, err, ErrChatClosed)
 	_, err = s.ChatContacts(t.Context(), buyer, target)

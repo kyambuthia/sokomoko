@@ -14,20 +14,21 @@ only the contact name and conversation context, never account email or credentia
 
 ## Using messages
 
-- Buyers open **Messages** in the storefront, **Message seller** on a product,
+- Buyers open **Messages** in the storefront, **Message seller** on a product, **Message service provider** on a service,
   or **Message seller or courier** on an order.
 - Partners use **Messages** in their workspace or **Message buyer** on an
-  order. Seller conversations belong to the partner account. Every active,
-  linked partner user can read and reply; each has an individual read marker.
+  order. Seller conversations belong to the partner account. Active linked partner users may participate through approved devices; each
+  has an individual read marker. Joining the shop does not automatically grant
+  a device access to past encrypted history.
 - Couriers open **Message buyer** on an assigned delivery. Couriers cannot
   receive or initiate unsolicited handle requests.
 - An exact handle can start a request between two buyers, or between a buyer
   and a shop. The sender gets one introduction. Only the receiving side may
   accept or decline. Acceptance enables replies. Declined requests cannot be
   reopened by the sender.
-- Product and order conversations start accepted because they have explicit
+- Product, service and order conversations start accepted because they have explicit
   marketplace context. A block applies to the entire relationship, including
-  all its product and order contexts.
+  all its product, service and order contexts.
 
 The inbox orders conversations by their most recent message. It has pages of
 30 conversations and unread indicators. History has pages of 50 messages.
@@ -129,12 +130,33 @@ JSON uses the standard `data`/`error` envelope and session plus CSRF:
 | POST | `/api/v1/messages/<id>/send` | `body`, `nonce`; returns message ID and a fresh nonce |
 | POST | `/api/v1/messages/<id>/action` | `action`, optional `message_id`, optional `reason` |
 
-A target has exactly one of `handle`, `product_id`, `order_id` or
+A target has exactly one of `handle`, `product_id`, `service_id`, `order_id` or
 `delivery_order_id`. An `order_id` without `partner_id` lists eligible
 contacts; select a seller with both `order_id` and `partner_id` to send.
 Courier contact uses `delivery_order_id`. Server resolution supplies every
 participant ID. A nonce is 16 cryptographically random bytes encoded as 32
 lowercase hex characters and must be reused when retrying an uncertain send.
+
+## Service enquiries
+
+Migration `0011_service_conversations.sql` attaches a service context to a seller
+conversation. `GET /messages/new?service_id=<id>` resolves the published service
+to its active shop. The encrypted `start` payload is
+`{"target":{"service_id":123}}`; use the existing signed device request protocol.
+Clients cannot override the shop or combine service context with another target.
+
+Only buyers can initiate this context; linked shop members can read and reply
+using their approved devices. Different services, product enquiries, order
+conversations and general shop requests remain separate threads. Relationship
+blocks apply across all of them. A service being archived or made a draft closes
+sending; authorized participants retain access to their existing conversation.
+Re-publishing enables the existing conversation again. Shop suspension and
+membership removal continue to revoke seller access.
+
+The service title/ID and shop relationship are server-visible context metadata.
+Message content continues through MLS; no plaintext introductory message is
+created. A conversation is an enquiry, never an appointment confirmation. The
+existing device trust, history and recovery limitations still apply.
 
 ## Implementation and verification
 

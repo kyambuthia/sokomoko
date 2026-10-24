@@ -35,7 +35,8 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   geocoding, map display, distance search or live location tracking.
 - Professional qualifications are not verified. The directory does not collect
   clinical details, and a dental category is not an endorsement.
-- Service-context messaging and listing images are not implemented yet.
+- Service enquiries use the existing encrypted shop messaging flow. Listing
+  images and appointment-specific conversations are not implemented yet.
 
 ## Identity
 

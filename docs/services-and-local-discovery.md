@@ -213,3 +213,16 @@ without them.
 
 Implementation references: [PostgreSQL 17 INSERT and ON CONFLICT](https://www.postgresql.org/docs/17/sql-insert.html),
 [PostgreSQL 17 constraints](https://www.postgresql.org/docs/17/ddl-constraints.html).
+
+
+### Encrypted enquiries
+
+Service detail pages link to the encrypted compose flow using `service_id`.
+Migration 11 stores this context separately from product and order conversations.
+Only published services from active, staffed shops can be contacted; archiving a
+listing closes sending but preserves authorized history. Shop membership, device
+approval and relationship blocks use the existing messaging rules. These are
+enquiries only and do not confirm bookings. See [messaging](messaging.md#service-enquiries).
+
+Migration references: [PostgreSQL 17 ALTER TABLE](https://www.postgresql.org/docs/17/sql-altertable.html)
+and [partial indexes](https://www.postgresql.org/docs/17/indexes-partial.html).

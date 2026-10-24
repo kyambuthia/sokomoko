@@ -75,7 +75,7 @@ reachable.
 - [x] Seller-owned listings with draft/published/archive visibility and versioned edits.
 - [x] Public browsing by service, category and locality; branded seller forms and JSON API.
 - [x] Development sample listings that preserve seller edits on repeated seeds.
-- [ ] Service-context encrypted enquiries.
+- [x] Service-context encrypted enquiries.
 - [ ] Practitioner availability and transactional appointment reservations.
 - [ ] Privacy-conscious geocoding and local map discovery.
 

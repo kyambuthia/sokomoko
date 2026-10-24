@@ -17,7 +17,7 @@ key-transparency directory. This implementation uses the classical MLS suite
 
 The server still sees account and shop relationships, device public keys,
 conversation context, timing, message sizes, and read markers. This is content
-encryption, not anonymous routing. Existing order, product, delivery and account
+encryption, not anonymous routing. Existing order, product, service, delivery and account
 data are outside this encryption boundary.
 
 ## Devices and trust
