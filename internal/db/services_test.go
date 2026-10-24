@@ -187,3 +187,47 @@ func TestServiceDiscoveryScopesBusinessAndVisibility(t *testing.T) {
 		t.Fatal("unknown business returned listings")
 	}
 }
+
+func TestOwnServicesStateFilterScopesCountsAndPagination(t *testing.T) {
+	s := newTestStore(t)
+	partner, owner, _ := chatShop(t, s)
+	_, outsider, _ := chatShop(t, s)
+	for i, state := range []string{"draft", "draft", "published", "archived"} {
+		listing := serviceFixture(fmt.Sprintf("state-filter-%d", i))
+		listing.State = state
+		_, err := s.SaveService(t.Context(), owner, listing)
+		chatMust(t, err)
+	}
+	for _, state := range []string{"", "draft", "published", "archived"} {
+		want := 1
+		if state == "" {
+			want = 4
+		} else if state == "draft" {
+			want = 2
+		}
+		items, total, err := s.OwnServicesByState(t.Context(), owner, state, 1, 0)
+		chatMust(t, err)
+		if len(items) != 1 || total != want || (state != "" && items[0].State != state) {
+			t.Fatalf("state=%q items=%+v total=%d", state, items, total)
+		}
+		next, nextTotal, err := s.OwnServicesByState(t.Context(), owner, state, 1, 1)
+		chatMust(t, err)
+		if nextTotal != want || (want == 1 && len(next) != 0) || (want > 1 && (len(next) != 1 || next[0].ID == items[0].ID || (state != "" && next[0].State != state))) {
+			t.Fatalf("state=%q second page=%+v total=%d", state, next, nextTotal)
+		}
+		items, total, err = s.OwnServicesByState(t.Context(), outsider, state, 10, 0)
+		chatMust(t, err)
+		if len(items) != 0 || total != 0 {
+			t.Fatalf("state=%q leaked another shop's services", state)
+		}
+	}
+	_, _, err := s.OwnServicesByState(t.Context(), owner, "unknown", 10, 0)
+	chatWantError(t, err, ErrServiceNotFound)
+	_, err = s.DB.ExecContext(t.Context(), `UPDATE partners SET status='suspended' WHERE id=$1`, partner)
+	chatMust(t, err)
+	items, total, err := s.OwnServicesByState(t.Context(), owner, "draft", 10, 0)
+	chatMust(t, err)
+	if len(items) != 0 || total != 0 {
+		t.Fatal("suspended shop retained listing access")
+	}
+}

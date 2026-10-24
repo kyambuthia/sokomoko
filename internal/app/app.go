@@ -43,6 +43,7 @@ type DirectoryService interface {
 	Browse(context.Context, db.ServiceFilter, int) ([]db.ServiceListing, int, error)
 	Public(context.Context, string) (*db.ServiceListing, error)
 	Own(context.Context, *directorysvc.Actor, int, int) ([]db.ServiceListing, int, error)
+	OwnByState(context.Context, *directorysvc.Actor, string, int, int) ([]db.ServiceListing, int, error)
 	Edit(context.Context, *directorysvc.Actor, int) (*db.ServiceListing, error)
 	Save(context.Context, *directorysvc.Actor, int, directorysvc.Input) (*db.ServiceListing, error)
 }

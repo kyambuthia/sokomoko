@@ -55,7 +55,7 @@ func (h *Handler) ownServices(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		page, limit := pageParams(r)
-		items, total, err := h.app.Directory.Own(r.Context(), serviceActor(r), page, limit)
+		items, total, err := h.app.Directory.OwnByState(r.Context(), serviceActor(r), r.URL.Query().Get("state"), page, limit)
 		if err != nil {
 			writeServiceError(w, err)
 			return

@@ -157,6 +157,12 @@ Public discovery uses `GET /api/v1/catalog/services` with `q`, `category`,
 `GET /api/v1/catalog/services/{slug}`. Only published listings belonging to
 active shops are visible. Search terms are literal text, including `%` and `_`.
 
+Seller lists support an optional `state=draft|published|archived` query parameter
+in both the workspace `/services` page and `GET /api/v1/partner/services`. Omit
+`state` or leave it empty to show all states. Unknown values return HTTP 400.
+The state predicate is applied with shop ownership in SQL before counting and
+pagination; public discovery continues to expose only published services.
+
 Authenticated sellers use `GET|POST /api/v1/partner/services` and
 `GET|PATCH /api/v1/partner/services/{id}`. Writes require the session CSRF
 header. Ownership is derived from the authenticated seller's active shop

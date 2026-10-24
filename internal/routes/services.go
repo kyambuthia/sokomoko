@@ -12,6 +12,7 @@ import (
 )
 
 type servicePage struct {
+	State                         string
 	Preview                       bool
 	FieldErrors                   map[string]string
 	ValidationFields              []directorysvc.FieldError
@@ -61,7 +62,8 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 		var err error
 		if own {
 			data.Role = db.RolePartner
-			data.Listings, total, err = a.Directory.Own(r.Context(), directoryActor(r), page, 24)
+			data.State = r.URL.Query().Get("state")
+			data.Listings, total, err = a.Directory.OwnByState(r.Context(), directoryActor(r), data.State, page, 24)
 		} else {
 			if raw := r.URL.Query().Get("partner_id"); raw != "" {
 				data.Filter.PartnerID, err = strconv.Atoi(raw)

@@ -42,7 +42,7 @@ type store interface {
 	BrowseServices(context.Context, db.ServiceFilter) ([]db.ServiceListing, int, error)
 	PublicService(context.Context, string) (*db.ServiceListing, error)
 	OwnService(context.Context, int, int) (*db.ServiceListing, error)
-	OwnServices(context.Context, int, int, int) ([]db.ServiceListing, int, error)
+	OwnServicesByState(context.Context, int, string, int, int) ([]db.ServiceListing, int, error)
 	SaveService(context.Context, int, db.ServiceListing) (*db.ServiceListing, error)
 }
 type Service struct{ store store }
@@ -87,13 +87,17 @@ func (s *Service) Public(ctx context.Context, key string) (*db.ServiceListing, e
 	return s.store.PublicService(ctx, key)
 }
 func (s *Service) Own(ctx context.Context, a *Actor, page, limit int) ([]db.ServiceListing, int, error) {
+	return s.OwnByState(ctx, a, "", page, limit)
+}
+
+func (s *Service) OwnByState(ctx context.Context, a *Actor, state string, page, limit int) ([]db.ServiceListing, int, error) {
 	if !validActor(a) {
 		return nil, 0, ErrForbidden
 	}
-	if !pageBounds(page, limit) {
+	if !pageBounds(page, limit) || (state != "" && !oneOf(state, "draft", "published", "archived")) {
 		return nil, 0, ErrInvalid
 	}
-	return s.store.OwnServices(ctx, a.ID, limit, (page-1)*limit)
+	return s.store.OwnServicesByState(ctx, a.ID, state, limit, (page-1)*limit)
 }
 func (s *Service) Edit(ctx context.Context, a *Actor, id int) (*db.ServiceListing, error) {
 	if !validActor(a) {

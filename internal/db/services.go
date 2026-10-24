@@ -88,17 +88,22 @@ func (s *Store) PublicService(ctx context.Context, slug string) (*ServiceListing
 
 // OwnServices scopes the query in SQL; no caller-supplied partner ID is trusted.
 func (s *Store) OwnServices(ctx context.Context, userID, limit, offset int) ([]ServiceListing, int, error) {
+	return s.OwnServicesByState(ctx, userID, "", limit, offset)
+}
+
+// OwnServicesByState applies publication-state filtering before counting and paging.
+func (s *Store) OwnServicesByState(ctx context.Context, userID int, state string, limit, offset int) ([]ServiceListing, int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	if userID <= 0 || limit < 1 || limit > 50 || offset < 0 || offset > 50000 {
+	if (state != "" && state != "draft" && state != "published" && state != "archived") || userID <= 0 || limit < 1 || limit > 50 || offset < 0 || offset > 50000 {
 		return nil, 0, ErrServiceNotFound
 	}
-	const scope = `JOIN partner_users pu ON pu.partner_id=s.partner_id JOIN users u ON u.id=pu.user_id WHERE pu.user_id=$1 AND u.role='partner' AND u.deleted_at IS NULL AND p.status='active'`
+	const scope = `JOIN partner_users pu ON pu.partner_id=s.partner_id JOIN users u ON u.id=pu.user_id WHERE pu.user_id=$1 AND u.role='partner' AND u.deleted_at IS NULL AND p.status='active' AND ($2='' OR s.state=$2)`
 	var total int
-	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope, userID).Scan(&total); err != nil {
+	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope, userID, state).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope+` ORDER BY s.updated_at DESC,s.id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope+` ORDER BY s.updated_at DESC,s.id DESC LIMIT $3 OFFSET $4`, userID, state, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}

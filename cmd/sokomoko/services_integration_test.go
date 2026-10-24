@@ -53,6 +53,43 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	if listing.Version != 1 || listing.State != "draft" {
 		t.Fatalf("unexpected listing: %+v", listing)
 	}
+
+	for _, state := range []string{"", "draft", "published", "archived"} {
+		var ownPage struct {
+			Items []db.ServiceListing `json:"items"`
+			Total int                 `json:"total"`
+		}
+		decodeAPIData(t, request(http.MethodGet, collection+"?state="+state, nil, "seller", false, http.StatusOK), &ownPage)
+		want := 0
+		if state == "" || state == "draft" {
+			want = 1
+		}
+		if ownPage.Total != want || len(ownPage.Items) != want {
+			t.Fatalf("state=%q own page=%+v", state, ownPage)
+		}
+		decodeAPIData(t, request(http.MethodGet, collection+"?state="+state, nil, "other", false, http.StatusOK), &ownPage)
+		if ownPage.Total != 0 || len(ownPage.Items) != 0 {
+			t.Fatal("filtered API leaked another seller's draft")
+		}
+	}
+	request(http.MethodGet, collection+"?state=unknown", nil, "seller", false, http.StatusBadRequest)
+	for _, state := range []string{"draft", "published", "archived", "unknown"} {
+		response, body := makeRequest(http.MethodGet, "/services?state="+state, nil, seller, "partner.localhost")
+		wantStatus := http.StatusOK
+		if state == "unknown" {
+			wantStatus = http.StatusBadRequest
+		}
+		if response.StatusCode != wantStatus {
+			t.Fatalf("state=%q status=%d body=%s", state, response.StatusCode, body)
+		}
+		if state != "unknown" && (!strings.Contains(body, `value="`+state+`" selected`) || strings.Contains(body, listing.Title) != (state == "draft")) {
+			t.Fatalf("state=%q unexpected seller view: %s", state, body)
+		}
+	}
+	pageResponse, _ := makeRequest(http.MethodGet, "/services?state=draft&page=2", nil, seller, "partner.localhost")
+	if pageResponse.StatusCode != http.StatusSeeOther || pageResponse.Header.Get("Location") != "/services?state=draft" {
+		t.Fatalf("filtered page redirect: status=%d location=%q", pageResponse.StatusCode, pageResponse.Header.Get("Location"))
+	}
 	item := fmt.Sprintf("%s/%d", collection, listing.ID)
 	public := "/api/v1/catalog/services/" + listing.Slug
 	request(http.MethodGet, public, nil, "anonymous", false, http.StatusNotFound)

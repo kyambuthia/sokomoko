@@ -22,6 +22,9 @@ func TestDirectoryRejectsUnauthorizedActorsBeforeStore(t *testing.T) {
 		if _, _, err := s.Own(t.Context(), a, 1, 20); !errors.Is(err, ErrForbidden) {
 			t.Fatal(err)
 		}
+		if _, _, err := s.OwnByState(t.Context(), a, "draft", 1, 20); !errors.Is(err, ErrForbidden) {
+			t.Fatal(err)
+		}
 	}
 }
 func TestDirectoryRejectsInvalidListingBeforeStore(t *testing.T) {
@@ -67,6 +70,14 @@ func TestDirectoryReturnsAllFieldErrorsWithoutTouchingStore(t *testing.T) {
 	for i, field := range validation.Fields {
 		if field.Field != expected[i] || field.Message == "" || strings.Contains(field.Message, "not a price") {
 			t.Fatalf("field=%+v", field)
+		}
+	}
+}
+
+func TestOwnServicesRejectsInvalidStateBeforeStore(t *testing.T) {
+	for _, state := range []string{"unknown", "DRAFT", "draft ", "published' OR true--"} {
+		if _, _, err := New(nil).OwnByState(t.Context(), &Actor{ID: 1, Role: db.RolePartner}, state, 1, 24); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("state=%q error=%v", state, err)
 		}
 	}
 }
