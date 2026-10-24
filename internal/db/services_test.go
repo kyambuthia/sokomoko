@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 )
@@ -137,5 +138,52 @@ func TestServiceDiscoveryFiltersLocationTypeWithoutLeakingDrafts(t *testing.T) {
 	chatMust(t, err)
 	if total != 3 || len(items) != 1 {
 		t.Fatalf("unfiltered pagination total=%d items=%+v", total, items)
+	}
+}
+
+func TestServiceDiscoveryScopesBusinessAndVisibility(t *testing.T) {
+	s := newTestStore(t)
+	partner, owner, _ := chatShop(t, s)
+	_, other, _ := chatShop(t, s)
+	for _, actor := range []int{owner, other} {
+		for _, state := range []string{"published", "draft", "archived"} {
+			v := serviceFixture(fmt.Sprintf("business-%d-%s", actor, state))
+			v.State = state
+			_, err := s.SaveService(t.Context(), actor, v)
+			chatMust(t, err)
+		}
+	}
+	filter := ServiceFilter{PartnerID: partner, Area: "west", Category: "hair", DeliveryMode: "premises", Limit: 1}
+	items, total, err := s.BrowseServices(t.Context(), filter)
+	chatMust(t, err)
+	if total != 1 || len(items) != 1 || items[0].PartnerID != partner || items[0].State != "published" {
+		t.Fatalf("total=%d items=%+v", total, items)
+	}
+	filter.Offset = 1
+	items, total, err = s.BrowseServices(t.Context(), filter)
+	chatMust(t, err)
+	if total != 1 || len(items) != 0 {
+		t.Fatal("business pagination count mismatch")
+	}
+	filter.Offset = 0
+	filter.Area = "nonexistent"
+	_, total, err = s.BrowseServices(t.Context(), filter)
+	chatMust(t, err)
+	if total != 0 {
+		t.Fatal("business filter ignored area")
+	}
+	filter.Area = ""
+	_, err = s.DB.Exec(`UPDATE partners SET status='suspended' WHERE id=$1`, partner)
+	chatMust(t, err)
+	_, total, err = s.BrowseServices(t.Context(), filter)
+	chatMust(t, err)
+	if total != 0 {
+		t.Fatal("business filter exposed suspended shop")
+	}
+	filter.PartnerID = 2147483647
+	_, total, err = s.BrowseServices(t.Context(), filter)
+	chatMust(t, err)
+	if total != 0 {
+		t.Fatal("unknown business returned listings")
 	}
 }

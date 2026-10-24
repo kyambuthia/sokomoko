@@ -24,7 +24,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/` | GET | public | `Root` | Home page and catalog |
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
 | `/search` | GET | public | `Search` | `q`, `category` |
-| `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `page`; 24 per page |
+| `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `partner_id`, `page`; 24 per page |
 | `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops only |
 | `/api/categories` | GET | public | `CategoriesAPI` | JSON `{categories}` for the header category nav |
 | `/login` | GET, POST | public | `auth.Login` | `user` role only; honours a safe `next` |
@@ -108,7 +108,8 @@ address as a draft and re-renders the form with `422`.
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (`status` filter; POST updates fulfillment) |
 
 Seller-only service pages on the partner host are `GET /services`,
-`GET|POST /services/new` and `GET|POST /services/<id>/edit`. Admin and staff
+`GET|POST /services/new`, `GET|POST /services/<id>/edit` and
+`GET|HEAD /services/<id>/preview` (private saved listing preview). Admin and staff
 accounts cannot manage these offerings. POST requires CSRF, all editable fields
 and a version number (`0` for creation). Validation errors preserve the entered
 text; a stale edit returns 409 without overwriting the current record.
@@ -159,7 +160,7 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | --- | --- | --- |
 | `GET /catalog/products` | public | Paginated product list: `{items, page, limit, total}` |
 | `GET /catalog/products/<slug>` | public | One product |
-| `GET /catalog/services?q=&category=&area=&delivery_mode=` | public | Published services; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
+| `GET /catalog/services?q=&category=&area=&delivery_mode=&partner_id=` | public | Published services; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
 | `GET /catalog/services/<slug>` | public | Published service details; 404 for private, archived or suspended-shop listings |
 | `GET /partner/services` | partner | Own shop listings including drafts; paginated |
 | `POST /partner/services` | partner | Create listing, version 0; owner derived from session |

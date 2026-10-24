@@ -4,7 +4,9 @@
   <div class="page-head"><h1>Local services</h1><a class="btn btn-secondary btn-sm" href="/">Shop products</a></div>
   <p class="muted">Find haircuts, beauty, wellness and help around your neighbourhood. Browse offerings by local businesses.</p>
   {{ if demoMode }}<p class="notice">Demo directory: these services are sample listings. No appointments, sales or payments are accepted.</p>{{ end }}
+  {{ if .Filter.PartnerID }}<p class="notice">Showing services from one business. <a href="/services">Browse all businesses</a></p>{{ end }}
   <form action="/services" method="GET" class="form" role="search" aria-label="Find services">
+    {{ if .Filter.PartnerID }}<input type="hidden" name="partner_id" value="{{ .Filter.PartnerID }}">{{ end }}
     <div class="form-row">
       <div class="field"><label class="label" for="service-query">Service or business</label><input class="input" id="service-query" type="search" name="q" value="{{ .Filter.Query }}" maxlength="120" placeholder="Haircut, salon, home repair…"></div>
       <div class="field"><label class="label" for="service-area">Neighbourhood or town</label><input class="input" id="service-area" name="area" value="{{ .Filter.Area }}" maxlength="120" placeholder="e.g. Westlands"></div>

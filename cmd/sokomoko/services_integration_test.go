@@ -107,6 +107,22 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	if page.Total != 1 || len(page.Items) != 1 {
 		t.Fatalf("unexpected results: %+v", page)
 	}
+	businessPath := fmt.Sprintf("/services?partner_id=%d&area=Westlands", listing.PartnerID)
+	businessResponse, businessHTML := makeRequest(http.MethodGet, businessPath, nil, nil, "localhost")
+	if businessResponse.StatusCode != http.StatusOK || !strings.Contains(businessHTML, listing.Slug) || !strings.Contains(businessHTML, fmt.Sprintf(`name="partner_id" value="%d"`, listing.PartnerID)) || !strings.Contains(detailHTML, fmt.Sprintf(`/services?partner_id=%d`, listing.PartnerID)) {
+		t.Fatal("business discovery link or filter missing")
+	}
+	decodeAPIData(t, request(http.MethodGet, fmt.Sprintf("/api/v1/catalog/services?partner_id=%d", listing.PartnerID), nil, "anonymous", false, http.StatusOK), &page)
+	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].PartnerID != listing.PartnerID {
+		t.Fatal("API business filter missing")
+	}
+	for _, raw := range []string{"0", "-1", "invalid", "2147483648", "999999999999999999999999"} {
+		request(http.MethodGet, "/api/v1/catalog/services?partner_id="+raw, nil, "anonymous", false, http.StatusBadRequest)
+		response, _ := makeRequest(http.MethodGet, "/services?partner_id="+raw, nil, nil, "localhost")
+		if response.StatusCode != http.StatusBadRequest {
+			t.Fatalf("partner_id=%s status=%d", raw, response.StatusCode)
+		}
+	}
 	decodeAPIData(t, request(http.MethodGet, "/api/v1/catalog/services?delivery_mode=mobile", nil, "anonymous", false, http.StatusOK), &page)
 	if page.Total != 0 || len(page.Items) != 0 {
 		t.Fatal("location type filter included a premises service")

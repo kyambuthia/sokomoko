@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -22,7 +23,16 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, limit := pageParams(r)
-	items, total, err := h.app.Directory.Browse(r.Context(), db.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: limit}, page)
+	partnerID := 0
+	if raw := r.URL.Query().Get("partner_id"); raw != "" {
+		var err error
+		partnerID, err = strconv.Atoi(raw)
+		if err != nil || partnerID <= 0 {
+			writeServiceError(w, directorysvc.ErrInvalid)
+			return
+		}
+	}
+	items, total, err := h.app.Directory.Browse(r.Context(), db.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: limit}, page)
 	if err != nil {
 		writeServiceError(w, err)
 		return

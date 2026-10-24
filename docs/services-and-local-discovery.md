@@ -268,3 +268,13 @@ its current draft/published/archived state and a private-preview notice. Unsaved
 edits are not included. Previewing does not publish a listing or open an enquiry.
 The route requires current membership in the owning active shop, sends
 `Cache-Control: no-store`, and leaves public draft/archived URLs unavailable.
+
+### Browse one business
+
+Public service details link to `/services?partner_id=<id>` to browse other
+published offerings from that business. HTML and JSON discovery accept this
+optional positive 32-bit integer and combine it with the existing filters.
+The HTML search form and pagination retain it; clearing filters returns to all
+businesses. Unknown or suspended businesses return an empty result, and private
+listing states stay excluded. Invalid, zero, negative or overflowing IDs return
+400 rather than silently broadening the search.

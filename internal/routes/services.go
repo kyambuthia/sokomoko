@@ -63,6 +63,13 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 			data.Role = db.RolePartner
 			data.Listings, total, err = a.Directory.Own(r.Context(), directoryActor(r), page, 24)
 		} else {
+			if raw := r.URL.Query().Get("partner_id"); raw != "" {
+				data.Filter.PartnerID, err = strconv.Atoi(raw)
+				if err != nil || data.Filter.PartnerID <= 0 {
+					servicePageError(w, r, directorysvc.ErrInvalid)
+					return
+				}
+			}
 			data.Listings, total, err = a.Directory.Browse(r.Context(), data.Filter, page)
 		}
 		if err != nil {
