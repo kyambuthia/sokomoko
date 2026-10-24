@@ -59,7 +59,7 @@ func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
 // WorkspaceLogin serves the partner host. Before an admin exists it explains
 // that setup must be completed on the admin host instead of redirecting into a loop.
 func (s *Service) WorkspaceLogin(tmpl *template.Template) http.HandlerFunc {
-	return s.workspaceLogin(tmpl, "", "Admin Login", "login:workspace", []string{db.RoleAdmin, db.RoleStaff, db.RolePartner})
+	return s.workspaceLogin(tmpl, "", "Partner Login", "login:workspace", []string{db.RoleAdmin, db.RoleStaff, db.RolePartner})
 }
 
 // CourierLogin accepts courier accounts only, even when a platform account
