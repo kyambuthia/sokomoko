@@ -72,6 +72,13 @@ are ignored. Polling stops for cancelled orders and completed fulfillment. An
 overall `delivered` order status also marks progress complete, even if partner
 or delivery fields still show an earlier stage.
 
+Payment status polling allows one request per widget and stops after five
+minutes with a manual-refresh message. Pending responses from detached widgets
+or a previous connection are ignored. Only `paid`, `failed`, `cancelled` and
+`offline` responses trigger a reload; pending or unknown states keep the page
+visible. An expired polling window never treats a late response as permission
+to reload.
+
 **Checkout flow.** `GET /checkout?checkout=<token>` resumes or creates an open
 checkout: it reserves stock for the whole cart for 15 minutes and snapshots
 prices. `POST /checkout` sends `delivery_address`, `payment_method`, and

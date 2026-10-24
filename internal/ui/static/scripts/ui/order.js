@@ -112,30 +112,53 @@ export class UIOrderForm extends HTMLElement {
 // reloads the page, which redirects on success or shows the failure.
 export class UIPaymentStatus extends HTMLElement {
   connectedCallback() {
+    clearInterval(this.timer);
+    this.generation = (this.generation || 0) + 1;
+    this.connected = true;
+    this.pending = false;
+    this.stopped = false;
     this.started = Date.now();
     this.timer = setInterval(() => this.poll(), 4000);
   }
 
   disconnectedCallback() {
     clearInterval(this.timer);
+    this.connected = false;
+    this.generation = (this.generation || 0) + 1;
+  }
+
+  stopWaiting() {
+    clearInterval(this.timer);
+    this.stopped = true;
+    const text = this.querySelector("[data-status-text]");
+    if (text) text.textContent = "Still waiting. If you approved the payment, refresh this page.";
   }
 
   async poll() {
-    if (document.hidden) return;
-    if (Date.now() - this.started > 5 * 60 * 1000) {
-      clearInterval(this.timer);
-      const text = this.querySelector("[data-status-text]");
-      if (text) text.textContent = "Still waiting. If you approved the payment, refresh this page.";
+    if (document.hidden || !this.connected || this.stopped) return;
+    if (Date.now() - this.started >= 5 * 60 * 1000) {
+      this.stopWaiting();
       return;
     }
+    if (this.pending) return;
+    const generation = this.generation;
+    this.pending = true;
     try {
       const status = await api(`/account/orders/${this.getAttribute("order-id")}/payment`);
-      if (status.status !== "pending") {
+      if (!this.connected || this.stopped || generation !== this.generation) return;
+      if (Date.now() - this.started >= 5 * 60 * 1000) {
+        this.stopWaiting();
+        return;
+      }
+      if (["paid", "failed", "cancelled", "offline"].includes(status?.status)) {
         clearInterval(this.timer);
+        this.stopped = true;
         location.reload();
       }
     } catch {
       // Keep the server-rendered message and try again on the next tick.
+    } finally {
+      if (generation === this.generation) this.pending = false;
     }
   }
 }
