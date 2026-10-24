@@ -66,6 +66,12 @@ edit and does not autosubmit a removal. Only nonempty values satisfying the
 input constraints autosubmit; an explicit zero still removes the line. This
 does not coordinate separate browser tabs.
 
+Customer order progress refreshes every 30 seconds while the page is visible.
+Only one request per widget is in flight; responses from a previous connection
+are ignored. Polling stops for cancelled orders and completed fulfillment. An
+overall `delivered` order status also marks progress complete, even if partner
+or delivery fields still show an earlier stage.
+
 **Checkout flow.** `GET /checkout?checkout=<token>` resumes or creates an open
 checkout: it reserves stock for the whole cart for 15 minutes and snapshots
 prices. `POST /checkout` sends `delivery_address`, `payment_method`, and

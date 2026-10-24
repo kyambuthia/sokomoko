@@ -71,7 +71,9 @@ dependencies. Search tests use controlled network responses and mock timers to
 check stale responses, debounce cancellation and dismissal. Cart tests check
 ordered reads and writes, recovery after failures, badge initialization and
 quantity updates during removal. Quantity tests check autosubmit timer cleanup, invalid intermediate edits and
-constraint checks at debounce expiry. DOM presentation is
+constraint checks at debounce expiry. Order progress tests exercise real rendering
+and controlled polling responses, including terminal states, slow requests,
+disconnection and reconnection. DOM presentation is
 stubbed, so these tests do not replace browser accessibility or layout checks.
 The same command runs in CI.
 

@@ -2,7 +2,8 @@ import { api, toast } from "./core.js";
 
 const STEPS = ["Placed", "Accepted", "Shipped", "Delivered"];
 
-function stepFor(partnerStatus, deliveryStatus) {
+function stepFor(status, partnerStatus, deliveryStatus) {
+  if (status === "delivered") return 3;
   if (deliveryStatus === "delivered" || partnerStatus === "completed") return 3;
   if (deliveryStatus === "shipped" || partnerStatus === "dispatched") return 2;
   if (partnerStatus === "accepted" || partnerStatus === "packing" || deliveryStatus === "processing") return 1;
@@ -14,6 +15,10 @@ function stepFor(partnerStatus, deliveryStatus) {
 // account API every 30 seconds while the page is visible.
 export class UIOrderProgress extends HTMLElement {
   connectedCallback() {
+    clearInterval(this.timer);
+    this.generation = (this.generation || 0) + 1;
+    this.connected = true;
+    this.pending = false;
     this.render();
     if (!this.terminal()) {
       this.timer = setInterval(() => this.refresh(), 30000);
@@ -22,16 +27,21 @@ export class UIOrderProgress extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this.timer);
+    this.connected = false;
+    this.generation = (this.generation || 0) + 1;
   }
 
   terminal() {
-    return this.getAttribute("status") === "cancelled" || stepFor(this.getAttribute("partner-status"), this.getAttribute("delivery-status")) === 3;
+    return this.getAttribute("status") === "cancelled" || stepFor(this.getAttribute("status"), this.getAttribute("partner-status"), this.getAttribute("delivery-status")) === 3;
   }
 
   async refresh() {
-    if (document.hidden) return;
+    if (document.hidden || !this.connected || this.pending || this.terminal()) return;
+    const generation = this.generation;
+    this.pending = true;
     try {
       const order = await api(`/account/orders/${this.getAttribute("order-id")}`);
+      if (!this.connected || generation !== this.generation) return;
       this.setAttribute("status", order.status);
       this.setAttribute("partner-status", order.partner_status);
       this.setAttribute("delivery-status", order.delivery_status);
@@ -41,12 +51,14 @@ export class UIOrderProgress extends HTMLElement {
       if (this.terminal()) clearInterval(this.timer);
     } catch {
       // The server-rendered state stays visible.
+    } finally {
+      if (generation === this.generation) this.pending = false;
     }
   }
 
   render() {
     const cancelled = this.getAttribute("status") === "cancelled";
-    const current = stepFor(this.getAttribute("partner-status"), this.getAttribute("delivery-status"));
+    const current = stepFor(this.getAttribute("status"), this.getAttribute("partner-status"), this.getAttribute("delivery-status"));
     const list = document.createElement("ol");
     list.className = "progress";
     if (cancelled) list.dataset.cancelled = "";
