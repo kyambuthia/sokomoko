@@ -23,8 +23,10 @@ type courierUpdateInput struct {
 }
 
 type courierOptionDTO struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
+	ID               int    `json:"id"`
+	Username         string `json:"username"`
+	ActiveDeliveries int    `json:"active_deliveries"`
+	FailedDeliveries int    `json:"failed_deliveries"`
 }
 
 type courierItemDTO struct {
@@ -62,7 +64,7 @@ func (h *Handler) adminCourierDeliveries(w http.ResponseWriter, r *http.Request)
 	}
 	couriers := make([]courierOptionDTO, 0, len(board.Couriers))
 	for _, courier := range board.Couriers {
-		couriers = append(couriers, courierOptionDTO{ID: courier.ID, Username: courier.Username})
+		couriers = append(couriers, courierOptionDTO{ID: courier.ID, Username: courier.Username, ActiveDeliveries: courier.ActiveDeliveries, FailedDeliveries: courier.FailedDeliveries})
 	}
 	orders := make([]courierDeliveryDTO, 0, len(board.Orders))
 	for _, delivery := range board.Orders {

@@ -238,8 +238,10 @@ type CourierDeliveryItem struct {
 }
 
 type CourierUser struct {
-	ID       int
-	Username string
+	ID               int
+	Username         string
+	ActiveDeliveries int
+	FailedDeliveries int
 }
 
 const (

@@ -20,9 +20,15 @@ func (s *Store) ListCourierUsers(ctx context.Context) ([]CourierUser, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx,
-		`SELECT id, username FROM users
-		 WHERE role = $1 AND deleted_at IS NULL
-		 ORDER BY lower(username), id LIMIT 200`, RoleCourier)
+		`SELECT u.id, u.username,
+         count(cd.id) FILTER (WHERE cd.status IN ('assigned','picked_up','out_for_delivery') AND o.status NOT IN ('cancelled','delivered')),
+         count(cd.id) FILTER (WHERE cd.status = 'delivery_failed' AND o.status NOT IN ('cancelled','delivered'))
+         FROM users u
+         LEFT JOIN courier_deliveries cd ON cd.courier_user_id=u.id
+           AND cd.status IN ('assigned','picked_up','out_for_delivery','delivery_failed')
+         LEFT JOIN orders o ON o.id=cd.order_id
+         WHERE u.role=$1 AND u.deleted_at IS NULL
+         GROUP BY u.id ORDER BY lower(u.username), u.id LIMIT 200`, RoleCourier)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +37,7 @@ func (s *Store) ListCourierUsers(ctx context.Context) ([]CourierUser, error) {
 	users := make([]CourierUser, 0)
 	for rows.Next() {
 		var user CourierUser
-		if err := rows.Scan(&user.ID, &user.Username); err != nil {
+		if err := rows.Scan(&user.ID, &user.Username, &user.ActiveDeliveries, &user.FailedDeliveries); err != nil {
 			return nil, err
 		}
 		users = append(users, user)

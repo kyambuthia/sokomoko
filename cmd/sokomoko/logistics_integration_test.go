@@ -11,7 +11,7 @@ import (
 
 func TestCourierAPIStatusRetriesPreserveAuthorizationAndTimeline(t *testing.T) {
 	clearAllTables()
-	adminID, _ := messageTestSession(t, "retry-dispatch", db.RoleAdmin, "admin.localhost")
+	adminID, admin := messageTestSession(t, "retry-dispatch", db.RoleAdmin, "admin.localhost")
 	buyerID, buyer := messageTestSession(t, "retry-buyer", db.RoleUser, "")
 	riderID, rider := messageTestSession(t, "retry-rider", db.RoleCourier, "courier.localhost")
 	_, outsider := messageTestSession(t, "retry-outsider", db.RoleCourier, "courier.localhost")
@@ -30,6 +30,32 @@ func TestCourierAPIStatusRetriesPreserveAuthorizationAndTimeline(t *testing.T) {
 	}
 	if err := testStore.AssignCourierToOrder(t.Context(), int(order), riderID, adminID); err != nil {
 		t.Fatal(err)
+	}
+	boardResponse, boardBody := makeAPIRequestOnHost(t, "admin.localhost", http.MethodGet, "/api/v1/admin/deliveries", nil, admin, false, nil)
+	messagingStatus(t, boardResponse, boardBody, http.StatusOK)
+	var board struct {
+		Couriers []struct {
+			ID     int `json:"id"`
+			Active int `json:"active_deliveries"`
+			Failed int `json:"failed_deliveries"`
+		} `json:"couriers"`
+	}
+	decodeAPIData(t, boardBody, &board)
+	found := false
+	for _, courier := range board.Couriers {
+		if courier.ID == riderID {
+			found = true
+			if courier.Active != 1 || courier.Failed != 0 {
+				t.Fatalf("courier workload=%+v", courier)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("assigned courier missing from dispatch API")
+	}
+	boardPageResponse, boardPage := makeRequest(http.MethodGet, "/deliveries", nil, admin, "admin.localhost")
+	if boardPageResponse.StatusCode != http.StatusOK || !strings.Contains(boardPage, "retry-rider · 1 active · 0 failed") {
+		t.Fatal("dispatch HTML workload missing")
 	}
 	jobs, err := testStore.ListCourierDeliveries(t.Context(), riderID)
 	if err != nil || len(jobs) != 1 {

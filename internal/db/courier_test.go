@@ -32,13 +32,18 @@ func TestCourierReassignmentAndFailurePreserveDeliveryBoundary(t *testing.T) {
 		t.Fatalf("jobs=%+v", jobs)
 	}
 	deliveryID := jobs[0].ID
+	assertCourierWorkload(t, s, first, 1, 0)
+	assertCourierWorkload(t, s, replacement, 0, 0)
 	chatWantError(t, s.UpdateCourierDelivery(t.Context(), deliveryID, replacement, CourierDeliveryPickedUp, ""), ErrCourierDeliveryForbidden)
 	chatWantError(t, s.UpdateCourierDelivery(t.Context(), deliveryID, first, CourierDeliveryDelivered, ""), ErrInvalidCourierTransition)
 	chatWantError(t, s.UpdateCourierDelivery(t.Context(), deliveryID, first, CourierDeliveryFailed, "private customer details"), ErrInvalidCourierTransition)
 	chatMust(t, s.UpdateCourierDelivery(t.Context(), deliveryID, first, CourierDeliveryFailed, "Address issue"))
 	assertCourierRetriesAreNoOp(t, s, deliveryID, first, CourierDeliveryFailed, "Address issue")
+	assertCourierWorkload(t, s, first, 0, 1)
 	chatWantError(t, s.UpdateCourierDelivery(t.Context(), deliveryID, first, CourierDeliveryFailed, "Other"), ErrInvalidCourierTransition)
 	chatMust(t, s.AssignCourierToOrder(t.Context(), int(orderID), replacement, admin))
+	assertCourierWorkload(t, s, first, 0, 0)
+	assertCourierWorkload(t, s, replacement, 1, 0)
 	jobs, err = s.ListCourierDeliveries(t.Context(), first)
 	chatMust(t, err)
 	if len(jobs) != 0 {
@@ -52,6 +57,7 @@ func TestCourierReassignmentAndFailurePreserveDeliveryBoundary(t *testing.T) {
 	assertCourierRetriesAreNoOp(t, s, deliveryID, replacement, CourierDeliveryOutForDelivery, "")
 	chatMust(t, s.UpdateCourierDelivery(t.Context(), deliveryID, replacement, CourierDeliveryDelivered, ""))
 	assertCourierRetriesAreNoOp(t, s, deliveryID, replacement, CourierDeliveryDelivered, "")
+	assertCourierWorkload(t, s, replacement, 0, 0)
 	jobs, err = s.ListCourierDeliveries(t.Context(), replacement)
 	chatMust(t, err)
 	if len(jobs) != 1 || jobs[0].DeliveryAddress != "" {
@@ -95,5 +101,47 @@ func assertCourierRetriesAreNoOp(t *testing.T, s *Store, id, courier int, status
 	chatMust(t, s.DB.QueryRow(`SELECT updated_at,(SELECT count(*) FROM courier_delivery_events WHERE delivery_id=$1) FROM courier_deliveries WHERE id=$1`, id).Scan(&after, &countAfter))
 	if !before.Equal(after) || countBefore != countAfter {
 		t.Fatalf("retry mutated delivery: updated=%v -> %v, events=%d -> %d", before, after, countBefore, countAfter)
+	}
+}
+
+func assertCourierWorkload(t *testing.T, s *Store, id, active, failed int) {
+	t.Helper()
+	couriers, err := s.ListCourierUsers(t.Context())
+	chatMust(t, err)
+	for _, courier := range couriers {
+		if courier.ID == id {
+			if courier.ActiveDeliveries != active || courier.FailedDeliveries != failed {
+				t.Fatalf("courier %d workload=%+v; want active=%d failed=%d", id, courier, active, failed)
+			}
+			return
+		}
+	}
+	t.Fatalf("courier %d missing", id)
+}
+
+func TestCourierWorkloadExcludesTerminalJobsAndInactiveAccounts(t *testing.T) {
+	s := newTestStore(t)
+	buyer, admin, rider := mustCreateUser(t, s, RoleUser), mustCreateUser(t, s, RoleAdmin), mustCreateUser(t, s, RoleCourier)
+	product := mustCreateProduct(t, s, 100, 5)
+	for _, terminal := range []struct{ order, partner string }{{"cancelled", "cancelled"}, {"delivered", "completed"}} {
+		chatMust(t, s.AddToCart(t.Context(), buyer, product, 1))
+		id, err := s.PlaceOrderFromCart(t.Context(), buyer, "fixture destination")
+		chatMust(t, err)
+		for _, step := range []string{"accepted", "packing", "dispatched"} {
+			chatMust(t, s.UpdateOrderFulfillment(t.Context(), int(id), step, "queued", ""))
+		}
+		chatMust(t, s.AssignCourierToOrder(t.Context(), int(id), rider, admin))
+		assertCourierWorkload(t, s, rider, 1, 0)
+		chatMust(t, s.UpdateOrderByAdmin(t.Context(), int(id), terminal.order, terminal.partner, "queued", ""))
+		assertCourierWorkload(t, s, rider, 0, 0)
+	}
+	_, err := s.DB.Exec(`UPDATE users SET deleted_at=now() WHERE id=$1`, rider)
+	chatMust(t, err)
+	couriers, err := s.ListCourierUsers(t.Context())
+	chatMust(t, err)
+	for _, courier := range couriers {
+		if courier.ID == rider || courier.ID == admin {
+			t.Fatal("inactive or non-courier account exposed in dispatch options")
+		}
 	}
 }

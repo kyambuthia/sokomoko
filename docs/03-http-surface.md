@@ -195,7 +195,7 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | `PATCH /partner/products/<id>` | admin, staff, partner | Change any of `{name, description, price, stock, category_id}`; omitted fields keep their values. `stock` sets available stock |
 | `GET /partner/orders?status=` | admin, staff, partner | Orders and summary |
 | `PATCH /partner/orders/<id>` | admin, staff, partner | Update `{partner_status, delivery_status, delivery_notice}` |
-| `GET /admin/deliveries` | admin, staff | Shipped orders awaiting delivery and active courier accounts; excludes prices and payment data |
+| `GET /admin/deliveries` | admin, staff | Shipped orders awaiting delivery and active courier accounts with `active_deliveries` and `failed_deliveries` counts; excludes prices and payment data |
 | `POST /admin/deliveries/assign` | admin, staff | Assign `{order_id, courier_id}`; only shipped orders can be assigned, and picked-up deliveries cannot be reassigned |
 | `GET /courier/deliveries` | courier | Own delivery assignments and delivered history; completed `delivery_address` is empty |
 | `PATCH /courier/deliveries/<id>` | courier | Update `{status, note}` through `picked_up`, `out_for_delivery`, `delivered`, or `delivery_failed` |
