@@ -18,6 +18,10 @@ export class UIQuantity extends HTMLElement {
     this.sync();
   }
 
+  disconnectedCallback() {
+    clearTimeout(this.timer);
+  }
+
   button(name, label, step) {
     const button = document.createElement("button");
     button.type = "button";

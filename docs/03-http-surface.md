@@ -56,7 +56,12 @@ authorization contract. Plaintext send endpoints reject new sends.
 should use `/api/v1`.
 
 Cart actions redirect back with a flash message. When the request has
-`Accept: application/json` they return the updated cart as JSON instead.
+`Accept: application/json` they return the updated cart as JSON instead. The
+JavaScript storefront serializes cart reads and writes within the current page,
+including badge initialization, and announces each successful snapshot before
+starting the next request. Failed requests release the queue. Pending line
+removal blocks later quantity autosubmits; detached quantity controls cancel
+their pending timer. This does not coordinate separate browser tabs.
 
 **Checkout flow.** `GET /checkout?checkout=<token>` resumes or creates an open
 checkout: it reserves stock for the whole cart for 15 minutes and snapshots

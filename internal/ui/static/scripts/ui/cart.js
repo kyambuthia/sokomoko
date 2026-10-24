@@ -1,5 +1,18 @@
 import { api, announceCart, busy, CART_CHANGED, loginRedirect, money, toast } from "./core.js";
 
+// Serialize this page's cart reads and writes, and publish each snapshot before
+// starting the next request. A rejected request must not poison later actions.
+let cartQueue = Promise.resolve();
+export function requestCart(path, options) {
+  const request = cartQueue.then(async () => {
+    const cart = await api(path, options);
+    announceCart(cart);
+    return cart;
+  });
+  cartQueue = request.catch(() => {});
+  return request;
+}
+
 // <ui-cart-badge signed-in><a class="has-count">…<span class="count" hidden></span></a></ui-cart-badge>
 // Keeps the cart count current as items are added or removed.
 export class UICartBadge extends HTMLElement {
@@ -8,7 +21,7 @@ export class UICartBadge extends HTMLElement {
     this.onChange = (event) => this.render(event.detail.count);
     document.addEventListener(CART_CHANGED, this.onChange);
     if (this.hasAttribute("signed-in") && this.count) {
-      api("/cart").then(announceCart).catch(() => {});
+      requestCart("/cart").catch(() => {});
     }
   }
 
@@ -39,11 +52,10 @@ export class UIAddToCart extends HTMLElement {
     const button = this.form.querySelector('[type="submit"]');
     busy(button, true);
     try {
-      const cart = await api("/cart/items", {
+      await requestCart("/cart/items", {
         method: "POST",
         body: { product_id: Number(data.get("product_id")), quantity: Number(data.get("quantity") || 1) },
       });
-      announceCart(cart);
       toast("Added to cart", "success");
     } catch (error) {
       if (error.status === 401) {
@@ -70,13 +82,16 @@ export class UICartLine extends HTMLElement {
 
   async submit(event, form) {
     event.preventDefault();
+    if (this.removing) return;
     const removing = form.action.endsWith("/cart/remove");
     const quantity = Number(new FormData(form).get("quantity"));
+    // A pending quantity autosubmit must not recreate a line after removal.
+    const isRemoval = removing || quantity <= 0;
+    if (isRemoval) this.removing = true;
     try {
-      const cart = removing || quantity <= 0
-        ? await api(`/cart/items/${this.productID}`, { method: "DELETE" })
-        : await api(`/cart/items/${this.productID}`, { method: "PATCH", body: { quantity } });
-      announceCart(cart);
+      const cart = isRemoval
+        ? await requestCart(`/cart/items/${this.productID}`, { method: "DELETE" })
+        : await requestCart(`/cart/items/${this.productID}`, { method: "PATCH", body: { quantity } });
       const item = (cart.items || []).find((line) => String(line.product_id) === this.productID);
       if (!item) {
         this.remove();
@@ -94,6 +109,8 @@ export class UICartLine extends HTMLElement {
         return;
       }
       toast(error.message, "error");
+    } finally {
+      if (isRemoval) this.removing = false;
     }
   }
 }

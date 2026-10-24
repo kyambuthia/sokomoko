@@ -68,7 +68,9 @@ container lifecycle behavior.
 
 `make test-ui` runs the JavaScript behavior tests in `tests/ui` without npm
 dependencies. Search tests use controlled network responses and mock timers to
-check stale responses, debounce cancellation and dismissal. DOM presentation is
+check stale responses, debounce cancellation and dismissal. Cart tests check
+ordered reads and writes, recovery after failures, badge initialization and
+quantity updates during removal. Quantity tests check autosubmit timer cleanup. DOM presentation is
 stubbed, so these tests do not replace browser accessibility or layout checks.
 The same command runs in CI.
 
