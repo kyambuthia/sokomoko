@@ -61,7 +61,10 @@ JavaScript storefront serializes cart reads and writes within the current page,
 including badge initialization, and announces each successful snapshot before
 starting the next request. Failed requests release the queue. Pending line
 removal blocks later quantity autosubmits; detached quantity controls cancel
-their pending timer. This does not coordinate separate browser tabs.
+their pending timer. Cart quantity is required: clearing it is an unfinished
+edit and does not autosubmit a removal. Only nonempty values satisfying the
+input constraints autosubmit; an explicit zero still removes the line. This
+does not coordinate separate browser tabs.
 
 **Checkout flow.** `GET /checkout?checkout=<token>` resumes or creates an open
 checkout: it reserves stock for the whole cart for 15 minutes and snapshots

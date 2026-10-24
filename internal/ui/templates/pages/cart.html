@@ -27,7 +27,7 @@
                 <form action="/cart/update" method="POST" class="row">
                   {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                   <input type="hidden" name="product_id" value="{{ .ProductID }}">
-                  <ui-quantity class="small" autosubmit><input class="input" type="number" name="quantity" value="{{ .Quantity }}" min="0" max="{{ .StockQuantity }}" inputmode="numeric" aria-label="Quantity for {{ .ProductName }}"></ui-quantity>
+                  <ui-quantity class="small" autosubmit><input class="input" type="number" name="quantity" value="{{ .Quantity }}" required min="0" max="{{ .StockQuantity }}" inputmode="numeric" aria-label="Quantity for {{ .ProductName }}"></ui-quantity>
                   <noscript><button type="submit" class="btn btn-secondary btn-sm">Update</button></noscript>
                 </form>
                 <form action="/cart/remove" method="POST">

@@ -49,7 +49,12 @@ export class UIQuantity extends HTMLElement {
     this.dispatchEvent(new CustomEvent("quantity-change", { bubbles: true, detail: { value: Number(this.input.value) } }));
     if (this.hasAttribute("autosubmit")) {
       clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.input.form?.requestSubmit(), 500);
+      // Clearing a quantity is an intermediate edit, not a request to remove
+      // the item. Let native constraints reject invalid values before submit.
+      if (this.input.value === "" || !this.input.checkValidity()) return;
+      this.timer = setTimeout(() => {
+        if (this.input.value !== "" && this.input.checkValidity()) this.input.form?.requestSubmit();
+      }, 500);
     }
   }
 
