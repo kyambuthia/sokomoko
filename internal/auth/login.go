@@ -11,20 +11,22 @@ import (
 )
 
 type LoginPageData struct {
-	Title     string
-	Username  string
-	Error     string
-	Next      string
-	CSRFToken string
+	Title                string
+	Username             string
+	Error                string
+	Next                 string
+	CSRFToken            string
+	PasswordResetEnabled bool
 }
 
 type AdminLoginPageData struct {
-	Title         string
-	Username      string
-	Error         string
-	Next          string
-	SetupRequired bool
-	CSRFToken     string
+	Title                string
+	Username             string
+	Error                string
+	Next                 string
+	SetupRequired        bool
+	CSRFToken            string
+	PasswordResetEnabled bool
 }
 
 type loginConfig struct {
@@ -39,7 +41,7 @@ func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 	cfg := loginConfig{title: "Login", abuseScope: "login:user", allowedRoles: []string{db.RoleUser}, tmpl: tmpl}
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.handleLogin(w, r, cfg, func(username string) any {
-			return LoginPageData{Title: cfg.title, Username: username, CSRFToken: s.CSRFTokenForSession(r), Next: safeNextPath(r.FormValue("next"))}
+			return LoginPageData{Title: cfg.title, Username: username, CSRFToken: s.CSRFTokenForSession(r), Next: safeNextPath(r.FormValue("next")), PasswordResetEnabled: !s.passwordResetDisabled}
 		}, func(data any, msg string) any {
 			d := data.(LoginPageData)
 			d.Error = msg
@@ -51,21 +53,23 @@ func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 // AdminLogin handles admin and staff authentication on the admin host. When no
 // admin exists yet it redirects to the first-run /setup flow.
 func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
-	return s.workspaceLogin(tmpl, "/setup")
+	return s.workspaceLogin(tmpl, "/setup", "Admin Login", "login:admin", []string{db.RoleAdmin, db.RoleStaff})
 }
 
-// WorkspaceLogin is AdminLogin for hosts without a setup flow (the partner
-// host). Before an admin exists it explains that setup must be completed on
-// the admin host instead of redirecting into a loop.
+// WorkspaceLogin serves the partner host. Before an admin exists it explains
+// that setup must be completed on the admin host instead of redirecting into a loop.
 func (s *Service) WorkspaceLogin(tmpl *template.Template) http.HandlerFunc {
-	return s.workspaceLogin(tmpl, "")
+	return s.workspaceLogin(tmpl, "", "Admin Login", "login:workspace", []string{db.RoleAdmin, db.RoleStaff, db.RolePartner})
 }
 
-func (s *Service) workspaceLogin(tmpl *template.Template, setupPath string) http.HandlerFunc {
-	cfg := loginConfig{title: "Admin Login", abuseScope: "login:admin", allowedRoles: []string{db.RoleAdmin, db.RoleStaff}, tmpl: tmpl}
-	if setupPath == "" {
-		cfg.allowedRoles = append(cfg.allowedRoles, db.RolePartner)
-	}
+// CourierLogin accepts courier accounts only, even when a platform account
+// shares the same browser session cookie domain.
+func (s *Service) CourierLogin(tmpl *template.Template) http.HandlerFunc {
+	return s.workspaceLogin(tmpl, "", "Courier Login", "login:courier", []string{db.RoleCourier})
+}
+
+func (s *Service) workspaceLogin(tmpl *template.Template, setupPath, title, abuseScope string, allowedRoles []string) http.HandlerFunc {
+	cfg := loginConfig{title: title, abuseScope: abuseScope, allowedRoles: allowedRoles, tmpl: tmpl}
 	return func(w http.ResponseWriter, r *http.Request) {
 		hasAdmin, err := s.store.HasAdminUser(r.Context())
 		if err != nil {
@@ -85,7 +89,7 @@ func (s *Service) workspaceLogin(tmpl *template.Template, setupPath string) http
 			return
 		}
 		s.handleLogin(w, r, cfg, func(username string) any {
-			return AdminLoginPageData{Title: cfg.title, Username: username, CSRFToken: s.CSRFTokenForSession(r), Next: safeNextPath(r.FormValue("next"))}
+			return AdminLoginPageData{Title: cfg.title, Username: username, CSRFToken: s.CSRFTokenForSession(r), Next: safeNextPath(r.FormValue("next")), PasswordResetEnabled: !s.passwordResetDisabled && cfg.abuseScope != "login:courier"}
 		}, func(data any, msg string) any {
 			d := data.(AdminLoginPageData)
 			d.Error = msg

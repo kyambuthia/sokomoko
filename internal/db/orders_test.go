@@ -257,11 +257,32 @@ func TestFulfillmentTransitionsMoveInventory(t *testing.T) {
 			t.Fatalf("%s: %v", step, err)
 		}
 	}
-	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "completed", "queued", ""); !errors.Is(err, ErrInvalidDeliveryTransition) {
-		t.Fatalf("delivery regression err = %v", err)
+	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "completed", "queued", ""); !errors.Is(err, ErrInvalidPartnerTransition) {
+		t.Fatalf("partner completion err = %v", err)
 	}
-	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "completed", "delivered", "done"); err != nil {
-		t.Fatalf("complete: %v", err)
+	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "completed", "delivered", "done"); !errors.Is(err, ErrInvalidPartnerTransition) {
+		t.Fatalf("seller completion err = %v", err)
+	}
+	courierID := mustCreateUser(t, s, RoleCourier)
+	if err := s.AssignCourierToOrder(t.Context(), shipped, courierID, userID); err != nil {
+		t.Fatalf("assign courier: %v", err)
+	}
+	deliveries, err := s.ListCourierDeliveries(t.Context(), courierID)
+	if err != nil || len(deliveries) != 1 {
+		t.Fatalf("deliveries = %+v, %v", deliveries, err)
+	}
+	for _, step := range []string{CourierDeliveryPickedUp, CourierDeliveryOutForDelivery, CourierDeliveryDelivered} {
+		if err := s.UpdateCourierDelivery(t.Context(), deliveries[0].ID, courierID, step, ""); err != nil {
+			t.Fatalf("courier %s: %v", step, err)
+		}
+	}
+	// Sellers may retry dispatch after delivery, but cannot reopen it.
+	if err := s.UpdateOrderFulfillment(t.Context(), shipped, "dispatched", "shipped", ""); err != nil {
+		t.Fatalf("repeat dispatch: %v", err)
+	}
+	order, err := s.GetOrderForUser(t.Context(), userID, shipped)
+	if err != nil || order == nil || order.Status != OrderStatusDelivered || order.DeliveryStatus != "delivered" {
+		t.Fatalf("delivered order changed by seller retry: %+v, %v", order, err)
 	}
 
 	if err := s.UpdateOrderFulfillment(t.Context(), cancelled, "cancelled", "queued", "out of stock"); err != nil {
@@ -287,8 +308,20 @@ func TestFulfillmentTransitionsMoveInventory(t *testing.T) {
 	}
 
 	summary, err := s.GetPartnerOrderSummary(t.Context())
-	if err != nil || summary.CompletedCount != 1 {
+	if err != nil || summary.CompletedCount != 1 || summary.DispatchedCount != 0 {
 		t.Fatalf("summary = %+v, %v", summary, err)
+	}
+	scoped, err := s.FulfillmentSummary(t.Context(), 0)
+	if err != nil || scoped.CompletedCount != 1 || scoped.DispatchedCount != 0 {
+		t.Fatalf("fulfillment summary = %+v, %v", scoped, err)
+	}
+	completed, total, err := s.ListFulfillmentOrdersPage(t.Context(), 0, "completed", 20, 0)
+	if err != nil || total != 1 || len(completed) != 1 || completed[0].ID != shipped {
+		t.Fatalf("completed filter = %+v, total=%d, %v", completed, total, err)
+	}
+	_, total, err = s.ListFulfillmentOrdersPage(t.Context(), 0, "dispatched", 20, 0)
+	if err != nil || total != 0 {
+		t.Fatalf("dispatched filter total=%d, %v", total, err)
 	}
 	counts, _ := s.GetOrderStatusCounts(t.Context())
 	if counts[OrderStatusDelivered] != 1 || counts[OrderStatusCancelled] != 1 {

@@ -1,0 +1,14 @@
+{{ define "title" }}Message reports · admin · sokomoko{{ end }}
+{{ define "layout" }}{{ template "admin-layout" . }}{{ end }}
+{{ define "main-area" }}
+<div class="stack-lg"><h1>Message reports</h1><p class="muted">Review the messages users chose to report. Only the reported message is shown.</p>
+{{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
+{{ range .Reports }}<article class="card stack">
+  <div class="row-between"><h2>Report #{{ .ID }}</h2><span class="badge">{{ .Reason }}</span></div>
+  <p class="small muted">Reported by @{{ .Reporter }} · {{ .CreatedAt.Format "2 Jan 2006 · 15:04" }}</p>
+  {{ if .Encrypted }}<p class="notice">Recipient-disclosed text from encrypted chat. Authorship has not been independently verified; do not treat this excerpt alone as proof.</p>{{ end }}
+  <div><p class="strong">@{{ .Sender }}</p><p class="chat-message__body">{{ .Body }}</p></div>
+  <form method="POST" action="/message-reports"><input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}"><input type="hidden" name="report_id" value="{{ .ID }}">{{ if .Encrypted }}<input type="hidden" name="encrypted" value="true">{{ end }}<button class="btn btn-secondary" type="submit">Mark reviewed</button></form>
+</article>{{ else }}<p class="muted">No open message reports.</p>{{ end }}
+</div>
+{{ end }}

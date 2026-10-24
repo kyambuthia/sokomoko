@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func templateFuncs() template.FuncMap {
+func templateFuncs(demoMode bool) template.FuncMap {
 	return template.FuncMap{
 		"asset":        AssetURL,
 		"icon":         Icon,
@@ -23,6 +23,7 @@ func templateFuncs() template.FuncMap {
 		"dict":         dict,
 		"json":         toJSON,
 		"rfc3339":      rfc3339,
+		"demoMode":     func() bool { return demoMode },
 	}
 }
 

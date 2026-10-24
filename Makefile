@@ -40,13 +40,13 @@ test-race: ## Run all tests with the race detector
 	SOKOMOKO_REQUIRE_DB_TESTS=1 $(GO) test -race ./...
 
 lint: ## gofmt check, go vet, staticcheck, and JavaScript syntax check
-	@unformatted="$$(gofmt -l $$(git ls-files '*.go'))"; if [ -n "$$unformatted" ]; then echo "$$unformatted"; exit 1; fi
+	bash scripts/go-format.sh --check
 	$(GO) vet ./...
 	$(GO) run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
 	@for f in internal/ui/static/scripts/*.js internal/ui/static/scripts/ui/*.js; do node --check "$$f" || exit 1; done
 
 fmt: ## Format Go code
-	gofmt -w $$(git ls-files '*.go')
+	bash scripts/go-format.sh --write
 
 docker: ## Build the production image
 	docker build -t sokomoko:local .
@@ -56,3 +56,14 @@ vuln: ## Check reachable vulnerabilities with a pinned scanner
 
 smoke-image: ## Verify a local production image using isolated disposable containers
 	bash scripts/smoke-image.sh sokomoko:local
+
+.PHONY: chat-crypto chat-crypto-test chat-crypto-check
+chat-crypto: ## Rebuild pinned browser MLS assets and third-party notices
+	bash scripts/build-chat-crypto.sh
+
+chat-crypto-test: ## Verify browser MLS protocol operations
+	cargo fmt --manifest-path web/crypto/Cargo.toml --check
+	cargo test --manifest-path web/crypto/Cargo.toml --locked
+
+chat-crypto-check: ## Rebuild separately and verify checked-in encryption assets match
+	bash scripts/check-chat-crypto.sh

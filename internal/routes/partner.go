@@ -11,6 +11,7 @@ import (
 )
 
 type PartnerSetupData struct {
+	Role      string
 	Title     string
 	Heading   string
 	Message   string
@@ -38,6 +39,7 @@ type PartnerDashboardData struct {
 }
 
 type PartnerProductsData struct {
+	Role       string
 	Title      string
 	CSRFToken  string
 	StoreName  string
@@ -48,6 +50,7 @@ type PartnerProductsData struct {
 }
 
 type PartnerProductNewData struct {
+	Role        string
 	Title       string
 	Message     string
 	Error       string
@@ -101,6 +104,7 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 			CSRFToken: a.Auth.CSRFToken(r),
 			CanEdit:   partnersvc.CanEditStoreSettings(partnerActorFromContext(r)),
 		}
+		data.Role, _ = partnerIdentity(r)
 		if existing != nil {
 			data.Settings = *existing
 		}
@@ -190,6 +194,7 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 		}
 
 		page := partnerProductsPage(view)
+		page.Role, _ = partnerIdentity(r)
 		page.CSRFToken = a.Auth.CSRFToken(r)
 		if flash := popFlash(w, r); flash.Message != "" {
 			if flash.Kind == "danger" {
@@ -217,6 +222,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 		}
 
 		data := partnerProductNewPage(view.Categories, a.Auth.CSRFToken(r))
+		data.Role, _ = partnerIdentity(r)
 		data.Partners = view.Partners
 
 		if r.Method == http.MethodGet {
@@ -299,6 +305,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		}
 
 		data := partnerProductNewPage(view.Categories, a.Auth.CSRFToken(r))
+		data.Role, _ = partnerIdentity(r)
 		data.Title = "Edit Product"
 		data.EditID = id
 		data.Form = partnersvc.CreateProductInput{Name: current.Name, Description: current.Description,

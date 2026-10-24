@@ -1,0 +1,162 @@
+{{ define "title" }}Messages · sokomoko{{ end }}
+{{ define "layout" }}{{ if eq .Workspace "partner" }}{{ template "partner-layout" . }}{{ else if eq .Workspace "courier" }}{{ template "courier-layout" . }}{{ else }}{{ template "storefront-layout" . }}{{ end }}{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "messages" "Page" . }}{{ end }}
+
+{{ define "chat-target-fields" }}
+{{ if .Handle }}<input type="hidden" name="handle" value="{{ .Handle }}">{{ end }}
+{{ if .ProductID }}<input type="hidden" name="product_id" value="{{ .ProductID }}">{{ end }}
+{{ if .OrderID }}<input type="hidden" name="order_id" value="{{ .OrderID }}">{{ end }}
+{{ if .PartnerID }}<input type="hidden" name="partner_id" value="{{ .PartnerID }}">{{ end }}
+{{ if .DeliveryOrderID }}<input type="hidden" name="delivery_order_id" value="{{ .DeliveryOrderID }}">{{ end }}
+{{ end }}
+
+{{ define "chat-report-options" }}
+<option value="spam">Spam</option><option value="harassment">Harassment</option><option value="scam">Scam</option><option value="personal_information">Personal information</option><option value="other">Other</option>
+{{ end }}
+
+{{ define "main-area" }}
+{{ if .Encrypted }}{{ template "encrypted-main" . }}{{ else }}
+<div class="stack-lg messages-page">
+<p class="notice">Earlier server-readable history. New messages require the encrypted client. <a href="/messages">Open encrypted messages</a></p>
+  <div class="page-head">
+    <div><h1>Messages</h1><p class="small muted">Your handle: <strong>@{{ .Username }}</strong></p></div>
+    <div class="row">
+      {{ if ne .Mode "inbox" }}<a class="btn btn-secondary btn-sm" href="/messages">Inbox</a>{{ end }}
+      {{ if and (ne .Role "courier") (ne .Mode "compose") }}<a class="btn btn-sm" href="/messages/new">New message</a>{{ end }}
+    </div>
+  </div>
+  {{ if demoMode }}<p class="notice notice-info">Demo conversations. Anyone using the same demo login can read its messages. Please use sample information.</p>{{ end }}
+  {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+
+  {{ if eq .Mode "inbox" }}
+  {{ if .Inbox.Conversations }}
+  <ul class="chat-inbox" aria-label="Conversations">
+    {{ range .Inbox.Conversations }}
+    <li><a class="chat-inbox__item" href="/messages/{{ .ID }}">
+      <div class="stack-sm"><span class="strong">{{ .Name }} {{ if .Unread }}<span class="badge badge-solid">Unread</span>{{ end }}</span><span class="small muted">{{ .Context }}</span></div>
+      <div class="chat-inbox__meta">
+        {{ if .IncomingRequest }}<span class="badge">Message request</span>{{ else if eq .State "pending" }}<span class="badge">Awaiting acceptance</span>{{ else if .Closed }}<span class="badge">Closed</span>{{ end }}
+        <time class="tiny muted" datetime="{{ rfc3339 .UpdatedAt }}">{{ .UpdatedAt.Format "2 Jan · 15:04" }}</time>
+      </div>
+    </a></li>
+    {{ end }}
+  </ul>
+  {{ if .Inbox.NextBefore }}<a class="btn btn-secondary" href="/messages?before={{ .Inbox.NextBefore }}">Older conversations</a>{{ end }}
+  {{ else }}
+  <div class="card stack"><h2>No conversations yet</h2><p class="muted">{{ if eq .Role "courier" }}Open an assigned delivery to message its buyer.{{ else }}Contact a seller from a product, open an order to reach its seller or courier, or start a request with an exact handle.{{ end }}</p></div>
+  {{ end }}
+
+  {{ else if eq .Mode "compose" }}
+  {{ if ne .Role "courier" }}
+  <form method="GET" action="/messages/new" class="card stack">
+    <label class="strong" for="contact-handle">Find a contact</label>
+    <p class="small muted" id="handle-help">Enter an exact buyer or seller handle. Couriers are available through assigned deliveries.</p>
+    <div class="row"><input class="input" id="contact-handle" name="handle" value="{{ .Target.Handle }}" placeholder="@username" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="handle-help" required><button class="btn btn-secondary" type="submit">Find contact</button></div>
+  </form>
+  {{ end }}
+  {{ if gt (len .Contacts) 1 }}
+    <section class="stack" aria-label="Order contacts"><h2>Who would you like to contact?</h2>
+    {{ range .Contacts }}<form method="GET" action="/messages/new" class="card row-between">
+      {{ template "chat-target-fields" .Target }}
+      <div><p class="strong">{{ .Name }}</p><p class="small muted">{{ .Context }}</p></div>
+      <button class="btn btn-secondary" type="submit">Message</button>
+    </form>{{ end }}</section>
+  {{ else if eq (len .Contacts) 1 }}
+    {{ range .Contacts }}
+    <section class="card stack"><div><h2>{{ .Name }}</h2><p class="small muted">{{ .Context }}</p></div>
+      {{ if .Shared }}<p class="small muted">This is a shop conversation. Its authorized team can read and reply.</p>{{ end }}
+      {{ if .ConversationID }}<a class="btn" href="/messages/{{ .ConversationID }}">Open conversation</a>{{ else }}
+      {{ if .Request }}<p class="small">Send one introduction. Further messages become available once the recipient accepts.</p>{{ end }}
+      <form method="POST" action="/messages/start" class="stack" data-submit-once>
+        {{ template "chat-target-fields" .Target }}
+        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}"><input type="hidden" name="nonce" value="{{ $.Nonce }}">
+        <label class="strong" for="first-message">Message</label>
+        <textarea class="input chat-compose" id="first-message" name="body" maxlength="4000" rows="5" required aria-describedby="first-message-help">{{ $.Body }}</textarea>
+        <p class="tiny muted" id="first-message-help">Up to 4,000 characters. Messages are stored by Sokomoko.</p>
+        <div><button class="btn" type="submit">{{ if .Request }}Send request{{ else }}Send message{{ end }}</button></div>
+      </form>{{ end }}
+    </section>
+    {{ end }}
+  {{ else if and (or .Target.OrderID .Target.ProductID .Target.DeliveryOrderID) (not .Error) }}
+    <p class="muted">No contacts are available for this order yet. Assigned couriers appear when dispatch begins.</p>
+  {{ end }}
+
+  {{ else if eq .Mode "thread" }}
+  {{ $c := .Thread.Conversation }}
+  <ui-messages conversation-id="{{ $c.ID }}" last-id="{{ .LastMessageID }}" {{ if not .OlderPage }}poll{{ end }} class="stack">
+    <div class="card stack-sm">
+      <div class="row-between"><div><h2>{{ $c.Name }}</h2><p class="small muted">{{ $c.Context }}</p></div>
+      <form method="POST" action="/messages/{{ $c.ID }}/action"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        {{ if $c.BlockedByMe }}<button class="btn btn-secondary btn-sm" name="action" value="unblock">Unblock contact</button>{{ else }}<button class="btn btn-secondary btn-sm" name="action" value="block">Block contact</button>{{ end }}
+      </form></div>
+      {{ if $c.Shared }}<p class="small muted">Shared with the shop's authorized team.</p>{{ end }}
+      <p class="small" data-conversation-state>{{ if $c.Blocked }}Messaging is blocked for this contact.{{ else if $c.Closed }}This conversation is closed. Its history remains available to authorized participants.{{ else if $c.IncomingRequest }}A new message request. Accept to continue the conversation.{{ else if eq $c.State "pending" }}Waiting for the recipient to accept.{{ end }}</p>
+      {{ if $c.IncomingRequest }}<form method="POST" action="/messages/{{ $c.ID }}/action" class="row" data-request-actions>
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        {{ if $c.CanAccept }}<button class="btn btn-sm" name="action" value="accept">Accept request</button>{{ end }}
+        <button class="btn btn-secondary btn-sm" name="action" value="decline">Decline</button>
+      </form>{{ end }}
+    </div>
+    {{ if .Thread.OlderBefore }}<a class="btn btn-secondary btn-sm" href="/messages/{{ $c.ID }}?before={{ .Thread.OlderBefore }}">Older messages</a>{{ end }}
+    {{ if .OlderPage }}<a class="btn btn-secondary btn-sm" href="/messages/{{ $c.ID }}">Latest messages</a>{{ end }}
+    <ol class="chat-history" data-message-list aria-label="Message history">
+    {{ range .Thread.Messages }}
+      <li class="chat-message{{ if .Mine }} chat-message--mine{{ end }}" data-message-id="{{ .ID }}">
+        <div class="chat-message__meta"><strong>@{{ .Sender }}</strong><time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2 Jan · 15:04" }}</time></div>
+        <p class="chat-message__body">{{ .Body }}</p>
+        {{ if .CanReport }}<details class="chat-report"><summary>Report</summary><form class="stack-sm" method="POST" action="/messages/{{ $c.ID }}/action">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}"><input type="hidden" name="action" value="report"><input type="hidden" name="message_id" value="{{ .ID }}">
+          <label for="report-{{ .ID }}">Reason</label><select class="select" id="report-{{ .ID }}" name="reason">{{ template "chat-report-options" }}</select>
+          <p class="tiny muted">This message will be shared with moderators.</p><button class="btn btn-secondary btn-sm" type="submit">Submit report</button>
+        </form></details>{{ end }}
+      </li>
+    {{ end }}
+    </ol>
+    <p class="small muted" role="status" aria-live="polite" data-chat-status></p>
+    {{ if .LastMessageID }}<form method="POST" action="/messages/{{ $c.ID }}/action" data-mark-read>
+      <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}"><input type="hidden" name="action" value="read"><input type="hidden" name="message_id" value="{{ .LastMessageID }}">
+      <button class="btn btn-plain btn-sm" type="submit">Mark shown messages as read</button>
+    </form>{{ end }}
+    {{ if not .OlderPage }}
+    <form method="POST" action="/messages/{{ $c.ID }}/send" class="card stack-sm" data-message-form {{ if not $c.CanSend }}hidden{{ end }}>
+      <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}"><input type="hidden" name="nonce" value="{{ .Nonce }}">
+      <label class="strong" for="message-body">Your reply</label><textarea class="input chat-compose" id="message-body" name="body" maxlength="4000" rows="3" required>{{ .Body }}</textarea>
+      <div class="row-between"><p class="tiny muted">Up to 4,000 characters</p><button class="btn" type="submit">Send message</button></div>
+    </form>
+    {{ end }}
+  </ui-messages>
+  {{ end }}
+  <p class="tiny muted">Messages are stored by Sokomoko. Reported messages can be reviewed by moderators. Keep passwords and payment details out of chat.</p>
+</div>
+{{ end }}
+{{ end }}
+
+{{ define "encrypted-main" }}
+<ui-encrypted-chat class="stack-lg messages-page" user-id="{{ .UserID }}" mode="{{ .Mode }}" conversation-id="{{ .Thread.Conversation.ID }}">
+ <div class="page-head"><div><h1>Messages</h1><p class="small muted">@{{ .Username }} · End-to-end encrypted messaging</p></div><div class="row"><a class="btn btn-secondary btn-sm" href="/messages">Inbox</a>{{ if ne .Role "courier" }}<a class="btn btn-sm" href="/messages/new">New message</a>{{ end }}</div></div>
+ {{ if demoMode }}<p class="notice">Demo accounts are shared. First-device enrollment belongs to whoever enrolls first; use sample information. Each visitor is a separate browser device.</p>{{ end }}
+ <noscript><p class="notice">JavaScript and secure local storage are required for encrypted messages. No plaintext fallback is available.</p></noscript>
+ <p role="status" aria-live="polite" data-encrypted-status>Opening this browser's encrypted keys…</p>
+ <details class="card" data-device-panel><summary>Messaging devices and verification</summary><div class="stack" data-devices></div></details>
+ <div class="card stack" data-device-enroll hidden><h2>Set up this browser</h2><p>This browser keeps the keys to your messages. Password reset cannot recover them. Keep an approved device available to approve another browser.</p><label for="device-name">Device name</label><input class="input" id="device-name" maxlength="60" value="My browser"><button class="btn" type="button" data-enroll>Create device keys</button></div>
+ <div class="stack" data-encrypted-content hidden>
+ {{ if eq .Mode "inbox" }}
+ <ul class="chat-inbox" aria-label="Conversations">{{ range .Inbox.Conversations }}<li><a class="chat-inbox__item" href="/messages/{{ .ID }}"><span>{{ .Name }} {{ if .Unread }}<span class="badge">Unread</span>{{ end }}<small class="muted">{{ .Context }}</small></span><time class="tiny">{{ .UpdatedAt.Format "2 Jan · 15:04" }}</time></a></li>{{ else }}<li>No conversations yet.</li>{{ end }}</ul>
+ {{ if .Inbox.NextBefore }}<a class="btn btn-secondary" href="/messages?before={{ .Inbox.NextBefore }}">Older conversations</a>{{ end }}
+ {{ else if eq .Mode "compose" }}
+ {{ if ne .Role "courier" }}<form method="GET" action="/messages/new" class="card stack"><label for="encrypted-handle">Find a contact by exact handle</label><div class="row"><input class="input" id="encrypted-handle" name="handle" placeholder="@username" value="{{ .Target.Handle }}" required maxlength="33"><button class="btn">Find contact</button></div></form>{{ end }}
+ {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+ {{ range .Contacts }}<section class="card stack"><h2>{{ .Name }}</h2><p>{{ .Context }}</p>{{ if .Shared }}<p class="small muted">Messages are encrypted to the shop team's approved devices. New teammates do not automatically receive past history.</p>{{ end }}<form data-open-conversation>{{ template "chat-target-fields" .Target }}<button class="btn" type="submit">Open encrypted conversation</button></form></section>{{ end }}
+ {{ else if eq .Mode "thread" }}
+ <div class="card stack"><div class="row-between"><div><h2>{{ .Thread.Conversation.Name }}</h2><p class="small muted">{{ .Thread.Conversation.Context }}</p></div><form method="POST" action="/messages/{{ .Thread.Conversation.ID }}/action"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ if .Thread.Conversation.BlockedByMe }}<button class="btn btn-secondary" name="action" value="unblock">Unblock contact</button>{{ else }}<button class="btn btn-secondary" name="action" value="block">Block contact</button>{{ end }}</form></div>
+ {{ if .Thread.Conversation.IncomingRequest }}<form method="POST" action="/messages/{{ .Thread.Conversation.ID }}/action" class="row"><input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ if .Thread.Conversation.CanAccept }}<button class="btn" name="action" value="accept">Accept request</button>{{ end }}<button class="btn btn-secondary" name="action" value="decline">Decline</button></form>{{ end }}
+ <p class="small muted">{{ if .Thread.Conversation.Shared }}Encrypted to the approved devices shown below.{{ end }} Existing server-readable messages are in <a href="?legacy=1">earlier history</a>.</p></div>
+ <section class="card stack" data-roster-panel hidden><h2>Review conversation devices</h2><p>Verify fingerprints with your contact through another trusted channel. Trusting a changed roster allows its listed devices to receive future messages.</p><ul data-roster></ul><button class="btn" type="button" data-trust-roster>Trust these devices</button></section>
+ <ol class="chat-history" data-encrypted-history aria-label="Encrypted message history"></ol>
+ <form class="card stack" data-encrypted-compose hidden><label for="encrypted-body">Your message</label><textarea class="input chat-compose" id="encrypted-body" rows="3" required maxlength="4000"></textarea><p class="tiny muted">Only approved recipient devices can decrypt this message.</p><button class="btn" type="submit">Send encrypted message</button></form>
+ {{ end }}
+ </div>
+ <p class="tiny muted">Message content is encrypted on your device. Sokomoko still sees conversation membership, timing, and message sizes. Reports disclose only the text you explicitly choose to share with moderators.</p>
+</ui-encrypted-chat>
+{{ end }}

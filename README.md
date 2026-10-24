@@ -3,18 +3,20 @@
 ![sokomoko wordmark](brand/logo.svg)
 
 Sokomoko is a server-rendered marketplace written in Go. One binary serves
-three web workspaces and a JSON API from a single PostgreSQL database:
+four web workspaces and a JSON API from a single PostgreSQL database:
 
 | Host | Who uses it | What it does |
 | --- | --- | --- |
 | `localhost` (storefront) | Customers | Browse, search, cart, checkout, order history |
 | `admin.localhost` | Admins and staff | Metrics, orders, reports, team, audit log |
 | `partner.localhost` | Admins, staff, partners | Store setup, product entry, order fulfillment |
+| `courier.localhost` | Couriers | Assigned delivery jobs and delivery status updates |
+| `docs.localhost` | Buyers, partners, developers | Public feature guide |
 | any host, `/api/v1/...` | Browser scripts and API clients | JSON API for the same features |
 
 ## Stack
 
-- Go 1.26, standard library `net/http` and `html/template`
+- Go 1.26.10, standard library `net/http` and `html/template`
 - PostgreSQL 17 through `pgx` (`database/sql` driver)
 - `golang.org/x/crypto/bcrypt` for passwords
 - One CSS design system and ES-module web components, with no build step
@@ -46,6 +48,7 @@ Then open:
 - Storefront: <http://localhost:6969>
 - Admin: <http://admin.localhost:6969> (first visit goes to `/setup`)
 - Partner: <http://partner.localhost:6969>
+- Documentation: <http://docs.localhost:6969>
 
 ## Commands
 
@@ -65,10 +68,10 @@ Common `make` targets: `run`, `build`, `test`, `test-race`, `lint`, `fmt`,
 cmd/sokomoko/      Entry point: commands, server wiring, host router, integration tests
 internal/
   app/             App container, service interfaces, middleware, rendering helpers
-  routes/          HTML handlers for the storefront, admin, and partner hosts
+  routes/          HTML handlers for the storefront, admin, partner, and courier hosts
   api/             JSON API under /api/v1
   auth/            Sessions, login, signup, setup, password reset, CSRF, abuse limits
-  service/         Business logic: account, admin, catalog, checkout, commerce, partner, payment (refunds)
+  service/         Business logic: account, admin, catalog, checkout, commerce, logistics, partner, payment (refunds)
   db/              PostgreSQL store, embedded migrations, seed data, test helpers (dbtest/)
   payments/        Payment providers: cash on delivery, M-Pesa Daraja, Paystack
   secret/          Encryption for stored provider credentials

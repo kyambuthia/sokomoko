@@ -38,6 +38,7 @@
     <div class="bar__search">{{ template "search-form" . }}</div>
     <nav class="bar__actions" aria-label="Account">
       {{ template "theme-toggle" }}
+      <a class="btn btn-icon desktop-only" href="/messages" aria-label="Messages">{{ icon "users" }}</a>
       <a class="btn btn-icon desktop-only" href="/account" aria-label="Account">{{ icon "user" }}</a>
       <ui-cart-badge {{ if signedIn . }}signed-in{{ end }}>
         <a class="btn btn-icon has-count desktop-only" href="/cart" aria-label="Cart">{{ icon "cart" }}<span class="count" hidden></span></a>

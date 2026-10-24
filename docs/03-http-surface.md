@@ -9,9 +9,10 @@ All routes are registered in `internal/routes/register.go` (HTML) and
 | `GET/HEAD /readyz` | Database ping with a 2 s deadline. `503` while draining or when the database is unreachable. |
 | `/static/...` | Embedded assets. In development, files under `internal/ui/static/` on disk take precedence. |
 
-Workspace pages link to other hosts through the `/storefront` and `/catalog`
-redirect routes listed below. The target is derived from the current host by swapping the `admin.` or `partner.` prefix
-(`routes/hosts.go`).
+Workspace pages link to other hosts through the `/storefront`, `/catalog`, and
+`/courier` redirect routes listed below. The target is derived from the current
+host by removing an existing `admin.`, `partner.`, or `courier.` prefix and
+adding the requested prefix (`routes/hosts.go`).
 
 Access column legend: **public** (no session needed), **signed in** (any
 session, otherwise redirect to `/login?next=...`), or a list of roles.
@@ -42,6 +43,13 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/payments/webhooks/<provider>` | POST | provider (signed) | `PaymentWebhook` | Paystack events, HMAC-SHA512 |
 | `/payments/callback/<provider>/<token>` | POST | provider (token) | `PaymentCallback` | M-Pesa STK results |
 
+Authenticated messaging routes on the storefront, partner and courier hosts,
+their JSON counterparts, and the admin report queue are documented in
+[Messaging HTTP contracts](messaging.md#http-contracts). New encrypted device
+operations use `POST /api/v1/encrypted-chat`; see
+[encrypted messaging](encrypted-messaging.md) for its signed envelope and
+authorization contract. Plaintext send endpoints reject new sends.
+
 `/api/categories` is the one unversioned JSON route left. New client code
 should use `/api/v1`.
 
@@ -71,6 +79,8 @@ address as a draft and re-renders the form with `422`.
 | `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` |
 | `/reports` | GET | admin, staff | `AdminReports` |
 | `/deliveries` | GET | admin, staff | `AdminDeliveries` (delivery board) |
+| `/couriers/new` | GET, POST | admin | `auth.CourierSignUp` (create a courier account with username and initial password; no email) |
+| `/courier` | GET | public | Redirect to the courier host's `/login` |
 | `/categories` | GET, POST | admin, staff | `AdminCategories` (list, create, rename with `action=update`, delete); `?edit=<id>` opens the edit form |
 | `/team` | GET, POST | admin | `AdminTeam` (GET lists 50 accounts per page, `?q=` searches username or email; POST deactivates a user, or reactivates one with `action=reactivate`) |
 | `/partners` | GET, POST | admin | `AdminPartners` (create, rename with `action=update`, suspend or reactivate, create partner logins); `?edit=<id>` opens the edit form |
@@ -95,13 +105,34 @@ address as a draft and re-renders the form with `422`.
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (`status` filter; POST updates fulfillment) |
 
+Partners control order preparation through `dispatched`. Dispatching ships the
+order and starts the courier handoff. Courier accounts update delivery stages
+after that point; partner forms cannot mark a courier delivery complete.
+
 Before any admin exists, the partner login page returns `503` with a message to
 finish setup on the admin host.
 
+## Courier host
+
+| Path | Methods | Access | Handler | Notes |
+| --- | --- | --- | --- | --- |
+| `/login` | GET, POST | public | `auth.CourierLogin` | Courier role only |
+| `/logout` | POST | public | `auth.Logout` | Revokes the session |
+| `/storefront` | GET | public | Redirect to the storefront host | |
+| `/password` | GET, POST | courier | `auth.PasswordChange` | Requires the current password |
+| `/` | GET, HEAD | public | Redirect to `/deliveries` | |
+| `/deliveries` | GET | courier | `CourierDeliveries` | Own assignments and delivered history; includes recipient name, delivery address, and item quantities |
+| `/deliveries/<id>` | POST | courier | `CourierDeliveryUpdate` | CSRF protected; accepts `status` and a fixed `note` reason for failed attempts |
+
+Couriers cannot request password-reset email. An admin provisions their
+username and initial password, which should be shared out of band. A courier
+cannot reassign an order or view another courier's jobs.
+
 ## JSON API (`/api/v1`)
 
-Served on every allowed host. Uses the same session cookie as the HTML pages;
-there are no API keys or bearer tokens.
+Served under `/api/v1` on the storefront, admin, partner, and courier hosts.
+The docs host serves the public guide only. The API uses the same session
+cookie as the HTML pages; there are no API keys or bearer tokens.
 
 ### Conventions
 
@@ -149,8 +180,18 @@ there are no API keys or bearer tokens.
 | `PATCH /partner/products/<id>` | admin, staff, partner | Change any of `{name, description, price, stock, category_id}`; omitted fields keep their values. `stock` sets available stock |
 | `GET /partner/orders?status=` | admin, staff, partner | Orders and summary |
 | `PATCH /partner/orders/<id>` | admin, staff, partner | Update `{partner_status, delivery_status, delivery_notice}` |
+| `GET /admin/deliveries` | admin, staff | Shipped orders awaiting delivery and active courier accounts; excludes prices and payment data |
+| `POST /admin/deliveries/assign` | admin, staff | Assign `{order_id, courier_id}`; only shipped orders can be assigned, and picked-up deliveries cannot be reassigned |
+| `GET /courier/deliveries` | courier | Own delivery assignments and delivered history |
+| `PATCH /courier/deliveries/<id>` | courier | Update `{status, note}` through `picked_up`, `out_for_delivery`, `delivered`, or `delivery_failed` |
 | `GET /partner/settings` | admin, staff, partner | Store settings (`404 store_not_configured` if unset) |
 | `PATCH /partner/settings` | admin, staff | Save store settings |
+
+When `status` is `delivery_failed`, `note` must be one of `Recipient
+unavailable`, `Address issue`, `Item damaged`, `Recipient declined`, or
+`Other`. Free-form failure notes are not retained. Partner update requests keep
+the legacy `delivery_status` field for compatibility, but the service ignores
+it; only the courier workflow advances post-dispatch delivery states.
 
 Partner-role callers are scoped exactly as in the partner HTML workspace.
 Money responses retain the existing decimal JSON numbers for v1 clients and
@@ -160,3 +201,8 @@ For example, a product priced at KES 12.50 has `"price": 12.5`,
 and payment totals follow the same `*_minor` convention. Clients should use
 the integer fields for arithmetic; all supported store currencies currently
 have two decimal places.
+
+Courier update retries for the same current action state and failure category
+succeed without duplicate timeline events. An old state submitted after a later
+handoff, a changed failure category, a cancelled order, or a request by a former
+courier still fails under the normal transition/authorization checks.

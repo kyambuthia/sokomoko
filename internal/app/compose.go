@@ -12,6 +12,8 @@ import (
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
+	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
+	messagingSvc "github.com/kyambuthia/sokomoko/internal/service/messaging"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 	"github.com/kyambuthia/sokomoko/internal/ui"
@@ -24,10 +26,12 @@ type ComposeOptions struct {
 	Auth      auth.Config
 	// Secrets seals payment provider credentials. Nil means credentials
 	// cannot be saved.
-	Secrets       *secret.Box
-	Payments      payments.Options
-	PublicBaseURL string
-	Production    bool
+	Secrets               *secret.Box
+	Payments              payments.Options
+	PublicBaseURL         string
+	Production            bool
+	PasswordResetDisabled bool
+	DemoMode              bool
 }
 
 func Compose(opts ComposeOptions) *App {
@@ -36,18 +40,22 @@ func Compose(opts ComposeOptions) *App {
 	checkoutService := checkoutsvc.New(opts.Store, paymentService)
 
 	return New(Dependencies{
-		Readiness:     opts.Store,
-		Catalog:       catalogsvc.New(opts.Store),
-		Account:       accountsvc.New(opts.Store),
-		Commerce:      commerceSvc.New(opts.Store),
-		Checkout:      checkoutService,
-		Payment:       paymentService,
-		Admin:         adminsvc.New(opts.Store),
-		Partner:       partnersvc.New(opts.Store),
-		Auth:          authService,
-		Templates:     opts.Templates,
-		StaticFS:      opts.StaticFS,
-		PublicBaseURL: opts.PublicBaseURL,
-		Production:    opts.Production,
+		Readiness:             opts.Store,
+		Catalog:               catalogsvc.New(opts.Store),
+		Account:               accountsvc.New(opts.Store),
+		Commerce:              commerceSvc.New(opts.Store),
+		Checkout:              checkoutService,
+		Payment:               paymentService,
+		Admin:                 adminsvc.New(opts.Store),
+		Partner:               partnersvc.New(opts.Store),
+		Logistics:             logisticsvc.New(opts.Store),
+		Messaging:             messagingSvc.New(opts.Store),
+		Auth:                  authService,
+		Templates:             opts.Templates,
+		StaticFS:              opts.StaticFS,
+		PublicBaseURL:         opts.PublicBaseURL,
+		Production:            opts.Production,
+		PasswordResetDisabled: opts.PasswordResetDisabled,
+		DemoMode:              opts.DemoMode,
 	})
 }

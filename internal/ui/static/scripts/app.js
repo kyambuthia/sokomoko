@@ -8,6 +8,8 @@ import { UIPassword } from "./ui/password.js";
 import { UIQuantity } from "./ui/quantity.js";
 import { UISearch } from "./ui/search.js";
 import { UIThemeToggle } from "./ui/theme-toggle.js";
+import { UIEncryptedChat } from "./ui/encrypted-chat.js";
+import { UIMessages } from "./ui/messages.js";
 import { UICategoryNav, UICharCounter, UICopy, UICountdown, UIRelativeTime, UITableFilter } from "./ui/widgets.js";
 
 const components = {
@@ -20,6 +22,8 @@ const components = {
   "ui-copy": UICopy,
   "ui-countdown": UICountdown,
   "ui-order-form": UIOrderForm,
+  "ui-messages": UIMessages,
+ "ui-encrypted-chat": UIEncryptedChat,
   "ui-order-progress": UIOrderProgress,
   "ui-password": UIPassword,
   "ui-payment-status": UIPaymentStatus,

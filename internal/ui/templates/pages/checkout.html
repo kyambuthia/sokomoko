@@ -11,7 +11,12 @@
   </div>
   {{ template "notice" dict "Kind" "danger" "Text" .Error }}
 
-  {{ if .CanCheckout }}
+  {{ if .DemoMode }}
+  <aside class="notice" role="status">
+    <p><strong>Checkout is disabled.</strong> This site only shows sample products. No real order, sale, or payment can be made.</p>
+  </aside>
+  <a class="btn btn-secondary" href="/cart">Return to cart</a>
+  {{ else if .CanCheckout }}
   <div class="split">
     <form action="{{ .FormAction }}" method="POST" class="form" data-submit-once>
       {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}

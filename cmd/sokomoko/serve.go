@@ -46,7 +46,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 		return wrapCommandError(commandServe, "configure password reset email", err)
 	}
 
-	templates, err := ui.ParseTemplates()
+	templates, err := ui.ParseTemplatesWithDemo(cfg.DemoMode)
 	if err != nil {
 		return wrapCommandError(commandServe, "parse templates", fmt.Errorf("parse templates: %w", err))
 	}
@@ -78,12 +78,14 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	}
 
 	application := app.Compose(app.ComposeOptions{
-		Store:         store,
-		Templates:     templates,
-		StaticFS:      ui.StaticFS,
-		Secrets:       secrets,
-		PublicBaseURL: cfg.PublicBaseURL,
-		Production:    cfg.IsProduction(),
+		Store:                 store,
+		Templates:             templates,
+		StaticFS:              ui.StaticFS,
+		Secrets:               secrets,
+		PublicBaseURL:         cfg.PublicBaseURL,
+		Production:            cfg.IsProduction(),
+		PasswordResetDisabled: cfg.PasswordResetDisabled,
+		DemoMode:              cfg.DemoMode,
 		Auth: auth.Config{
 			Environment:              cfg.Environment,
 			AdminSetupToken:          cfg.AdminSetupToken,
@@ -92,6 +94,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 			AuthAbuseBackoffBase:     time.Duration(cfg.AuthAbuseBackoffBase) * time.Second,
 			AuthAbuseBackoffMax:      time.Duration(cfg.AuthAbuseBackoffMax) * time.Second,
 			PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
+			PasswordResetDisabled:    cfg.PasswordResetDisabled,
 			PasswordResetEmailSender: resetEmailSender,
 			TrustProxyHeaders:        cfg.TrustProxyHeaders,
 		},
@@ -196,11 +199,15 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	mainMux := http.NewServeMux()
 	adminMux := http.NewServeMux()
 	partnerMux := http.NewServeMux()
+	courierMux := http.NewServeMux()
+	docsMux := http.NewServeMux()
 	apiMux := http.NewServeMux()
 
 	routes.RegisterPublic(application, mainMux)
 	routes.RegisterAdmin(application, adminMux)
 	routes.RegisterPartner(application, partnerMux)
+	routes.RegisterCourier(application, courierMux)
+	routes.RegisterDocs(application, docsMux)
 	api.Register(application, apiMux)
 
 	allowedHosts := parseAllowedHosts(cfg.AllowedHostsRaw)
@@ -210,12 +217,14 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 			"127.0.0.1":         {},
 			"admin.localhost":   {},
 			"partner.localhost": {},
+			"courier.localhost": {},
+			"docs.localhost":    {},
 		}
 	}
 	log.Printf("Trusted hosts: %s", sortedHostList(allowedHosts))
 
 	handler := app.Chain(
-		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, apiMux),
+		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux),
 		buildMiddlewares(cfg, application)...,
 	)
 

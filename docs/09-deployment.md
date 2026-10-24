@@ -20,7 +20,7 @@ reverse proxy.
 
 `Dockerfile`:
 
-- Build stage on `golang:1.26.9-bookworm`. `CGO_ENABLED=0`, `-trimpath`,
+- Build stage on `golang:1.26.10-bookworm`. `CGO_ENABLED=0`, `-trimpath`,
   `-ldflags "-s -w -X main.version=${VERSION}"`.
 - Runtime stage `gcr.io/distroless/static-debian12:nonroot`: only the binary,
   running as `nonroot`.
@@ -48,15 +48,66 @@ dump and restore into a fresh database.
 | `app` | `sokomoko serve` | `read_only`, `cap_drop: ALL`, `no-new-privileges`, 512 MiB, 1 CPU, 128 PIDs, 45 s stop grace period |
 | `proxy` | Caddy 2.11 | Publishes 80 and 443 (TCP and UDP); waits for the app to be healthy |
 
-The image is pinned by `SOKOMOKO_IMAGE`, which should be a tested digest.
-`deploy/Caddyfile` serves the three hostnames, obtains certificates with
-`TLS_EMAIL`, adds HSTS, and overwrites `X-Forwarded-For` and
+The image is pinned by `SOKOMOKO_IMAGE`, which should be a verified digest.
+`deploy/Caddyfile` serves the configured hostnames, obtains certificates,
+adds HSTS, and overwrites `X-Forwarded-For` and
 `X-Forwarded-Proto`. That is why the app runs with `TRUST_PROXY_HEADERS=true`;
-it is safe only while Caddy is the sole way in.
+it is safe only while Caddy is the sole way in. On the EC2 demo, the instance
+security group allows TCP 80 and 443 only from Cloudflare's published IPv4
+ranges. This keeps direct requests from reaching Caddy with forged proxy
+headers or bypassing Cloudflare edge controls. Port 80 remains available through
+Cloudflare for HTTP-01 certificate validation.
+
+Cloudflare publishes the current ranges at
+<https://api.cloudflare.com/client/v4/ips>. If the ranges change, add the new
+CIDRs to both ports before removing retired CIDRs, then verify all proxied
+hostnames still return `/readyz` successfully. Keep the DNS records orange-cloud
+proxied; the demo EC2 instance has no IPv6 address.
 
 Copy `deploy/production.env.example` to `.env.production`, fill in real values,
-and restrict its permissions. Hostnames must use the `admin.` and `partner.`
-prefixes, because the router dispatches on them.
+and restrict its permissions. Set `COURIER_HOST` to the courier workspace
+hostname and create a matching proxied DNS record. `DOCS_HOST` is the public
+feature guide host. Admin, partner, courier, and docs hostnames must use the
+`admin.`, `partner.`, `courier.`, and `docs.` prefixes because the router
+dispatches on them. The docs host serves the embedded public guide and does
+not expose the JSON API.
+
+### Single-instance demo
+
+`deploy/compose.ec2-demo.yml` adds a local PostgreSQL 17 container for a
+single-instance demo. The database has no published port and stores its data
+in a Docker volume on the host's encrypted EBS disk. This is a low-cost demo
+layout, not a replacement for managed PostgreSQL backups and recovery.
+
+For a demo without email, set `PASSWORD_RESET_DISABLED=true` and leave the
+SMTP variables empty. Production startup then allows SMTP to be omitted,
+password-reset links disappear from sign-in pages, and reset URLs return 404.
+Users can still change a password after signing in.
+
+Set `DEMO_MODE=true` to show a site-wide notice that listings are sample
+content and that no sales, orders, or payments are accepted. The checkout
+page explains that it is disabled, web order submission returns 403, payment
+routes are unavailable, and API checkout endpoints return a demo-mode error.
+
+The `seed` Compose profile is a one-time initialization step for the demo. It
+runs the catalog seed and creates a customer account when
+`DEMO_CUSTOMER_PASSWORD` is set and a partner account when
+`DEMO_PARTNER_PASSWORD` is set. Run it with `ENV=development` in the isolated
+demo database; the public production server still refuses seed-on-start.
+Repeated seeding leaves existing accounts unchanged.
+
+The seed command can also create an admin from `ADMIN_USERNAME`,
+`ADMIN_EMAIL`, and `ADMIN_PASSWORD`. Keep that credential private. When no
+admin is created, `/setup` remains available only to loopback requests, so it
+cannot be claimed through the public reverse proxy.
+
+Courier accounts are created by an admin from the admin deliveries page. Each
+account uses a username and initial password, with no email address or reset
+email. Share initial passwords out of band and have couriers change them after
+sign-in. The demo seeds no courier users or deliveries, so the courier
+workspace has no public demo credentials. Dispatch is manual; the application
+does not provide GPS tracking or route optimization. Messaging between buyers
+and couriers is available for assigned deliveries; see [Messaging](messaging.md).
 
 ## Database roles
 

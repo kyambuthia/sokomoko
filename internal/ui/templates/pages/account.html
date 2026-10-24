@@ -6,9 +6,10 @@
   <div class="page-head">
     <div>
       <h1>Account</h1>
-      <p class="muted small">{{ .Viewer.Username }}</p>
+      <p class="muted small">Your handle: @{{ .Viewer.Username }}</p>
     </div>
     <div class="row">
+      <a class="btn btn-secondary btn-sm" href="/messages">Messages</a>
       <a class="btn btn-secondary btn-sm" href="/account/password">{{ icon "settings" }}Password</a>
       <form action="/logout" method="POST">
         {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
@@ -52,6 +53,7 @@
           · {{ len .Items }} item{{ if ne (len .Items) 1 }}s{{ end }}
           · {{ .DeliveryAddress }}
         </p>
+        <div><a class="btn btn-secondary btn-sm" href="/messages/new?order_id={{ .ID }}">Message seller or courier</a></div>
       </li>
       {{ end }}
     </ul>

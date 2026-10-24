@@ -1,10 +1,14 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"html/template"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
 type StaffSignupPageData struct {
@@ -20,6 +24,14 @@ type SignupPageData struct {
 	Title     string
 	Username  string
 	Email     string
+	Error     string
+	CSRFToken string
+}
+
+type CourierSignupPageData struct {
+	Title     string
+	Username  string
+	Message   string
 	Error     string
 	CSRFToken string
 }
@@ -136,6 +148,49 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		data.Message = "Staff account created successfully."
+		renderWithStatus(w, tmpl, 0, data)
+	}
+}
+
+// CourierSignUp creates a rider login for a signed-in admin. Couriers have no
+// email workflow, so the required database email is a non-deliverable alias.
+func (s *Service) CourierSignUp(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := CourierSignupPageData{Title: "Add courier", CSRFToken: s.CSRFTokenForSession(r)}
+		if r.Method == http.MethodGet {
+			renderWithStatus(w, tmpl, 0, data)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		username := strings.TrimSpace(r.FormValue("username"))
+		password := r.FormValue("password")
+		data.Username = username
+		if !isValidUsername(username) {
+			data.Error = "Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+		if !isStrongEnoughPassword(password) {
+			data.Error = "Password must be 10 to 72 characters"
+			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
+			return
+		}
+
+		sum := sha256.Sum256([]byte(strings.ToLower(username)))
+		email := "courier+" + hex.EncodeToString(sum[:]) + "@courier.invalid"
+		if _, err := createUserWithPassword(r.Context(), s.store, username, email, password, db.RoleCourier); err != nil {
+			log.Printf("Error creating courier account: %v", err)
+			statusCode, message := mapAccountCreationError(err, "Failed to create courier account. Username may already exist.")
+			data.Error = message
+			renderWithStatus(w, tmpl, statusCode, data)
+			return
+		}
+
+		data.Message = "Courier account created. Share the username and initial password with the rider outside this site."
 		renderWithStatus(w, tmpl, 0, data)
 	}
 }

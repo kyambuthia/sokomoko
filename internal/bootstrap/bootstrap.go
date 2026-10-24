@@ -7,6 +7,7 @@ type store interface {
 	SeedAdmin(ctx context.Context)
 	SeedPartners(ctx context.Context)
 	SeedInitialCatalog(ctx context.Context)
+	SeedDemoAccounts(ctx context.Context) error
 }
 
 type Service struct {
@@ -31,7 +32,7 @@ func (s *Service) Seed() error {
 	s.store.SeedAdmin(context.Background())
 	s.store.SeedPartners(context.Background())
 	s.store.SeedInitialCatalog(context.Background())
-	return nil
+	return s.store.SeedDemoAccounts(context.Background())
 }
 
 func (s *Service) Prepare(seed bool) error {

@@ -32,6 +32,7 @@
       </div>
       <ul class="small">{{ range .Items }}<li>{{ .ProductName }} × {{ .Quantity }} - {{ money .LineTotal }}</li>{{ end }}</ul>
       <p class="tiny muted">{{ icon "map-pin" }} {{ .DeliveryAddress }}</p>
+      {{ if eq $.Role "partner" }}<div><a class="btn btn-secondary btn-sm" href="/messages/new?order_id={{ .ID }}">Message buyer</a></div>{{ end }}
       <details>
         <summary class="btn btn-secondary btn-sm">Update</summary>
         <ui-order-form scope="partner" order-id="{{ .ID }}">
@@ -42,14 +43,12 @@
               <div class="field">
                 <label class="label" for="partner_status_{{ .ID }}">Partner</label>
                 <select class="select" id="partner_status_{{ .ID }}" name="partner_status" required>
-                  {{ $p := .PartnerStatus }}{{ range $v := list "new" "accepted" "packing" "dispatched" "completed" "cancelled" }}<option value="{{ $v }}" {{ if eq $p $v }}selected{{ end }}>{{ $v }}</option>{{ end }}
+                  {{ $p := .PartnerStatus }}{{ range $v := list "new" "accepted" "packing" "dispatched" "cancelled" }}<option value="{{ $v }}" {{ if eq $p $v }}selected{{ end }}>{{ $v }}</option>{{ end }}
                 </select>
               </div>
               <div class="field">
-                <label class="label" for="delivery_status_{{ .ID }}">Delivery</label>
-                <select class="select" id="delivery_status_{{ .ID }}" name="delivery_status" required>
-                  {{ $d := .DeliveryStatus }}{{ range $v := list "queued" "processing" "shipped" "delivered" }}<option value="{{ $v }}" {{ if eq $d $v }}selected{{ end }}>{{ $v }}</option>{{ end }}
-                </select>
+                <span class="label">Delivery</span>
+                <p class="small">{{ .DeliveryStatus }} · courier updates this after partner dispatch</p>
               </div>
             </div>
             <div class="field">

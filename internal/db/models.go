@@ -12,6 +12,7 @@ const (
 	RoleUser    = "user"
 	RoleStaff   = "staff"
 	RoleAdmin   = "admin"
+	RoleCourier = "courier"
 )
 
 // User represents an account in the system. Passwords are bcrypt hashes; the
@@ -208,6 +209,46 @@ type Order struct {
 	PaymentStatus   string // newest payment's status
 	Items           []OrderItem
 }
+
+// CourierDelivery is the dispatch and rider-facing projection for one order.
+// It deliberately omits payment data and prices; riders receive only the
+// customer name, delivery address, fulfillment state, and item quantities.
+type CourierDelivery struct {
+	ID              int
+	OrderID         int
+	CourierUserID   int
+	CourierName     string
+	AssignedByID    int
+	CustomerName    string
+	DeliveryAddress string
+	OrderStatus     string
+	PartnerStatus   string
+	DeliveryStatus  string
+	Status          string
+	FailureNote     string
+	CreatedAt       time.Time
+	AssignedAt      time.Time
+	UpdatedAt       time.Time
+	Items           []CourierDeliveryItem
+}
+
+type CourierDeliveryItem struct {
+	ProductName string
+	Quantity    int
+}
+
+type CourierUser struct {
+	ID       int
+	Username string
+}
+
+const (
+	CourierDeliveryAssigned       = "assigned"
+	CourierDeliveryPickedUp       = "picked_up"
+	CourierDeliveryOutForDelivery = "out_for_delivery"
+	CourierDeliveryDelivered      = "delivered"
+	CourierDeliveryFailed         = "delivery_failed"
+)
 
 // AwaitingPayment reports whether an online payment is still outstanding.
 func (o Order) AwaitingPayment() bool {

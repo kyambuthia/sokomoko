@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.26.9 (from `go.mod`)
+- Go 1.26.10 (from `go.mod`)
 - PostgreSQL 17, either from `docker compose` or your own server
 - Node.js, only for `make lint`'s JavaScript syntax check
 - Docker, for the image build and smoke test
@@ -45,11 +45,14 @@ templates are parsed once at startup from the embedded copy.
 | `make build` | Static binary in `bin/sokomoko` |
 | `make test` | `go test ./...` with database tests required |
 | `make test-race` | Same with `-race` |
-| `make lint` | `gofmt` check, `go vet`, `node --check` on every script |
+| `make lint` | `gofmt` check (including new files), `go vet`, pinned staticcheck and `node --check` on every script |
 | `make fmt` | `gofmt -w` |
 | `make vuln` | `govulncheck` (pinned v1.9.0) |
 | `make docker` | Build `sokomoko:local` |
 | `make smoke-image` | Run `scripts/smoke-image.sh` against `sokomoko:local` |
+| `make chat-crypto-test` | Check Rust formatting and run the MLS protocol test |
+| `make chat-crypto` | Regenerate embedded encryption assets and license notices |
+| `make chat-crypto-check` | Verify generated encryption assets match source without changing them |
 
 ## Tests
 
@@ -105,3 +108,23 @@ Dockerfile, and GitHub Actions.
   `static/scripts/` and load them with the `asset` helper.
 - **Formatting.** `gofmt` for Go. Match the existing style for CSS and JS
   (tokens, BEM classes, custom elements).
+
+## Browser cryptography
+
+Go embeds the pinned OpenMLS JS/WASM artifacts. After changing `web/crypto`,
+run `make chat-crypto-test` and `make chat-crypto` using the versions in
+[encrypted messaging](encrypted-messaging.md). Review the generated assets and
+license notices together with the Rust source and Cargo.lock. The build script
+remaps local filesystem paths; local Rust targets are excluded from Git and
+Docker build contexts. Do not enable cryptographic debug logging.
+
+`rust-toolchain.toml` pins the crypto compiler and wasm target. CI runs the
+native protocol test and `make chat-crypto-check`, which rebuilds JS/WASM and
+license notices in a temporary directory and compares them with embedded
+assets. The check does not overwrite the working tree. If it fails, run
+`make chat-crypto`, inspect the changes, and rerun the check. Updating Rust,
+wasm-bindgen or dependencies is a source-and-artifact change to review together.
+
+Fulfilment completion follows the courier's delivered order state. Seller
+retries of dispatch preserve that state; completed filters and counts include
+courier deliveries even when the seller preparation state remains dispatched.

@@ -1,0 +1,86 @@
+{{ define "title" }}My deliveries · courier · sokomoko{{ end }}
+{{ define "layout" }}{{ template "courier-layout" . }}{{ end }}
+
+{{ define "courier-failure-reasons" }}
+<select class="select" name="note" required aria-label="Reason delivery failed">
+  <option value="">Select reason</option>
+  {{ range list "Recipient unavailable" "Address issue" "Item damaged" "Recipient declined" "Other" }}<option value="{{ . }}">{{ . }}</option>{{ end }}
+</select>
+{{ end }}
+
+{{ define "main-area" }}
+<div class="stack">
+  <h1>My deliveries</h1>
+  <p class="muted">Work assigned to your courier account appears here. Customer addresses are private; use them only to complete the assigned delivery.</p>
+  {{ template "notice" dict "Kind" "success" "Text" .Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+
+  {{ if .Deliveries }}
+    {{ range .Deliveries }}
+    <article class="card stack">
+      <div class="row row-between">
+        <div><p class="section-title">Order #{{ .OrderID }}</p><p class="tiny muted">Assigned <ui-relative-time datetime="{{ rfc3339 .AssignedAt }}">{{ .AssignedAt.Format "2006-01-02 15:04" }}</ui-relative-time></p></div>
+        <span class="badge">{{ .Status }}</span>
+      </div>
+      <div><p class="section-title">Deliver to</p><p>@{{ .CustomerName }}</p><p>{{ .DeliveryAddress }}</p></div>
+      {{ if ne .Status "delivered" }}<div><a class="btn btn-secondary btn-sm" href="/messages/new?delivery_order_id={{ .OrderID }}">Message buyer</a></div>{{ end }}
+      <div><p class="section-title">Items</p><ul class="list">
+        {{ range .Items }}<li>{{ .Quantity }} × {{ .ProductName }}</li>{{ end }}
+      </ul></div>
+
+      {{ if .FailureNote }}<p class="notice notice-error">Latest attempt: {{ .FailureNote }}</p>{{ end }}
+
+      {{ if eq .Status "assigned" }}
+      <div class="row">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="status" value="picked_up">
+          <button type="submit" class="btn">{{ icon "box" }}Picked up</button>
+        </form>
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="status" value="delivery_failed">
+          {{ template "courier-failure-reasons" . }}
+          <button type="submit" class="btn btn-secondary">Report failed attempt</button>
+        </form>
+      </div>
+      {{ else if eq .Status "picked_up" }}
+      <div class="row">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="status" value="out_for_delivery">
+          <button type="submit" class="btn">{{ icon "truck" }}Out for delivery</button>
+        </form>
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="status" value="delivery_failed">
+          {{ template "courier-failure-reasons" . }}
+          <button type="submit" class="btn btn-secondary">Report failed attempt</button>
+        </form>
+      </div>
+      {{ else if eq .Status "out_for_delivery" }}
+      <div class="row">
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="status" value="delivered">
+          <button type="submit" class="btn">{{ icon "check" }}Mark delivered</button>
+        </form>
+        <form action="/deliveries/{{ .ID }}" method="POST" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="status" value="delivery_failed">
+          {{ template "courier-failure-reasons" . }}
+          <button type="submit" class="btn btn-secondary">Report failed attempt</button>
+        </form>
+      </div>
+      {{ else if eq .Status "delivered" }}
+      <p class="small muted">Delivery completed.</p>
+      {{ else if eq .Status "delivery_failed" }}
+      <p class="small muted">Dispatch has been notified. This delivery can be reassigned by the operations team.</p>
+      {{ end }}
+    </article>
+    {{ end }}
+  {{ else }}
+    {{ template "empty" dict "Icon" "truck" "Text" "No deliveries assigned yet." }}
+  {{ end }}
+</div>
+{{ end }}

@@ -1,0 +1,24 @@
+{{ define "title" }}Add courier · admin · sokomoko{{ end }}
+{{ define "layout" }}{{ template "admin-layout" . }}{{ end }}
+
+{{ define "main-area" }}
+<div class="stack narrow">
+  <h1>Add courier</h1>
+  <p class="muted">Couriers use a username and password. No email is collected or sent. The rider can change this password after signing in at the courier workspace.</p>
+  {{ template "notice" dict "Kind" "success" "Text" .Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .Error }}
+  <form action="/couriers/new" method="POST" class="form" data-submit-once>
+    {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+    <div class="field">
+      <label class="label" for="username">Courier username</label>
+      <input class="input" type="text" id="username" name="username" value="{{ .Username }}" required autofocus autocomplete="off" autocapitalize="none" minlength="3" maxlength="32">
+    </div>
+    <div class="field">
+      <label class="label" for="password">Initial password</label>
+      <ui-password><input class="input" type="password" id="password" name="password" required minlength="10" maxlength="72" autocomplete="new-password"></ui-password>
+      <p class="tiny muted">Use at least 10 characters. Share it with the rider outside this site.</p>
+    </div>
+    <div><button type="submit" class="btn">{{ icon "user-plus" }}Create courier</button></div>
+  </form>
+</div>
+{{ end }}

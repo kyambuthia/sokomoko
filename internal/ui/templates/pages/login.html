@@ -18,6 +18,6 @@
     </div>
     <button type="submit" class="btn btn-block">Sign in</button>
   </form>
-  <p class="row-between small"><a href="/signup">Create account</a><a href="/password-reset/request">Forgot password?</a></p>
+  <p class="row-between small"><a href="/signup">Create account</a>{{ if .PasswordResetEnabled }}<a href="/password-reset/request">Forgot password?</a>{{ end }}</p>
 </div>
 {{ end }}

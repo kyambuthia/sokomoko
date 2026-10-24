@@ -49,6 +49,7 @@ type CheckoutPageData struct {
 	Viewer          Viewer
 	Phone           string
 	NeedsPhone      bool // some offered method collects a mobile number
+	DemoMode        bool
 }
 
 type PaymentMethodOption struct {
@@ -306,6 +307,22 @@ func checkoutErrorMessage(err error) (string, bool) {
 
 func Checkout(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if a.DemoMode {
+			switch r.Method {
+			case http.MethodGet, http.MethodHead:
+				a.Render(w, a.Templates.Checkout, CheckoutPageData{
+					Title:    "Demo checkout",
+					DemoMode: true,
+					Viewer:   viewerFromRequest(r),
+				})
+			case http.MethodPost:
+				http.Error(w, "This demo does not accept orders or payments.", http.StatusForbidden)
+			default:
+				methodNotAllowed(w, http.MethodGet, http.MethodHead, http.MethodPost)
+			}
+			return
+		}
+
 		userID, _ := requestUserID(r)
 		paymentMethod := strings.TrimSpace(r.FormValue("payment_method"))
 

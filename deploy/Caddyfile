@@ -1,8 +1,4 @@
-{
-	email {$TLS_EMAIL}
-}
-
-{$STOREFRONT_HOST}, {$ADMIN_HOST}, {$PARTNER_HOST} {
+{$STOREFRONT_HOST}, {$ADMIN_HOST}, {$PARTNER_HOST}, {$COURIER_HOST}, {$DOCS_HOST}, {$LEGAL_HOST} {
 	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	reverse_proxy app:8080 {

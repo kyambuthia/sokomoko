@@ -34,21 +34,23 @@ const (
 )
 
 type Config struct {
-	loadErrors          []string
-	Environment         string
-	Port                string
-	DatabaseURL         string
-	DatabaseURLExplicit bool
-	DBMaxOpenConns      int
-	DBMaxIdleConns      int
-	DBConnMaxLifetime   int
-	DBQueryTimeout      int
-	AllowedHostsRaw     string
-	AdminSetupToken     string
-	SessionCookieDomain string
-	TrustProxyHeaders   bool
-	LogFormat           string
-	LogLevel            string
+	loadErrors            []string
+	Environment           string
+	Port                  string
+	DatabaseURL           string
+	DatabaseURLExplicit   bool
+	DBMaxOpenConns        int
+	DBMaxIdleConns        int
+	DBConnMaxLifetime     int
+	DBQueryTimeout        int
+	AllowedHostsRaw       string
+	AdminSetupToken       string
+	SessionCookieDomain   string
+	TrustProxyHeaders     bool
+	PasswordResetDisabled bool
+	DemoMode              bool
+	LogFormat             string
+	LogLevel              string
 
 	PostRateLimitMax     int
 	PostRateLimitWindow  int
@@ -79,34 +81,36 @@ func LoadFromEnv() Config {
 		return readEnvInt(name, fallback, &loadErrors)
 	}
 	cfg := Config{
-		Environment:          strings.ToLower(readEnv("ENV", defaultEnvironment)),
-		Port:                 readEnv("PORT", defaultPort),
-		DatabaseURL:          databaseURL,
-		DatabaseURLExplicit:  databaseURL != "",
-		DBMaxOpenConns:       readInt("DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns),
-		DBMaxIdleConns:       readInt("DB_MAX_IDLE_CONNS", defaultDBMaxIdleConns),
-		DBConnMaxLifetime:    readInt("DB_CONN_MAX_LIFETIME_SECONDS", defaultDBConnMaxLifetimeSeconds),
-		DBQueryTimeout:       readInt("DB_QUERY_TIMEOUT_SECONDS", defaultDBQueryTimeoutSeconds),
-		AllowedHostsRaw:      strings.TrimSpace(os.Getenv("ALLOWED_HOSTS")),
-		AdminSetupToken:      strings.TrimSpace(os.Getenv("ADMIN_SETUP_TOKEN")),
-		SessionCookieDomain:  strings.TrimSpace(strings.ToLower(os.Getenv("SESSION_COOKIE_DOMAIN"))),
-		TrustProxyHeaders:    readEnvBool("TRUST_PROXY_HEADERS", false, &loadErrors),
-		LogFormat:            strings.ToLower(strings.TrimSpace(os.Getenv("LOG_FORMAT"))),
-		LogLevel:             strings.ToLower(readEnv("LOG_LEVEL", "info")),
-		PostRateLimitMax:     readInt("POST_RATE_LIMIT_MAX", defaultPostRateMax),
-		PostRateLimitWindow:  readInt("POST_RATE_LIMIT_WINDOW_SECONDS", defaultPostRateWin),
-		AuthAbuseMaxFailures: readInt("AUTH_ABUSE_MAX_FAILURES", defaultAuthAbuseMaxFailures),
-		AuthAbuseBackoffBase: readInt("AUTH_ABUSE_BACKOFF_BASE_SECONDS", defaultAuthAbuseBackoffBaseSeconds),
-		AuthAbuseBackoffMax:  readInt("AUTH_ABUSE_BACKOFF_MAX_SECONDS", defaultAuthAbuseBackoffMaxSeconds),
-		PasswordResetBaseURL: strings.TrimSpace(os.Getenv("PASSWORD_RESET_BASE_URL")),
-		PublicBaseURL:        strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")),
-		SecretsKey:           strings.TrimSpace(os.Getenv("SECRETS_KEY")),
-		SecretsKeyPrevious:   strings.TrimSpace(os.Getenv("SECRETS_KEY_PREVIOUS")),
-		SMTPHost:             strings.TrimSpace(strings.ToLower(os.Getenv("SMTP_HOST"))),
-		SMTPPort:             readEnv("SMTP_PORT", defaultSMTPPort),
-		SMTPUsername:         strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
-		SMTPPassword:         strings.TrimSpace(os.Getenv("SMTP_PASSWORD")),
-		SMTPFrom:             strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		Environment:           strings.ToLower(readEnv("ENV", defaultEnvironment)),
+		Port:                  readEnv("PORT", defaultPort),
+		DatabaseURL:           databaseURL,
+		DatabaseURLExplicit:   databaseURL != "",
+		DBMaxOpenConns:        readInt("DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns),
+		DBMaxIdleConns:        readInt("DB_MAX_IDLE_CONNS", defaultDBMaxIdleConns),
+		DBConnMaxLifetime:     readInt("DB_CONN_MAX_LIFETIME_SECONDS", defaultDBConnMaxLifetimeSeconds),
+		DBQueryTimeout:        readInt("DB_QUERY_TIMEOUT_SECONDS", defaultDBQueryTimeoutSeconds),
+		AllowedHostsRaw:       strings.TrimSpace(os.Getenv("ALLOWED_HOSTS")),
+		AdminSetupToken:       strings.TrimSpace(os.Getenv("ADMIN_SETUP_TOKEN")),
+		SessionCookieDomain:   strings.TrimSpace(strings.ToLower(os.Getenv("SESSION_COOKIE_DOMAIN"))),
+		TrustProxyHeaders:     readEnvBool("TRUST_PROXY_HEADERS", false, &loadErrors),
+		PasswordResetDisabled: readEnvBool("PASSWORD_RESET_DISABLED", false, &loadErrors),
+		DemoMode:              readEnvBool("DEMO_MODE", false, &loadErrors),
+		LogFormat:             strings.ToLower(strings.TrimSpace(os.Getenv("LOG_FORMAT"))),
+		LogLevel:              strings.ToLower(readEnv("LOG_LEVEL", "info")),
+		PostRateLimitMax:      readInt("POST_RATE_LIMIT_MAX", defaultPostRateMax),
+		PostRateLimitWindow:   readInt("POST_RATE_LIMIT_WINDOW_SECONDS", defaultPostRateWin),
+		AuthAbuseMaxFailures:  readInt("AUTH_ABUSE_MAX_FAILURES", defaultAuthAbuseMaxFailures),
+		AuthAbuseBackoffBase:  readInt("AUTH_ABUSE_BACKOFF_BASE_SECONDS", defaultAuthAbuseBackoffBaseSeconds),
+		AuthAbuseBackoffMax:   readInt("AUTH_ABUSE_BACKOFF_MAX_SECONDS", defaultAuthAbuseBackoffMaxSeconds),
+		PasswordResetBaseURL:  strings.TrimSpace(os.Getenv("PASSWORD_RESET_BASE_URL")),
+		PublicBaseURL:         strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")),
+		SecretsKey:            strings.TrimSpace(os.Getenv("SECRETS_KEY")),
+		SecretsKeyPrevious:    strings.TrimSpace(os.Getenv("SECRETS_KEY_PREVIOUS")),
+		SMTPHost:              strings.TrimSpace(strings.ToLower(os.Getenv("SMTP_HOST"))),
+		SMTPPort:              readEnv("SMTP_PORT", defaultSMTPPort),
+		SMTPUsername:          strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		SMTPPassword:          strings.TrimSpace(os.Getenv("SMTP_PASSWORD")),
+		SMTPFrom:              strings.TrimSpace(os.Getenv("SMTP_FROM")),
 	}
 	cfg.loadErrors = loadErrors
 	if cfg.DatabaseURL == "" {
@@ -170,10 +174,10 @@ func (c Config) Validate() error {
 		if len(hosts) == 0 {
 			problems = append(problems, "ALLOWED_HOSTS is required in production")
 		}
-		if c.PasswordResetBaseURL == "" {
+		if !c.PasswordResetDisabled && c.PasswordResetBaseURL == "" {
 			problems = append(problems, "PASSWORD_RESET_BASE_URL is required in production so reset links never trust the Host header")
 		}
-		if c.SMTPHost == "" || c.SMTPFrom == "" {
+		if !c.PasswordResetDisabled && (c.SMTPHost == "" || c.SMTPFrom == "") {
 			problems = append(problems, "SMTP_HOST and SMTP_FROM are required in production for password recovery")
 		}
 		if c.AdminSetupToken != "" && len(c.AdminSetupToken) < 32 {

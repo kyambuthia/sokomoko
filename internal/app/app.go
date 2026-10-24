@@ -16,6 +16,8 @@ import (
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
+	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
+	messagingSvc "github.com/kyambuthia/sokomoko/internal/service/messaging"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 	"github.com/kyambuthia/sokomoko/internal/ui"
@@ -118,6 +120,25 @@ type PartnerService interface {
 	UpdateOrder(ctx context.Context, actor *partnersvc.Actor, input partnersvc.UpdateOrderInput) error
 }
 
+type LogisticsService interface {
+	DispatchBoard(context.Context, *logisticsvc.Actor) (logisticsvc.DispatchBoard, error)
+	Assign(context.Context, *logisticsvc.Actor, string, string) error
+	Jobs(context.Context, *logisticsvc.Actor) ([]db.CourierDelivery, error)
+	Update(context.Context, *logisticsvc.Actor, string, string, string) error
+}
+
+type MessagingService interface {
+	Encrypted(context.Context, *messagingSvc.Actor, db.EncryptedRequest) (db.EncryptedResponse, error)
+	Contacts(context.Context, *messagingSvc.Actor, db.ChatTarget) ([]db.ChatContact, error)
+	Inbox(context.Context, *messagingSvc.Actor, int) (db.ChatInbox, error)
+	Thread(context.Context, *messagingSvc.Actor, int, int, int) (db.ChatThread, error)
+	Start(context.Context, *messagingSvc.Actor, db.ChatTarget, string, string) (int, error)
+	Send(context.Context, *messagingSvc.Actor, int, string, string) (int, error)
+	Action(context.Context, *messagingSvc.Actor, int, string, int, string) error
+	Reports(context.Context, *messagingSvc.Actor) ([]db.ChatReport, error)
+	ResolveReport(context.Context, *messagingSvc.Actor, int) error
+}
+
 type AuthService interface {
 	APIAuthMiddleware(next http.Handler) http.Handler
 	AdminLogin(tmpl *template.Template) http.HandlerFunc
@@ -132,6 +153,8 @@ type AuthService interface {
 	PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc
 	SignUp(tmpl *template.Template) http.HandlerFunc
 	StaffSignUp(tmpl *template.Template) http.HandlerFunc
+	CourierSignUp(tmpl *template.Template) http.HandlerFunc
+	CourierLogin(tmpl *template.Template) http.HandlerFunc
 	PasswordChange(tmpl *template.Template, action, backHref string) http.HandlerFunc
 	WorkspaceLogin(tmpl *template.Template) http.HandlerFunc
 }
@@ -145,46 +168,58 @@ type Dependencies struct {
 	Payment   PaymentService
 	Admin     AdminService
 	Partner   PartnerService
+	Logistics LogisticsService
+	Messaging MessagingService
 	Auth      AuthService
 	Templates *ui.Templates
 	StaticFS  embed.FS
 	// PublicBaseURL is the public origin used in payment return and callback
 	// URLs. When empty, development derives it from the request.
-	PublicBaseURL string
-	Production    bool
+	PublicBaseURL         string
+	Production            bool
+	PasswordResetDisabled bool
+	DemoMode              bool
 }
 
 type App struct {
-	Readiness     ReadinessChecker
-	Catalog       CatalogService
-	Account       AccountService
-	Commerce      CommerceService
-	Checkout      CheckoutService
-	Payment       PaymentService
-	Admin         AdminService
-	Partner       PartnerService
-	Auth          AuthService
-	Templates     *ui.Templates
-	StaticFS      embed.FS
-	PublicBaseURL string
-	Production    bool
+	Readiness             ReadinessChecker
+	Catalog               CatalogService
+	Account               AccountService
+	Commerce              CommerceService
+	Checkout              CheckoutService
+	Payment               PaymentService
+	Admin                 AdminService
+	Partner               PartnerService
+	Logistics             LogisticsService
+	Messaging             MessagingService
+	Auth                  AuthService
+	Templates             *ui.Templates
+	StaticFS              embed.FS
+	PublicBaseURL         string
+	Production            bool
+	PasswordResetDisabled bool
+	DemoMode              bool
 }
 
 func New(deps Dependencies) *App {
 	return &App{
-		Readiness:     deps.Readiness,
-		Catalog:       deps.Catalog,
-		Account:       deps.Account,
-		Commerce:      deps.Commerce,
-		Checkout:      deps.Checkout,
-		Payment:       deps.Payment,
-		Admin:         deps.Admin,
-		Partner:       deps.Partner,
-		Auth:          deps.Auth,
-		Templates:     deps.Templates,
-		StaticFS:      deps.StaticFS,
-		PublicBaseURL: deps.PublicBaseURL,
-		Production:    deps.Production,
+		Readiness:             deps.Readiness,
+		Catalog:               deps.Catalog,
+		Account:               deps.Account,
+		Commerce:              deps.Commerce,
+		Checkout:              deps.Checkout,
+		Payment:               deps.Payment,
+		Admin:                 deps.Admin,
+		Partner:               deps.Partner,
+		Logistics:             deps.Logistics,
+		Messaging:             deps.Messaging,
+		Auth:                  deps.Auth,
+		Templates:             deps.Templates,
+		StaticFS:              deps.StaticFS,
+		PublicBaseURL:         deps.PublicBaseURL,
+		Production:            deps.Production,
+		PasswordResetDisabled: deps.PasswordResetDisabled,
+		DemoMode:              deps.DemoMode,
 	}
 }
 
@@ -200,7 +235,7 @@ func (a *App) PublicBase(r *http.Request) string {
 		return ""
 	}
 	host := strings.ToLower(r.Host)
-	for _, prefix := range []string{"admin.", "partner."} {
+	for _, prefix := range []string{"admin.", "partner.", "courier."} {
 		host = strings.TrimPrefix(host, prefix)
 	}
 	scheme := "http"

@@ -6,13 +6,13 @@ PostgreSQL store, and the store owns all SQL. Dependencies point downward only.
 ```text
 cmd/sokomoko            commands, config, server wiring, host router
       |
-internal/routes         HTML handlers (storefront, admin, partner)
+internal/routes         HTML handlers (storefront, admin, partner, courier)
 internal/api            JSON handlers (/api/v1)
 internal/auth           auth handlers and middleware
       |
 internal/app            App container: service interfaces, middleware, Render/JSON
       |
-internal/service/*      business rules, one package per domain
+internal/service/*      business rules, one package per domain (including logistics)
       |
 internal/db             *db.Store: SQL, transactions, migrations
       |
@@ -39,6 +39,8 @@ Supporting packages with no upward dependencies: `money`, `slug`, `config`,
 | `internal/service/account` | A customer's orders. |
 | `internal/service/admin` | Metrics, reports, order overrides, team deactivation, audit log reads. |
 | `internal/service/partner` | Store settings, product creation, fulfillment, per-partner scoping. |
+| `internal/service/logistics` | Dispatch board, shipped-order assignment, courier job scoping, and delivery status transitions. |
+| `internal/service/messaging` | Handle resolution, conversations, message validation, requests, blocking and reported-message review. Store operations enforce participant relationships. Browser-side OpenMLS encrypts new content; Go relays ciphertext and checks signed device operations. See [encrypted messaging](encrypted-messaging.md). |
 | `internal/db` | `Store`, connection pool, `withTx` retry helper, migrations, seed data, typed errors. `dbtest/` provisions isolated schemas for tests. |
 | `internal/money` | `Cents` (int64) with parsing, formatting, and basis-point multiplication. |
 | `internal/slug` | `Make` and `Valid` for URL slugs, matching the database CHECK constraints. |
@@ -62,18 +64,31 @@ handler, except for a few `db.Err*` sentinels the API checks directly.
 
 ## Host routing
 
-`buildServer` in `cmd/sokomoko/server.go` creates four muxes and one router:
+`buildServer` in `cmd/sokomoko/server.go` creates six muxes and one router:
 
 1. The host is canonicalised (lower-cased, port stripped). Hosts not in
    `ALLOWED_HOSTS` get `400 Invalid host`.
-2. Paths under `/api/v1` go to the API mux, whatever the host.
-3. Hosts starting with `admin.` go to the admin mux.
-4. Hosts starting with `partner.` go to the partner mux.
-5. Everything else goes to the storefront mux.
+2. Hosts starting with `docs.` go to the public documentation mux.
+3. Paths under `/api/v1` on other allowed hosts go to the API mux.
+4. Hosts starting with `admin.` go to the admin mux.
+5. Hosts starting with `partner.` go to the partner mux.
+6. Hosts starting with `courier.` go to the courier mux.
+7. Everything else goes to the storefront mux.
 
-Production hostnames must therefore begin with `admin.` and `partner.`. When
+Production admin, partner, courier, and docs hostnames must therefore begin
+with `admin.`, `partner.`, `courier.`, and `docs.` respectively. When
 `ALLOWED_HOSTS` is empty (development only), the defaults are `localhost`,
-`127.0.0.1`, `admin.localhost`, and `partner.localhost`.
+`127.0.0.1`, `admin.localhost`, `partner.localhost`, `courier.localhost`, and
+`docs.localhost`.
+
+Courier jobs are scoped by the authenticated courier's user ID in the store
+query. Dispatchers can assign only shipped orders; a courier can move an
+assignment through pickup, out-for-delivery, and delivered, or record a failed
+attempt using a fixed reason. Reassignment is allowed before pickup or after a
+failed attempt. Each assignment and status change appends a database event;
+event rows cannot be updated or deleted. The workflow is manual and does not
+include GPS tracking or route optimization. Buyer/courier messaging is scoped
+to each assignment event; see [Messaging](messaging.md).
 
 ## Request pipeline
 

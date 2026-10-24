@@ -20,7 +20,7 @@ From the header of `0001_initial_schema.sql`:
 
 | Area | Table | Purpose |
 | --- | --- | --- |
-| Identity | `users` | Accounts. `role` is `user`, `staff`, `admin`, or `partner` (`partner` added in migration 2). |
+| Identity | `users` | Accounts. `role` is `user`, `staff`, `admin`, `partner` or `courier`. Case-insensitive unique usernames are the public handles. |
 | | `sessions` | SHA-256 of the session token, user, CSRF token, expiry |
 | | `password_reset_tokens` | SHA-256 of the token, expiry, `used_at` |
 | | `partner_users` | Links a `partner` user to one partner (migration 2) |
@@ -36,6 +36,12 @@ From the header of `0001_initial_schema.sql`:
 | Cart | `carts`, `cart_items` | One cart per user; line quantity 1 to 999 |
 | Checkout | `checkouts`, `checkout_lines` | Priced snapshot of the cart with a unique token |
 | Orders | `orders`, `order_items` | Placed orders with three status fields and an inventory state |
+| Logistics | `courier_deliveries`, `courier_delivery_events` | Current assignment and append-only assignment/status history (migration 7) |
+| Messaging | `chat_conversations`, `chat_messages` | Context and participant identities, request state, legacy plaintext messages and unique send nonces (migration 8) |
+| | `chat_reads`, `chat_blocks` | Per-user read cursors and blocks across conversations |
+| Encryption | `chat_devices`, `chat_device_packages`, `chat_encrypted_sessions` | Public device directory, one-time key packages and approved recipient rosters (migration 9) |
+| | `chat_encrypted_events`, `chat_encrypted_requests`, `chat_encrypted_reads`, `chat_encrypted_reports` | Ciphertext events, signed-request idempotency, read markers and explicit report disclosures |
+| | `chat_reports`, `chat_rate_limits` | Selected-message reports and persistent abuse budgets |
 | Payments | `payments`, `payment_attempts` | Payment record per order; one attempt per provider request, kept after retries (migrations 3 and 4) |
 | | `commerce_settings` | Single row: store currency, flat shipping, free-shipping threshold, tax rate (migration 3) |
 | | `payment_providers` | Enabled flag, mode, and encrypted credentials per provider (migration 3) |

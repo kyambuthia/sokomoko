@@ -175,6 +175,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding-block: var(--s4) var(--s6);
 }
 
+.demo-banner {
+  background: var(--fg);
+  color: var(--bg);
+}
+.demo-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-block: var(--s2);
+  font-size: var(--t-sm);
+  line-height: 1.4;
+}
+.demo-banner__inner strong {
+  flex: none;
+  letter-spacing: 0.06em;
+}
+@media (max-width: 36rem) {
+  .demo-banner__inner { align-items: flex-start; gap: var(--s2); }
+}
+
 .stack { display: grid; gap: var(--s4); align-content: start; }
 .stack-sm { display: grid; gap: var(--s2); align-content: start; }
 .stack-lg { display: grid; gap: var(--s6); align-content: start; }
@@ -308,7 +328,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   inset: auto 0 0 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   padding-bottom: env(safe-area-inset-bottom);
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: saturate(1.4) blur(16px);
@@ -839,6 +859,32 @@ dialog .row-between { margin-top: var(--s5); justify-content: flex-end; }
 .footer__col a:hover { color: var(--fg); }
 .footer__note { margin: 0; padding-top: var(--s4); border-top: 1px solid var(--line); }
 
+/* Messaging -------------------------------------------------------------- */
+
+.messages-page { max-width: 56rem; margin-inline: auto; }
+.chat-inbox { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.chat-inbox li + li { border-top: 1px solid var(--line); }
+.chat-inbox__item { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s4); text-decoration: none; overflow-wrap: anywhere; }
+.chat-inbox__item:hover { background: var(--fill); text-decoration: none; }
+.chat-inbox__meta { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s2); flex-shrink: 0; }
+.chat-history { display: flex; flex-direction: column; gap: var(--s4); }
+.chat-message { align-self: flex-start; max-width: 90%; min-width: 12rem; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--fill); }
+.chat-message--mine { align-self: flex-end; background: var(--bg); border-color: var(--line-strong); }
+.chat-message__meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2) var(--s4); font-size: var(--t-xs); color: var(--fg-2); margin-bottom: var(--s2); }
+.chat-message__body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-compose { min-height: 7rem; height: auto; padding: var(--s3); resize: vertical; }
+.chat-report { margin-top: var(--s2); font-size: var(--t-xs); }
+.chat-report summary { cursor: pointer; min-height: var(--tap); display: flex; align-items: center; color: var(--fg-2); }
+.chat-report form { padding-top: var(--s2); }
+ui-messages { display: block; }
+ui-messages [hidden] { display: none !important; }
+[data-chat-status]:empty { display: none; }
+@media (max-width: 35rem) {
+  .chat-inbox__item { flex-direction: column; gap: var(--s2); }
+  .chat-inbox__meta { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .chat-message { max-width: 96%; min-width: 0; }
+}
+
 /* Utilities -------------------------------------------------------------- */
 
 .muted { color: var(--fg-2); }
@@ -871,3 +917,9 @@ dialog .row-between { margin-top: var(--s5); justify-content: flex-end; }
 ui-quantity, ui-copy, ui-countdown, ui-relative-time, ui-confirm, ui-add-to-cart, ui-order-form { display: contents; }
 ui-search, ui-table-filter, ui-order-progress, ui-category-nav, ui-password, ui-cart-line, ui-payment-status { display: block; }
 ui-cart-badge, ui-theme-toggle { display: contents; }
+
+ui-encrypted-chat [hidden] { display: none !important; }
+ui-encrypted-chat { display: block; }
+ui-encrypted-chat [data-devices] { padding-top: 1rem; }
+ui-encrypted-chat [data-roster] { overflow-wrap: anywhere; }
+ui-encrypted-chat .device-fingerprint { font-size: .75rem; overflow-wrap: anywhere; }

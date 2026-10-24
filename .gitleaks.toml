@@ -1,0 +1,18 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignore the local Go module cache, which is excluded from Git and Docker builds."
+paths = [
+  '''(^|/)\.gomodcache/''',
+]
+
+# The generic rule mistakes two adjacent public Cargo package names for a key.
+# Keep the exception restricted to this exact match and this lockfile.
+[[allowlists]]
+description = "Public libcrux dependency names in the Cargo lockfile"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)web/crypto/Cargo\.lock$''']
+regexTarget = "match"
+regexes = ['''^libcrux-secrets",\s*"libcrux-sha3"$''']

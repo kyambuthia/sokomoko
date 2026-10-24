@@ -25,6 +25,7 @@
 {{ define "storefront-layout" }}
 <body class="has-tabbar {{ block "body-class" . }}{{ end }}">
   <a class="skip" href="#main">Skip to content</a>
+  {{ template "demo-site-notice" . }}
   {{ template "storefront-header" . }}
   <main id="main" class="container main" tabindex="-1">
     {{ template "main-area" . }}
@@ -38,6 +39,7 @@
 {{ define "admin-layout" }}
 <body>
   <a class="skip" href="#main">Skip to content</a>
+  {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "admin" "Page" . }}
   <div class="ws">
     {{ template "admin-nav" . }}
@@ -51,9 +53,24 @@
 {{ define "partner-layout" }}
 <body>
   <a class="skip" href="#main">Skip to content</a>
+  {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "partner" "Page" . }}
   <div class="ws">
     {{ template "partner-nav" . }}
+    <main id="main" class="container main" tabindex="-1">
+      {{ template "main-area" . }}
+    </main>
+  </div>
+</body>
+{{ end }}
+
+{{ define "courier-layout" }}
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  {{ template "demo-site-notice" . }}
+  {{ template "workspace-header" dict "Tag" "courier" "Page" . }}
+  <div class="ws">
+    {{ template "courier-nav" . }}
     <main id="main" class="container main" tabindex="-1">
       {{ template "main-area" . }}
     </main>
@@ -65,11 +82,23 @@
 {{ define "workspace-auth-layout" }}
 <body>
   <a class="skip" href="#main">Skip to content</a>
+  {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "workspace" "Page" . }}
   <main id="main" class="container main" tabindex="-1">
     {{ template "main-area" . }}
   </main>
 </body>
+{{ end }}
+
+{{ define "demo-site-notice" }}
+{{ if demoMode }}
+<aside class="demo-banner" role="status" aria-label="Demo site notice">
+  <div class="container demo-banner__inner">
+    <strong>DEMO SITE</strong>
+    <span>Listings are sample content, not real products. No sales, orders, or payments are accepted.</span>
+  </div>
+</aside>
+{{ end }}
 {{ end }}
 
 {{/* Pages override main-area; this empty default keeps the layouts valid. */}}

@@ -72,7 +72,7 @@ func setupTestServer(dsn string) {
 
 	cfg := config.Config{
 		Port:            "6969",
-		AllowedHostsRaw: "localhost,127.0.0.1,admin.localhost,partner.localhost",
+		AllowedHostsRaw: "localhost,127.0.0.1,admin.localhost,partner.localhost,courier.localhost",
 	}
 	server, _ := buildServer(cfg, a)
 	testHandler = server.Handler

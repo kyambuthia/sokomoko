@@ -58,6 +58,69 @@ func (s *Store) SeedAdmin(ctx context.Context) {
 	log.Printf("seed: admin bootstrap user created: %s", username)
 }
 
+// SeedDemoAccounts creates explicitly configured customer and partner logins.
+// These are only created by the development seed command, which production
+// refuses to run. Existing accounts are left untouched on repeated seeds.
+func (s *Store) SeedDemoAccounts(ctx context.Context) error {
+	if password := os.Getenv("DEMO_CUSTOMER_PASSWORD"); password != "" {
+		if err := s.seedDemoAccount(ctx, "demo-customer", "demo-customer@demo.invalid", password, RoleUser, ""); err != nil {
+			return fmt.Errorf("seed demo customer: %w", err)
+		}
+	}
+	if password := os.Getenv("DEMO_PARTNER_PASSWORD"); password != "" {
+		if err := s.seedDemoAccount(ctx, "demo-partner", "demo-partner@demo.invalid", password, RolePartner, "urban_goods"); err != nil {
+			return fmt.Errorf("seed demo partner: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *Store) seedDemoAccount(ctx context.Context, username, email, password, role, partnerSlug string) error {
+	if len(password) < 10 || len(password) > 72 {
+		return fmt.Errorf("password for %s must be 10-72 bytes", username)
+	}
+
+	existing, err := s.GetUserByUsername(ctx, username)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		log.Printf("seed: demo account already exists: %s", username)
+		return nil
+	}
+	existing, err = s.GetUserByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return fmt.Errorf("email for %s is already in use", username)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	user := User{Username: username, Email: email, PasswordHash: string(hash), Role: role}
+	if role != RolePartner {
+		if _, err := s.CreateUser(ctx, user); err != nil {
+			return err
+		}
+	} else {
+		partner, err := s.GetPartnerBySlug(ctx, partnerSlug)
+		if err != nil {
+			return err
+		}
+		if partner == nil {
+			return fmt.Errorf("partner %q does not exist", partnerSlug)
+		}
+		if _, err := s.CreatePartnerUser(ctx, user, partner.ID); err != nil {
+			return err
+		}
+	}
+	log.Printf("seed: demo account created username=%s role=%s", username, role)
+	return nil
+}
+
 type seedPartner struct {
 	Name  string
 	Slug  string

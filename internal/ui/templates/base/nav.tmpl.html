@@ -1,4 +1,4 @@
-{{/* dict: Tab (shop, search, cart, account) and Page. */}}
+{{/* dict: Tab (shop, search, cart, messages, account) and Page. */}}
 {{ define "tabbar" }}
 <nav class="tabbar" aria-label="Primary">
   <a href="/" {{ if eq .Tab "shop" }}aria-current="page"{{ end }}>{{ icon "home" }}Shop</a>
@@ -6,6 +6,7 @@
   <ui-cart-badge {{ if signedIn .Page }}signed-in{{ end }}>
     <a href="/cart" class="has-count" {{ if eq .Tab "cart" }}aria-current="page"{{ end }}>{{ icon "cart" }}Cart<span class="count" hidden></span></a>
   </ui-cart-badge>
+  <a href="/messages" {{ if eq .Tab "messages" }}aria-current="page"{{ end }}>{{ icon "users" }}Messages</a>
   <a href="/account" {{ if eq .Tab "account" }}aria-current="page"{{ end }}>{{ icon "user" }}Account</a>
 </nav>
 {{ end }}
@@ -26,6 +27,7 @@
     <a class="ws-nav__link" href="/team" {{ if eq .Title "Team Management" }}aria-current="page"{{ end }}>{{ icon "users" }}Team</a>
     <a class="ws-nav__link" href="/staff/signup" {{ if eq .Title "Staff Account Setup" }}aria-current="page"{{ end }}>{{ icon "user-plus" }}Add staff</a>
     <a class="ws-nav__link" href="/audit" {{ if eq .Title "Audit Log" }}aria-current="page"{{ end }}>{{ icon "audit" }}Audit</a>
+    <a class="ws-nav__link" href="/message-reports" {{ if eq .Title "Message reports" }}aria-current="page"{{ end }}>{{ icon "users" }}Message reports</a>
     {{ end }}
     <span class="ws-nav__sep" aria-hidden="true"></span>
     <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
@@ -37,10 +39,22 @@
 <nav class="ws-nav" aria-label="Partner">
   <div class="ws-nav__list">
     <a class="ws-nav__link" href="/dashboard" {{ if eq .Title "Partner Dashboard" }}aria-current="page"{{ end }}>{{ icon "dashboard" }}Overview</a>
+    {{ if eq (field . "Role") "partner" }}<a class="ws-nav__link" href="/messages" {{ if eq .Title "Messages" }}aria-current="page"{{ end }}>{{ icon "users" }}Messages</a>{{ end }}
     <a class="ws-nav__link" href="/orders" {{ if eq .Title "Partner Orders" }}aria-current="page"{{ end }}>{{ icon "orders" }}Orders</a>
     <a class="ws-nav__link" href="/products" {{ if eq .Title "Partner Products" }}aria-current="page"{{ end }}>{{ icon "box" }}Products</a>
     <a class="ws-nav__link" href="/products/new" {{ if eq .Title "Add Product" }}aria-current="page"{{ end }}>{{ icon "plus" }}Add product</a>
     <a class="ws-nav__link" href="/setup" {{ if eq .Title "Store Setup" }}aria-current="page"{{ end }}>{{ icon "settings" }}Store</a>
+    <span class="ws-nav__sep" aria-hidden="true"></span>
+    <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
+  </div>
+</nav>
+{{ end }}
+
+{{ define "courier-nav" }}
+<nav class="ws-nav" aria-label="Courier">
+  <div class="ws-nav__list">
+    <a class="ws-nav__link" href="/deliveries" {{ if eq .Title "My Deliveries" }}aria-current="page"{{ end }}>{{ icon "truck" }}My deliveries</a>
+    <a class="ws-nav__link" href="/messages" {{ if eq .Title "Messages" }}aria-current="page"{{ end }}>{{ icon "users" }}Messages</a>
     <span class="ws-nav__sep" aria-hidden="true"></span>
     <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
   </div>

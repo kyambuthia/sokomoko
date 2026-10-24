@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	ErrForbiddenWorkspace        = errors.New("forbidden partner workspace")
 	ErrStoreNotConfigured        = errors.New("store not configured")
 	ErrMissingStoreFields        = errors.New("missing store fields")
 	ErrInvalidStoreSlug          = errors.New("invalid store slug")
@@ -173,7 +174,7 @@ func (s *Service) StoreSettings(ctx context.Context) (*StoreSettings, error) {
 // CanEditStoreSettings reports whether actor may change the marketplace-wide
 // store settings. Partner accounts manage only their own catalog and orders.
 func CanEditStoreSettings(actor *Actor) bool {
-	return actor != nil && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff)
+	return actor != nil && actor.ID > 0 && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff)
 }
 
 func (s *Service) SaveStoreSettings(ctx context.Context, actor *Actor, input StoreSettingsInput) (StoreSettings, error) {
@@ -205,6 +206,9 @@ func (s *Service) SaveStoreSettings(ctx context.Context, actor *Actor, input Sto
 }
 
 func (s *Service) DashboardForActor(ctx context.Context, actor *Actor) (DashboardData, error) {
+	if !canUseWorkspace(actor) {
+		return DashboardData{}, ErrForbiddenWorkspace
+	}
 	settings, err := s.requireStoreSettings(ctx)
 	if err != nil {
 		return DashboardData{}, err
@@ -233,6 +237,9 @@ func (s *Service) DashboardForActor(ctx context.Context, actor *Actor) (Dashboar
 }
 
 func (s *Service) partnerIDForActor(ctx context.Context, actor *Actor) (int, error) {
+	if !canUseWorkspace(actor) {
+		return 0, ErrForbiddenWorkspace
+	}
 	if !actorIsPartner(actor) {
 		return 0, nil
 	}
@@ -249,6 +256,9 @@ func (s *Service) ProductsPageForActor(ctx context.Context, actor *Actor, page, 
 }
 
 func (s *Service) productsForActor(ctx context.Context, actor *Actor, limit, offset int) (ProductsData, int, error) {
+	if !canUseWorkspace(actor) {
+		return ProductsData{}, 0, ErrForbiddenWorkspace
+	}
 	settings, err := s.requireStoreSettings(ctx)
 	if err != nil {
 		return ProductsData{}, 0, err
@@ -327,6 +337,9 @@ func (s *Service) OrdersPageForActor(ctx context.Context, actor *Actor, filter s
 }
 
 func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input CreateProductInput) error {
+	if !canUseWorkspace(actor) {
+		return ErrForbiddenWorkspace
+	}
 	if _, err := s.requireStoreSettings(ctx); err != nil {
 		return err
 	}
@@ -402,7 +415,7 @@ type ProductInput struct {
 // productForActor loads a product the actor may edit. A partner user may only
 // edit their own partner's products; anything else reads as not found.
 func (s *Service) productForActor(ctx context.Context, actor *Actor, idRaw string) (*db.Product, error) {
-	if actor == nil || (actor.Role != db.RoleAdmin && actor.Role != db.RoleStaff && actor.Role != db.RolePartner) {
+	if !canUseWorkspace(actor) {
 		return nil, ErrProductNotFound
 	}
 	id, err := strconv.Atoi(strings.TrimSpace(idRaw))
@@ -486,6 +499,9 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 }
 
 func (s *Service) OrdersForActor(ctx context.Context, actor *Actor, filter string) (OrdersData, error) {
+	if !canUseWorkspace(actor) {
+		return OrdersData{}, ErrForbiddenWorkspace
+	}
 	cleanFilter := strings.TrimSpace(filter)
 	if cleanFilter == "" {
 		cleanFilter = "all"
@@ -507,7 +523,7 @@ func (s *Service) OrdersForActor(ctx context.Context, actor *Actor, filter strin
 	}
 	filtered := make([]Order, 0, len(orders))
 	for _, order := range orders {
-		if cleanFilter == "all" || order.PartnerStatus == cleanFilter {
+		if matchesOrderFilter(order, cleanFilter) {
 			filtered = append(filtered, mapOrder(order))
 		}
 	}
@@ -526,7 +542,7 @@ func (s *Service) OrdersForActor(ctx context.Context, actor *Actor, filter strin
 }
 
 func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrderInput) error {
-	if actor == nil || (actor.Role != db.RoleAdmin && actor.Role != db.RoleStaff && actor.Role != db.RolePartner) {
+	if !canUseWorkspace(actor) {
 		return ErrForbiddenOrderUpdate
 	}
 	orderID, err := strconv.Atoi(strings.TrimSpace(input.OrderID))
@@ -611,14 +627,35 @@ func mapOrder(order db.Order) Order {
 	}
 }
 
+func canUseWorkspace(actor *Actor) bool {
+	return actor != nil && actor.ID > 0 && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff || actor.Role == db.RolePartner)
+}
+
 func actorIsPartner(actor *Actor) bool {
 	return actor != nil && actor.Role == "partner" && actor.ID > 0
+}
+
+func matchesOrderFilter(order db.Order, filter string) bool {
+	switch filter {
+	case "all":
+		return true
+	case "completed":
+		return order.Status == db.OrderStatusDelivered
+	case "dispatched":
+		return order.PartnerStatus == "dispatched" && order.Status != db.OrderStatusDelivered
+	default:
+		return order.PartnerStatus == filter
+	}
 }
 
 func summaryForOrders(orders []Order) Summary {
 	var summary Summary
 	for _, order := range orders {
 		if order.Status == "cancelled" {
+			continue
+		}
+		if order.Status == db.OrderStatusDelivered {
+			summary.CompletedCount++
 			continue
 		}
 		switch order.PartnerStatus {
@@ -628,8 +665,6 @@ func summaryForOrders(orders []Order) Summary {
 			summary.InProgressCount++
 		case "dispatched":
 			summary.DispatchedCount++
-		case "completed":
-			summary.CompletedCount++
 		}
 		if (order.PartnerStatus == "new" || order.PartnerStatus == "accepted") &&
 			!order.CreatedAt.IsZero() && time.Since(order.CreatedAt) >= 2*time.Hour {

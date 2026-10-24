@@ -14,14 +14,15 @@ import (
 )
 
 var (
-	ErrForbiddenOrderUpdate = errors.New("forbidden order update")
-	ErrForbiddenUserAction  = errors.New("forbidden user action")
-	ErrInvalidOrderID       = errors.New("invalid order id")
-	ErrOrderNotFound        = errors.New("order not found")
-	ErrInvalidOrderState    = errors.New("invalid order state")
-	ErrInvalidUserID        = errors.New("invalid user id")
-	ErrUserNotFound         = errors.New("user not found")
-	ErrProtectedUser        = errors.New("protected user")
+	ErrForbiddenOrderUpdate       = errors.New("forbidden order update")
+	ErrForbiddenUserAction        = errors.New("forbidden user action")
+	ErrInvalidOrderID             = errors.New("invalid order id")
+	ErrOrderNotFound              = errors.New("order not found")
+	ErrInvalidOrderState          = errors.New("invalid order state")
+	ErrInvalidUserID              = errors.New("invalid user id")
+	ErrUserNotFound               = errors.New("user not found")
+	ErrProtectedUser              = errors.New("protected user")
+	ErrCourierHasActiveDeliveries = errors.New("courier has active deliveries")
 )
 
 type Service struct {
@@ -300,7 +301,7 @@ func (s *Service) TeamMembers(ctx context.Context, query string, page, limit int
 		page = 1
 	}
 	users, total, err := s.store.ListUsersByRoles(ctx, db.UserSearch{
-		Roles:  []string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleUser},
+		Roles:  []string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleCourier, db.RoleUser},
 		Query:  query,
 		Limit:  limit,
 		Offset: (page - 1) * limit,
@@ -337,6 +338,9 @@ func (s *Service) DeactivateUser(ctx context.Context, actor *Actor, userIDRaw st
 		return ErrProtectedUser
 	}
 	if err := s.store.DeleteUser(ctx, userID); err != nil {
+		if errors.Is(err, db.ErrCourierHasActiveDeliveries) {
+			return ErrCourierHasActiveDeliveries
+		}
 		return err
 	}
 	_ = s.store.CreateAuditLog(ctx, actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")

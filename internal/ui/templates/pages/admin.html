@@ -136,12 +136,59 @@
 
 {{ if eq .Title "Delivery Management" }}
   <h1>Deliveries</h1>
+  {{ template "notice" dict "Kind" "success" "Text" .Message }}
+  {{ template "notice" dict "Kind" "danger" "Text" .DispatchError }}
   <dl class="stats">
     <div class="stat"><dt>Queued</dt><dd>{{ .Deliveries.QueuedCount }}</dd></div>
     <div class="stat"><dt>Processing</dt><dd>{{ .Deliveries.ProcessingCount }}</dd></div>
     <div class="stat"><dt>Shipped</dt><dd>{{ .Deliveries.ShippedCount }}</dd></div>
     <div class="stat"><dt>Delivered</dt><dd>{{ .Deliveries.DeliveredCount }}</dd></div>
   </dl>
+
+  <section class="stack">
+    <div class="row row-between">
+      <div><h2>Courier dispatch</h2><p class="tiny muted">Assign only after the partner marks an order as shipped. Couriers see only their assigned orders.</p></div>
+      <div class="row">{{ if eq .Role "admin" }}<a class="btn btn-secondary" href="/couriers/new">{{ icon "user-plus" }}Add courier</a>{{ end }}<a class="btn btn-secondary" href="{{ .CourierHostURL }}" rel="noreferrer">Courier sign in</a></div>
+    </div>
+    {{ if .Dispatch.Orders }}
+      {{ if .Dispatch.Couriers }}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Order</th><th>Customer</th><th>Destination</th><th>Items</th><th>Courier</th><th class="actions">Dispatch</th></tr></thead>
+          <tbody>
+          {{ range .Dispatch.Orders }}
+            {{ $order := . }}
+            <tr>
+              <td class="strong">#{{ .OrderID }}<div class="tiny muted">{{ if .Status }}{{ .Status }}{{ else }}unassigned{{ end }}</div></td>
+              <td>{{ .CustomerName }}</td>
+              <td>{{ .DeliveryAddress }}</td>
+              <td><ul class="tiny">{{ range .Items }}<li>{{ .Quantity }} × {{ .ProductName }}</li>{{ end }}</ul>{{ if .FailureNote }}<p class="tiny notice-error">Failed attempt: {{ .FailureNote }}</p>{{ end }}</td>
+              <td>{{ if .CourierName }}{{ .CourierName }}{{ else }}<span class="muted">Unassigned</span>{{ end }}</td>
+              <td class="actions">
+                <form action="/deliveries" method="POST" class="stack compact">
+                  <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+                  <input type="hidden" name="order_id" value="{{ .OrderID }}">
+                  <label class="sr-only" for="courier_{{ .OrderID }}">Assign order {{ .OrderID }}</label>
+                  <select class="select" id="courier_{{ .OrderID }}" name="courier_id" required>
+                    <option value="">Choose courier</option>
+                    {{ range $.Dispatch.Couriers }}<option value="{{ .ID }}" {{ if eq .ID $order.CourierUserID }}selected{{ end }}>{{ .Username }}</option>{{ end }}
+                  </select>
+                  <button type="submit" class="btn">{{ if .CourierUserID }}Reassign{{ else }}Assign{{ end }}</button>
+                </form>
+              </td>
+            </tr>
+          {{ end }}
+          </tbody>
+        </table>
+      </div>
+      {{ else }}
+      <div class="empty"><p>No courier accounts yet. Create a courier account to start dispatching.</p><a class="btn" href="/couriers/new">{{ icon "user-plus" }}Add courier</a></div>
+      {{ end }}
+    {{ else }}
+      {{ template "empty" dict "Icon" "truck" "Text" "No shipped orders are waiting for courier assignment." }}
+    {{ end }}
+  </section>
+
   {{ if .Deliveries.Pending }}
   <ui-table-filter for="admin-deliveries-table" placeholder="Filter deliveries"></ui-table-filter>
   <div class="table-wrap">

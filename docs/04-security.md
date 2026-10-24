@@ -132,6 +132,19 @@ assumes exactly one trusted proxy in front of the app.
 Both limiters live in process memory, so limits are per instance and reset on
 restart.
 
+Messaging also has persistent PostgreSQL budgets for contact lookups,
+conversation creation, sends and reports. These are shared across processes.
+Every messaging operation checks user, shop or delivery membership, including
+polling. A courier reassignment revokes the former courier's chat access.
+Admins can review only messages submitted through the report flow, with no
+implicit access to private threads. New message content uses browser-side MLS
+end-to-end encryption; the server stores ciphertext and routing metadata.
+Earlier plaintext history remains separately labelled. Later devices require
+approval by an existing device and receive future sessions only. Shared demo
+accounts are public identities and must never carry private information.
+See [Encrypted messaging](encrypted-messaging.md) for the trust model,
+verification, recovery limitations and recipient-disclosed reports.
+
 ## HTTP hardening
 
 - **Host allowlist.** Unknown `Host` headers get `400`.
@@ -154,3 +167,25 @@ restart.
 - **Request IDs** from clients are accepted only when short and alphanumeric, so
   they cannot forge log lines.
 - **Logs** contain no query strings, cookies, passwords, tokens, or addresses.
+
+## Workspace service boundaries
+
+Partner dashboard, catalogue, order queries and product creation require a
+positive actor ID with an explicit admin, staff or partner role inside the
+service, in addition to HTTP route guards. Missing actors, buyers, couriers,
+unknown roles and nonpositive IDs cannot fall through into platform-wide
+scope. Product edits keep the not-found response for unauthorized actors.
+Marketplace-wide settings changes also require a positive admin/staff ID.
+Actor records are trusted application inputs built from authenticated users;
+these checks do not replace authentication or database membership checks.
+
+Courier dispatch operations and rider operations have separate role checks.
+A status retry is a no-op only for the current owning courier, for the same
+current action state (pickup, out for delivery, delivery or failure), and with
+the same stored failure category. Ownership and cancellation are checked
+before retry handling. Retries neither append an audit event nor change
+stored timestamps. A request for an earlier state after the job has advanced
+still fails; this is not a general request-idempotency-key system.
+
+References: [OWASP authorization guidance](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
+and [PostgreSQL 17 row locks](https://www.postgresql.org/docs/17/explicit-locking.html).

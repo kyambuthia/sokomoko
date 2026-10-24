@@ -12,6 +12,8 @@ type Templates struct {
 	Checkout             *template.Template
 	Payment              *template.Template
 	Account              *template.Template
+	Messages             *template.Template
+	MessageReports       *template.Template
 	Admin                *template.Template
 	AdminLogin           *template.Template
 	AdminSetup           *template.Template
@@ -21,6 +23,8 @@ type Templates struct {
 	PartnerProducts      *template.Template
 	PartnerProductNew    *template.Template
 	PartnerOrders        *template.Template
+	CourierSignup        *template.Template
+	CourierDashboard     *template.Template
 	Login                *template.Template
 	Signup               *template.Template
 	PasswordResetRequest *template.Template
@@ -29,7 +33,12 @@ type Templates struct {
 }
 
 func ParseTemplates() (*Templates, error) {
-	funcMap := templateFuncs()
+	return ParseTemplatesWithDemo(false)
+}
+
+// ParseTemplatesWithDemo parses the UI templates with a configurable demo-site banner.
+func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
+	funcMap := templateFuncs(demoMode)
 
 	baseTemplateFiles := []string{
 		"templates/base/base.tmpl.html",
@@ -74,6 +83,14 @@ func ParseTemplates() (*Templates, error) {
 	}
 
 	accountTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/account.html")
+	if err != nil {
+		return nil, err
+	}
+	messagesTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/messages.html")
+	if err != nil {
+		return nil, err
+	}
+	messageReportsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/message_reports.html")
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +140,16 @@ func ParseTemplates() (*Templates, error) {
 		return nil, err
 	}
 
+	courierSignupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/courier_signup.html")
+	if err != nil {
+		return nil, err
+	}
+
+	courierDashboardTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/courier_dashboard.html")
+	if err != nil {
+		return nil, err
+	}
+
 	loginTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/login.html")
 	if err != nil {
 		return nil, err
@@ -156,6 +183,8 @@ func ParseTemplates() (*Templates, error) {
 		Checkout:             checkoutTmpl,
 		Payment:              paymentTmpl,
 		Account:              accountTmpl,
+		Messages:             messagesTmpl,
+		MessageReports:       messageReportsTmpl,
 		Admin:                adminTmpl,
 		AdminLogin:           adminLoginTmpl,
 		AdminSetup:           adminSetupTmpl,
@@ -165,6 +194,8 @@ func ParseTemplates() (*Templates, error) {
 		PartnerProducts:      partnerProductsTmpl,
 		PartnerProductNew:    partnerProductNewTmpl,
 		PartnerOrders:        partnerOrdersTmpl,
+		CourierSignup:        courierSignupTmpl,
+		CourierDashboard:     courierDashboardTmpl,
 		Login:                loginTmpl,
 		Signup:               signupTmpl,
 		PasswordResetRequest: passwordResetRequestTmpl,

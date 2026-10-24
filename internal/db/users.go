@@ -169,12 +169,36 @@ func (s *Store) DeleteUser(ctx context.Context, id int) error {
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		var role string
+		err := tx.QueryRowContext(ctx,
+			"SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", id,
+		).Scan(&role)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if role == RoleCourier {
+			var active bool
+			if err := tx.QueryRowContext(ctx,
+				`SELECT EXISTS (
+				 SELECT 1 FROM courier_deliveries
+				 WHERE courier_user_id = $1 AND status IN ('assigned', 'picked_up', 'out_for_delivery')
+				)`, id,
+			).Scan(&active); err != nil {
+				return err
+			}
+			if active {
+				return ErrCourierHasActiveDeliveries
+			}
+		}
 		if _, err := tx.ExecContext(ctx,
 			"UPDATE users SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id,
 		); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id)
+		_, err = tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id)
 		return err
 	})
 }

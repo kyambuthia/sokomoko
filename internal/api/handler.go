@@ -11,6 +11,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
+	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
@@ -42,11 +43,22 @@ func Register(a *app.App, mux *http.ServeMux) {
 
 	// Customer session and commerce APIs.
 	mux.Handle(apiPrefix+"/me", h.authenticated(http.HandlerFunc(h.me)))
+	mux.Handle(apiPrefix+"/encrypted-chat", h.authenticated(http.HandlerFunc(h.encryptedChat)))
+	mux.Handle(apiPrefix+"/messages", h.authenticated(http.HandlerFunc(h.messages)))
+	mux.Handle(apiPrefix+"/messages/contacts", h.authenticated(http.HandlerFunc(h.messageContacts)))
+	mux.Handle(apiPrefix+"/messages/{id}", h.authenticated(http.HandlerFunc(h.messageThread)))
+	mux.Handle(apiPrefix+"/messages/{id}/send", h.authenticated(http.HandlerFunc(h.messageSend)))
+	mux.Handle(apiPrefix+"/messages/{id}/action", h.authenticated(http.HandlerFunc(h.messageAction)))
 	mux.Handle(apiPrefix+"/cart", h.authenticated(http.HandlerFunc(h.cart)))
 	mux.Handle(apiPrefix+"/cart/items", h.authenticated(http.HandlerFunc(h.cartItemCreate)))
 	mux.Handle(apiPrefix+"/cart/items/", h.authenticated(http.HandlerFunc(h.cartItem)))
-	mux.Handle(apiPrefix+"/checkout", h.authenticated(http.HandlerFunc(h.checkout)))
-	mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.checkoutSession)))
+	if a.DemoMode {
+		mux.HandleFunc(apiPrefix+"/checkout", h.demoCheckoutDisabled)
+		mux.HandleFunc(apiPrefix+"/checkout/", h.demoCheckoutDisabled)
+	} else {
+		mux.Handle(apiPrefix+"/checkout", h.authenticated(http.HandlerFunc(h.checkout)))
+		mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.checkoutSession)))
+	}
 	mux.Handle(apiPrefix+"/account/orders", h.authenticated(http.HandlerFunc(h.accountOrders)))
 	mux.Handle(apiPrefix+"/account/orders/", h.authenticated(http.HandlerFunc(h.accountOrder)))
 
@@ -54,10 +66,18 @@ func Register(a *app.App, mux *http.ServeMux) {
 	// used on storefront, admin, and partner hosts without duplicating routes.
 	mux.Handle(apiPrefix+"/admin/", h.role([]string{"admin", "staff"}, http.HandlerFunc(h.admin)))
 	mux.Handle(apiPrefix+"/partner/", h.role([]string{"admin", "staff", "partner"}, http.HandlerFunc(h.partner)))
+	mux.Handle(apiPrefix+"/admin/deliveries", h.role([]string{db.RoleAdmin, db.RoleStaff}, http.HandlerFunc(h.adminCourierDeliveries)))
+	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.role([]string{db.RoleAdmin, db.RoleStaff}, http.HandlerFunc(h.adminCourierAssign)))
+	mux.Handle(apiPrefix+"/courier/deliveries", h.role([]string{db.RoleCourier}, http.HandlerFunc(h.courierDeliveries)))
+	mux.Handle(apiPrefix+"/courier/deliveries/", h.role([]string{db.RoleCourier}, http.HandlerFunc(h.courierDeliveryUpdate)))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusNotFound, "not_found", "API route not found")
+}
+
+func (h *Handler) demoCheckoutDisabled(w http.ResponseWriter, r *http.Request) {
+	writeError(w, http.StatusForbidden, "demo_mode", "This demo does not accept orders or payments")
 }
 
 func (h *Handler) authenticated(next http.Handler) http.Handler {

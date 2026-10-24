@@ -35,7 +35,7 @@ var (
 		"new":        {"new": true, "accepted": true, "cancelled": true},
 		"accepted":   {"accepted": true, "packing": true, "cancelled": true},
 		"packing":    {"packing": true, "dispatched": true, "cancelled": true},
-		"dispatched": {"dispatched": true, "completed": true},
+		"dispatched": {"dispatched": true},
 		"completed":  {"completed": true},
 		"cancelled":  {"cancelled": true},
 	}
@@ -395,7 +395,13 @@ func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, st
 	if partnerID > 0 {
 		args = append(args, partnerID)
 	}
-	if status != "" && status != "all" {
+	switch status {
+	case "completed":
+		predicate += " AND o.status = 'delivered'"
+	case "dispatched":
+		predicate += " AND o.partner_status = 'dispatched' AND o.status <> 'delivered'"
+	case "", "all":
+	default:
 		args = append(args, status)
 		predicate += fmt.Sprintf(" AND o.partner_status = $%d", len(args))
 	}
@@ -421,8 +427,8 @@ func (s *Store) FulfillmentSummary(ctx context.Context, partnerID int) (PartnerO
 	err := s.DB.QueryRowContext(ctx,
 		`SELECT count(*) FILTER (WHERE o.partner_status = 'new'),
 		        count(*) FILTER (WHERE o.partner_status IN ('accepted', 'packing')),
-		        count(*) FILTER (WHERE o.partner_status = 'dispatched'),
-		        count(*) FILTER (WHERE o.partner_status = 'completed'),
+		        count(*) FILTER (WHERE o.partner_status = 'dispatched' AND o.status <> 'delivered'),
+		        count(*) FILTER (WHERE o.status = 'delivered'),
 		        count(*) FILTER (WHERE o.partner_status IN ('new', 'accepted') AND o.created_at <= now() - interval '2 hours')
 		 FROM orders o WHERE `+fulfillmentPredicate(partnerID), args...).Scan(
 		&summary.NewCount, &summary.InProgressCount, &summary.DispatchedCount, &summary.CompletedCount, &summary.OverdueCount)
@@ -451,9 +457,9 @@ func lockOrderTx(ctx context.Context, tx *sql.Tx, orderID int) (*lockedOrder, er
 	return &o, nil
 }
 
-// UpdateOrderFulfillment applies a partner fulfillment update. Partner status
-// drives the overall order status, and both partner and delivery statuses may
-// only move forward. Dispatching ships stock; cancelling releases it.
+// UpdateOrderFulfillment applies a partner fulfillment update. Partners control
+// preparation; dispatching ships stock and sets delivery to shipped. The
+// courier workflow owns later delivery-state changes.
 func (s *Store) UpdateOrderFulfillment(ctx context.Context, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
 	nextStatus, ok := partnerStatusToOrderStatus[partnerStatus]
 	if !ok {
@@ -473,7 +479,22 @@ func (s *Store) UpdateOrderFulfillment(ctx context.Context, orderID int, partner
 		if !isAllowedPartnerTransition(current.PartnerStatus, partnerStatus) {
 			return ErrInvalidPartnerTransition
 		}
-		if !isAllowedDeliveryTransition(current.DeliveryStatus, deliveryStatus) {
+		// Partners control preparation, while courier accounts control the
+		// delivery handoff. Once dispatched, a partner cannot complete or alter
+		// delivery state. Dispatching advances the order to shipped atomically.
+		if current.PartnerStatus == "dispatched" {
+			if partnerStatus != "dispatched" {
+				return ErrInvalidPartnerTransition
+			}
+			// A retried dispatch must not reopen a courier-completed order.
+			nextStatus = current.Status
+			deliveryStatus = current.DeliveryStatus
+		} else if partnerStatus == "dispatched" {
+			deliveryStatus = "shipped"
+		} else {
+			deliveryStatus = current.DeliveryStatus
+		}
+		if !validDeliveryStatuses[deliveryStatus] || !isAllowedDeliveryTransition(current.DeliveryStatus, deliveryStatus) {
 			return ErrInvalidDeliveryTransition
 		}
 		return writeOrderStateTx(ctx, tx, orderID, current, nextStatus, partnerStatus, deliveryStatus, deliveryNotice)
@@ -523,8 +544,8 @@ func (s *Store) GetPartnerOrderSummary(ctx context.Context) (PartnerOrderSummary
 		`SELECT
 		    count(*) FILTER (WHERE partner_status = 'new'),
 		    count(*) FILTER (WHERE partner_status IN ('accepted', 'packing')),
-		    count(*) FILTER (WHERE partner_status = 'dispatched'),
-		    count(*) FILTER (WHERE partner_status = 'completed'),
+		    count(*) FILTER (WHERE partner_status = 'dispatched' AND status <> 'delivered'),
+		    count(*) FILTER (WHERE status = 'delivered'),
 		    count(*) FILTER (WHERE partner_status IN ('new', 'accepted') AND created_at <= now() - interval '2 hours')
 		 FROM orders
 		 WHERE status <> 'cancelled'`,

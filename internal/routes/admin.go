@@ -10,6 +10,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
+	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
@@ -33,6 +34,9 @@ type AdminPageData struct {
 	Deactivated     []adminsvc.TeamMember
 	Orders          []adminsvc.Order
 	Deliveries      adminsvc.DeliveryBoard
+	Dispatch        logisticsvc.DispatchBoard
+	DispatchError   string
+	CourierHostURL  string
 	AuditLogs       []adminsvc.AuditLog
 	OrderCount      int
 	CancelledCount  int
@@ -222,9 +226,38 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
+		}
+
+		status := http.StatusOK
+		dispatchError := ""
+		if r.Method == http.MethodPost {
+			err := a.Logistics.Assign(r.Context(), logisticsActorFromContext(r), r.FormValue("order_id"), r.FormValue("courier_id"))
+			switch {
+			case err == nil:
+				redirectWithFlash(w, r, "/deliveries", "success", "Courier assignment saved")
+				return
+			case errors.Is(err, logisticsvc.ErrForbidden):
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			case errors.Is(err, logisticsvc.ErrInvalidOrderID), errors.Is(err, logisticsvc.ErrInvalidCourierID):
+				dispatchError = "Choose a valid order and courier."
+				status = http.StatusBadRequest
+			case errors.Is(err, logisticsvc.ErrCourierNotFound):
+				dispatchError = "That courier account is not active. Refresh and choose an active courier."
+				status = http.StatusBadRequest
+			case errors.Is(err, logisticsvc.ErrOrderNotReady):
+				dispatchError = "Only shipped orders awaiting delivery can be assigned."
+				status = http.StatusBadRequest
+			case errors.Is(err, logisticsvc.ErrDeliveryStarted):
+				dispatchError = "This delivery has already been picked up and cannot be reassigned."
+				status = http.StatusConflict
+			default:
+				http.Error(w, "Unable to assign courier", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		metrics, err := loadAdminMetrics(r.Context(), svc)
@@ -237,7 +270,23 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		renderAdminPage(a, w, r, http.StatusOK, adminDeliveriesPage(metrics, adminRoleFromContext(r), board))
+		dispatch, err := a.Logistics.DispatchBoard(r.Context(), logisticsActorFromContext(r))
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		page := adminDeliveriesPage(metrics, adminRoleFromContext(r), board)
+		page.Dispatch = dispatch
+		page.DispatchError = dispatchError
+		page.CourierHostURL = siblingURL(r, courierHostPrefix, "/login")
+		if flash := popFlash(w, r); flash.Message != "" {
+			if flash.Kind == "danger" {
+				page.DispatchError = flash.Message
+			} else {
+				page.Message = flash.Message
+			}
+		}
+		renderAdminPage(a, w, r, status, page)
 	}
 }
 
@@ -276,6 +325,8 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 				page.TeamError = "User does not exist"
 			case errors.Is(err, adminsvc.ErrProtectedUser):
 				page.TeamError = "Admin accounts cannot be deactivated from this view"
+			case errors.Is(err, adminsvc.ErrCourierHasActiveDeliveries):
+				page.TeamError = "This courier has deliveries assigned or in transit. Reassign them before deactivating the account."
 			case err != nil && reactivate:
 				page.TeamError = "Unable to reactivate user"
 			case err != nil:

@@ -11,6 +11,7 @@ import (
 const (
 	adminHostPrefix   = "admin."
 	partnerHostPrefix = "partner."
+	courierHostPrefix = "courier."
 )
 
 // siblingURL returns an absolute URL for path on the host that shares the
@@ -23,7 +24,7 @@ func siblingURL(r *http.Request, prefix, path string) string {
 		host, port = r.Host, ""
 	}
 	host = strings.ToLower(host)
-	for _, p := range []string{adminHostPrefix, partnerHostPrefix} {
+	for _, p := range []string{adminHostPrefix, partnerHostPrefix, courierHostPrefix} {
 		if strings.HasPrefix(host, p) {
 			host = strings.TrimPrefix(host, p)
 			break

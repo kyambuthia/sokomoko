@@ -73,7 +73,7 @@ func adminDeliveriesPage(metrics adminsvc.Metrics, role string, board adminsvc.D
 }
 
 func adminTeamPage(metrics adminsvc.Metrics, role string, teamMembers []adminsvc.TeamMember) AdminPageData {
-	page := newAdminPage(metrics, role, "Team Management", "Manage admin, staff, and customer accounts")
+	page := newAdminPage(metrics, role, "Team Management", "Manage admin, staff, courier, and customer accounts")
 	page.TeamMembers = teamMembers
 	return page
 }

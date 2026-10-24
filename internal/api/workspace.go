@@ -528,7 +528,7 @@ func (h *Handler) partnerSettings(w http.ResponseWriter, r *http.Request) {
 
 func writePartnerError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, partnersvc.ErrForbiddenOrderUpdate), errors.Is(err, partnersvc.ErrForbiddenSettingsUpdate):
+	case errors.Is(err, partnersvc.ErrForbiddenWorkspace), errors.Is(err, partnersvc.ErrForbiddenOrderUpdate), errors.Is(err, partnersvc.ErrForbiddenSettingsUpdate):
 		writeError(w, http.StatusForbidden, "forbidden", "Action is not allowed")
 	case errors.Is(err, partnersvc.ErrInvalidOrderID), errors.Is(err, partnersvc.ErrMissingProductFields), errors.Is(err, partnersvc.ErrInvalidProductPrice), errors.Is(err, partnersvc.ErrInvalidProductStock), errors.Is(err, partnersvc.ErrMissingStoreFields),
 		errors.Is(err, partnersvc.ErrInvalidStoreSlug), errors.Is(err, partnersvc.ErrInvalidContactEmail):

@@ -47,6 +47,7 @@ type Config struct {
 	AuthAbuseBackoffBase     time.Duration
 	AuthAbuseBackoffMax      time.Duration
 	PasswordResetBaseURL     string
+	PasswordResetDisabled    bool
 	PasswordResetEmailSender PasswordResetEmailSender
 	// TrustProxyHeaders makes X-Forwarded-For and X-Forwarded-Proto authoritative.
 	// Enable it only behind a reverse proxy that overwrites those headers.
@@ -61,6 +62,7 @@ type Service struct {
 	sessionCookieDomain      string
 	abuseLimiter             *authAbuseLimiter
 	passwordResetBaseURL     string
+	passwordResetDisabled    bool
 	passwordResetEmailSender PasswordResetEmailSender
 	trustProxyHeaders        bool
 }
@@ -78,6 +80,7 @@ func NewService(store store, cfg Config) *Service {
 		sessionCookieDomain:      strings.TrimSpace(strings.ToLower(cfg.SessionCookieDomain)),
 		abuseLimiter:             newAuthAbuseLimiter(cfg.AuthAbuseMaxFailures, cfg.AuthAbuseBackoffBase, cfg.AuthAbuseBackoffMax),
 		passwordResetBaseURL:     strings.TrimSpace(cfg.PasswordResetBaseURL),
+		passwordResetDisabled:    cfg.PasswordResetDisabled,
 		passwordResetEmailSender: cfg.PasswordResetEmailSender,
 		trustProxyHeaders:        cfg.TrustProxyHeaders,
 	}

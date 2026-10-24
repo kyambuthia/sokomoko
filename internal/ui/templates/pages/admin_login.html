@@ -1,9 +1,9 @@
-{{ define "title" }}Sign in · workspace · sokomoko{{ end }}
+{{ define "title" }}{{ .Title }} · sokomoko{{ end }}
 {{ define "layout" }}{{ template "workspace-auth-layout" . }}{{ end }}
 
 {{ define "main-area" }}
 <div class="auth stack">
-  <h1>Workspace sign in</h1>
+  <h1>{{ .Title }}</h1>
   {{ template "notice" dict "Kind" "danger" "Text" .Error }}
   {{ if not .SetupRequired }}
   <form action="/login" method="POST" class="form">
@@ -19,7 +19,7 @@
     </div>
     <button type="submit" class="btn btn-block">Sign in</button>
   </form>
-  <p class="small"><a href="/password-reset/request">Forgot password?</a></p>
+  {{ if .PasswordResetEnabled }}<p class="small"><a href="/password-reset/request">Forgot password?</a></p>{{ end }}
   {{ end }}
 </div>
 {{ end }}

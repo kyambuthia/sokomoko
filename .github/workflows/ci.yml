@@ -18,6 +18,29 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Scan current files for secrets
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir --redact --no-banner .
+
+      - name: Scan Git history for secrets
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --log-opts=--all --redact --no-banner .
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -60,12 +83,7 @@ jobs:
         run: go mod download
 
       - name: Check Go formatting
-        run: |
-          unformatted="$(gofmt -l $(git ls-files '*.go'))"
-          if [ -n "$unformatted" ]; then
-            echo "$unformatted"
-            exit 1
-          fi
+        run: bash scripts/go-format.sh --check
 
       - name: Check go.mod is tidy
         run: |
@@ -102,3 +120,23 @@ jobs:
 
       - name: Validate production Compose configuration
         run: docker compose --env-file deploy/production.env.example -f deploy/compose.production.yml config --quiet
+
+  chat-crypto:
+    name: Browser encryption source and assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Install matching WASM bindings generator
+        run: cargo install wasm-bindgen-cli --version 0.2.114 --locked
+
+      - name: Verify protocol operations and formatting
+        run: make chat-crypto-test
+
+      - name: Verify embedded browser assets match source
+        run: make chat-crypto-check

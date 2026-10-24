@@ -52,6 +52,25 @@ node_modules/
 .env
 .env.*
 !.env.example
+.envrc
+.npmrc
+.pypirc
+.netrc
+
+# Private keys and local cloud credentials
+**/.aws/
+**/.ssh/
+**/.docker/
+**/.secrets/
+**/secrets/
+**/credentials
+**/credentials.*
+**/id_rsa
+**/id_ed25519
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Temporary files
 *.tmp
@@ -61,3 +80,6 @@ node_modules/
 # Local Go caches created by some dev environments
 .gocache/
 .gomodcache/
+
+# Local Rust builds; reviewed WASM assets are generated separately.
+/web/crypto/target/

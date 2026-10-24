@@ -11,6 +11,7 @@ import (
 )
 
 type PartnerOrdersPageData struct {
+	Role            string
 	Title           string
 	CSRFToken       string
 	Orders          []partnersvc.Order
@@ -78,6 +79,7 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 		page := partnerOrdersPage(view)
+		page.Role, _ = partnerIdentity(r)
 		page.Message = data.Message
 		page.Error = data.Error
 		page.CSRFToken = a.Auth.CSRFToken(r)

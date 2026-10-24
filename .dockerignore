@@ -8,4 +8,26 @@ sokomoko
 *.log
 .env
 .env.*
+.envrc
+.npmrc
+.pypirc
+.netrc
 docs
+
+# Do not send private keys or local cloud credentials to the image builder.
+**/.aws/
+**/.ssh/
+**/.docker/
+**/.secrets/
+**/secrets/
+**/credentials
+**/credentials.*
+**/id_rsa
+**/id_ed25519
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local cryptography build artifacts are not needed by the Go image.
+web/crypto/target/

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Sokomoko feature guide for buyers, partners, operators, and developers.">
+  <title>Feature guide · sokomoko</title>
+  <link rel="icon" type="image/svg+xml" href="/static/icons/sokomoko.svg">
+  <link rel="preload" href="/static/fonts/jetbrains-mono-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/stylesheets/app.css">
+  <link rel="stylesheet" href="/static/docs/docs.css">
+  <script src="/static/scripts/theme.js"></script>
+  <script type="module" src="/static/scripts/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <aside class="demo-banner" role="status" aria-label="Demo site notice">
+    <div class="container demo-banner__inner">
+      <strong>DEMO SITE</strong>
+      <span>Sample listings only. No actual products are for sale; no sales, orders, or payments are accepted.</span>
+    </div>
+  </aside>
+  <header class="bar">
+    <div class="container bar__inner">
+      <a class="brand brand--bar" href="https://asiliano.online/" aria-label="sokomoko">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M24 8H8V16H24V24H8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+        <svg class="brand__wordmark" viewBox="0 0 264 32" aria-hidden="true" focusable="false">
+          <path d="M32 8H8V16H32V24H8M40 8H64V24H40ZM72 8V24M72 16H80V8H96M72 16H80V24H96M104 8H128V24H104ZM136 24V8H148V24M148 8H160V24M168 8H192V24H168ZM200 8V24M200 16H208V8H224M200 16H208V24H224M232 8H256V24H232Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/>
+        </svg>
+      </a>
+      <nav class="docs-header-links" aria-label="Site navigation">
+        <a class="btn btn-plain btn-sm" href="https://asiliano.online/">Storefront</a>
+        <a class="btn btn-plain btn-sm" href="https://partner.asiliano.online/login">Partner demo</a>
+        <a class="btn btn-plain btn-sm" href="https://courier.asiliano.online/login">Courier sign in</a>
+        <a class="btn btn-secondary btn-sm" href="https://github.com/kyambuthia/sokomoko">Source code</a>
+      </nav>
+      <div class="bar__actions">
+        <ui-theme-toggle><button type="button" class="btn btn-icon" aria-label="Toggle appearance"><svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-moon"></use></svg></button></ui-theme-toggle>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="container main docs-page" tabindex="-1">
+    <section class="section docs-intro" aria-labelledby="page-title">
+      <div class="page-head">
+        <h1 id="page-title">Feature guide</h1>
+        <span class="badge">Asiliano demo</span>
+      </div>
+      <p>Sokomoko is a multi-vendor marketplace with a customer storefront, partner workspace, operations console, and JSON API. This guide describes the codebase and the demo currently running at asiliano.online.</p>
+      <div class="row">
+        <a class="btn" href="https://asiliano.online/">Open storefront</a>
+        <a class="btn btn-secondary" href="https://partner.asiliano.online/login">Open partner demo</a>
+      </div>
+    </section>
+
+    <nav class="chips docs-nav" aria-label="On this page">
+      <a class="chip" href="#overview">Platform</a>
+      <a class="chip" href="#buyers">Buyers</a>
+      <a class="chip" href="#partners">Partners</a>
+      <a class="chip" href="#couriers">Couriers</a>
+      <a class="chip" href="#messaging">Messages</a>
+      <a class="chip" href="#operators">Operators</a>
+      <a class="chip" href="#developers">Developers</a>
+      <a class="chip" href="#security">Security & payments</a>
+      <a class="chip" href="#demo-access">Demo access</a>
+    </nav>
+
+    <section class="section docs-section" id="overview" aria-labelledby="overview-title">
+      <div class="page-head"><h2 id="overview-title">Platform</h2><span class="badge">4 workspaces</span></div>
+      <p class="docs-lead">One Go application serves the storefront, partner, courier and admin workspaces, and versioned API from a PostgreSQL database.</p>
+      <div class="docs-grid docs-grid-three">
+        <article class="card docs-card"><p class="section-title">Customer storefront</p><h3>asiliano.online</h3><p>Catalog, search, product pages, customer accounts, and cart interactions. In this demo, checkout is disabled.</p></article>
+        <article class="card docs-card"><p class="section-title">Partner workspace</p><h3>partner.asiliano.online</h3><p>Store setup, product listing and stock management, partner dashboard, and fulfillment queue.</p></article>
+        <article class="card docs-card"><p class="section-title">Courier workspace</p><h3>courier.asiliano.online</h3><p>Private rider job lists, delivery status updates, and failed-attempt reporting.</p></article>
+        <article class="card docs-card"><p class="section-title">Admin workspace</p><h3>admin.asiliano.online</h3><p>Catalog, partners, orders, deliveries, reports, payment settings, staff accounts, and audit history.</p></article>
+      </div>
+      <p class="docs-note">This public guide is hosted at <code>docs.asiliano.online</code>.</p>
+    </section>
+
+    <section class="section docs-section" id="buyers" aria-labelledby="buyers-title">
+      <div class="page-head"><h2 id="buyers-title">For buyers</h2><span class="badge">Storefront</span></div>
+      <div class="list docs-list">
+        <article class="list-item docs-list-item"><strong>Browse</strong><span>Explore categories, product details, images, and full-text search.</span></article>
+        <article class="list-item docs-list-item"><strong>Accounts</strong><span>Sign up, sign in, manage sessions, change a password, and view an account.</span></article>
+        <article class="list-item docs-list-item"><strong>Cart</strong><span>Add items, change quantities, and remove cart lines.</span></article>
+        <article class="list-item docs-list-item"><strong>Orders</strong><span>The application supports checkout, order history, fulfillment tracking, and eligible cancellation. Checkout and order placement are disabled in this demo.</span></article>
+      </div>
+      <p class="docs-note">The listed products are sample content only. No purchase or payment can be made on this demo.</p>
+    </section>
+
+    <section class="section docs-section" id="partners" aria-labelledby="partners-title">
+      <div class="page-head"><h2 id="partners-title">For partners</h2><a class="btn btn-secondary btn-sm" href="https://partner.asiliano.online/login">Partner sign in</a></div>
+      <p class="docs-lead">Partner users operate within a dedicated workspace and can access products and eligible orders associated with their own partner account.</p>
+      <div class="docs-grid docs-grid-two">
+        <article class="card docs-card"><h3>Store settings</h3><p>Configure a store name, slug, description, and contact details.</p></article>
+        <article class="card docs-card"><h3>Product listings</h3><p>Create and edit names, descriptions, prices, stock, and categories.</p></article>
+        <article class="card docs-card"><h3>Order fulfillment</h3><p>Accept and prepare orders, then mark them dispatched for courier delivery. Courier accounts control the delivery handoff.</p></article>
+        <article class="card docs-card"><h3>Partner dashboard</h3><p>Review product counts and fulfillment summaries.</p></article>
+      </div>
+    </section>
+
+    <section class="section docs-section" id="couriers" aria-labelledby="couriers-title">
+      <div class="page-head"><h2 id="couriers-title">For riders & couriers</h2><a class="btn btn-secondary btn-sm" href="https://courier.asiliano.online/login">Courier sign in</a></div>
+      <p class="docs-lead">Operations staff assign shipped orders to a courier. Each courier account sees its own assigned jobs and the information needed to deliver them.</p>
+      <div class="docs-grid docs-grid-two">
+        <article class="card docs-card"><h3>Dispatch</h3><p>Admins and staff assign or reassign an order before pickup. Failed attempts return to dispatch for review and reassignment.</p></article>
+        <article class="card docs-card"><h3>Rider workflow</h3><p>Couriers mark an order picked up, out for delivery, delivered, or unsuccessful. A fixed reason is required for a failed attempt; dispatch can then reassign it.</p></article>
+        <article class="card docs-card"><h3>Private job data</h3><p>Riders see only their own assigned customer name, delivery address, and item quantities. Payment details and item prices are not shown.</p></article>
+        <article class="card docs-card"><h3>Account access</h3><p>An admin creates each courier login without email. Couriers can change their password after signing in.</p></article>
+      </div>
+      <p class="docs-note">Dispatch is manual. Couriers can message the buyer of an assigned delivery. The codebase does not include GPS tracking or route optimization.</p>
+      <p class="docs-note">This demo publishes no courier login. The live courier workspace is available for deployments that provision courier accounts; no real deliveries are accepted here.</p>
+    </section>
+
+    <section class="section docs-section" id="messaging" aria-labelledby="messaging-title">
+      <div class="page-head"><h2 id="messaging-title">Handles & messages</h2><span class="badge">Buyer · shop · courier</span></div>
+      <p class="docs-lead">Each username is also an @handle. Open Messages to find an exact buyer or seller handle, or contact someone from a product, order, or assigned delivery.</p>
+      <div class="docs-grid docs-grid-two">
+        <article class="card docs-card"><h3>Message requests</h3><p>Send one introduction by handle. The recipient accepts before the conversation continues. Product and order conversations open with their marketplace context.</p></article>
+        <article class="card docs-card"><h3>Shop inbox</h3><p>Approved devices of authorized shop members receive future sessions after recipient review. New devices do not inherit earlier history. Each seller has a separate conversation when an order includes multiple shops.</p></article>
+        <article class="card docs-card"><h3>Delivery conversations</h3><p>Buyers and their assigned courier can chat. Reassignment opens a new conversation and removes the former courier's access. Completed delivery conversations become read-only.</p></article>
+        <article class="card docs-card"><h3>Block & report</h3><p>Block a contact across conversations or explicitly disclose selected received text for moderator review. Admins review the reported message without opening the rest of the chat.</p></article>
+      </div>
+      <p class="docs-note">New messages are encrypted on approved browser devices using MLS. Review device fingerprints before trusting a contact. Older server-readable history remains separately labeled. Password reset cannot recover lost messaging keys. Shared demo accounts are for sample information only.</p>
+    </section>
+
+    <section class="section docs-section" id="operators" aria-labelledby="operators-title">
+      <div class="page-head"><h2 id="operators-title">For operators</h2><span class="badge">Admin workspace</span></div>
+      <div class="docs-grid docs-grid-two">
+        <article class="card docs-card"><h3>Marketplace catalog</h3><p>Manage categories, onboard partners, and suspend or reactivate partner stores.</p></article>
+        <article class="card docs-card"><h3>Orders & deliveries</h3><p>Review orders, create courier logins, assign or reassign shipped orders, and track delivery stages.</p></article>
+        <article class="card docs-card"><h3>Reports</h3><p>Review dashboard metrics and order counts and revenue grouped by order status. Demo data is illustrative.</p></article>
+        <article class="card docs-card"><h3>Team & audit</h3><p>Create staff users, deactivate or reactivate accounts, and review admin audit events.</p></article>
+      </div>
+      <p class="docs-note">The admin workspace is for platform operators and has no public demo account.</p>
+    </section>
+
+    <section class="section docs-section" id="developers" aria-labelledby="developers-title">
+      <div class="page-head"><h2 id="developers-title">For developers</h2><a class="btn btn-secondary btn-sm" href="https://github.com/kyambuthia/sokomoko">Source code</a></div>
+      <div class="docs-grid docs-grid-two">
+        <article class="card docs-card"><h3>Application</h3><p>Go 1.26.10, standard <code>net/http</code>, and <code>html/template</code>. Server-rendered pages use CSS and ES modules without a frontend bundler.</p></article>
+        <article class="card docs-card"><h3>JSON API</h3><p>Versioned <code>/api/v1</code> endpoints cover the catalog, account, cart, checkout, orders, messaging, admin operations, partner tools, and courier deliveries.</p></article>
+        <article class="card docs-card"><h3>Data</h3><p>PostgreSQL 17 via <code>database/sql</code> and pgx. SQL migrations, templates, and static assets are embedded in the binary.</p></article>
+        <article class="card docs-card"><h3>Local development</h3><p>Use <code>docker compose up --build</code>, or <code>make run</code> with PostgreSQL. The repository <code>docs/</code> folder covers configuration, architecture, development, and deployment.</p></article>
+      </div>
+      <aside class="card docs-callout"><p class="section-title">API conventions</p><p>JSON responses use a data/error envelope, paginated lists, session authentication, and CSRF tokens for state-changing requests. Public catalog reads use short cache windows.</p></aside>
+    </section>
+
+    <section class="section docs-section" id="security" aria-labelledby="security-title">
+      <div class="page-head"><h2 id="security-title">Security & payments</h2><span class="badge">Code capabilities</span></div>
+      <ul class="docs-checklist">
+        <li>Password hashes use bcrypt; sessions use random tokens stored as hashes.</li>
+        <li>Role checks and partner data scoping protect workspace actions.</li>
+        <li>Courier queries are scoped to assignments owned by the signed-in courier; delivery transitions are validated and recorded in an append-only event history.</li>
+        <li>CSRF protection applies to state-changing forms and API calls.</li>
+        <li>Request limits and login abuse backoff are included.</li>
+        <li>Production responses set security headers; Caddy terminates HTTPS.</li>
+        <li>Configured payment provider credentials are encrypted at rest.</li>
+      </ul>
+      <div class="card docs-payment"><p class="section-title">Payment adapters</p><p><strong>Cash on delivery</strong> · <strong>M-Pesa Daraja</strong> · <strong>Paystack</strong></p><p>The code includes provider callbacks, payment confirmation, reconciliation, and refund workflows. Payment routes are disabled in this demo.</p></div>
+    </section>
+
+    <section class="section docs-section docs-demo" id="demo-access" aria-labelledby="demo-title">
+      <div class="page-head"><h2 id="demo-title">Demo access</h2><span class="badge badge-solid">Shared accounts</span></div>
+      <p class="docs-lead">Use these accounts to explore the demo. They are shared between visitors; changes may be visible to other people. Do not enter personal or payment information.</p>
+      <div class="docs-grid docs-grid-two">
+        <article class="card docs-card"><div class="row-between"><h3>Buyer</h3><a href="https://asiliano.online/login">Sign in</a></div><dl class="docs-credentials"><div><dt>Username</dt><dd><code>demo-customer</code></dd></div><div><dt>Password</dt><dd><code>AsilianoShop!2026</code></dd></div></dl></article>
+        <article class="card docs-card"><div class="row-between"><h3>Partner</h3><a href="https://partner.asiliano.online/login">Sign in</a></div><dl class="docs-credentials"><div><dt>Username</dt><dd><code>demo-partner</code></dd></div><div><dt>Password</dt><dd><code>AsilianoPartner!2026</code></dd></div></dl></article>
+      </div>
+      <p class="docs-note">Demo only. No actual products are for sale; sales, orders, and payments are not accepted.</p>
+    </section>
+
+    <footer class="docs-footer">
+      <a class="brand" href="https://asiliano.online/" aria-label="sokomoko">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M24 8H8V16H24V24H8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+        <svg class="brand__wordmark" viewBox="0 0 264 32" aria-hidden="true" focusable="false"><path d="M32 8H8V16H32V24H8M40 8H64V24H40ZM72 8V24M72 16H80V8H96M72 16H80V24H96M104 8H128V24H104ZM136 24V8H148V24M148 8H160V24M168 8H192V24H168ZM200 8V24M200 16H208V8H224M200 16H208V24H224M232 8H256V24H232Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter"/></svg>
+      </a>
+      <a href="#main">Back to top</a>
+    </footer>
+  </main>
+</body>
+</html>
