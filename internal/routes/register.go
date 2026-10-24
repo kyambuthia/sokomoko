@@ -38,6 +38,8 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/", public(Root(a)))
 	mux.Handle("/products/", public(ProductDetail(a)))
 	mux.Handle("/search", public(Search(a)))
+	mux.Handle("/services", public(Services(a, false)))
+	mux.Handle("/services/{slug}", public(ServiceDetail(a)))
 	mux.HandleFunc("/api/categories", CategoriesAPI(a))
 
 	mux.HandleFunc("/login", a.Auth.Login(a.Templates.Login))
@@ -118,6 +120,9 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/dashboard", staff(PartnerDashboard(a)))
 	mux.Handle("/products", staff(PartnerProducts(a)))
 	mux.Handle("/products/new", staff(PartnerProductNew(a)))
+	mux.Handle("/services", withRole(a, db.RolePartner, Services(a, true)))
+	mux.Handle("/services/new", withRole(a, db.RolePartner, PartnerServiceEdit(a)))
+	mux.Handle("/services/{id}/edit", withRole(a, db.RolePartner, PartnerServiceEdit(a)))
 	mux.Handle("/products/{id}/edit", staff(PartnerProductEdit(a)))
 	mux.Handle("/password", staff(a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/dashboard")))
 	mux.Handle("/orders", staff(PartnerOrders(a)))

@@ -1,0 +1,20 @@
+{{ define "title" }}{{ .Title }} · services · sokomoko{{ end }}
+{{ define "main-area" }}
+<div class="stack narrow">
+  <a href="/services">← All services</a>
+  {{ with .Listing }}
+  <span class="badge">{{ .Category }}</span>
+  <h1>{{ .Title }}</h1>
+  <p class="muted">Offered by {{ .PartnerName }} · {{ .PublicArea }}</p>
+  <div class="card stack">
+    <p>{{ .Description }}</p>
+    <dl><dt>Duration</dt><dd>{{ .DurationMinutes }} minutes</dd>
+      <dt>Price</dt><dd>{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ .Currency }} {{ .PriceCents }}{{ end }}</dd>
+      <dt>Location</dt><dd>{{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote service{{ end }}</dd>
+    </dl>
+  </div>
+  {{ end }}
+  {{ if demoMode }}<p class="notice">Demo service only. No appointments, sales or payments are accepted.</p>{{ else }}<p class="muted">Directory listing only. Appointment booking is not available here.</p>{{ end }}
+  <p class="tiny muted">Listing a service does not verify professional qualifications. Do not submit health information through this directory.</p>
+</div>
+{{ end }}

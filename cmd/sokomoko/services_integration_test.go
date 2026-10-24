@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -80,4 +82,40 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	input.State = "archived"
 	request(http.MethodPatch, item, input, "seller", true, http.StatusOK)
 	request(http.MethodGet, public, nil, "anonymous", false, http.StatusNotFound)
+	// HTML forms use the same authorization, validation and version checks.
+	response, _ := makeRequest(http.MethodGet, item+"/edit", nil, seller, "partner.localhost")
+	// The API path is deliberately not a page route.
+	if response.StatusCode == http.StatusOK {
+		t.Fatal("API edit suffix unexpectedly matched")
+	}
+	editPath := fmt.Sprintf("/services/%d/edit", listing.ID)
+	response, pageHTML := makeRequest(http.MethodGet, editPath, nil, seller, "partner.localhost")
+	if response.StatusCode != http.StatusOK || !strings.Contains(pageHTML, `name="version" value="3"`) {
+		t.Fatalf("edit page status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	session, err := testStore.GetSession(t.Context(), seller[0].Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"csrf_token": {session.CSRFToken}, "version": {"3"}, "title": {"<script>alert(1)</script>"}, "description": {input.Description}, "category": {"hair"}, "duration_minutes": {"30"}, "price_mode": {"fixed"}, "price": {"500.00"}, "currency": {"KES"}, "public_area": {"Westlands"}, "delivery_mode": {"premises"}, "state": {"published"}}
+	response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("save status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	response, pageHTML = makeRequest(http.MethodGet, "/services/"+listing.Slug, nil, nil, "localhost")
+	if response.StatusCode != http.StatusOK || strings.Contains(pageHTML, "<script>alert(1)</script>") || !strings.Contains(pageHTML, "&lt;script&gt;") {
+		t.Fatalf("unsafe or missing service page status=%d", response.StatusCode)
+	}
+	response, pageHTML = makeRequest(http.MethodPost, editPath, form, seller, "partner.localhost")
+	if response.StatusCode != http.StatusConflict || !strings.Contains(pageHTML, "Your text is kept below") {
+		t.Fatalf("stale form status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	response, pageHTML = makeRequest(http.MethodGet, "/services?area=Westlands", nil, nil, "localhost")
+	if response.StatusCode != http.StatusOK || !strings.Contains(pageHTML, listing.Slug) {
+		t.Fatalf("directory status=%d body=%s", response.StatusCode, pageHTML)
+	}
+	response, _ = makeRequest(http.MethodGet, editPath, nil, other, "partner.localhost")
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("cross-shop HTML status=%d", response.StatusCode)
+	}
 }

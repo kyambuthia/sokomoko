@@ -5,6 +5,10 @@ import (
 )
 
 type Templates struct {
+	Services             *template.Template
+	ServiceDetail        *template.Template
+	PartnerServices      *template.Template
+	PartnerServiceEdit   *template.Template
 	Index                *template.Template
 	Search               *template.Template
 	Product              *template.Template
@@ -175,7 +179,27 @@ func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
 		return nil, err
 	}
 
+	servicesTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/services.html")
+	if err != nil {
+		return nil, err
+	}
+	serviceDetailTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/service_detail.html")
+	if err != nil {
+		return nil, err
+	}
+	partnerServicesTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_services.html")
+	if err != nil {
+		return nil, err
+	}
+	partnerServiceEditTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_service_edit.html")
+	if err != nil {
+		return nil, err
+	}
 	return &Templates{
+		Services:             servicesTmpl,
+		ServiceDetail:        serviceDetailTmpl,
+		PartnerServices:      partnerServicesTmpl,
+		PartnerServiceEdit:   partnerServiceEditTmpl,
 		Index:                indexTmpl,
 		Search:               searchTmpl,
 		Product:              productTmpl,

@@ -1,0 +1,27 @@
+{{ define "title" }}Local services · sokomoko{{ end }}
+{{ define "main-area" }}
+<div class="stack">
+  <div class="page-head"><h1>Local services</h1><a class="btn btn-secondary btn-sm" href="/">Shop products</a></div>
+  <p class="muted">Find haircuts, beauty, wellness and help around your neighbourhood. Browse offerings by local businesses.</p>
+  {{ if demoMode }}<p class="notice">Demo directory: these services are sample listings. No appointments, sales or payments are accepted.</p>{{ end }}
+  <form action="/services" method="GET" class="form" role="search" aria-label="Find services">
+    <div class="form-row">
+      <div class="field"><label class="label" for="service-query">Service or business</label><input class="input" id="service-query" type="search" name="q" value="{{ .Filter.Query }}" maxlength="120" placeholder="Haircut, salon, home repair…"></div>
+      <div class="field"><label class="label" for="service-area">Neighbourhood or town</label><input class="input" id="service-area" name="area" value="{{ .Filter.Area }}" maxlength="120" placeholder="e.g. Westlands"></div>
+      <div class="field"><label class="label" for="service-category">Category</label><select class="select" id="service-category" name="category"><option value="">All categories</option>{{ range .Categories }}<option value="{{ . }}"{{ if eq . $.Filter.Category }} selected{{ end }}>{{ . }}</option>{{ end }}</select></div>
+    </div>
+    <div class="row"><button class="btn" type="submit">Find services</button><a href="/services" class="btn btn-secondary">Clear filters</a></div>
+  </form>
+  {{ range .Listings }}
+  <article class="card stack">
+    <div class="page-head"><h2><a href="/services/{{ .Slug }}">{{ .Title }}</a></h2><span class="badge">{{ .Category }}</span></div>
+    <p class="muted">{{ .PartnerName }} · {{ .PublicArea }}</p>
+    <p>{{ .DurationMinutes }} minutes · {{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ .Currency }} {{ .PriceCents }}{{ end }}</p>
+    <a href="/services/{{ .Slug }}">View service</a>
+  </article>
+  {{ else }}
+  {{ template "empty" dict "Icon" "search" "Text" "No services match these filters. Try another area or category." "Href" "/services" "Action" "Browse all services" }}
+  {{ end }}
+  {{ template "pager" .Pager }}
+</div>
+{{ end }}

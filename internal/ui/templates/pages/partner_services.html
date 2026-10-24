@@ -1,0 +1,15 @@
+{{ define "title" }}Services · partner · sokomoko{{ end }}
+{{ define "layout" }}{{ template "partner-layout" . }}{{ end }}
+{{ define "main-area" }}
+<div class="stack">
+  <div class="page-head"><h1>Services</h1><a href="/services/new" class="btn btn-sm">{{ icon "plus" }}Add service</a></div>
+  <p class="muted">Create offerings for your shop. Drafts stay private; published services appear in the directory. Archive a listing to hide it.</p>
+  {{ if demoMode }}<p class="notice">Demo services only. No real appointments, sales or payments.</p>{{ end }}
+  {{ if .Listings }}
+  <div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Area</th><th>State</th><th>Price</th><th>Action</th></tr></thead><tbody>
+    {{ range .Listings }}<tr><td>{{ .Title }}</td><td>{{ .PublicArea }}</td><td><span class="badge">{{ .State }}</span></td><td>{{ if eq .PriceMode "quote" }}Quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ .Currency }} {{ .PriceCents }}{{ end }}</td><td><a href="/services/{{ .ID }}/edit" aria-label="Edit {{ .Title }}">Edit</a></td></tr>{{ end }}
+  </tbody></table></div>
+  {{ else }}{{ template "empty" dict "Icon" "store" "Text" "No services yet. Start with a draft." "Href" "/services/new" "Action" "Add service" }}{{ end }}
+  {{ template "pager" .Pager }}
+</div>
+{{ end }}

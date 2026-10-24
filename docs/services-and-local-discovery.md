@@ -167,4 +167,10 @@ Stale updates return 409, and another shop's records return 404.
 Price input is a decimal string in `price`; returned `price_cents` is an integer
 in minor currency units. Quote-only listings require zero price. No appointment,
 payment, location tracking or medical-data collection is performed by these
-endpoints. The storefront and seller HTML forms are a subsequent increment.
+endpoints. The storefront supports `/services` and `/services/{slug}`. Sellers manage offerings
+on their workspace host at `/services`, `/services/new` and
+`/services/{id}/edit`. Forms preserve entered text on validation errors and stale
+updates, and require explicit review of the current version after a conflict.
+The pages reuse the storefront and workspace brand, font, navigation and form
+styles. Demo mode clearly marks offerings as samples with no appointments or
+payments.
