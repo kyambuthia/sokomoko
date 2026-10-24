@@ -183,8 +183,9 @@ func (s *Store) DeleteUser(ctx context.Context, id int) error {
 			var active bool
 			if err := tx.QueryRowContext(ctx,
 				`SELECT EXISTS (
-				 SELECT 1 FROM courier_deliveries
-				 WHERE courier_user_id = $1 AND status IN ('assigned', 'picked_up', 'out_for_delivery')
+				 SELECT 1 FROM courier_deliveries cd JOIN orders o ON o.id=cd.order_id
+				 WHERE cd.courier_user_id = $1 AND cd.status IN ('assigned', 'picked_up', 'out_for_delivery')
+				 AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered'
 				)`, id,
 			).Scan(&active); err != nil {
 				return err

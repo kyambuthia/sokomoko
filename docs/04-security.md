@@ -188,7 +188,10 @@ completion through either the order status or delivery status also hides the
 address, removes the job from workload counts and closes courier messaging and
 handoff actions. Existing conversation history remains available to authorized
 participants. The courier event history is not rewritten to imply a rider
-confirmed an administrative completion.
+confirmed an administrative completion. Courier deactivation is blocked while
+a nonterminal order has an assigned, picked-up or out-for-delivery handoff.
+Cancelled and completed orders do not block deactivation; successful
+deactivation still revokes every session.
 A status retry is a no-op only for the current owning courier, for the same
 current action state (pickup, out for delivery, delivery or failure), and with
 the same stored failure category. Ownership and cancellation are checked

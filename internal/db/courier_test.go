@@ -199,3 +199,55 @@ func TestCourierAdministrativeCompletionClosesAccessAndHandoffs(t *testing.T) {
 		})
 	}
 }
+
+func TestCourierDeactivationIgnoresTerminalOrdersAndRevokesSessions(t *testing.T) {
+	for _, terminal := range []struct{ name, order, delivery string }{
+		{"cancelled", "cancelled", "shipped"}, {"order-completed", "delivered", "shipped"}, {"delivery-completed", "shipped", "delivered"},
+	} {
+		t.Run(terminal.name, func(t *testing.T) {
+			s := newTestStore(t)
+			buyer, admin, rider := mustCreateUser(t, s, RoleUser), mustCreateUser(t, s, RoleAdmin), mustCreateUser(t, s, RoleCourier)
+			product := mustCreateProduct(t, s, 100, 2)
+			chatMust(t, s.AddToCart(t.Context(), buyer, product, 1))
+			order, err := s.PlaceOrderFromCart(t.Context(), buyer, "fixture address")
+			chatMust(t, err)
+			for _, step := range []string{"accepted", "packing", "dispatched"} {
+				chatMust(t, s.UpdateOrderFulfillment(t.Context(), int(order), step, "queued", ""))
+			}
+			chatMust(t, s.AssignCourierToOrder(t.Context(), int(order), rider, admin))
+			chatMust(t, s.CreateSession(t.Context(), Session{ID: "courier-deactivation-fixture", UserID: rider, CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour)}))
+			jobs, err := s.ListCourierDeliveries(t.Context(), rider)
+			chatMust(t, err)
+			for _, stage := range []string{CourierDeliveryAssigned, CourierDeliveryPickedUp, CourierDeliveryOutForDelivery} {
+				if stage != CourierDeliveryAssigned {
+					chatMust(t, s.UpdateCourierDelivery(t.Context(), jobs[0].ID, rider, stage, ""))
+				}
+				chatWantError(t, s.DeleteUser(t.Context(), rider), ErrCourierHasActiveDeliveries)
+				session, err := s.GetSession(t.Context(), "courier-deactivation-fixture")
+				chatMust(t, err)
+				if session == nil {
+					t.Fatal("failed deactivation revoked a live rider session")
+				}
+			}
+			chatMust(t, s.UpdateOrderByAdmin(t.Context(), int(order), terminal.order, "dispatched", terminal.delivery, ""))
+			chatMust(t, s.DeleteUser(t.Context(), rider))
+			session, err := s.GetSession(t.Context(), "courier-deactivation-fixture")
+			chatMust(t, err)
+			if session != nil {
+				t.Fatal("successful deactivation retained session")
+			}
+			user, err := s.GetUserByID(t.Context(), rider)
+			chatMust(t, err)
+			if user != nil {
+				t.Fatal("deactivated courier remained visible")
+			}
+			chatMust(t, s.AddToCart(t.Context(), buyer, product, 1))
+			newOrder, err := s.PlaceOrderFromCart(t.Context(), buyer, "new fixture destination")
+			chatMust(t, err)
+			for _, step := range []string{"accepted", "packing", "dispatched"} {
+				chatMust(t, s.UpdateOrderFulfillment(t.Context(), int(newOrder), step, "queued", ""))
+			}
+			chatWantError(t, s.AssignCourierToOrder(t.Context(), int(newOrder), rider, admin), ErrCourierUserNotFound)
+		})
+	}
+}
