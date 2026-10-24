@@ -46,6 +46,7 @@ templates are parsed once at startup from the embedded copy.
 | `make test` | `go test ./...` with database tests required |
 | `make test-race` | Same with `-race` |
 | `make test-isolated` | Full race suite with disposable PostgreSQL 17; requires local Docker |
+| `make test-ui` | JavaScript component behavior tests with the built-in Node.js test runner; requires Node.js 22+ |
 | `make lint` | `gofmt` check (including new files), `go vet`, pinned staticcheck, JavaScript syntax and declared-interpreter shell syntax checks |
 | `make fmt` | `gofmt -w` |
 | `make vuln` | `govulncheck` (pinned v1.9.0) |
@@ -64,6 +65,12 @@ than runtime behavior; keep integration checks for migrations, backups and
 container lifecycle behavior.
 
 ## Tests
+
+`make test-ui` runs the JavaScript behavior tests in `tests/ui` without npm
+dependencies. Search tests use controlled network responses and mock timers to
+check stale responses, debounce cancellation and dismissal. DOM presentation is
+stubbed, so these tests do not replace browser accessibility or layout checks.
+The same command runs in CI.
 
 ```bash
 make db-up && make db-test-create

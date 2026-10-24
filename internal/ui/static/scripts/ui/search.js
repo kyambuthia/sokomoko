@@ -26,13 +26,15 @@ export class UISearch extends HTMLElement {
     this.input.addEventListener("blur", () => setTimeout(() => this.close(), 150));
   }
 
+  disconnectedCallback() {
+    this.close();
+  }
+
   schedule() {
-    clearTimeout(this.timer);
+    // Invalidate requests immediately, including during the debounce window.
+    this.close();
     const query = this.input.value.trim();
-    if (query.length < 2) {
-      this.close();
-      return;
-    }
+    if (query.length < 2) return;
     this.timer = setTimeout(() => this.fetch(query), 200);
   }
 
@@ -44,7 +46,7 @@ export class UISearch extends HTMLElement {
       if (seq !== this.seq) return;
       this.render(data?.items || [], query);
     } catch {
-      this.close();
+      if (seq === this.seq) this.close();
     }
   }
 
@@ -76,6 +78,10 @@ export class UISearch extends HTMLElement {
   }
 
   key(event) {
+    if (event.key === "Escape") {
+      this.close();
+      return;
+    }
     const options = [...this.list.querySelectorAll('[role="option"]')];
     if (this.list.hidden || !options.length) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -87,12 +93,12 @@ export class UISearch extends HTMLElement {
     } else if (event.key === "Enter" && this.active >= 0) {
       event.preventDefault();
       location.assign(options[this.active].href);
-    } else if (event.key === "Escape") {
-      this.close();
     }
   }
 
   close() {
+    clearTimeout(this.timer);
+    this.seq = (this.seq || 0) + 1;
     if (!this.list) return;
     this.list.hidden = true;
     this.input.setAttribute("aria-expanded", "false");

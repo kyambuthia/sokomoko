@@ -105,6 +105,9 @@ jobs:
       - name: Check JavaScript syntax
         run: for f in internal/ui/static/scripts/*.js internal/ui/static/scripts/ui/*.js; do node --check "$f" || exit 1; done
 
+      - name: Run JavaScript component tests
+        run: node --test tests/ui/*.test.mjs
+
       - name: Run Go tests
         run: go test -race ./...
 
