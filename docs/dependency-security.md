@@ -17,9 +17,13 @@ findings below; no advisory ignore list or success override is configured.
 | `libcrux-kem` 0.0.9, RUSTSEC-2026-0330 and RUSTSEC-2026-0331 | Present in the complete lockfile; absent from `cargo tree --locked -i libcrux-kem` with this application's enabled features. | Resolve the optional dependency graph to a patched version (0.0.10 or later), or an upstream release that removes it. Do not enable it while affected. |
 | `proc-macro-error2` 2.0.1, RUSTSEC-2026-0173 | Unmaintained dependency warning in the lockfile. | Review the upstream replacement path alongside provider updates. |
 
-`make vuln` found no reachable Go vulnerabilities, but reported one advisory in a
-required module outside imported packages. This does not imply that all locked
-Go modules are advisory-free.
+`make vuln` found no reachable Go vulnerabilities. Its verbose report identified
+[GO-2026-5932](https://pkg.go.dev/vuln/GO-2026-5932), concerning unmaintained
+`golang.org/x/crypto/openpgp`, in the required `golang.org/x/crypto` module. This
+repository imports `bcrypt`, not the affected OpenPGP packages; the scanner found
+no affected imported package. There is no fixed version of the OpenPGP package,
+so upgrading `x/crypto` solely to clear that module-level report is not a remedy.
+Recheck reachability when imports change.
 
 ## Algorithm boundary hardening
 

@@ -136,6 +136,7 @@
         <article class="card docs-card"><h3>Block & report</h3><p>Block a contact across conversations or explicitly disclose selected received text for moderator review. Admins review the reported message without opening the rest of the chat.</p></article>
       </div>
       <p class="docs-note">New messages are encrypted on approved browser devices using MLS. Review device fingerprints before trusting a contact. Older server-readable history remains separately labeled. Password reset cannot recover lost messaging keys. Shared demo accounts are for sample information only.</p>
+      <p class="docs-note">Messaging remains a demo implementation without an independent cryptographic audit. The Rust dependency audit has unresolved advisories; algorithm restrictions reduce exposure but do not resolve them. Developers should review the <a href="https://github.com/kyambuthia/sokomoko/blob/trunk/docs/dependency-security.md">dependency security findings</a> before considering a production release.</p>
     </section>
 
     <section class="section docs-section" id="operators" aria-labelledby="operators-title">
