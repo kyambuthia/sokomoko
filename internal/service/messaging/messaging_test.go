@@ -12,7 +12,7 @@ func TestNormalizeMessagingInputs(t *testing.T) {
 	if err != nil || target.Handle != "Some.User" {
 		t.Fatalf("target=%+v err=%v", target, err)
 	}
-	for _, target := range []db.ChatTarget{{}, {Handle: "ab"}, {Handle: "foo@example.com"}, {Handle: "valid", ProductID: 1}, {PartnerID: 1}, {OrderID: -1}, {OrderID: 1, DeliveryOrderID: 2}} {
+	for _, target := range []db.ChatTarget{{}, {Handle: "ab"}, {Handle: "foo@example.com"}, {Handle: "valid", ProductID: 1}, {ServiceID: -1}, {ServiceID: 1, ProductID: 2}, {ServiceID: 1, Handle: "valid"}, {ServiceID: 1, PartnerID: 2}, {PartnerID: 1}, {OrderID: -1}, {OrderID: 1, DeliveryOrderID: 2}} {
 		if _, err := normalizeTarget(target); err == nil {
 			t.Fatalf("accepted invalid target %+v", target)
 		}

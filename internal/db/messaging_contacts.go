@@ -139,6 +139,17 @@ func resolveChatTarget(ctx context.Context, tx *sql.Tx, actorID int, t ChatTarge
 		default:
 			return c, ErrChatNotFound // couriers are contactable only through assignments
 		}
+	case t.ServiceID > 0:
+		if role != RoleUser {
+			return c, ErrChatNotFound
+		}
+		c.Kind, c.CustomerID, c.CustomerName, c.ServiceID = "seller", actorID, username, t.ServiceID
+		err = tx.QueryRowContext(ctx, `SELECT p.id,p.name,svc.title FROM service_listings svc
+   JOIN partners p ON p.id=svc.partner_id AND p.status='active'
+   WHERE svc.id=$1 AND svc.state='published'
+   AND EXISTS (SELECT 1 FROM partner_users pu JOIN users u ON u.id=pu.user_id
+    WHERE pu.partner_id=p.id AND u.role='partner' AND u.deleted_at IS NULL)
+   FOR SHARE OF svc`, t.ServiceID).Scan(&c.PartnerID, &c.PartnerName, &c.ServiceName)
 	case t.ProductID > 0:
 		if role != RoleUser {
 			return c, ErrChatNotFound
@@ -194,8 +205,8 @@ func findChat(ctx context.Context, tx *sql.Tx, c chatRecord) (int, error) {
 	var id int
 	err := tx.QueryRowContext(ctx, `SELECT id FROM chat_conversations WHERE kind=$1 AND customer_user_id=$2
       AND COALESCE(other_user_id,0)=$3 AND COALESCE(partner_id,0)=$4 AND COALESCE(product_id,0)=$5
-      AND COALESCE(order_id,0)=$6 AND COALESCE(assignment_event_id,0)=$7`,
-		c.Kind, c.CustomerID, c.OtherID, c.PartnerID, c.ProductID, c.OrderID, c.AssignmentID).Scan(&id)
+      AND COALESCE(order_id,0)=$6 AND COALESCE(assignment_event_id,0)=$7 AND COALESCE(service_id,0)=$8`,
+		c.Kind, c.CustomerID, c.OtherID, c.PartnerID, c.ProductID, c.OrderID, c.AssignmentID, c.ServiceID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -235,9 +246,9 @@ func (s *Store) StartChat(ctx context.Context, actorID int, target ChatTarget, b
 				return err
 			}
 			err = tx.QueryRowContext(ctx, `INSERT INTO chat_conversations(kind,customer_user_id,other_user_id,partner_id,
-              product_id,order_id,delivery_id,assignment_event_id,requester_user_id,state)
-              VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),NULLIF($6,0),NULLIF($7,0),NULLIF($8,0),$9,$10) RETURNING id`,
-				c.Kind, c.CustomerID, c.OtherID, c.PartnerID, c.ProductID, c.OrderID, c.DeliveryID, c.AssignmentID, actorID, c.State).Scan(&existing)
+              product_id,order_id,delivery_id,assignment_event_id,requester_user_id,state,service_id)
+              VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),NULLIF($6,0),NULLIF($7,0),NULLIF($8,0),$9,$10,NULLIF($11,0)) RETURNING id`,
+				c.Kind, c.CustomerID, c.OtherID, c.PartnerID, c.ProductID, c.OrderID, c.DeliveryID, c.AssignmentID, actorID, c.State, c.ServiceID).Scan(&existing)
 			if err != nil {
 				return err
 			}

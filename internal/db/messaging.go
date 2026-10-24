@@ -13,11 +13,11 @@ import (
 const chatPageSize = 30
 
 type chatRecord struct {
-	ID, CustomerID, OtherID, PartnerID, ProductID, OrderID, DeliveryID, AssignmentID, RequesterID, LastMessageID int
-	Kind, State, CustomerName, OtherName, PartnerName, ProductName                                               string
-	UpdatedAt                                                                                                    time.Time
-	Live, Unread                                                                                                 bool
-	BlockedByCustomer, BlockedByOther                                                                            bool
+	ID, CustomerID, OtherID, PartnerID, ProductID, ServiceID, OrderID, DeliveryID, AssignmentID, RequesterID, LastMessageID int
+	Kind, State, CustomerName, OtherName, PartnerName, ProductName, ServiceName                                             string
+	UpdatedAt                                                                                                               time.Time
+	Live, Unread                                                                                                            bool
+	BlockedByCustomer, BlockedByOther                                                                                       bool
 }
 
 // No platform role gets implicit access to conversations. Seller membership
@@ -34,14 +34,15 @@ const chatAccessSQL = `
  AND (c.order_id IS NULL OR o.user_id = c.customer_user_id)`
 
 const chatSelectSQL = `SELECT c.id, c.kind, c.customer_user_id, COALESCE(c.other_user_id, 0),
- COALESCE(c.partner_id, 0), COALESCE(c.product_id, 0), COALESCE(c.order_id, 0),
+ COALESCE(c.partner_id, 0), COALESCE(c.product_id, 0), COALESCE(c.service_id, 0), COALESCE(c.order_id, 0),
  COALESCE(c.delivery_id, 0), COALESCE(c.assignment_event_id, 0), c.requester_user_id,
- c.state, c.updated_at, c.last_message_id, cu.username, COALESCE(ou.username, ''), COALESCE(p.name, ''), COALESCE(prod.name, ''),
+ c.state, c.updated_at, c.last_message_id, cu.username, COALESCE(ou.username, ''), COALESCE(p.name, ''), COALESCE(prod.name, ''), COALESCE(svc.title, ''),
  COALESCE(cu.deleted_at IS NULL AND cu.role = 'user' AND CASE c.kind
  WHEN 'direct' THEN ou.deleted_at IS NULL AND ou.role = 'user'
  WHEN 'seller' THEN p.status = 'active'
    AND EXISTS (SELECT 1 FROM partner_users pu JOIN users u ON u.id = pu.user_id
                WHERE pu.partner_id = p.id AND u.role = 'partner' AND u.deleted_at IS NULL)
+   AND (c.service_id IS NULL OR (svc.state = 'published' AND svc.partner_id = c.partner_id))
    AND (c.product_id IS NULL OR (prod.deleted_at IS NULL AND prod.partner_id = c.partner_id))
    AND (c.order_id IS NULL OR EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = c.order_id AND oi.partner_id = c.partner_id))
  WHEN 'delivery' THEN ou.deleted_at IS NULL AND ou.role = 'courier'
@@ -61,15 +62,16 @@ const chatSelectSQL = `SELECT c.id, c.kind, c.customer_user_id, COALESCE(c.other
  LEFT JOIN users ou ON ou.id = c.other_user_id
  LEFT JOIN partners p ON p.id = c.partner_id
  LEFT JOIN products prod ON prod.id = c.product_id
+ LEFT JOIN service_listings svc ON svc.id = c.service_id
  LEFT JOIN orders o ON o.id = c.order_id
  LEFT JOIN courier_deliveries d ON d.id = c.delivery_id
  WHERE ` + chatAccessSQL
 
 func scanChat(row interface{ Scan(...any) error }) (chatRecord, error) {
 	var c chatRecord
-	err := row.Scan(&c.ID, &c.Kind, &c.CustomerID, &c.OtherID, &c.PartnerID, &c.ProductID,
+	err := row.Scan(&c.ID, &c.Kind, &c.CustomerID, &c.OtherID, &c.PartnerID, &c.ProductID, &c.ServiceID,
 		&c.OrderID, &c.DeliveryID, &c.AssignmentID, &c.RequesterID, &c.State, &c.UpdatedAt, &c.LastMessageID,
-		&c.CustomerName, &c.OtherName, &c.PartnerName, &c.ProductName, &c.Live, &c.Unread, &c.BlockedByCustomer, &c.BlockedByOther)
+		&c.CustomerName, &c.OtherName, &c.PartnerName, &c.ProductName, &c.ServiceName, &c.Live, &c.Unread, &c.BlockedByCustomer, &c.BlockedByOther)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrChatNotFound
 	}
@@ -100,6 +102,8 @@ func (c chatRecord) view(actorID int) ChatConversation {
 		v.Context = fmt.Sprintf("Delivery · order #%d", c.OrderID)
 	case c.OrderID > 0:
 		v.Context = fmt.Sprintf("Order #%d · %s", c.OrderID, c.PartnerName)
+	case c.ServiceID > 0:
+		v.Context = "Service · " + c.ServiceName
 	case c.ProductID > 0:
 		v.Context = c.ProductName
 	case c.Kind == "seller":
@@ -150,12 +154,18 @@ func chatView(ctx context.Context, q querier, c chatRecord, actorID int) (ChatCo
 // reassignment locks this same row, so it cannot race with message access.
 func loadChatTx(ctx context.Context, tx *sql.Tx, actorID, id int, mutate bool) (chatRecord, error) {
 	var deliveryID sql.NullInt64
-	var orderID sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT delivery_id,order_id FROM chat_conversations WHERE id=$1`, id).Scan(&deliveryID, &orderID); err != nil {
+	var orderID, serviceID sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT delivery_id,order_id,service_id FROM chat_conversations WHERE id=$1`, id).Scan(&deliveryID, &orderID, &serviceID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return chatRecord{}, ErrChatNotFound
 		}
 		return chatRecord{}, err
+	}
+	if serviceID.Valid && mutate {
+		// Serialize sends with archiving and other listing changes, then recheck live state.
+		if _, err := tx.ExecContext(ctx, `SELECT id FROM service_listings WHERE id=$1 FOR SHARE`, serviceID.Int64); err != nil {
+			return chatRecord{}, err
+		}
 	}
 	if deliveryID.Valid {
 		// Dispatch locks the order before the assignment. Match that order,

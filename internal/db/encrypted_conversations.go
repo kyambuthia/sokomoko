@@ -43,8 +43,8 @@ func startEncryptedChat(ctx context.Context, tx *sql.Tx, actorID int, r Encrypte
 		if err = chatRate(ctx, tx, actorID, "start", 3600, 10); err != nil {
 			return err
 		}
-		err = tx.QueryRowContext(ctx, `INSERT INTO chat_conversations(kind,customer_user_id,other_user_id,partner_id,product_id,order_id,delivery_id,assignment_event_id,requester_user_id,state,last_message_id)
-  VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),NULLIF($6,0),NULLIF($7,0),NULLIF($8,0),$9,$10,nextval(pg_get_serial_sequence('chat_messages','id')))RETURNING id`, c.Kind, c.CustomerID, c.OtherID, c.PartnerID, c.ProductID, c.OrderID, c.DeliveryID, c.AssignmentID, actorID, c.State).Scan(&id)
+		err = tx.QueryRowContext(ctx, `INSERT INTO chat_conversations(kind,customer_user_id,other_user_id,partner_id,product_id,order_id,delivery_id,assignment_event_id,requester_user_id,state,last_message_id,service_id)
+  VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),NULLIF($6,0),NULLIF($7,0),NULLIF($8,0),$9,$10,nextval(pg_get_serial_sequence('chat_messages','id')),NULLIF($11,0))RETURNING id`, c.Kind, c.CustomerID, c.OtherID, c.PartnerID, c.ProductID, c.OrderID, c.DeliveryID, c.AssignmentID, actorID, c.State, c.ServiceID).Scan(&id)
 	}
 	out.ConversationID = id
 	return err

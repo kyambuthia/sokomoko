@@ -65,7 +65,7 @@ func messageInt(raw string) (int, error) {
 }
 func messageTarget(v url.Values) (db.ChatTarget, error) {
 	t := db.ChatTarget{Handle: v.Get("handle")}
-	for key, dest := range map[string]*int{"product_id": &t.ProductID, "order_id": &t.OrderID, "partner_id": &t.PartnerID, "delivery_order_id": &t.DeliveryOrderID} {
+	for key, dest := range map[string]*int{"product_id": &t.ProductID, "service_id": &t.ServiceID, "order_id": &t.OrderID, "partner_id": &t.PartnerID, "delivery_order_id": &t.DeliveryOrderID} {
 		n, err := messageInt(v.Get(key))
 		if err != nil {
 			return t, err
@@ -139,7 +139,7 @@ func messageCompose(a *app.App, workspace string) http.HandlerFunc {
 		}
 		p.Target = t
 		status := http.StatusOK
-		if t.Handle != "" || t.ProductID > 0 || t.OrderID > 0 || t.DeliveryOrderID > 0 {
+		if t.Handle != "" || t.ServiceID > 0 || t.ProductID > 0 || t.OrderID > 0 || t.DeliveryOrderID > 0 {
 			p.Contacts, err = a.Messaging.Contacts(r.Context(), messagingActor(r), t)
 			if err != nil {
 				status, p.Error = messageError(err)

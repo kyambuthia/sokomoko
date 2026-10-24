@@ -4,6 +4,7 @@
 
 {{ define "chat-target-fields" }}
 {{ if .Handle }}<input type="hidden" name="handle" value="{{ .Handle }}">{{ end }}
+{{ if .ServiceID }}<input type="hidden" name="service_id" value="{{ .ServiceID }}">{{ end }}
 {{ if .ProductID }}<input type="hidden" name="product_id" value="{{ .ProductID }}">{{ end }}
 {{ if .OrderID }}<input type="hidden" name="order_id" value="{{ .OrderID }}">{{ end }}
 {{ if .PartnerID }}<input type="hidden" name="partner_id" value="{{ .PartnerID }}">{{ end }}
@@ -78,7 +79,7 @@
       </form>{{ end }}
     </section>
     {{ end }}
-  {{ else if and (or .Target.OrderID .Target.ProductID .Target.DeliveryOrderID) (not .Error) }}
+  {{ else if and (or .Target.OrderID .Target.ProductID .Target.ServiceID .Target.DeliveryOrderID) (not .Error) }}
     <p class="muted">No contacts are available for this order yet. Assigned couriers appear when dispatch begins.</p>
   {{ end }}
 

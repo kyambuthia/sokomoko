@@ -14,11 +14,12 @@ var (
 	ErrChatConflict = errors.New("message submission has already been used")
 )
 
-// ChatTarget is an untrusted request. Exactly one of Handle, ProductID,
+// ChatTarget is an untrusted request. Exactly one of Handle, ProductID, ServiceID,
 // OrderID or DeliveryOrderID must be supplied; PartnerID qualifies OrderID.
 type ChatTarget struct {
 	Handle          string `json:"handle,omitempty"`
 	ProductID       int    `json:"product_id,omitempty"`
+	ServiceID       int    `json:"service_id,omitempty"`
 	OrderID         int    `json:"order_id,omitempty"`
 	PartnerID       int    `json:"partner_id,omitempty"`
 	DeliveryOrderID int    `json:"delivery_order_id,omitempty"`

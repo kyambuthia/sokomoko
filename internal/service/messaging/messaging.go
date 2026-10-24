@@ -56,7 +56,7 @@ func validActor(a *Actor) bool {
 
 func normalizeTarget(t db.ChatTarget) (db.ChatTarget, error) {
 	t.Handle = strings.TrimPrefix(strings.TrimSpace(t.Handle), "@")
-	if t.ProductID < 0 || t.OrderID < 0 || t.PartnerID < 0 || t.DeliveryOrderID < 0 {
+	if t.ServiceID < 0 || t.ProductID < 0 || t.OrderID < 0 || t.PartnerID < 0 || t.DeliveryOrderID < 0 {
 		return t, db.ErrChatInvalid
 	}
 	count := 0
@@ -65,6 +65,9 @@ func normalizeTarget(t db.ChatTarget) (db.ChatTarget, error) {
 		if !handlePattern.MatchString(t.Handle) {
 			return t, db.ErrChatInvalid
 		}
+	}
+	if t.ServiceID > 0 {
+		count++
 	}
 	if t.ProductID > 0 {
 		count++

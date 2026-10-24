@@ -65,6 +65,15 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	}
 	request(http.MethodPatch, item, input, "seller", true, http.StatusConflict)
 	request(http.MethodGet, public, nil, "anonymous", false, http.StatusOK)
+	detailResponse, detailHTML := makeRequest(http.MethodGet, "/services/"+listing.Slug, nil, buyer, "localhost")
+	enquiryPath := fmt.Sprintf("/messages/new?service_id=%d", listing.ID)
+	if detailResponse.StatusCode != http.StatusOK || !strings.Contains(detailHTML, enquiryPath) {
+		t.Fatal("service enquiry entry missing")
+	}
+	composeResponse, composeHTML := makeRequest(http.MethodGet, enquiryPath, nil, buyer, "localhost")
+	if composeResponse.StatusCode != http.StatusOK || !strings.Contains(composeHTML, `name="service_id"`) || !strings.Contains(composeHTML, "Open encrypted conversation") || !strings.Contains(composeHTML, "Service · Neighbourhood haircut") {
+		t.Fatalf("service compose status=%d body=%s", composeResponse.StatusCode, composeHTML)
+	}
 	var page struct {
 		Items []db.ServiceListing `json:"items"`
 		Total int                 `json:"total"`

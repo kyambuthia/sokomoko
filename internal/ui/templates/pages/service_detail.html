@@ -13,6 +13,7 @@
       <dt>Location</dt><dd>{{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote service{{ end }}</dd>
     </dl>
   </div>
+  <a class="btn" href="/messages/new?service_id={{ .ID }}">Message service provider</a>
   {{ end }}
   {{ if demoMode }}<p class="notice">Demo service only. No appointments, sales or payments are accepted.</p>{{ else }}<p class="muted">Directory listing only. Appointment booking is not available here.</p>{{ end }}
   <p class="tiny muted">Listing a service does not verify professional qualifications. Do not submit health information through this directory.</p>
