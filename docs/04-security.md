@@ -180,6 +180,10 @@ Actor records are trusted application inputs built from authenticated users;
 these checks do not replace authentication or database membership checks.
 
 Courier dispatch operations and rider operations have separate role checks.
+Courier history retains completed jobs but the shared delivery query returns an
+empty address after completion, for both HTML and JSON responses. Active jobs
+and failed attempts retain the address for delivery work. This is a read
+projection; the original address remains in the order record.
 A status retry is a no-op only for the current owning courier, for the same
 current action state (pickup, out for delivery, delivery or failure), and with
 the same stored failure category. Ownership and cancellation are checked

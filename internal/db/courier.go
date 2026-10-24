@@ -46,6 +46,7 @@ func (s *Store) ListCourierDispatchOrders(ctx context.Context) ([]CourierDeliver
 }
 
 // ListCourierDeliveries returns only the deliveries assigned to courierUserID.
+// Completed history omits recipient addresses; active and failed jobs retain them.
 func (s *Store) ListCourierDeliveries(ctx context.Context, courierUserID int) ([]CourierDelivery, error) {
 	if courierUserID <= 0 {
 		return nil, ErrCourierDeliveryForbidden
@@ -80,7 +81,7 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 		)
 		 SELECT COALESCE(cd.id, 0), o.id, COALESCE(cd.courier_user_id, 0),
 		        COALESCE(courier.username, ''), COALESCE(cd.assigned_by_user_id, 0),
-		        customer.username, o.delivery_address, o.status, o.partner_status,
+		        customer.username, CASE WHEN cd.status='delivered' THEN '' ELSE o.delivery_address END, o.status, o.partner_status,
 		        o.delivery_status, COALESCE(cd.status, ''), COALESCE(cd.failure_note, ''),
 		        o.created_at, COALESCE(cd.assigned_at, o.created_at),
 	        COALESCE(cd.updated_at, o.updated_at), oi.product_name, oi.quantity

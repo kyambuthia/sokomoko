@@ -28,7 +28,7 @@ func TestCourierReassignmentAndFailurePreserveDeliveryBoundary(t *testing.T) {
 	chatMust(t, s.AssignCourierToOrder(t.Context(), int(orderID), first, admin)) // retry has no extra event
 	jobs, err := s.ListCourierDeliveries(t.Context(), first)
 	chatMust(t, err)
-	if len(jobs) != 1 {
+	if len(jobs) != 1 || jobs[0].DeliveryAddress != "demo delivery address" {
 		t.Fatalf("jobs=%+v", jobs)
 	}
 	deliveryID := jobs[0].ID
@@ -52,6 +52,12 @@ func TestCourierReassignmentAndFailurePreserveDeliveryBoundary(t *testing.T) {
 	assertCourierRetriesAreNoOp(t, s, deliveryID, replacement, CourierDeliveryOutForDelivery, "")
 	chatMust(t, s.UpdateCourierDelivery(t.Context(), deliveryID, replacement, CourierDeliveryDelivered, ""))
 	assertCourierRetriesAreNoOp(t, s, deliveryID, replacement, CourierDeliveryDelivered, "")
+	jobs, err = s.ListCourierDeliveries(t.Context(), replacement)
+	chatMust(t, err)
+	if len(jobs) != 1 || jobs[0].DeliveryAddress != "" {
+		t.Fatal("completed courier history retained address")
+	}
+
 	chatWantError(t, s.UpdateCourierDelivery(t.Context(), deliveryID, first, CourierDeliveryDelivered, ""), ErrCourierDeliveryForbidden)
 	chatWantError(t, s.AssignCourierToOrder(t.Context(), int(orderID), first, admin), ErrDeliveryNotReady)
 	var count, privateNotes int

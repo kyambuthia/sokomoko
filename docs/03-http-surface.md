@@ -130,7 +130,7 @@ finish setup on the admin host.
 | `/storefront` | GET | public | Redirect to the storefront host | |
 | `/password` | GET, POST | courier | `auth.PasswordChange` | Requires the current password |
 | `/` | GET, HEAD | public | Redirect to `/deliveries` | |
-| `/deliveries` | GET | courier | `CourierDeliveries` | Own assignments and delivered history; includes recipient name, delivery address, and item quantities |
+| `/deliveries` | GET | courier | `CourierDeliveries` | Own assignments and delivered history; includes recipient handle and item quantities; address is hidden after completion |
 | `/deliveries/<id>` | POST | courier | `CourierDeliveryUpdate` | CSRF protected; accepts `status` and a fixed `note` reason for failed attempts |
 
 Couriers cannot request password-reset email. An admin provisions their
@@ -197,7 +197,7 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | `PATCH /partner/orders/<id>` | admin, staff, partner | Update `{partner_status, delivery_status, delivery_notice}` |
 | `GET /admin/deliveries` | admin, staff | Shipped orders awaiting delivery and active courier accounts; excludes prices and payment data |
 | `POST /admin/deliveries/assign` | admin, staff | Assign `{order_id, courier_id}`; only shipped orders can be assigned, and picked-up deliveries cannot be reassigned |
-| `GET /courier/deliveries` | courier | Own delivery assignments and delivered history |
+| `GET /courier/deliveries` | courier | Own delivery assignments and delivered history; completed `delivery_address` is empty |
 | `PATCH /courier/deliveries/<id>` | courier | Update `{status, note}` through `picked_up`, `out_for_delivery`, `delivered`, or `delivery_failed` |
 | `GET /partner/settings` | admin, staff, partner | Store settings (`404 store_not_configured` if unset) |
 | `PATCH /partner/settings` | admin, staff | Save store settings |

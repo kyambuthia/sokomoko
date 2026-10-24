@@ -22,7 +22,7 @@
         <div><p class="section-title">Order #{{ .OrderID }}</p><p class="tiny muted">Assigned <ui-relative-time datetime="{{ rfc3339 .AssignedAt }}">{{ .AssignedAt.Format "2006-01-02 15:04" }}</ui-relative-time></p></div>
         <span class="badge">{{ .Status }}</span>
       </div>
-      <div><p class="section-title">Deliver to</p><p>@{{ .CustomerName }}</p><p>{{ .DeliveryAddress }}</p></div>
+      <div><p class="section-title">Deliver to</p><p>@{{ .CustomerName }}</p>{{ if eq .Status "delivered" }}<p class="small muted">Address hidden after delivery completion.</p>{{ else }}<p>{{ .DeliveryAddress }}</p>{{ end }}</div>
       {{ if ne .Status "delivered" }}<div><a class="btn btn-secondary btn-sm" href="/messages/new?delivery_order_id={{ .OrderID }}">Message buyer</a></div>{{ end }}
       <div><p class="section-title">Items</p><ul class="list">
         {{ range .Items }}<li>{{ .Quantity }} × {{ .ProductName }}</li>{{ end }}

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -34,6 +35,11 @@ func TestCourierAPIStatusRetriesPreserveAuthorizationAndTimeline(t *testing.T) {
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("jobs=%+v, %v", jobs, err)
 	}
+	respBefore, bodyBefore := makeAPIRequestOnHost(t, "courier.localhost", http.MethodGet, "/api/v1/courier/deliveries", nil, rider, false, nil)
+	messagingStatus(t, respBefore, bodyBefore, http.StatusOK)
+	if !strings.Contains(string(bodyBefore), "Sample test address") {
+		t.Fatal("active delivery lost its address")
+	}
 	path := fmt.Sprintf("/api/v1/courier/deliveries/%d", jobs[0].ID)
 	input := map[string]string{"status": db.CourierDeliveryPickedUp}
 	resp, body := makeAPIRequestOnHost(t, "courier.localhost", http.MethodPatch, path, input, rider, false, nil)
@@ -46,6 +52,19 @@ func TestCourierAPIStatusRetriesPreserveAuthorizationAndTimeline(t *testing.T) {
 			resp, body = makeAPIRequestOnHost(t, "courier.localhost", http.MethodPatch, path, input, rider, true, nil)
 			messagingStatus(t, resp, body, http.StatusOK)
 		}
+	}
+	resp, body = makeAPIRequestOnHost(t, "courier.localhost", http.MethodGet, "/api/v1/courier/deliveries", nil, rider, false, nil)
+	messagingStatus(t, resp, body, http.StatusOK)
+	if strings.Contains(string(body), "Sample test address") || !strings.Contains(string(body), `"delivery_address":""`) {
+		t.Fatal("completed API history exposed address")
+	}
+	pageResponse, page := makeRequest(http.MethodGet, "/deliveries", nil, rider, "courier.localhost")
+	if pageResponse.StatusCode != http.StatusOK || strings.Contains(page, "Sample test address") || !strings.Contains(page, "Address hidden after delivery completion") {
+		t.Fatal("completed HTML history exposed address")
+	}
+	var storedAddress string
+	if err := testStore.DB.QueryRow(`SELECT delivery_address FROM orders WHERE id=$1`, order).Scan(&storedAddress); err != nil || storedAddress != "Sample test address" {
+		t.Fatalf("order address changed: %v", err)
 	}
 	resp, body = makeAPIRequestOnHost(t, "courier.localhost", http.MethodPatch, path, input, outsider, true, nil)
 	messagingStatus(t, resp, body, http.StatusForbidden)
