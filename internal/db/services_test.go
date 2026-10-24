@@ -114,3 +114,28 @@ func TestServiceConcurrentEditsDoNotOverwrite(t *testing.T) {
 		t.Fatalf("audit count=%d", count)
 	}
 }
+
+func TestServiceDiscoveryFiltersLocationTypeWithoutLeakingDrafts(t *testing.T) {
+	s := newTestStore(t)
+	_, owner, _ := chatShop(t, s)
+	for _, mode := range []string{"premises", "mobile", "remote"} {
+		for _, state := range []string{"published", "draft", "archived"} {
+			v := serviceFixture("filter-" + mode + "-" + state)
+			v.DeliveryMode, v.State = mode, state
+			_, err := s.SaveService(t.Context(), owner, v)
+			chatMust(t, err)
+		}
+	}
+	for _, mode := range []string{"premises", "mobile", "remote"} {
+		items, total, err := s.BrowseServices(t.Context(), ServiceFilter{DeliveryMode: mode, Area: "west", Category: "hair", Limit: 1})
+		chatMust(t, err)
+		if total != 1 || len(items) != 1 || items[0].DeliveryMode != mode || items[0].State != "published" {
+			t.Fatalf("mode=%s total=%d items=%+v", mode, total, items)
+		}
+	}
+	items, total, err := s.BrowseServices(t.Context(), ServiceFilter{Limit: 2, Offset: 2})
+	chatMust(t, err)
+	if total != 3 || len(items) != 1 {
+		t.Fatalf("unfiltered pagination total=%d items=%+v", total, items)
+	}
+}

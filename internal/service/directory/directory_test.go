@@ -38,7 +38,7 @@ func TestDirectoryRejectsInvalidListingBeforeStore(t *testing.T) {
 }
 func TestDirectoryBoundsUntrustedQueries(t *testing.T) {
 	s := New(nil)
-	for _, f := range []db.ServiceFilter{{Limit: 0}, {Limit: 51}, {Limit: 20, Query: strings.Repeat("a", 121)}, {Limit: 20, Area: "bad\x00area"}, {Limit: 20, Category: "unknown"}} {
+	for _, f := range []db.ServiceFilter{{Limit: 0}, {Limit: 51}, {Limit: 20, Query: strings.Repeat("a", 121)}, {Limit: 20, Area: "bad\x00area"}, {Limit: 20, Category: "unknown"}, {Limit: 20, DeliveryMode: "unknown"}} {
 		if _, _, err := s.Browse(t.Context(), f, 1); !errors.Is(err, ErrInvalid) {
 			t.Fatal(err)
 		}

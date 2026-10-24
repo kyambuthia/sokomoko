@@ -73,7 +73,8 @@ func (s *Service) Browse(ctx context.Context, f db.ServiceFilter, page int) ([]d
 	f.Query = strings.TrimSpace(f.Query)
 	f.Area = strings.TrimSpace(f.Area)
 	f.Category = strings.TrimSpace(f.Category)
-	if !pageBounds(page, f.Limit) || !text(f.Query, 0, 120, false) || !text(f.Area, 0, 120, false) || (f.Category != "" && !oneOf(f.Category, "hair", "beauty", "dental", "wellness", "home", "other")) {
+	f.DeliveryMode = strings.TrimSpace(f.DeliveryMode)
+	if (f.DeliveryMode != "" && !oneOf(f.DeliveryMode, "premises", "mobile", "remote")) || !pageBounds(page, f.Limit) || !text(f.Query, 0, 120, false) || !text(f.Area, 0, 120, false) || (f.Category != "" && !oneOf(f.Category, "hair", "beauty", "dental", "wellness", "home", "other")) {
 		return nil, 0, ErrInvalid
 	}
 	f.Offset = (page - 1) * f.Limit

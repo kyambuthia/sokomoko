@@ -22,7 +22,7 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, limit := pageParams(r)
-	items, total, err := h.app.Directory.Browse(r.Context(), db.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), Limit: limit}, page)
+	items, total, err := h.app.Directory.Browse(r.Context(), db.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: limit}, page)
 	if err != nil {
 		writeServiceError(w, err)
 		return

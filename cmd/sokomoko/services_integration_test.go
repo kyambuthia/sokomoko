@@ -83,6 +83,15 @@ func TestServiceAPIEnforcesOwnershipPrivacyAndVersions(t *testing.T) {
 	if page.Total != 1 || len(page.Items) != 1 {
 		t.Fatalf("unexpected results: %+v", page)
 	}
+	decodeAPIData(t, request(http.MethodGet, "/api/v1/catalog/services?delivery_mode=mobile", nil, "anonymous", false, http.StatusOK), &page)
+	if page.Total != 0 || len(page.Items) != 0 {
+		t.Fatal("location type filter included a premises service")
+	}
+	request(http.MethodGet, "/api/v1/catalog/services?delivery_mode=unknown", nil, "anonymous", false, http.StatusBadRequest)
+	modeResponse, modeHTML := makeRequest(http.MethodGet, "/services?delivery_mode=premises", nil, nil, "localhost")
+	if modeResponse.StatusCode != http.StatusOK || !strings.Contains(modeHTML, `value="premises" selected`) || !strings.Contains(modeHTML, listing.Slug) {
+		t.Fatal("HTML location filter not applied or retained")
+	}
 	decodeAPIData(t, request(http.MethodGet, "/api/v1/catalog/services?q=%25", nil, "anonymous", false, http.StatusOK), &page)
 	if page.Total != 0 {
 		t.Fatal("wildcard expanded in literal search")

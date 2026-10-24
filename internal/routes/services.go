@@ -55,7 +55,7 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 		}
 		page := pageParam(r)
 		data := servicePage{Title: "Services", Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Categories: serviceCategories}
-		data.Filter = db.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), Limit: 24}
+		data.Filter = db.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: 24}
 		var total int
 		var err error
 		if own {

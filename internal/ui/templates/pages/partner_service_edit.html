@@ -5,7 +5,7 @@
 <h1>{{ if .EditID }}Edit{{ else }}Add{{ end }} service</h1>
 {{ if .ValidationFields }}
 <section class="notice notice-danger stack" role="alert" aria-labelledby="service-errors-title">
-<h2 id="service-errors-title">Check {{ len .ValidationFields }} service fields</h2>
+<h2 id="service-errors-title">Check {{ len .ValidationFields }} service field{{ if ne (len .ValidationFields) 1 }}s{{ end }}</h2>
 <ul>{{ range .ValidationFields }}<li>{{ if eq .Field "version" }}{{ .Message }}{{ else }}<a href="#{{ .Field }}">{{ .Message }}</a>{{ end }}</li>{{ end }}</ul>
 </section>
 {{ else }}{{ template "notice" dict "Kind" "danger" "Text" .Error }}{{ end }}
