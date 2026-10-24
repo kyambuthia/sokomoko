@@ -60,7 +60,9 @@ sokomoko healthcheck      Probe /readyz locally (used by the container HEALTHCHE
 ```
 
 Common `make` targets: `run`, `build`, `test`, `test-race`, `lint`, `fmt`,
-`docker`, `smoke-image`, `vuln`. Run `make help` for the full list.
+`test-isolated`, `docker`, `smoke-image`, `vuln`. Run `make help` for the full list.
+`make test-isolated` runs the race suite with a disposable local PostgreSQL
+container and cleans it up afterward; no existing database is needed.
 
 ## Repository layout
 

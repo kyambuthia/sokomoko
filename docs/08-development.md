@@ -45,6 +45,7 @@ templates are parsed once at startup from the embedded copy.
 | `make build` | Static binary in `bin/sokomoko` |
 | `make test` | `go test ./...` with database tests required |
 | `make test-race` | Same with `-race` |
+| `make test-isolated` | Full race suite with disposable PostgreSQL 17; requires local Docker |
 | `make lint` | `gofmt` check (including new files), `go vet`, pinned staticcheck and `node --check` on every script |
 | `make fmt` | `gofmt -w` |
 | `make vuln` | `govulncheck` (pinned v1.9.0) |
@@ -60,6 +61,25 @@ templates are parsed once at startup from the embedded copy.
 make db-up && make db-test-create
 make test
 ```
+
+For an isolated run without configuring or reusing a database:
+
+```bash
+make test-isolated
+# Or select packages and flags:
+bash scripts/test-isolated.sh -race ./internal/db -run TestService -count=1
+```
+
+This starts `postgres:17-alpine` with a random port published only on
+`127.0.0.1`, overrides both database URL variables for the test process, and
+requires database tests to run. Its default suite uses `-count=1` to bypass
+Go test result caching. It removes its own container and anonymous
+storage after success, test failure, or a handled interrupt. No development
+containers, host directories or named volumes are used. The password is a
+fixed disposable fixture, not a deployment credential. Use a local Docker
+engine; remote Docker port mappings are not reachable through local loopback.
+An uncatchable kill or daemon outage can prevent cleanup; the container is
+also configured for automatic removal when it stops.
 
 Database tests use `internal/db/dbtest`. Each test gets a fresh PostgreSQL
 schema (via `search_path` in the returned DSN), and the schema is dropped when

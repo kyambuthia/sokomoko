@@ -6,7 +6,7 @@ DATABASE_URL ?= postgres://sokomoko:sokomoko@localhost:5432/sokomoko?sslmode=dis
 SOKOMOKO_TEST_DATABASE_URL ?= postgres://sokomoko:sokomoko@localhost:5432/sokomoko_test?sslmode=disable
 export DATABASE_URL SOKOMOKO_TEST_DATABASE_URL
 
-.PHONY: help db-up db-down db-test-create migrate seed run build test test-race lint fmt docker vuln smoke-image
+.PHONY: help db-up db-down db-test-create migrate seed run build test test-race test-isolated lint fmt docker vuln smoke-image
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -38,6 +38,9 @@ test: ## Run all tests (requires PostgreSQL)
 
 test-race: ## Run all tests with the race detector
 	SOKOMOKO_REQUIRE_DB_TESTS=1 $(GO) test -race ./...
+
+test-isolated: ## Run race tests with a disposable loopback PostgreSQL container
+	GO="$(GO)" bash scripts/test-isolated.sh
 
 lint: ## gofmt check, go vet, staticcheck, and JavaScript syntax check
 	bash scripts/go-format.sh --check
