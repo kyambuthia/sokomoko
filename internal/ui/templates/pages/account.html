@@ -42,6 +42,7 @@
         </p>
         {{ if eq .Booking.Status "requested" }}<p class="small muted">Waiting for provider response by {{ .LocalDeadline }}.</p>{{ end }}
         {{ if eq .Booking.Status "confirmed" }}<p class="small muted">The provider confirmed this appointment.</p>{{ end }}
+        {{ if .StatusDescription }}<p class="small muted">{{ .StatusDescription }}</p>{{ end }}
         {{ if .CanCancel }}
         <ui-confirm title="Cancel appointment?" message="This will release the requested time and cannot be undone." confirm-label="Cancel appointment" cancel-label="Keep appointment">
           <form method="POST" action="/account/bookings/{{ .Booking.ID }}/cancel">

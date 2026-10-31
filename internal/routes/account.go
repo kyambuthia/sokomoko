@@ -29,11 +29,12 @@ type AccountPageData struct {
 }
 
 type AccountBookingView struct {
-	Booking       db.ServiceBooking
-	StatusLabel   string
-	LocalStart    string
-	LocalDeadline string
-	CanCancel     bool
+	Booking           db.ServiceBooking
+	StatusLabel       string
+	StatusDescription string
+	LocalStart        string
+	LocalDeadline     string
+	CanCancel         bool
 }
 
 type AccountServiceBookingsPage struct {
@@ -52,9 +53,29 @@ func accountBookingView(booking db.ServiceBooking) AccountBookingView {
 	}
 	return AccountBookingView{
 		Booking: booking, StatusLabel: bookingStatusLabel(booking.Status),
-		LocalStart:    booking.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
-		LocalDeadline: booking.ResponseDeadline.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
-		CanCancel:     (booking.Status == "requested" || booking.Status == "confirmed") && booking.StartsAt.After(time.Now()),
+		StatusDescription: bookingStatusDescription(booking.Status),
+		LocalStart:        booking.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
+		LocalDeadline:     booking.ResponseDeadline.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
+		CanCancel:         (booking.Status == "requested" || booking.Status == "confirmed") && booking.StartsAt.After(time.Now()),
+	}
+}
+
+func bookingStatusDescription(status string) string {
+	switch status {
+	case "rejected":
+		return "The provider declined this request."
+	case "expired":
+		return "This request expired before the provider responded."
+	case "cancelled":
+		return "This appointment was cancelled."
+	case "in_progress":
+		return "Your appointment is in progress."
+	case "completed":
+		return "Your appointment is complete."
+	case "no_show":
+		return "This appointment was marked as missed."
+	default:
+		return ""
 	}
 }
 
