@@ -504,7 +504,10 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 		if err := s.verifyAndApply(ctx, payment, payload); err != nil {
 			slog.Warn("payment verification failed", "payment_id", payment.ID, "error", err)
 		}
-		if refreshed, err := s.store.GetOrderPayment(ctx, userID, orderID); err == nil && refreshed.Status == db.PaymentStatusCaptured {
+		refreshed, err := s.store.GetOrderPayment(ctx, userID, orderID)
+		if err != nil {
+			slog.Warn("payment status refresh failed", "payment_id", payment.ID, "error", err)
+		} else if refreshed.Status == db.PaymentStatusCaptured {
 			view.Status = "paid"
 			return view, nil
 		}
