@@ -90,6 +90,12 @@ func (s *Store) CreatePasswordResetToken(ctx context.Context, userID int, token 
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		// Serialize token replacement with other reset requests and token use.
+		var lockedUserID int
+		if err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", userID).
+			Scan(&lockedUserID); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM password_reset_tokens WHERE user_id = $1", userID); err != nil {
 			return err
 		}
@@ -140,11 +146,35 @@ func (s *Store) UsePasswordResetToken(ctx context.Context, token, passwordHash s
 		used = false
 		var userID int
 		err := tx.QueryRowContext(ctx,
+			`SELECT user_id FROM password_reset_tokens
+			 WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
+			hashOpaqueToken(token),
+		).Scan(&userID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		// Use the same user-before-token lock order as token creation.
+		var lockedUserID int
+		err = tx.QueryRowContext(ctx,
+			"SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", userID,
+		).Scan(&lockedUserID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errResetTargetMissing
+		}
+		if err != nil {
+			return err
+		}
+
+		err = tx.QueryRowContext(ctx,
 			`UPDATE password_reset_tokens
 			 SET used_at = now()
-			 WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+			 WHERE token_hash = $1 AND user_id = $2 AND used_at IS NULL AND expires_at > now()
 			 RETURNING user_id`,
-			hashOpaqueToken(token),
+			hashOpaqueToken(token), lockedUserID,
 		).Scan(&userID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
