@@ -153,8 +153,8 @@ func validChatReportReason(reason string) bool {
 func (s *Store) ChatReports(ctx context.Context, actorID int) ([]ChatReport, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	// Bound each source before joining report details. The global top 100 can
-	// contain at most 100 rows from either source, so this preserves the result.
+	// Bound each source before joining report details. Every global top-100 row
+	// must be in its source's top 100; encrypted breaks cross-source ties.
 	rows, err := s.DB.QueryContext(ctx, `SELECT r.id,sender.username,reporter.username,m.body,r.reason,r.created_at,false AS encrypted
       FROM (
         SELECT id,conversation_id,message_id,reporter_user_id,reason,created_at
@@ -179,7 +179,7 @@ func (s *Store) ChatReports(ctx context.Context, actorID int) ([]ChatReport, err
       JOIN chat_encrypted_events e ON e.id=r.event_id
       JOIN chat_devices d ON d.id=e.sender_device_id JOIN users sender ON sender.id=d.user_id
       JOIN users reporter ON reporter.id=r.reporter_user_id
-      ORDER BY created_at,id LIMIT 100`, actorID)
+      ORDER BY created_at,encrypted,id LIMIT 100`, actorID)
 	if err != nil {
 		return nil, err
 	}
