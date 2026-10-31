@@ -199,6 +199,8 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | `POST /partner/services` | partner | Create listing, version 0; owner derived from session |
 | `GET /partner/services/<id>` | partner | Own editable listing; another shop returns 404 |
 | `PATCH /partner/services/<id>` | partner | Full editable field replacement plus current version; stale version returns 409 |
+| `GET /partner/service-bookings?page=&limit=` | partner | Own shop appointment queue, paginated |
+| `POST /partner/service-bookings/<id>/status` | partner | Update with {action, version}; supports confirm, reject, cancel, start, complete and no_show; returns 204 |
 | `GET /catalog/search?q=&category=` | public | Paginated product search; category may be used without `q`; `{items, page, limit, total}` |
 | `GET /me` | signed in | Current user |
 | `GET /cart` | signed in | Cart lines and subtotal |

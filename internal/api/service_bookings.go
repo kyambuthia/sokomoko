@@ -86,6 +86,75 @@ func (h *Handler) accountServiceBookings(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (h *Handler) partnerServiceBookings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	user := auth.GetUserFromContext(r.Context())
+	if user == nil || user.Role != db.RolePartner {
+		writeError(w, http.StatusForbidden, "forbidden", "A partner account is required")
+		return
+	}
+	page, limit := pageParams(r)
+	if page > 1000 || (page-1)*limit > 50000 {
+		writeError(w, http.StatusBadRequest, "invalid_pagination", "Page must be between 1 and 1000")
+		return
+	}
+	items, total, err := h.app.Bookings.ForPartner(
+		r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, page, limit,
+	)
+	if err != nil {
+		writeServiceBookingError(w, err)
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"items": items, "page": page, "limit": limit, "total": total,
+	})
+}
+
+func (h *Handler) partnerServiceBookingAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	user := auth.GetUserFromContext(r.Context())
+	if user == nil || user.Role != db.RolePartner {
+		writeError(w, http.StatusForbidden, "forbidden", "A partner account is required")
+		return
+	}
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_booking_id", "Appointment id must be a positive integer")
+		return
+	}
+	var fields map[string]json.RawMessage
+	if err := decodeJSON(r, &fields); err != nil || len(fields) != 2 {
+		writeError(w, http.StatusBadRequest, "invalid_json", "Request body must include action and version")
+		return
+	}
+	for key := range fields {
+		if key != "action" && key != "version" {
+			writeError(w, http.StatusBadRequest, "invalid_json", "Request body includes unsupported appointment fields")
+			return
+		}
+	}
+	var action string
+	var version int64
+	if json.Unmarshal(fields["action"], &action) != nil ||
+		json.Unmarshal(fields["version"], &version) != nil || version <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_booking_action", "Action and positive version are required")
+		return
+	}
+	if err := h.app.Bookings.Respond(
+		r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, id, version, action,
+	); err != nil {
+		writeServiceBookingError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusNoContent, nil)
+}
+
 func (h *Handler) cancelServiceBooking(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -118,11 +187,11 @@ func (h *Handler) cancelServiceBooking(w http.ResponseWriter, r *http.Request) {
 func writeServiceBookingError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, bookingsvc.ErrForbidden):
-		writeError(w, http.StatusForbidden, "forbidden", "A customer account is required")
+		writeError(w, http.StatusForbidden, "forbidden", "This account cannot manage that appointment")
 	case errors.Is(err, bookingsvc.ErrNotFound), errors.Is(err, db.ErrServiceNotFound):
 		writeError(w, http.StatusNotFound, "booking_not_found", "Appointment or service not found")
 	case errors.Is(err, bookingsvc.ErrInvalid):
-		writeError(w, http.StatusBadRequest, "invalid_booking", "Check the selected time, listing version, and idempotency key")
+		writeError(w, http.StatusBadRequest, "invalid_booking", "Check the appointment details and action")
 	case errors.Is(err, bookingsvc.ErrListingChanged):
 		writeError(w, http.StatusConflict, "service_changed", "This service changed. Reload its latest details before requesting")
 	case errors.Is(err, bookingsvc.ErrTimeConflict):
@@ -132,7 +201,9 @@ func writeServiceBookingError(w http.ResponseWriter, err error) {
 	case errors.Is(err, bookingsvc.ErrIdempotencyConflict):
 		writeError(w, http.StatusConflict, "idempotency_conflict", "This key was already used for another request")
 	case errors.Is(err, bookingsvc.ErrVersionConflict), errors.Is(err, bookingsvc.ErrInvalidState):
-		writeError(w, http.StatusConflict, "booking_changed", "This appointment changed or can no longer be cancelled")
+		writeError(w, http.StatusConflict, "booking_changed", "This appointment changed or cannot be updated with that action")
+	case errors.Is(err, bookingsvc.ErrResponseExpired):
+		writeError(w, http.StatusConflict, "response_expired", "The response deadline passed; this request is no longer active")
 	default:
 		writeError(w, http.StatusInternalServerError, "booking_unavailable", "Unable to process the appointment request")
 	}

@@ -44,6 +44,8 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.role([]string{db.RoleUser}, http.HandlerFunc(h.cancelServiceBooking)))
 	mux.Handle(apiPrefix+"/partner/services", h.role([]string{db.RolePartner}, http.HandlerFunc(h.ownServices)))
 	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{db.RolePartner}, http.HandlerFunc(h.ownService)))
+	mux.Handle(apiPrefix+"/partner/service-bookings", h.role([]string{db.RolePartner}, http.HandlerFunc(h.partnerServiceBookings)))
+	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.role([]string{db.RolePartner}, http.HandlerFunc(h.partnerServiceBookingAction)))
 
 	// Public catalog reads.
 	mux.HandleFunc(apiPrefix+"/catalog/products", h.catalogProducts)
