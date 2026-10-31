@@ -1,7 +1,8 @@
 # Services and local discovery
 
-Status: service listings, seller forms and public discovery are implemented with migration 10;
-booking and map integration below remain a design proposal. The demo must continue to say that
+Status: service listings, seller forms, public discovery and weekly opening hours are implemented
+with migrations 10 and 26; transactional booking and map integration below remain a design proposal.
+The demo must continue to say that
 listings, bookings and payments are illustrative; no real sale or appointment
 is confirmed.
 
@@ -23,11 +24,12 @@ Use these records:
 
 | Record | Purpose |
 | --- | --- |
-| `service_listings` | Partner ownership, category, duration, price mode, publication state |
+| `service_listings` | Partner ownership, category, duration, price mode, publication state, timezone |
+| `service_weekly_hours` | One local opening interval per weekday for a service listing; an absent weekday is closed or unpublished |
 | `partner_locations` | Public business address, verified pin, timezone, opening hours and visibility |
 | `service_location_offerings` | Which services are available at each branch, at what price |
 | `service_resources` | Practitioner, chair or room and its capacity |
-| `service_availability` / `service_exceptions` | Weekly hours, leave, holidays and overrides |
+| `service_availability` / `service_exceptions` | Future resource-specific availability, leave, holidays and overrides |
 | `service_bookings` | Buyer, immutable offering/price snapshot, location/resource, start/end and state |
 | `service_booking_events` | Audited changes and actor IDs, without free-form medical details |
 | `service_areas` | Coverage for mobile providers; separate from the provider's private home address |
@@ -142,8 +144,12 @@ model and rollout are architectural recommendations for this repository.
 
 Service listings have a shop owner, stable slug, title, category, duration,
 fixed/from/quote pricing in KES or USD, broad public area, premises/mobile/remote
-mode and draft/published/archived state. They do not reserve stock, accept
-appointments, store precise coordinates or claim practitioner verification.
+mode and draft/published/archived state. Each listing can publish a timezone and
+one opening interval per weekday; times are local to the IANA timezone, weekdays
+use Sunday=0 through Saturday=6, and omitted days have no published hours. The
+schedule is informational and does not calculate bookable slots. Listings do not
+reserve stock, accept appointments, store precise coordinates or claim practitioner
+verification.
 Public queries include only published listings of active shops. Seller writes
 lock current membership and role, use optimistic versions to reject stale edits,
 and record an audit event in the same transaction. Search treats user text
@@ -184,6 +190,10 @@ Example JSON for creating a draft (send with the authenticated partner session,
   "currency": "KES",
   "public_area": "Westlands, Nairobi",
   "delivery_mode": "premises",
+  "timezone": "Africa/Nairobi",
+  "weekly_hours": [
+    {"weekday": 1, "opens_at": "09:00", "closes_at": "17:00"}
+  ],
   "state": "draft",
   "version": 0
 }
@@ -193,7 +203,15 @@ For updates, send the same editable fields with the `version` returned by the
 latest read. The server generates `id`, `partner_id`, `slug`, timestamps and the
 next version. Unknown JSON fields are rejected. Categories are `hair`, `beauty`,
 `dental`, `wellness`, `home` and `other`; delivery modes are `premises`, `mobile`
-and `remote`. Duration is 5–480 minutes; currencies are `KES` or `USD`.
+and `remote`. Duration is 5–480 minutes; currencies are `KES` or `USD`. The timezone must be
+an available IANA timezone (defaults to `Africa/Nairobi`). `weekly_hours` is
+optional and accepts at most one `HH:MM` interval per weekday, with closing time
+after opening time. An empty or omitted weekday is not shown as open. Public and
+detail responses include `timezone` and a `weekly_hours` array when a schedule is
+published; the field is omitted when no hours are published. Collection responses
+omit `weekly_hours` to keep listing payloads compact. On an update, clients that omit
+either new field retain its saved value; send `weekly_hours: []` to clear the schedule.
+Opening times are informational and are not appointment slots.
 
 Service prices in the directory, detail page, private preview and seller list
 are formatted from minor units using the listing’s saved currency, independently
@@ -251,6 +269,10 @@ For example, an out-of-range duration includes
 Multiple invalid fields are reported together; field messages contain corrective
 instructions rather than submitted content. Missing or invalid version values
 require reloading the form. A valid but stale version still returns 409.
+
+Weekly hours validate timezone names, weekday range, duplicate weekdays, exact
+24-hour `HH:MM` values and increasing same-day intervals. The seller form presents
+Sunday through Saturday and preserves partial or invalid times for correction.
 
 Service descriptions accept multiple lines. Browser form CRLF line endings are
 normalized to LF before validation and storage, so the 3000-character limit counts

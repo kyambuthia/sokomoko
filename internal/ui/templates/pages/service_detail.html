@@ -16,6 +16,7 @@
     <dl><dt>Duration</dt><dd>{{ .DurationMinutes }} minutes</dd>
       <dt>Price</dt><dd>{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</dd>
       <dt>Location</dt><dd>{{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote service{{ end }}</dd>
+      <dt>Weekly hours</dt><dd><p class="tiny muted">Local time · {{ .Timezone }}</p>{{ if $.Schedule }}<ul>{{ range $.Schedule }}<li>{{ .Name }}: {{ .OpensAt }}–{{ .ClosesAt }}</li>{{ end }}</ul>{{ else }}Hours not published{{ end }}</dd>
     </dl>
   </div>
   {{ if not $.Preview }}<a href="/services?partner_id={{ .PartnerID }}">More services from {{ .PartnerName }}</a>

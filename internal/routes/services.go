@@ -4,12 +4,20 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 )
+
+type serviceWeekday struct {
+	Number   int
+	Name     string
+	OpensAt  string
+	ClosesAt string
+}
 
 type servicePage struct {
 	ConflictListing               *db.ServiceListing
@@ -27,9 +35,39 @@ type servicePage struct {
 	Form                          directorysvc.Input
 	EditID                        int
 	Categories                    []string
+	Weekdays                      []serviceWeekday
+	Schedule                      []serviceWeekday
+	ConflictSchedule              []serviceWeekday
 }
 
 var serviceCategories = []string{"hair", "beauty", "dental", "wellness", "home", "other"}
+var serviceWeekdayNames = [...]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+
+func serviceWeekdayForms(hours []db.ServiceWeeklyHour) []serviceWeekday {
+	byDay := make(map[int]db.ServiceWeeklyHour, len(hours))
+	for _, hour := range hours {
+		if hour.Weekday >= 0 && hour.Weekday < len(serviceWeekdayNames) {
+			byDay[hour.Weekday] = hour
+		}
+	}
+	days := make([]serviceWeekday, 0, len(serviceWeekdayNames))
+	for number, name := range serviceWeekdayNames {
+		hour := byDay[number]
+		days = append(days, serviceWeekday{Number: number, Name: name, OpensAt: hour.OpensAt, ClosesAt: hour.ClosesAt})
+	}
+	return days
+}
+
+func serviceSchedule(hours []db.ServiceWeeklyHour) []serviceWeekday {
+	days := serviceWeekdayForms(hours)
+	schedule := make([]serviceWeekday, 0, len(hours))
+	for _, day := range days {
+		if day.OpensAt != "" && day.ClosesAt != "" {
+			schedule = append(schedule, day)
+		}
+	}
+	return schedule
+}
 
 func directoryActor(r *http.Request) *directorysvc.Actor {
 	u := auth.GetUserFromContext(r.Context())
@@ -101,7 +139,7 @@ func ServiceDetail(a *app.App) http.HandlerFunc {
 			servicePageError(w, r, err)
 			return
 		}
-		a.Render(w, a.Templates.ServiceDetail, servicePage{Title: listing.Title, Listing: listing, Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
+		a.Render(w, a.Templates.ServiceDetail, servicePage{Title: listing.Title, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours), Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
 	}
 }
 
@@ -123,7 +161,7 @@ func PartnerServicePreview(a *app.App) http.HandlerFunc {
 			servicePageError(w, r, err)
 			return
 		}
-		a.Render(w, a.Templates.ServiceDetail, servicePage{Preview: true, Title: listing.Title, Role: db.RolePartner, Listing: listing, Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
+		a.Render(w, a.Templates.ServiceDetail, servicePage{Preview: true, Title: listing.Title, Role: db.RolePartner, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours), Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
 	}
 }
 
@@ -145,16 +183,17 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 		data := servicePage{Title: "Services", Role: db.RolePartner, CSRFToken: a.Auth.CSRFToken(r), EditID: id, Categories: serviceCategories}
 		actor := directoryActor(r)
 		if r.Method == http.MethodGet {
-			data.Form = directorysvc.Input{Category: "hair", DurationMinutes: 30, PriceMode: "fixed", Price: "0.00", Currency: "KES", DeliveryMode: "premises", State: "draft"}
+			data.Form = directorysvc.Input{Category: "hair", DurationMinutes: 30, PriceMode: "fixed", Price: "0.00", Currency: "KES", DeliveryMode: "premises", State: "draft", Timezone: "Africa/Nairobi"}
 			if id > 0 {
 				v, err := a.Directory.Edit(r.Context(), actor, id)
 				if err != nil {
 					servicePageError(w, r, err)
 					return
 				}
-				data.Form = directorysvc.Input{Title: v.Title, Description: v.Description, Category: v.Category, DurationMinutes: v.DurationMinutes, PriceMode: v.PriceMode, Price: v.PriceCents.String(), Currency: v.Currency, PublicArea: v.PublicArea, DeliveryMode: v.DeliveryMode, State: v.State, Version: v.Version}
+				data.Form = directorysvc.Input{Title: v.Title, Description: v.Description, Category: v.Category, DurationMinutes: v.DurationMinutes, PriceMode: v.PriceMode, Price: v.PriceCents.String(), Currency: v.Currency, PublicArea: v.PublicArea, DeliveryMode: v.DeliveryMode, State: v.State, Version: v.Version, Timezone: v.Timezone, WeeklyHours: v.WeeklyHours}
 			}
 			data.Duration = strconv.Itoa(data.Form.DurationMinutes)
+			data.Weekdays = serviceWeekdayForms(data.Form.WeeklyHours)
 			a.Render(w, a.Templates.PartnerServiceEdit, data)
 			return
 		}
@@ -168,7 +207,16 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 			duration = 0
 		}
 		version, versionErr := strconv.Atoi(r.PostForm.Get("version"))
-		data.Form = directorysvc.Input{Title: r.PostForm.Get("title"), Description: r.PostForm.Get("description"), Category: r.PostForm.Get("category"), DurationMinutes: duration, PriceMode: r.PostForm.Get("price_mode"), Price: r.PostForm.Get("price"), Currency: r.PostForm.Get("currency"), PublicArea: r.PostForm.Get("public_area"), DeliveryMode: r.PostForm.Get("delivery_mode"), State: r.PostForm.Get("state"), Version: version}
+		data.Form = directorysvc.Input{Title: r.PostForm.Get("title"), Description: r.PostForm.Get("description"), Category: r.PostForm.Get("category"), DurationMinutes: duration, PriceMode: r.PostForm.Get("price_mode"), Price: r.PostForm.Get("price"), Currency: r.PostForm.Get("currency"), PublicArea: r.PostForm.Get("public_area"), DeliveryMode: r.PostForm.Get("delivery_mode"), State: r.PostForm.Get("state"), Version: version, Timezone: r.PostForm.Get("timezone"), WeeklyHours: []db.ServiceWeeklyHour{}}
+		for weekday := range serviceWeekdayNames {
+			opensAt := strings.TrimSpace(r.PostForm.Get("opens_at_" + strconv.Itoa(weekday)))
+			closesAt := strings.TrimSpace(r.PostForm.Get("closes_at_" + strconv.Itoa(weekday)))
+			if opensAt == "" && closesAt == "" {
+				continue
+			}
+			data.Form.WeeklyHours = append(data.Form.WeeklyHours, db.ServiceWeeklyHour{Weekday: weekday, OpensAt: opensAt, ClosesAt: closesAt})
+		}
+		data.Weekdays = serviceWeekdayForms(data.Form.WeeklyHours)
 		if versionErr != nil {
 			data.Form.Version = -1
 		}
@@ -204,6 +252,7 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 				servicePageError(w, r, err)
 				return
 			}
+			data.ConflictSchedule = serviceSchedule(data.ConflictListing.WeeklyHours)
 			data.Error = "Someone edited this listing. Your text is kept below. Review the current saved version before applying your changes."
 		} else if !errors.Is(err, directorysvc.ErrInvalid) {
 			servicePageError(w, r, err)

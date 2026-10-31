@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -26,17 +27,19 @@ type Actor struct {
 	Role string
 }
 type Input struct {
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Category        string `json:"category"`
-	DurationMinutes int    `json:"duration_minutes"`
-	PriceMode       string `json:"price_mode"`
-	Price           string `json:"price"`
-	Currency        string `json:"currency"`
-	PublicArea      string `json:"public_area"`
-	DeliveryMode    string `json:"delivery_mode"`
-	State           string `json:"state"`
-	Version         int    `json:"version"`
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	Category        string                 `json:"category"`
+	DurationMinutes int                    `json:"duration_minutes"`
+	PriceMode       string                 `json:"price_mode"`
+	Price           string                 `json:"price"`
+	Currency        string                 `json:"currency"`
+	PublicArea      string                 `json:"public_area"`
+	DeliveryMode    string                 `json:"delivery_mode"`
+	State           string                 `json:"state"`
+	Version         int                    `json:"version"`
+	Timezone        string                 `json:"timezone"`
+	WeeklyHours     []db.ServiceWeeklyHour `json:"weekly_hours"`
 }
 type store interface {
 	BrowseServices(context.Context, db.ServiceFilter) ([]db.ServiceListing, int, error)
@@ -116,12 +119,38 @@ func (s *Service) Save(ctx context.Context, a *Actor, id int, in Input) (*db.Ser
 	if !validActor(a) {
 		return nil, ErrForbidden
 	}
+	// Older API clients may not send the newly added schedule fields on update.
+	// Preserve those values when omitted; an explicit empty array clears hours.
+	if id > 0 && (in.Timezone == "" || in.WeeklyHours == nil) {
+		current, err := s.store.OwnService(ctx, a.ID, id)
+		if err != nil {
+			return nil, err
+		}
+		if in.Timezone == "" {
+			in.Timezone = current.Timezone
+		}
+		if in.WeeklyHours == nil {
+			in.WeeklyHours = current.WeeklyHours
+		}
+	}
+	if in.WeeklyHours == nil {
+		in.WeeklyHours = []db.ServiceWeeklyHour{}
+	}
 	in.Title = strings.TrimSpace(in.Title)
 	// URL-encoded browser forms submit textarea line breaks as CRLF.
 	// Store canonical LF before checking length and control characters.
 	in.Description = strings.TrimSpace(strings.ReplaceAll(in.Description, "\r\n", "\n"))
 	in.PublicArea = strings.TrimSpace(in.PublicArea)
 	in.Currency = strings.ToUpper(strings.TrimSpace(in.Currency))
+	in.Timezone = strings.TrimSpace(in.Timezone)
+	if in.Timezone == "" {
+		in.Timezone = "Africa/Nairobi"
+	}
+	for i := range in.WeeklyHours {
+		in.WeeklyHours[i].OpensAt = strings.TrimSpace(in.WeeklyHours[i].OpensAt)
+		in.WeeklyHours[i].ClosesAt = strings.TrimSpace(in.WeeklyHours[i].ClosesAt)
+	}
+	sort.Slice(in.WeeklyHours, func(i, j int) bool { return in.WeeklyHours[i].Weekday < in.WeeklyHours[j].Weekday })
 	price, err := money.Parse(strings.TrimSpace(in.Price))
 	if in.PriceMode == "quote" && strings.TrimSpace(in.Price) == "" {
 		price = 0
@@ -130,7 +159,7 @@ func (s *Service) Save(ctx context.Context, a *Actor, id int, in Input) (*db.Ser
 	if validationErr := validateInput(id, in, price, err); validationErr != nil {
 		return nil, validationErr
 	}
-	v := db.ServiceListing{ID: id, Title: in.Title, Description: in.Description, Category: in.Category, DurationMinutes: in.DurationMinutes, PriceMode: in.PriceMode, PriceCents: price, Currency: in.Currency, PublicArea: in.PublicArea, DeliveryMode: in.DeliveryMode, State: in.State, Version: in.Version}
+	v := db.ServiceListing{ID: id, Title: in.Title, Description: in.Description, Category: in.Category, DurationMinutes: in.DurationMinutes, PriceMode: in.PriceMode, PriceCents: price, Currency: in.Currency, PublicArea: in.PublicArea, DeliveryMode: in.DeliveryMode, State: in.State, Version: in.Version, Timezone: in.Timezone, WeeklyHours: in.WeeklyHours}
 	if id == 0 {
 		var suffix [8]byte
 		if _, err := rand.Read(suffix[:]); err != nil {
