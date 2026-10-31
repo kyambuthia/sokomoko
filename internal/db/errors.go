@@ -38,6 +38,7 @@ var (
 	ErrCourierHasActiveDeliveries = errors.New("courier has active deliveries")
 	ErrLastAdmin                  = errors.New("cannot deactivate the last active admin")
 	ErrUserInactive               = errors.New("user is inactive")
+	ErrWorkspaceActorNotFound     = errors.New("active workspace actor not found")
 )
 
 const (

@@ -675,10 +675,6 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 	if err != nil || orderID <= 0 {
 		return ErrInvalidOrderID
 	}
-	if actorIsPartner(actor) && !s.orderBelongsToPartner(ctx, orderID, actor.ID) {
-		return ErrForbiddenOrderUpdate
-	}
-
 	partnerStatus := strings.TrimSpace(input.PartnerStatus)
 	deliveryStatus := strings.TrimSpace(input.DeliveryStatus)
 	notice := strings.TrimSpace(input.DeliveryNotice)
@@ -686,9 +682,12 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 		notice = string(runes[:maxNoticeLength])
 	}
 
-	if err := s.store.UpdateOrderFulfillment(ctx, orderID, partnerStatus, deliveryStatus, notice); err != nil {
+	if err := s.store.UpdateOrderFulfillmentForActor(ctx, actor.ID, actor.Role, orderID, partnerStatus, deliveryStatus, notice); err != nil {
 		switch {
 		case errors.Is(err, db.ErrOrderNotFound):
+			if actorIsPartner(actor) {
+				return ErrForbiddenOrderUpdate
+			}
 			return ErrOrderNotFound
 		case errors.Is(err, db.ErrInvalidPartnerTransition),
 			errors.Is(err, db.ErrInvalidDeliveryTransition),
@@ -798,16 +797,4 @@ func summaryForOrders(orders []Order) Summary {
 		}
 	}
 	return summary
-}
-
-// orderBelongsToPartner reports whether the partner user may update orderID.
-// Only wholly owned orders can be updated through a partner account; orders
-// that mix partners remain an admin/staff operation.
-func (s *Service) orderBelongsToPartner(ctx context.Context, orderID, userID int) bool {
-	partnerID, err := s.store.PartnerIDForUser(ctx, userID)
-	if err != nil || partnerID == 0 {
-		return false
-	}
-	owned, err := s.store.PartnerOwnsOrder(ctx, partnerID, orderID)
-	return err == nil && owned
 }

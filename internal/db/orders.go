@@ -379,6 +379,15 @@ func (s *Store) PartnerOwnsOrder(ctx context.Context, partnerID, orderID int) (b
 	return owned, err
 }
 
+func partnerOwnsOrderTx(ctx context.Context, tx *sql.Tx, partnerID, orderID int) (bool, error) {
+	var owned bool
+	err := tx.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM orders o WHERE o.id = $2 AND "+partnerOwnsOrderSQL+")",
+		partnerID, orderID,
+	).Scan(&owned)
+	return owned, err
+}
+
 func (s *Store) ListAllOrders(ctx context.Context) ([]Order, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -557,6 +566,19 @@ func lockOrderTx(ctx context.Context, tx *sql.Tx, orderID int) (*lockedOrder, er
 // preparation; dispatching ships stock and sets delivery to shipped. The
 // courier workflow owns later delivery-state changes.
 func (s *Store) UpdateOrderFulfillment(ctx context.Context, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
+	return s.updateOrderFulfillment(ctx, 0, "", orderID, partnerStatus, deliveryStatus, deliveryNotice)
+}
+
+// UpdateOrderFulfillmentForActor checks workspace authorization and order
+// ownership in the same transaction as the fulfillment update.
+func (s *Store) UpdateOrderFulfillmentForActor(ctx context.Context, actorID int, actorRole string, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
+	if actorID <= 0 {
+		return ErrOrderNotFound
+	}
+	return s.updateOrderFulfillment(ctx, actorID, actorRole, orderID, partnerStatus, deliveryStatus, deliveryNotice)
+}
+
+func (s *Store) updateOrderFulfillment(ctx context.Context, actorID int, actorRole string, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error {
 	nextStatus, ok := partnerStatusToOrderStatus[partnerStatus]
 	if !ok {
 		return ErrInvalidPartnerStatus
@@ -568,9 +590,29 @@ func (s *Store) UpdateOrderFulfillment(ctx context.Context, orderID int, partner
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		partnerID, isPartner := 0, false
+		if actorID > 0 {
+			var err error
+			partnerID, isPartner, err = lockWorkspaceActorTx(ctx, tx, actorID, actorRole)
+			if errors.Is(err, ErrWorkspaceActorNotFound) {
+				return ErrOrderNotFound
+			}
+			if err != nil {
+				return err
+			}
+		}
 		current, err := lockOrderTx(ctx, tx, orderID)
 		if err != nil {
 			return err
+		}
+		if isPartner {
+			owned, err := partnerOwnsOrderTx(ctx, tx, partnerID, orderID)
+			if err != nil {
+				return err
+			}
+			if !owned {
+				return ErrOrderNotFound
+			}
 		}
 		if !isAllowedPartnerTransition(current.PartnerStatus, partnerStatus) {
 			return ErrInvalidPartnerTransition
