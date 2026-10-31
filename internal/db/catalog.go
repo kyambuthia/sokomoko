@@ -179,9 +179,60 @@ func scanProduct(row interface{ Scan(...any) error }) (*Product, error) {
 	return product, nil
 }
 
+func lockProductMutationActorTx(ctx context.Context, tx *sql.Tx, actorID int, actorRole string) (int, bool, error) {
+	if actorID <= 0 {
+		return 0, false, ErrProductNotFound
+	}
+	switch actorRole {
+	case RolePartner:
+		var partnerID int
+		err := tx.QueryRowContext(ctx, `SELECT p.id
+			FROM partners p
+			JOIN partner_users pu ON pu.partner_id = p.id
+			JOIN users u ON u.id = pu.user_id
+			WHERE u.id = $1 AND u.role = $2 AND u.deleted_at IS NULL AND p.status = 'active'
+			FOR SHARE OF p, pu, u`,
+			actorID, RolePartner,
+		).Scan(&partnerID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, ErrProductNotFound
+		}
+		if err != nil {
+			return 0, false, err
+		}
+		return partnerID, true, nil
+	case RoleAdmin, RoleStaff:
+		var authorizedUserID int
+		err := tx.QueryRowContext(ctx,
+			`SELECT id FROM users WHERE id = $1 AND role = $2 AND deleted_at IS NULL FOR SHARE`,
+			actorID, actorRole,
+		).Scan(&authorizedUserID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, false, ErrProductNotFound
+		}
+		if err != nil {
+			return 0, false, err
+		}
+		return 0, false, nil
+	default:
+		return 0, false, ErrProductNotFound
+	}
+}
+
 // CreateProduct inserts a product, its opening stock in the default warehouse,
 // and any images in one transaction.
 func (s *Store) CreateProduct(ctx context.Context, product Product) (int64, error) {
+	return s.createProduct(ctx, product, 0, "")
+}
+
+func (s *Store) CreateProductForActor(ctx context.Context, product Product, actorID int, actorRole string) (int64, error) {
+	if actorID <= 0 {
+		return 0, ErrProductNotFound
+	}
+	return s.createProduct(ctx, product, actorID, actorRole)
+}
+
+func (s *Store) createProduct(ctx context.Context, product Product, actorID int, actorRole string) (int64, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
@@ -195,6 +246,15 @@ func (s *Store) CreateProduct(ctx context.Context, product Product) (int64, erro
 
 	var id int64
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if actorID > 0 {
+			partnerID, isPartner, err := lockProductMutationActorTx(ctx, tx, actorID, actorRole)
+			if err != nil {
+				return err
+			}
+			if isPartner {
+				product.PartnerID = sql.NullInt64{Int64: int64(partnerID), Valid: true}
+			}
+		}
 		warehouseID, err := defaultWarehouseID(ctx, tx)
 		if err != nil {
 			return err
@@ -364,6 +424,17 @@ func (s *Store) getProduct(ctx context.Context, predicate string, arg any) (*Pro
 // leaves URL-only images in place. Either image change commits with the rest
 // of the update.
 func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
+	return s.updateProduct(ctx, product, 0, "")
+}
+
+func (s *Store) UpdateProductForActor(ctx context.Context, product Product, actorID int, actorRole string) error {
+	if actorID <= 0 {
+		return ErrProductNotFound
+	}
+	return s.updateProduct(ctx, product, actorID, actorRole)
+}
+
+func (s *Store) updateProduct(ctx context.Context, product Product, actorID int, actorRole string) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
@@ -372,17 +443,30 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 	}
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx,
-			`UPDATE products
-			 SET name = $1, slug = $2, description = $3, price_cents = $4, category_id = $5
-			 WHERE id = $6 AND deleted_at IS NULL`,
+		partnerID, isPartner := 0, false
+		if actorID > 0 {
+			var err error
+			partnerID, isPartner, err = lockProductMutationActorTx(ctx, tx, actorID, actorRole)
+			if err != nil {
+				return err
+			}
+		}
+		updateQuery := `UPDATE products
+			SET name = $1, slug = $2, description = $3, price_cents = $4, category_id = $5
+			WHERE id = $6 AND deleted_at IS NULL`
+		updateArgs := []any{
 			strings.TrimSpace(product.Name),
 			strings.TrimSpace(product.Slug),
 			strings.TrimSpace(product.Description),
 			int64(product.Price),
 			product.CategoryID,
 			product.ID,
-		)
+		}
+		if isPartner {
+			updateQuery += ` AND partner_id = $7`
+			updateArgs = append(updateArgs, partnerID)
+		}
+		result, err := tx.ExecContext(ctx, updateQuery, updateArgs...)
 		if err != nil {
 			return wrapProductCreateError(err)
 		}
@@ -468,43 +552,19 @@ func (s *Store) deleteProduct(ctx context.Context, id, actorID int, actorRole st
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		partnerID, isPartner := 0, false
+		if actorID > 0 {
+			var err error
+			partnerID, isPartner, err = lockProductMutationActorTx(ctx, tx, actorID, actorRole)
+			if err != nil {
+				return err
+			}
+		}
 		deleteQuery := `UPDATE products SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL`
 		args := []any{id}
-		if actorID > 0 {
-			switch actorRole {
-			case RolePartner:
-				var partnerID int
-				err := tx.QueryRowContext(ctx, `SELECT p.id
-					FROM partners p
-					JOIN partner_users pu ON pu.partner_id = p.id
-					JOIN users u ON u.id = pu.user_id
-					WHERE u.id = $1 AND u.role = $2 AND u.deleted_at IS NULL AND p.status = 'active'
-					FOR SHARE OF p, pu, u`,
-					actorID, RolePartner,
-				).Scan(&partnerID)
-				if errors.Is(err, sql.ErrNoRows) {
-					return ErrProductNotFound
-				}
-				if err != nil {
-					return err
-				}
-				deleteQuery += ` AND partner_id = $2`
-				args = append(args, partnerID)
-			case RoleAdmin, RoleStaff:
-				var authorizedUserID int
-				err := tx.QueryRowContext(ctx,
-					`SELECT id FROM users WHERE id = $1 AND role = $2 AND deleted_at IS NULL FOR SHARE`,
-					actorID, actorRole,
-				).Scan(&authorizedUserID)
-				if errors.Is(err, sql.ErrNoRows) {
-					return ErrProductNotFound
-				}
-				if err != nil {
-					return err
-				}
-			default:
-				return ErrProductNotFound
-			}
+		if isPartner {
+			deleteQuery += ` AND partner_id = $2`
+			args = append(args, partnerID)
 		}
 
 		result, err := tx.ExecContext(ctx, deleteQuery, args...)

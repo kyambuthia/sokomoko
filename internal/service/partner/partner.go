@@ -467,16 +467,6 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 		}}
 	}
 
-	if actorIsPartner(actor) {
-		partnerID, err := s.store.PartnerIDForUser(ctx, actor.ID)
-		if err != nil {
-			return err
-		}
-		if partnerID == 0 {
-			return ErrUnableToCreateProduct
-		}
-		product.PartnerID = sql.NullInt64{Int64: int64(partnerID), Valid: true}
-	}
 	slugBase := slug.Make(name)
 	if slugBase == "" {
 		slugBase = "product"
@@ -486,7 +476,7 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 		if attempt > 0 {
 			product.Slug = fmt.Sprintf("%s-%d-%d", slugBase, time.Now().Unix(), attempt)
 		}
-		_, err := s.store.CreateProduct(ctx, product)
+		_, err := s.store.CreateProductForActor(ctx, product, actor.ID, actor.Role)
 		if err == nil {
 			return nil
 		}
@@ -602,7 +592,7 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	} else if input.RemoveImage {
 		product.RemoveUploadedImages = true
 	}
-	if err := s.store.UpdateProduct(ctx, *product); err != nil {
+	if err := s.store.UpdateProductForActor(ctx, *product, actor.ID, actor.Role); err != nil {
 		if errors.Is(err, db.ErrProductNotFound) {
 			return ErrProductNotFound
 		}

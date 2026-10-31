@@ -10,9 +10,9 @@ type store interface {
 	PartnerIDForUser(ctx context.Context, userID int) (int, error)
 	CountProducts(ctx context.Context) (int, error)
 	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
-	CreateProduct(ctx context.Context, product db.Product) (int64, error)
+	CreateProductForActor(ctx context.Context, product db.Product, actorID int, actorRole string) (int64, error)
 	GetProductByID(ctx context.Context, id int) (*db.Product, error)
-	UpdateProduct(ctx context.Context, product db.Product) error
+	UpdateProductForActor(ctx context.Context, product db.Product, actorID int, actorRole string) error
 	DeleteProductForActor(context.Context, int, int, string) error
 	GetAllCategories(ctx context.Context) ([]db.Category, error)
 	GetPartnerOrderSummary(ctx context.Context) (db.PartnerOrderSummary, error)
