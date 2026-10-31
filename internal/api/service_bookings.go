@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,6 +12,48 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 )
+
+func (h *Handler) serviceAvailability(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	reader, ok := h.app.Bookings.(interface {
+		Availability(context.Context, string, string) (bookingsvc.Availability, error)
+	})
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "availability_unavailable", "Service availability is unavailable")
+		return
+	}
+	availability, err := reader.Availability(r.Context(), r.PathValue("slug"), r.URL.Query().Get("date"))
+	switch {
+	case errors.Is(err, bookingsvc.ErrInvalid):
+		writeError(w, http.StatusBadRequest, "invalid_date", "A valid service slug and date in YYYY-MM-DD format are required")
+		return
+	case errors.Is(err, db.ErrServiceNotFound):
+		writeError(w, http.StatusNotFound, "service_not_found", "Service listing not found")
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "availability_unavailable", "Unable to load service availability")
+		return
+	}
+	slots := make([]map[string]any, 0, len(availability.Slots))
+	for _, slot := range availability.Slots {
+		slots = append(slots, map[string]any{
+			"local_start": slot.LocalStart,
+			"starts_at":   slot.StartsAt.UTC(),
+			"ends_at":     slot.EndsAt.UTC(),
+		})
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"service_slug":     availability.ServiceSlug,
+		"listing_version":  availability.ListingVersion,
+		"date":             availability.Date,
+		"timezone":         availability.Timezone,
+		"duration_minutes": availability.DurationMinutes,
+		"slots":            slots,
+	})
+}
 
 func (h *Handler) createServiceBooking(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

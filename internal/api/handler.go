@@ -39,6 +39,7 @@ func Register(a *app.App, mux *http.ServeMux) {
 	// Service discovery and seller-owned offerings.
 	mux.HandleFunc(apiPrefix+"/catalog/services", h.serviceList)
 	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}", h.serviceDetail)
+	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}/availability", h.serviceAvailability)
 	mux.Handle(apiPrefix+"/services/{slug}/bookings", h.role([]string{db.RoleUser}, http.HandlerFunc(h.createServiceBooking)))
 	mux.Handle(apiPrefix+"/account/service-bookings", h.role([]string{db.RoleUser}, http.HandlerFunc(h.accountServiceBookings)))
 	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.role([]string{db.RoleUser}, http.HandlerFunc(h.cancelServiceBooking)))

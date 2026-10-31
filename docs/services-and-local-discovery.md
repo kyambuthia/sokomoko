@@ -266,8 +266,11 @@ transaction. A minute-level maintenance job expires requests after
 their response deadline and records a system event. No deposit or payment is
 collected for a service request.
 
-There is not yet a JSON booking endpoint, a customer-selected resource, or a
-generated availability calendar.
+The JSON API suggests open start times at 15-minute intervals for a
+selected local date. Suggestions exclude live reservations and current-time
+conflicts, but remain advisory; a booking request rechecks capacity and opening
+hours in its transaction. There is not yet a customer-selected resource or a
+full availability calendar.
 
 ### Demo content
 

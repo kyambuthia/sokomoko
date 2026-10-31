@@ -15,16 +15,17 @@ import (
 )
 
 var (
-	ErrForbidden           = errors.New("customer role required")
-	ErrInvalid             = errors.New("invalid booking request")
-	ErrListingChanged      = errors.New("service listing changed; reload before requesting")
-	ErrUnavailable         = errors.New("that time is no longer available")
-	ErrTimeConflict        = errors.New("that time has already been requested")
-	ErrIdempotencyConflict = errors.New("request key was already used for another appointment")
-	ErrNotFound            = errors.New("appointment request not found")
-	ErrInvalidState        = errors.New("appointment request cannot move to that state")
-	ErrVersionConflict     = errors.New("appointment request changed; reload before updating")
-	ErrResponseExpired     = errors.New("provider response deadline has passed")
+	ErrForbidden               = errors.New("customer role required")
+	ErrInvalid                 = errors.New("invalid booking request")
+	ErrListingChanged          = errors.New("service listing changed; reload before requesting")
+	ErrUnavailable             = errors.New("that time is no longer available")
+	ErrTimeConflict            = errors.New("that time has already been requested")
+	ErrIdempotencyConflict     = errors.New("request key was already used for another appointment")
+	ErrNotFound                = errors.New("appointment request not found")
+	ErrInvalidState            = errors.New("appointment request cannot move to that state")
+	ErrVersionConflict         = errors.New("appointment request changed; reload before updating")
+	ErrResponseExpired         = errors.New("provider response deadline has passed")
+	ErrAvailabilityUnavailable = errors.New("service availability is unavailable")
 )
 
 type Actor struct {
@@ -44,6 +45,25 @@ type store interface {
 type Service struct{ store store }
 
 func New(s store) *Service { return &Service{store: s} }
+
+type AvailabilitySlot struct {
+	LocalStart string
+	StartsAt   time.Time
+	EndsAt     time.Time
+}
+
+type Availability struct {
+	ServiceSlug     string
+	ListingVersion  int
+	Date            string
+	Timezone        string
+	DurationMinutes int
+	Slots           []AvailabilitySlot
+}
+
+type availabilityStore interface {
+	ServiceBookingIntervals(context.Context, int, time.Time, time.Time) ([]db.ServiceBookingInterval, error)
+}
 
 const localMinuteLayout = "2006-01-02T15:04"
 
@@ -77,6 +97,106 @@ func parseLocalStart(value string, loc *time.Location) (time.Time, bool) {
 		}
 	}
 	return instant.UTC(), matches == 1
+}
+
+// Availability suggests starts on a 15-minute cadence from the listing's
+// opening time. It is advisory; Request rechecks schedule and capacity in SQL.
+func (s *Service) Availability(ctx context.Context, listingSlug, localDate string) (Availability, error) {
+	if !slug.ValidWithMaxLength(listingSlug, 160) {
+		return Availability{}, ErrInvalid
+	}
+	date, err := time.Parse("2006-01-02", localDate)
+	if err != nil || date.Format("2006-01-02") != localDate {
+		return Availability{}, ErrInvalid
+	}
+
+	listing, err := s.store.PublicService(ctx, listingSlug)
+	if err != nil {
+		return Availability{}, err
+	}
+	loc, err := time.LoadLocation(listing.Timezone)
+	if err != nil {
+		return Availability{}, ErrAvailabilityUnavailable
+	}
+	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
+	if dayStart.Format("2006-01-02") != localDate {
+		return Availability{}, ErrInvalid
+	}
+	dayEnd := dayStart.AddDate(0, 0, 1)
+	availability := Availability{
+		ServiceSlug: listing.Slug, ListingVersion: listing.Version, Date: localDate,
+		Timezone: listing.Timezone, DurationMinutes: listing.DurationMinutes,
+		Slots: make([]AvailabilitySlot, 0),
+	}
+	weekday := int(time.Date(date.Year(), date.Month(), date.Day(), 12, 0, 0, 0, loc).Weekday())
+	var opensAt, closesAt string
+	for _, hours := range listing.WeeklyHours {
+		if hours.Weekday == weekday {
+			opensAt, closesAt = hours.OpensAt, hours.ClosesAt
+			break
+		}
+	}
+	if opensAt == "" || closesAt == "" {
+		return availability, nil
+	}
+
+	opens, err := time.Parse("15:04", opensAt)
+	if err != nil {
+		return Availability{}, ErrAvailabilityUnavailable
+	}
+	closes, err := time.Parse("15:04", closesAt)
+	if err != nil {
+		return Availability{}, ErrAvailabilityUnavailable
+	}
+	openMinute := opens.Hour()*60 + opens.Minute()
+	closeMinute := closes.Hour()*60 + closes.Minute()
+	wallDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	wallStart := wallDay.Add(time.Duration(openMinute) * time.Minute)
+	wallEnd := wallDay.Add(time.Duration(closeMinute) * time.Minute)
+
+	store, ok := s.store.(availabilityStore)
+	if !ok {
+		return Availability{}, ErrAvailabilityUnavailable
+	}
+	busy, err := store.ServiceBookingIntervals(ctx, listing.ID, dayStart, dayEnd)
+	if err != nil {
+		return Availability{}, err
+	}
+	now := time.Now().UTC()
+	for wall := wallStart; wall.Before(wallEnd); wall = wall.Add(15 * time.Minute) {
+		localStart := wall.Format(localMinuteLayout)
+		startsAt, unambiguous := parseLocalStart(localStart, loc)
+		if !unambiguous || !startsAt.After(now) {
+			continue
+		}
+		endsAt := startsAt.Add(time.Duration(listing.DurationMinutes) * time.Minute)
+		startLocal, endLocal := startsAt.In(loc), endsAt.In(loc)
+		if startLocal.Format("2006-01-02") != localDate || endLocal.Format("2006-01-02") != localDate {
+			continue
+		}
+		endMinute := endLocal.Hour()*60 + endLocal.Minute()
+		if endMinute > closeMinute {
+			continue
+		}
+		_, startOffset := startLocal.Zone()
+		_, endOffset := endLocal.Zone()
+		if startOffset != endOffset {
+			continue
+		}
+		available := true
+		for _, interval := range busy {
+			if interval.StartsAt.Before(endsAt) && interval.EndsAt.After(startsAt) {
+				available = false
+				break
+			}
+		}
+		if available {
+			availability.Slots = append(availability.Slots, AvailabilitySlot{
+				LocalStart: localStart, StartsAt: startsAt.UTC(), EndsAt: endsAt.UTC(),
+			})
+		}
+	}
+	return availability, nil
 }
 
 func validActor(actor *Actor) bool {
