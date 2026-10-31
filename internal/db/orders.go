@@ -331,7 +331,7 @@ func (s *Store) ListOrdersByUserPage(ctx context.Context, userID, limit, offset 
 	}
 	lastOffset := ((total - 1) / limit) * limit
 	if offset > lastOffset {
-		offset = lastOffset
+		return []Order{}, total, nil
 	}
 	orders, err := s.listOrders(ctx,
 		"WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC LIMIT $2 OFFSET $3", userID, limit, offset)
@@ -454,7 +454,7 @@ func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, st
 	}
 	lastOffset := ((total - 1) / limit) * limit
 	if offset > lastOffset {
-		offset = lastOffset
+		return []Order{}, total, nil
 	}
 	limitArg := fmt.Sprintf("$%d", len(args)+1)
 	offsetArg := fmt.Sprintf("$%d", len(args)+2)
