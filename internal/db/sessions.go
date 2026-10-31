@@ -123,8 +123,16 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 func (s *Store) CleanupSessions(ctx context.Context) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at <= now()")
-	return err
+	return executeCleanupBatches(ctx, s.DB, `WITH expired AS (
+ SELECT id FROM sessions
+ WHERE expires_at <= statement_timestamp()
+ ORDER BY expires_at
+ LIMIT $1
+ FOR UPDATE SKIP LOCKED
+)
+DELETE FROM sessions AS stale
+USING expired
+WHERE stale.id = expired.id`)
 }
 
 func (s *Store) CountActiveSessions(ctx context.Context) (int, error) {
@@ -138,15 +146,43 @@ func (s *Store) CountActiveSessions(ctx context.Context) (int, error) {
 func (s *Store) CleanupPasswordResetTokens(ctx context.Context) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	if _, err := s.DB.ExecContext(ctx,
-		"DELETE FROM password_reset_email_outbox WHERE expires_at <= now()",
-	); err != nil {
-		return err
+	for _, query := range []string{
+		`WITH expired AS (
+ SELECT id FROM password_reset_email_outbox
+ WHERE expires_at <= statement_timestamp()
+ ORDER BY expires_at
+ LIMIT $1
+ FOR UPDATE SKIP LOCKED
+)
+DELETE FROM password_reset_email_outbox AS mail
+USING expired
+WHERE mail.id = expired.id`,
+		`WITH used AS (
+ SELECT id FROM password_reset_tokens
+ WHERE used_at IS NOT NULL
+ ORDER BY id
+ LIMIT $1
+ FOR UPDATE SKIP LOCKED
+)
+DELETE FROM password_reset_tokens AS tokens
+USING used
+WHERE tokens.id = used.id`,
+		`WITH expired AS (
+ SELECT id FROM password_reset_tokens
+ WHERE expires_at <= statement_timestamp()
+ ORDER BY expires_at
+ LIMIT $1
+ FOR UPDATE SKIP LOCKED
+)
+DELETE FROM password_reset_tokens AS tokens
+USING expired
+WHERE tokens.id = expired.id`,
+	} {
+		if err := executeCleanupBatches(ctx, s.DB, query); err != nil {
+			return err
+		}
 	}
-	_, err := s.DB.ExecContext(ctx,
-		"DELETE FROM password_reset_tokens WHERE used_at IS NOT NULL OR expires_at <= now()",
-	)
-	return err
+	return nil
 }
 
 // CreatePasswordResetToken stores a new reset token, invalidating any earlier

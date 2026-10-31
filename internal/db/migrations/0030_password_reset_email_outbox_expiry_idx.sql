@@ -1,0 +1,1 @@
+CREATE INDEX password_reset_email_outbox_expiry_idx ON password_reset_email_outbox (expires_at);
