@@ -509,7 +509,10 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 			return view, nil
 		}
 	}
-	if reason, err := s.store.LastPaymentError(ctx, payment.ID); err == nil && reason != "" {
+	reason, err := s.store.LastPaymentError(ctx, payment.ID)
+	if err != nil {
+		slog.Warn("payment attempt error lookup failed", "payment_id", payment.ID, "error", err)
+	} else if reason != "" {
 		view.Status = "failed"
 		view.Message = reason
 	}
