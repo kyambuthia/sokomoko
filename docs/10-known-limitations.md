@@ -24,8 +24,9 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 - **Limited product image management.** The partner workspace accepts one
   optional JPEG or PNG upload up to 900 KB, normalized to at most 256 KB and
-  stored in PostgreSQL. A new upload becomes the primary image and existing
-  gallery entries remain; images cannot be reordered or removed independently.
+  stored in PostgreSQL. A new upload becomes primary and replaces the prior
+  uploaded image while bundled gallery entries remain; images cannot be
+  reordered or removed independently.
   Products without a usable image show a bundled fallback. Product managers can
   delete products from the workspace; deleted products disappear from the
   storefront and active carts, affected open checkouts are cancelled with stock

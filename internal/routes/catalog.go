@@ -106,7 +106,7 @@ func ProductImage(a *app.App) http.HandlerFunc {
 		}
 		sum := sha256.Sum256(asset.Data)
 		w.Header().Set("Content-Type", asset.ContentType)
-		w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+		w.Header().Set("Cache-Control", "public, max-age=60, must-revalidate")
 		w.Header().Set("ETag", `"`+hex.EncodeToString(sum[:])+`"`)
 		http.ServeContent(w, r, fmt.Sprintf("product-image-%d", id), asset.CreatedAt, bytes.NewReader(asset.Data))
 	}

@@ -378,6 +378,14 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 		}
 
 		if hasUploadedProductImage(product.Images) {
+			if _, err := tx.ExecContext(ctx,
+				`DELETE FROM product_images AS image
+				 USING product_image_blobs AS blob
+				 WHERE image.id = blob.product_image_id AND image.product_id = $1`,
+				product.ID,
+			); err != nil {
+				return err
+			}
 			newImageCount := 0
 			for _, image := range product.Images {
 				if len(image.Data) > 0 {
