@@ -71,6 +71,10 @@ func (s *categoryStore) CreateCategory(ctx context.Context, c db.Category) (int6
 	return 1, s.err
 }
 
+func (s *categoryStore) CreateCategoryForActor(ctx context.Context, _ int, _ string, c db.Category) (int64, error) {
+	return s.CreateCategory(ctx, c)
+}
+
 func (s *categoryStore) CreateAuditLog(context.Context, int, string, string, int, string) error {
 	return nil
 }

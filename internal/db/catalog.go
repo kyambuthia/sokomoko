@@ -32,19 +32,34 @@ func scanCategory(row interface{ Scan(...any) error }) (*Category, error) {
 }
 
 func (s *Store) CreateCategory(ctx context.Context, category Category) (int64, error) {
+	return s.createCategory(ctx, 0, "", category, false)
+}
+
+func (s *Store) CreateCategoryForActor(ctx context.Context, actorID int, actorRole string, category Category) (int64, error) {
+	return s.createCategory(ctx, actorID, actorRole, category, true)
+}
+
+func (s *Store) createCategory(ctx context.Context, actorID int, actorRole string, category Category, requireActor bool) (int64, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	var id int64
-	err := s.DB.QueryRowContext(ctx,
-		`INSERT INTO categories (name, slug, description, parent_id)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id`,
-		strings.TrimSpace(category.Name),
-		strings.TrimSpace(category.Slug),
-		strings.TrimSpace(category.Description),
-		category.ParentID,
-	).Scan(&id)
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireActor {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, actorRole); err != nil {
+				return err
+			}
+		}
+		return tx.QueryRowContext(ctx,
+			`INSERT INTO categories (name, slug, description, parent_id)
+			 VALUES ($1, $2, $3, $4)
+			 RETURNING id`,
+			strings.TrimSpace(category.Name),
+			strings.TrimSpace(category.Slug),
+			strings.TrimSpace(category.Description),
+			category.ParentID,
+		).Scan(&id)
+	})
 	return id, wrapDBError(err)
 }
 
@@ -66,25 +81,56 @@ func (s *Store) GetCategoryBySlug(ctx context.Context, slug string) (*Category, 
 }
 
 func (s *Store) UpdateCategory(ctx context.Context, category Category) error {
+	return s.updateCategory(ctx, 0, "", category, false)
+}
+
+func (s *Store) UpdateCategoryForActor(ctx context.Context, actorID int, actorRole string, category Category) error {
+	return s.updateCategory(ctx, actorID, actorRole, category, true)
+}
+
+func (s *Store) updateCategory(ctx context.Context, actorID int, actorRole string, category Category, requireActor bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx,
-		`UPDATE categories SET name = $1, slug = $2, description = $3, parent_id = $4
-		 WHERE id = $5 AND deleted_at IS NULL`,
-		strings.TrimSpace(category.Name),
-		strings.TrimSpace(category.Slug),
-		strings.TrimSpace(category.Description),
-		category.ParentID,
-		category.ID,
-	)
-	return wrapDBError(err)
+
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireActor {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, actorRole); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx,
+			`UPDATE categories SET name = $1, slug = $2, description = $3, parent_id = $4
+			 WHERE id = $5 AND deleted_at IS NULL`,
+			strings.TrimSpace(category.Name),
+			strings.TrimSpace(category.Slug),
+			strings.TrimSpace(category.Description),
+			category.ParentID,
+			category.ID,
+		)
+		return wrapDBError(err)
+	})
 }
 
 func (s *Store) DeleteCategory(ctx context.Context, id int) error {
+	return s.deleteCategory(ctx, 0, "", id, false)
+}
+
+func (s *Store) DeleteCategoryForActor(ctx context.Context, actorID int, actorRole string, id int) error {
+	return s.deleteCategory(ctx, actorID, actorRole, id, true)
+}
+
+func (s *Store) deleteCategory(ctx context.Context, actorID int, actorRole string, id int, requireActor bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx, "UPDATE categories SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id)
-	return err
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireActor {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, actorRole); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx, "UPDATE categories SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id)
+		return err
+	})
 }
 
 // CountProductsByCategory returns the number of active products in each

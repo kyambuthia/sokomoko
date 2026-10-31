@@ -74,7 +74,10 @@ func (s *Service) CreateCategory(ctx context.Context, actor *Actor, input Catego
 	if name == "" || len([]rune(name)) > maxCategoryName || len([]rune(description)) > maxCategoryDescription || !slug.Valid(categorySlug) {
 		return ErrInvalidCategory
 	}
-	id, err := s.store.CreateCategory(ctx, db.Category{Name: name, Slug: categorySlug, Description: description})
+	id, err := s.store.CreateCategoryForActor(ctx, actor.ID, actor.Role, db.Category{Name: name, Slug: categorySlug, Description: description})
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return ErrForbiddenCatalogAction
+	}
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateCategory
 	}
@@ -109,7 +112,10 @@ func (s *Service) UpdateCategory(ctx context.Context, actor *Actor, idRaw string
 	}
 	before := category.Name
 	category.Name, category.Description = name, description
-	err = s.store.UpdateCategory(ctx, *category)
+	err = s.store.UpdateCategoryForActor(ctx, actor.ID, actor.Role, *category)
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return ErrForbiddenCatalogAction
+	}
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateCategory
 	}
@@ -136,7 +142,10 @@ func (s *Service) DeleteCategory(ctx context.Context, actor *Actor, idRaw string
 	if category == nil {
 		return ErrCategoryNotFound
 	}
-	if err := s.store.DeleteCategory(ctx, id); err != nil {
+	if err := s.store.DeleteCategoryForActor(ctx, actor.ID, actor.Role, id); err != nil {
+		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+			return ErrForbiddenCatalogAction
+		}
 		return err
 	}
 	s.logAudit(ctx, actor.ID, "category.delete", "category", id, "slug="+category.Slug)

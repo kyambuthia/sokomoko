@@ -10,12 +10,15 @@ type store interface {
 	DashboardCounts(ctx context.Context) (db.DashboardCounts, error)
 	CountProductsByCategory(ctx context.Context) (map[int]int, error)
 	CreateCategory(ctx context.Context, category db.Category) (int64, error)
+	CreateCategoryForActor(ctx context.Context, actorID int, actorRole string, category db.Category) (int64, error)
 	CreatePartner(ctx context.Context, partner db.Partner) (int64, error)
 	CreatePartnerForActor(ctx context.Context, actorID int, partner db.Partner) (int64, error)
 	CreatePartnerUser(ctx context.Context, user db.User, partnerID int) (int64, error)
 	CreatePartnerUserForActor(ctx context.Context, actorID int, user db.User, partnerID int) (int64, error)
 	DeleteCategory(ctx context.Context, id int) error
+	DeleteCategoryForActor(ctx context.Context, actorID int, actorRole string, id int) error
 	UpdateCategory(ctx context.Context, category db.Category) error
+	UpdateCategoryForActor(ctx context.Context, actorID int, actorRole string, category db.Category) error
 	UpdatePartnerDetails(ctx context.Context, id int, name, contactEmail string) (bool, error)
 	UpdatePartnerDetailsForActor(ctx context.Context, actorID, partnerID int, name, contactEmail string) (bool, error)
 	GetAllCategories(ctx context.Context) ([]db.Category, error)
