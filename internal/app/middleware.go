@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -94,15 +95,31 @@ func RequestLogger() Middleware {
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
 			slog.LogAttrs(r.Context(), slog.LevelInfo, "http request",
-				slog.String("method", r.Method),
-				slog.String("path", requestLogPath(r.URL.Path)),
-				slog.String("host", r.Host),
+				slog.String("method", boundedRequestLogField(r.Method)),
+				slog.String("path", boundedRequestLogField(requestLogPath(r.URL.Path))),
+				slog.String("host", boundedRequestLogField(r.Host)),
 				slog.Int("status", rec.status),
 				slog.Duration("duration", time.Since(start)),
 				slog.String("request_id", RequestIDFromContext(r.Context())),
 			)
 		})
 	}
+}
+
+const maxRequestLogFieldBytes = 256
+
+func boundedRequestLogField(value string) string {
+	value = strings.ToValidUTF8(value, "?")
+	if len(value) <= maxRequestLogFieldBytes {
+		return value
+	}
+
+	const suffix = "..."
+	prefixBytes := maxRequestLogFieldBytes - len(suffix)
+	for prefixBytes > 0 && !utf8.ValidString(value[:prefixBytes]) {
+		prefixBytes--
+	}
+	return value[:prefixBytes] + suffix
 }
 
 // requestLogPath removes the bearer token used to authenticate M-Pesa
