@@ -12,6 +12,7 @@ type MaintenanceStore interface {
 	CleanupSessions(context.Context) error
 	CleanupPasswordResetTokens(context.Context) error
 	ExpireUnpaidOrders(ctx context.Context, cutoff time.Time) (int, error)
+	ExpireServiceBookingRequests(context.Context) (int, error)
 }
 
 // ExclusiveRunner runs a job only when no other process is running it. A
@@ -72,16 +73,12 @@ func Maintain(ctx context.Context, store MaintenanceStore) {
 		if expired > 0 {
 			slog.Info("unpaid orders cancelled", "count", expired)
 		}
-		if expirer, ok := store.(interface {
-			ExpireServiceBookingRequests(context.Context) (int, error)
-		}); ok {
-			count, err := expirer.ExpireServiceBookingRequests(ctx)
-			if err != nil && ctx.Err() == nil {
-				slog.Error("service booking expiry failed", "error", err)
-			}
-			if count > 0 {
-				slog.Info("service booking requests expired", "count", count)
-			}
+		count, err := store.ExpireServiceBookingRequests(ctx)
+		if err != nil && ctx.Err() == nil {
+			slog.Error("service booking expiry failed", "error", err)
+		}
+		if count > 0 {
+			slog.Info("service booking requests expired", "count", count)
 		}
 	})
 	prune := exclusive(ctx, store, housekeepingJobLockKey, func(ctx context.Context) {

@@ -22,6 +22,9 @@ func (s *blockingMaintenance) CleanupPasswordResetTokens(context.Context) error 
 func (s *blockingMaintenance) ExpireUnpaidOrders(context.Context, time.Time) (int, error) {
 	return 0, nil
 }
+func (s *blockingMaintenance) ExpireServiceBookingRequests(context.Context) (int, error) {
+	return 0, nil
+}
 
 func TestMaintain_CancelsDatabaseWorkBeforeContinuing(t *testing.T) {
 	store := &blockingMaintenance{started: make(chan struct{})}
@@ -65,6 +68,9 @@ func (s *lockedMaintenance) ReleaseExpiredReservations(context.Context) (int, er
 func (s *lockedMaintenance) CleanupSessions(context.Context) error            { return nil }
 func (s *lockedMaintenance) CleanupPasswordResetTokens(context.Context) error { return nil }
 func (s *lockedMaintenance) ExpireUnpaidOrders(context.Context, time.Time) (int, error) {
+	return 0, nil
+}
+func (s *lockedMaintenance) ExpireServiceBookingRequests(context.Context) (int, error) {
 	return 0, nil
 }
 
