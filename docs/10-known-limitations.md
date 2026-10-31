@@ -37,8 +37,10 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Services and local discovery
 
-- Service listings support discovery and seller management. They do not reserve
-  appointments, manage practitioner calendars, take deposits or confirm bookings.
+- Service listings support discovery and seller management, including optional
+  weekly opening hours in the listing's timezone. Those hours are informational:
+  listings do not reserve appointments, manage practitioner calendars, take
+  deposits or confirm bookings.
 - Locality search matches seller-entered neighbourhood/town text. There is no
   geocoding, map display, distance search or live location tracking.
 - Professional qualifications are not verified. The directory does not collect

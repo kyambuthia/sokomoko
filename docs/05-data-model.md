@@ -20,10 +20,13 @@ From the header of `0001_initial_schema.sql`:
 
 Migration `0010_service_listings.sql` adds seller-owned `service_listings` beside
 products. Listings have a stable public slug, category, duration, price mode,
-minor-unit price, currency, broad public area and delivery mode. A version counter
-protects edits; an audit entry and the successful change commit together. Only
-published entries from active shops are public. Draft and archived entries remain
-available to their owning shop. The table has no appointment, precise location,
+minor-unit price, currency, broad public area and delivery mode. Migration
+`0026_service_weekly_availability.sql` adds each listing's IANA timezone and an
+optional `service_weekly_hours` row for each weekday. These local-time intervals
+are informational; they do not create bookable slots. A version counter protects
+edits; an audit entry and the successful change commit together. Only published
+entries from active shops are public. Draft and archived entries remain available
+to their owning shop. The model still has no appointment, precise location,
 practitioner or clinical-data fields. See [services](services-and-local-discovery.md).
 
 ## Tables

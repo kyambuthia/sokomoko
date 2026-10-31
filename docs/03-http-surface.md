@@ -27,7 +27,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
 | `/search` | GET | public | `Search` | `q`, `category`, `page`; 24 products per page |
 | `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `partner_id`, `page`; 24 per page |
-| `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops only |
+| `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops only; optional weekly hours are local-time information, not bookable slots |
 | `/api/categories` | GET | public | `CategoriesAPI` | JSON `{categories}` for the header category nav |
 | `/login` | GET, POST | public | `auth.Login` | `user` role only; honours a safe `next` |
 | `/signup` | GET, POST | public | `auth.SignUp` | Creates a `user` and signs in |
@@ -136,8 +136,9 @@ Seller-only service pages on the partner host are `GET /services`,
 `GET|POST /services/new`, `GET|POST /services/<id>/edit` and
 `GET|HEAD /services/<id>/preview` (private saved listing preview). Admin and staff
 accounts cannot manage these offerings. POST requires CSRF, all editable fields
-and a version number (`0` for creation). Validation errors preserve the entered
-text; a stale edit returns 409 without overwriting the current record.
+and a version number (`0` for creation). The edit form includes a timezone and
+optional weekly hours. Validation errors preserve the entered text; a stale edit
+returns 409 without overwriting the current record.
 
 Partners control order preparation through `dispatched`. Dispatching ships the
 order and starts the courier handoff. Courier accounts update delivery stages
