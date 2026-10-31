@@ -10,9 +10,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/secret"
 )
+
+const maxDurationSeconds = int64(1<<63-1) / int64(time.Second)
 
 const (
 	defaultPort        = "6969"
@@ -143,6 +146,20 @@ func (c Config) Validate() error {
 	}
 	if !validPort(c.Port) {
 		problems = append(problems, "PORT must be between 1 and 65535")
+	}
+	for _, setting := range []struct {
+		name  string
+		value int
+	}{
+		{"DB_CONN_MAX_LIFETIME_SECONDS", c.DBConnMaxLifetime},
+		{"DB_QUERY_TIMEOUT_SECONDS", c.DBQueryTimeout},
+		{"POST_RATE_LIMIT_WINDOW_SECONDS", c.PostRateLimitWindow},
+		{"AUTH_ABUSE_BACKOFF_BASE_SECONDS", c.AuthAbuseBackoffBase},
+		{"AUTH_ABUSE_BACKOFF_MAX_SECONDS", c.AuthAbuseBackoffMax},
+	} {
+		if int64(setting.value) > maxDurationSeconds {
+			problems = append(problems, fmt.Sprintf("%s must not exceed %d seconds", setting.name, maxDurationSeconds))
+		}
 	}
 	if c.Environment != "" && c.Environment != "development" && c.Environment != "test" && c.Environment != "production" {
 		problems = append(problems, "ENV must be development, test, or production")
