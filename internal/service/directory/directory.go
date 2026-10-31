@@ -151,7 +151,7 @@ func (s *Service) Save(ctx context.Context, a *Actor, id int, in Input) (*db.Ser
 		in.WeeklyHours[i].ClosesAt = strings.TrimSpace(in.WeeklyHours[i].ClosesAt)
 	}
 	sort.Slice(in.WeeklyHours, func(i, j int) bool { return in.WeeklyHours[i].Weekday < in.WeeklyHours[j].Weekday })
-	price, err := money.Parse(strings.TrimSpace(in.Price))
+	price, err := money.ParseCurrency(strings.TrimSpace(in.Price), in.Currency)
 	if in.PriceMode == "quote" && strings.TrimSpace(in.Price) == "" {
 		price = 0
 		err = nil

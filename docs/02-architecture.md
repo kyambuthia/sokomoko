@@ -153,7 +153,7 @@ HTTP server timeouts: read 15 s, read header 10 s, write 15 s, idle 60 s.
 
 - **Server-rendered first.** Every feature works as plain HTML forms. JavaScript
   enhances pages but is not required.
-- **The database enforces invariants.** Money columns are integer cents with
+- **The database enforces invariants.** Money columns use fixed-point hundredths with
   `CHECK` constraints; order and checkout totals must equal their parts;
   inventory cannot oversell (`reserved + allocated <= on_hand`).
 - **Transactions retry.** `Store.withTx` retries serialization failures and

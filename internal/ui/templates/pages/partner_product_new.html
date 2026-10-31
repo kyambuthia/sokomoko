@@ -15,7 +15,7 @@
     <div class="form-row">
       <div class="field">
         <label class="label" for="price">Price ({{ currency }})</label>
-        <input class="input" type="text" id="price" name="price" value="{{ .Form.Price }}" required inputmode="decimal" pattern="\d+(\.\d{1,2})?" placeholder="0">
+        <input class="input" type="text" id="price" name="price" value="{{ .Form.Price }}" required inputmode="decimal" pattern="\d+(\.\d{1,2})?" placeholder="{{ moneyInput 0 (currency) }}">
         <small class="hint">Enter whole units for UGX and RWF.</small>
       </div>
       <div class="field">
