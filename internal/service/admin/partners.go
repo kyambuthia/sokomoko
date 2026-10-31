@@ -124,7 +124,10 @@ func (s *Service) SetPartnerStatus(ctx context.Context, actor *Actor, idRaw, sta
 	if err != nil {
 		return ErrPartnerNotFound
 	}
-	found, err := s.store.SetPartnerStatus(ctx, id, status)
+	found, err := s.store.SetPartnerStatusForActor(ctx, actor.ID, id, status)
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return ErrForbiddenPartnerAction
+	}
 	if err != nil {
 		return err
 	}

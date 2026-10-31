@@ -185,14 +185,28 @@ func (s *Store) UpdatePartnerDetails(ctx context.Context, id int, name, contactE
 	return n > 0, err
 }
 
-// SetPartnerStatus changes a partner's status. Suspending also signs out the
-// partner's own logins in the same transaction.
+// SetPartnerStatus changes a partner's status for a trusted internal caller.
 func (s *Store) SetPartnerStatus(ctx context.Context, id int, status string) (bool, error) {
+	return s.setPartnerStatus(ctx, 0, id, status, false)
+}
+
+// SetPartnerStatusForActor revalidates the admin in the partner status
+// transaction.
+func (s *Store) SetPartnerStatusForActor(ctx context.Context, actorID, partnerID int, status string) (bool, error) {
+	return s.setPartnerStatus(ctx, actorID, partnerID, status, true)
+}
+
+func (s *Store) setPartnerStatus(ctx context.Context, actorID, partnerID int, status string, requireAdmin bool) (bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	found := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, "UPDATE partners SET status = $1 WHERE id = $2", status, id)
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
+		result, err := tx.ExecContext(ctx, "UPDATE partners SET status = $1 WHERE id = $2", status, partnerID)
 		if err != nil {
 			return wrapDBError(err)
 		}
@@ -205,7 +219,7 @@ func (s *Store) SetPartnerStatus(ctx context.Context, id int, status string) (bo
 			return nil
 		}
 		_, err = tx.ExecContext(ctx,
-			"DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM partner_users WHERE partner_id = $1)", id)
+			"DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM partner_users WHERE partner_id = $1)", partnerID)
 		return err
 	})
 	return found, err
