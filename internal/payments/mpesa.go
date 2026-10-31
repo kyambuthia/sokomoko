@@ -2,7 +2,9 @@ package payments
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,10 +17,11 @@ import (
 )
 
 const (
-	mpesaSandboxAPI    = "https://sandbox.safaricom.co.ke"
-	mpesaProductionAPI = "https://api.safaricom.co.ke"
-	mpesaPayBill       = "CustomerPayBillOnline"
-	mpesaBuyGoods      = "CustomerBuyGoodsOnline"
+	maxMpesaTokenCacheEntries = 16
+	mpesaSandboxAPI           = "https://sandbox.safaricom.co.ke"
+	mpesaProductionAPI        = "https://api.safaricom.co.ke"
+	mpesaPayBill              = "CustomerPayBillOnline"
+	mpesaBuyGoods             = "CustomerBuyGoodsOnline"
 )
 
 // Kenya does not observe daylight saving, and the distroless runtime image
@@ -112,7 +115,7 @@ func (m *Mpesa) token(ctx context.Context, cfg Config) (string, error) {
 	if key == "" || secret == "" {
 		return "", ErrNotConfigured
 	}
-	cacheKey := m.base(cfg) + "|" + key
+	cacheKey := mpesaTokenCacheKey(m.base(cfg), key)
 	m.mu.Lock()
 	if cached, ok := m.tokens[cacheKey]; ok && time.Now().Before(cached.expires) {
 		m.mu.Unlock()
@@ -138,13 +141,43 @@ func (m *Mpesa) token(ctx context.Context, cfg Config) (string, error) {
 	if lifetime <= 0 {
 		lifetime = 3599
 	}
-	m.mu.Lock()
-	if m.tokens == nil {
-		m.tokens = map[string]cachedToken{}
-	}
-	m.tokens[cacheKey] = cachedToken{value: resp.AccessToken, expires: time.Now().Add(time.Duration(lifetime-60) * time.Second)}
-	m.mu.Unlock()
+	m.cacheToken(cacheKey, cachedToken{
+		value:   resp.AccessToken,
+		expires: time.Now().Add(time.Duration(lifetime-60) * time.Second),
+	})
 	return resp.AccessToken, nil
+}
+
+func mpesaTokenCacheKey(baseURL, consumerKey string) string {
+	digest := sha256.Sum256([]byte(baseURL + "\x00" + consumerKey))
+	return hex.EncodeToString(digest[:])
+}
+
+func (m *Mpesa) cacheToken(key string, token cachedToken) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	if m.tokens == nil {
+		m.tokens = make(map[string]cachedToken)
+	}
+	for cacheKey, cached := range m.tokens {
+		if !cached.expires.After(now) {
+			delete(m.tokens, cacheKey)
+		}
+	}
+	if _, exists := m.tokens[key]; !exists && len(m.tokens) >= maxMpesaTokenCacheEntries {
+		oldestKey := ""
+		var oldestExpiry time.Time
+		for cacheKey, cached := range m.tokens {
+			if oldestKey == "" || cached.expires.Before(oldestExpiry) {
+				oldestKey = cacheKey
+				oldestExpiry = cached.expires
+			}
+		}
+		delete(m.tokens, oldestKey)
+	}
+	m.tokens[key] = token
 }
 
 func (m *Mpesa) password(cfg Config, now time.Time) (string, string, error) {
