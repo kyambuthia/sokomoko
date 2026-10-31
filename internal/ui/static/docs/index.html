@@ -45,15 +45,20 @@
 
   <main id="main" class="container main docs-page" tabindex="-1">
     <section class="section docs-intro" aria-labelledby="page-title">
-      <div class="page-head">
-        <h1 id="page-title">Feature guide</h1>
-        <span class="badge">Asiliano demo</span>
+      <div class="docs-intro__copy">
+        <div class="page-head">
+          <h1 id="page-title">Feature guide</h1>
+          <span class="badge">Asiliano demo</span>
+        </div>
+        <p>Sokomoko is a multi-vendor marketplace with a customer storefront, partner workspace, operations console, and JSON API. This guide describes the codebase and the demo currently running at asiliano.online.</p>
+        <div class="row">
+          <a class="btn" href="https://asiliano.online/">Open storefront</a>
+          <a class="btn btn-secondary" href="https://partner.asiliano.online/login">Open partner demo</a>
+        </div>
       </div>
-      <p>Sokomoko is a multi-vendor marketplace with a customer storefront, partner workspace, operations console, and JSON API. This guide describes the codebase and the demo currently running at asiliano.online.</p>
-      <div class="row">
-        <a class="btn" href="https://asiliano.online/">Open storefront</a>
-        <a class="btn btn-secondary" href="https://partner.asiliano.online/login">Open partner demo</a>
-      </div>
+      <figure class="docs-hero-art">
+        <img src="/static/docs/art/marketplace-cutout.webp" alt="Dithered cutout illustration connecting a shopper, shopkeeper, and courier." width="1152" height="768" fetchpriority="high" decoding="async">
+      </figure>
     </section>
 
     <nav class="chips docs-nav" aria-label="On this page">
@@ -83,6 +88,7 @@
 
     <section class="section docs-section" id="buyers" aria-labelledby="buyers-title">
       <div class="page-head"><h2 id="buyers-title">For buyers</h2><span class="badge">Storefront</span></div>
+      <figure class="docs-section-art"><img src="/static/docs/art/buyers-cutout.webp" alt="Dithered cutout illustration of a shopper choosing a household item while checking a phone." width="768" height="512" loading="lazy" decoding="async"></figure>
       <div class="list docs-list">
         <article class="list-item docs-list-item"><strong>Browse</strong><span>Explore categories, product details, images, and full-text search.</span></article>
         <article class="list-item docs-list-item"><strong>Accounts</strong><span>Sign up, sign in, manage sessions, change a password, and view an account.</span></article>
@@ -94,6 +100,7 @@
 
     <section class="section docs-section" id="partners" aria-labelledby="partners-title">
       <div class="page-head"><h2 id="partners-title">For partners</h2><a class="btn btn-secondary btn-sm" href="https://partner.asiliano.online/login">Partner sign in</a></div>
+      <figure class="docs-section-art"><img src="/static/docs/art/partners-cutout.webp" alt="Dithered cutout illustration of a shop owner checking a tablet and packing an order." width="768" height="512" loading="lazy" decoding="async"></figure>
       <p class="docs-lead">Partner users operate within a dedicated workspace and can access products and eligible orders associated with their own partner account.</p>
       <div class="docs-grid docs-grid-two">
         <article class="card docs-card"><h3>Store settings</h3><p>Configure a store name, slug, description, and contact details.</p></article>
@@ -105,6 +112,7 @@
 
     <section class="section docs-section" id="couriers" aria-labelledby="couriers-title">
       <div class="page-head"><h2 id="couriers-title">For riders & couriers</h2><a class="btn btn-secondary btn-sm" href="https://courier.asiliano.online/login">Courier sign in</a></div>
+      <figure class="docs-section-art"><img src="/static/docs/art/couriers-cutout.webp" alt="Dithered cutout illustration of a courier handing a parcel to a customer beside a bicycle." width="768" height="512" loading="lazy" decoding="async"></figure>
       <p class="docs-lead">Operations staff assign shipped orders to a courier. Each courier account sees its own assigned jobs and the information needed to deliver them.</p>
       <div class="docs-grid docs-grid-two">
         <article class="card docs-card"><h3>Dispatch</h3><p>Admins and staff assign or reassign an order before pickup. Failed attempts return to dispatch for review and reassignment.</p></article>
@@ -118,6 +126,7 @@
 
     <section class="section docs-section" id="services" aria-labelledby="services-title">
       <div class="page-head"><h2 id="services-title">Local services</h2><span class="badge">Directory</span></div>
+      <figure class="docs-section-art"><img src="/static/docs/art/services-cutout.webp" alt="Dithered cutout illustration of hairstyling, home maintenance, and remote design services." width="768" height="512" loading="lazy" decoding="async"></figure>
       <p class="docs-lead">The codebase supports seller offerings alongside products, with the same storefront design and partner workspace.</p>
       <div class="docs-grid docs-grid-two">
         <article class="card docs-card"><h3>Find a local offering</h3><p>Browse services by title, business, category, neighbourhood and where the service happens. Open any service to browse other published offerings from the same business. Listings show duration, currency, fixed or starting price, or quote-only pricing, and whether the offering is at a business, mobile or remote.</p></article>
@@ -128,6 +137,7 @@
 
     <section class="section docs-section" id="messaging" aria-labelledby="messaging-title">
       <div class="page-head"><h2 id="messaging-title">Handles & messages</h2><span class="badge">Buyer · shop · courier</span></div>
+      <figure class="docs-section-art"><img src="/static/docs/art/messaging-cutout.webp" alt="Dithered cutout illustration of two people messaging with a padlock between them." width="768" height="512" loading="lazy" decoding="async"></figure>
       <p class="docs-lead">Each username is also an @handle. Open Messages to find an exact buyer or seller handle, or contact someone from a product, service, order, or assigned delivery.</p>
       <div class="docs-grid docs-grid-two">
         <article class="card docs-card"><h3>Message requests</h3><p>Send one introduction by handle. The recipient accepts before the conversation continues. Product, service and order conversations open with their marketplace context.</p></article>
@@ -141,6 +151,7 @@
 
     <section class="section docs-section" id="operators" aria-labelledby="operators-title">
       <div class="page-head"><h2 id="operators-title">For operators</h2><span class="badge">Admin workspace</span></div>
+      <figure class="docs-section-art"><img src="/static/docs/art/operations-cutout.webp" alt="Dithered cutout illustration of an operations coordinator reviewing parcels, a route map, and a tablet." width="768" height="512" loading="lazy" decoding="async"></figure>
       <div class="docs-grid docs-grid-two">
         <article class="card docs-card"><h3>Marketplace catalog</h3><p>Manage categories, onboard partners, and suspend or reactivate partner stores.</p></article>
         <article class="card docs-card"><h3>Orders & deliveries</h3><p>Review orders, create courier logins, assign or reassign shipped orders, and track delivery stages.</p></article>
