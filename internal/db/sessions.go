@@ -106,7 +106,7 @@ func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token
 		// Serialize token replacement and cooldown checks with token use.
 		var blocked bool
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COALESCE(password_reset_requested_at > now() - interval '5 minutes', FALSE)
+			`SELECT COALESCE(password_reset_requested_at > clock_timestamp() - interval '5 minutes', FALSE)
 			 FROM users WHERE id = $1 FOR UPDATE`, userID,
 		).Scan(&blocked); err != nil {
 			return err
@@ -124,7 +124,7 @@ func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
-			"UPDATE users SET password_reset_requested_at = now() WHERE id = $1", userID,
+			"UPDATE users SET password_reset_requested_at = clock_timestamp() WHERE id = $1", userID,
 		); err != nil {
 			return err
 		}
