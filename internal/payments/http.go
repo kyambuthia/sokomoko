@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const maxProviderResponseBytes = 1 << 20
+
 func defaultClient() *http.Client {
 	return &http.Client{Timeout: 20 * time.Second}
 }
@@ -41,9 +43,12 @@ func doJSON(ctx context.Context, client *http.Client, method, url string, header
 		return 0, fmt.Errorf("%w: %v", ErrProviderFailure, err)
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxProviderResponseBytes+1))
 	if err != nil {
 		return resp.StatusCode, fmt.Errorf("%w: read response: %v", ErrProviderFailure, err)
+	}
+	if len(raw) > maxProviderResponseBytes {
+		return resp.StatusCode, fmt.Errorf("%w: response exceeds %d bytes", ErrProviderFailure, maxProviderResponseBytes)
 	}
 	if out != nil && len(raw) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {
