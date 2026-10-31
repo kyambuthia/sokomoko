@@ -61,17 +61,31 @@ export class UIOrderProgress extends HTMLElement {
     const current = stepFor(this.getAttribute("status"), this.getAttribute("partner-status"), this.getAttribute("delivery-status"));
     const list = document.createElement("ol");
     list.className = "progress";
-    if (cancelled) list.dataset.cancelled = "";
-    list.setAttribute("aria-label", cancelled ? "Order cancelled" : `Order ${STEPS[current].toLowerCase()}`);
+    if (cancelled) {
+      list.dataset.cancelled = "";
+      list.setAttribute("aria-hidden", "true");
+    } else {
+      list.setAttribute("aria-label", `Order ${STEPS[current].toLowerCase()}`);
+    }
     STEPS.forEach((label, index) => {
       const item = document.createElement("li");
       item.textContent = label;
       if (!cancelled && index <= current) item.dataset.done = "";
-      if (!cancelled && index === current) item.dataset.current = "";
+      if (!cancelled && index === current) {
+        item.dataset.current = "";
+        item.setAttribute("aria-current", "step");
+      }
       list.append(item);
     });
-    if (cancelled) list.querySelector("li").textContent = "Cancelled";
-    this.replaceChildren(list);
+    if (cancelled) {
+      const status = document.createElement("p");
+      status.className = "small muted";
+      status.setAttribute("role", "status");
+      status.textContent = "Order cancelled";
+      this.replaceChildren(list, status);
+    } else {
+      this.replaceChildren(list);
+    }
   }
 }
 
