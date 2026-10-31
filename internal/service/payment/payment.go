@@ -716,8 +716,8 @@ func (s *Service) HandleWebhook(ctx context.Context, providerID string, r *http.
 
 // HandleCallback processes an unsigned provider callback (M-Pesa). The
 // per-payment token in the URL authenticates it, the provider identifiers
-// must match the stored attempt, and a success is confirmed with the
-// provider before capture.
+// must match the stored attempt, and the callback outcome is confirmed with
+// the provider before it changes payment state.
 func (s *Service) HandleCallback(ctx context.Context, providerID, token string, r *http.Request, body []byte) error {
 	provider, cfg, err := s.providerFor(ctx, providerID)
 	if err != nil {
@@ -751,11 +751,8 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if event.Result == nil {
 		return nil
 	}
-	if event.Result.Status == payments.StatusFailed {
-		if payment.AttemptStatus == db.PaymentAttemptStatusCompleted {
-			return nil
-		}
-		return s.store.FailPaymentAttempt(ctx, payment.AttemptID, event.Result.Reason)
+	if event.Result.Status == payments.StatusFailed && payment.AttemptStatus == db.PaymentAttemptStatusCompleted {
+		return nil
 	}
 	confirmed, err := s.verifyWith(ctx, provider, cfg, payment, payload)
 	if err != nil {
@@ -767,7 +764,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if confirmed.Status != payments.StatusPaid {
 		return s.apply(ctx, payment, confirmed)
 	}
-	if event.Result.Receipt != "" {
+	if event.Result.Status == payments.StatusPaid && event.Result.Receipt != "" {
 		confirmed.Receipt = event.Result.Receipt
 	}
 	return s.apply(ctx, payment, confirmed)
