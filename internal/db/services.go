@@ -115,12 +115,27 @@ func (s *Store) BrowseServices(ctx context.Context, f ServiceFilter) ([]ServiceL
 func (s *Store) PublicService(ctx context.Context, slug string) (*ServiceListing, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	v, err := scanService(s.DB.QueryRowContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE s.slug=$1 AND s.state='published' AND p.status='active'`, slug))
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
 	if err != nil {
 		return nil, err
 	}
-	v.WeeklyHours, err = loadServiceWeeklyHours(ctx, s.DB, v.ID)
-	return v, err
+	defer tx.Rollback()
+
+	v, err := scanService(tx.QueryRowContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE s.slug=$1 AND s.state='published' AND p.status='active'`, slug))
+	if err != nil {
+		return nil, err
+	}
+	v.WeeklyHours, err = loadServiceWeeklyHours(ctx, tx, v.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, wrapDBError(err)
+	}
+	return v, nil
 }
 
 // OwnServices scopes the query in SQL; no caller-supplied partner ID is trusted.
