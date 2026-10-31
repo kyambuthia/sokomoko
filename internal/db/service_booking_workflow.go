@@ -194,11 +194,8 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 		}
 
 		var current struct {
-			status         string
-			version        int64
-			responseIsOpen bool
-			startsInFuture bool
-			endsInPast     bool
+			status  string
+			version int64
 		}
 		query := `SELECT status,version FROM service_bookings WHERE id=$1`
 		args := []any{bookingID}
@@ -217,14 +214,6 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRowContext(ctx,
-			`SELECT response_deadline > clock_timestamp(),starts_at > clock_timestamp(),ends_at <= clock_timestamp()
-			 FROM service_bookings WHERE id=$1`,
-			bookingID,
-		).Scan(&current.responseIsOpen, &current.startsInFuture, &current.endsInPast)
-		if err != nil {
-			return err
-		}
 		if current.version != expectedVersion {
 			return ErrServiceBookingVersionConflict
 		}
@@ -232,26 +221,18 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 		var allowed bool
 		switch {
 		case role == RoleUser && newStatus == "cancelled" &&
-			(current.status == "requested" || current.status == "confirmed") &&
-			current.startsInFuture:
+			(current.status == "requested" || current.status == "confirmed"):
 			allowed = true
-		case role == RolePartner && newStatus == "confirmed" && current.status == "requested":
-			if !current.responseIsOpen {
-				return ErrServiceBookingResponseExpired
-			}
+		case role == RolePartner && (newStatus == "confirmed" || newStatus == "rejected") &&
+			current.status == "requested":
 			allowed = true
-		case role == RolePartner && newStatus == "rejected" && current.status == "requested":
-			if !current.responseIsOpen {
-				return ErrServiceBookingResponseExpired
-			}
+		case role == RolePartner && newStatus == "in_progress" && current.status == "confirmed":
 			allowed = true
-		case role == RolePartner && newStatus == "in_progress" && current.status == "confirmed" && !current.startsInFuture && !current.endsInPast:
+		case role == RolePartner && newStatus == "completed" && current.status == "in_progress":
 			allowed = true
-		case role == RolePartner && newStatus == "completed" && current.status == "in_progress" && current.endsInPast:
+		case role == RolePartner && newStatus == "no_show" && current.status == "confirmed":
 			allowed = true
-		case role == RolePartner && newStatus == "no_show" && current.status == "confirmed" && current.endsInPast:
-			allowed = true
-		case role == RolePartner && newStatus == "cancelled" && current.status == "confirmed" && current.startsInFuture:
+		case role == RolePartner && newStatus == "cancelled" && current.status == "confirmed":
 			allowed = true
 		}
 		if !allowed {
