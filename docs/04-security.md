@@ -60,12 +60,12 @@ With no valid link, a partner user sees empty lists.
 `CSRFMiddleware` runs on every request:
 
 - Safe methods (GET, HEAD, OPTIONS, TRACE) pass.
-- Requests with no session cookie do not need a session token. For these
-  requests, browser Origin or Referer metadata must match the request origin,
-  and Sec-Fetch-Site must not indicate a cross-origin request. This protects
-  login, signup, and password-reset forms before a session exists. Clients that
-  omit browser origin metadata remain supported.
-- With a session cookie, the request must carry the session's CSRF token in the
+- Anonymous requests, including those with an expired or revoked session
+  cookie, do not need a session token. Browser Origin or Referer metadata
+  must match the request origin, and Sec-Fetch-Site must not indicate a
+  cross-origin request. This protects login, signup, and password-reset forms.
+  Clients that omit browser origin metadata remain supported.
+- With a valid session cookie, the request must carry the session's CSRF token in the
   `csrf_token` form field or the `X-CSRF-Token` header. The comparison is
   constant-time. A missing token gets `403 CSRF token missing`, a wrong one
   `403 CSRF token invalid` (JSON error codes on `/api/v1`).

@@ -26,18 +26,10 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Only enforce CSRF for cookie-authenticated requests
+		// Require a token for a valid session cookie and origin checks for anonymous requests
 		cookie, err := r.Cookie(sessionCookieName)
 		if err != nil {
-			// Anonymous forms have no session token yet. Reject browser requests
-			// that identify a different origin, while leaving non-browser clients
-			// without Origin or Referer headers usable.
-			if !s.sameOriginRequest(r) {
-				if isAPIRequest(r) {
-					writeAPIJSONError(w, http.StatusForbidden, "csrf_origin_invalid", "Cross-origin request rejected")
-					return
-				}
-				http.Error(w, "Cross-origin request rejected", http.StatusForbidden)
+			if s.rejectCrossOriginAnonymousRequest(w, r) {
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -65,6 +57,9 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 			// than locking the browser out of /login: drop the cookie from both
 			// the response and this request so downstream handlers cannot
 			// authenticate with it.
+			if s.rejectCrossOriginAnonymousRequest(w, r) {
+				return
+			}
 			s.clearSessionCookie(w, r)
 			r = withoutSessionCookie(r)
 			next.ServeHTTP(w, r)
@@ -103,6 +98,20 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), csrfTokenContextKey, expectedToken)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// rejectCrossOriginAnonymousRequest applies the anonymous-request origin
+// check and writes the matching HTML or API error response.
+func (s *Service) rejectCrossOriginAnonymousRequest(w http.ResponseWriter, r *http.Request) bool {
+	if s.sameOriginRequest(r) {
+		return false
+	}
+	if isAPIRequest(r) {
+		writeAPIJSONError(w, http.StatusForbidden, "csrf_origin_invalid", "Cross-origin request rejected")
+		return true
+	}
+	http.Error(w, "Cross-origin request rejected", http.StatusForbidden)
+	return true
 }
 
 // sameOriginRequest guards anonymous state-changing requests such as login
