@@ -13,14 +13,7 @@ import (
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 )
 
-const (
-	serviceBookingsPageSize = 20
-	serviceBookingsMaxPage  = 1000
-)
-
-func serviceBookingsPageParam(r *http.Request) int {
-	return min(pageParam(r), serviceBookingsMaxPage)
-}
+const serviceBookingsPageSize = 20
 
 type serviceBookingCard struct {
 	Booking           db.ServiceBooking
@@ -87,7 +80,7 @@ func PartnerServiceBookings(a *app.App) http.HandlerFunc {
 			http.Error(w, "Authentication required", http.StatusUnauthorized)
 			return
 		}
-		page := serviceBookingsPageParam(r)
+		page := pageParamBounded(r, 1000)
 		bookings, total, err := a.Bookings.ForPartner(
 			r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, page, serviceBookingsPageSize,
 		)

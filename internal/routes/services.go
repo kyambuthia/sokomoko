@@ -102,7 +102,7 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet, http.MethodHead)
 			return
 		}
-		page := pageParam(r)
+		page := pageParamBounded(r, 1000)
 		data := servicePage{Title: "Services", Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Categories: serviceCategories}
 		data.Filter = db.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: 24}
 		var total int

@@ -27,6 +27,11 @@ func pageParam(r *http.Request) int {
 	return min(page, maxPage)
 }
 
+// pageParamBounded caps a parsed page at a service's maximum supported page.
+func pageParamBounded(r *http.Request, bound int) int {
+	return min(pageParam(r), bound)
+}
+
 func pageCount(limit, total int) int {
 	return max(1, (total+limit-1)/limit)
 }

@@ -134,7 +134,7 @@ func AccountServiceBookings(a *app.App) http.HandlerFunc {
 			http.Error(w, "Customer sign-in required", http.StatusUnauthorized)
 			return
 		}
-		page := serviceBookingsPageParam(r)
+		page := pageParamBounded(r, 1000)
 		bookings, total, err := a.Bookings.ForCustomer(
 			r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, page, serviceBookingsPageSize,
 		)
