@@ -314,9 +314,24 @@ func (s *Store) ListOrdersByUser(ctx context.Context, userID int) ([]Order, erro
 func (s *Store) ListOrdersByUserPage(ctx context.Context, userID, limit, offset int) ([]Order, int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	if limit < 1 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	var total int
 	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders WHERE user_id = $1", userID).Scan(&total); err != nil {
 		return nil, 0, err
+	}
+	if total == 0 {
+		return []Order{}, 0, nil
+	}
+	lastOffset := ((total - 1) / limit) * limit
+	if offset > lastOffset {
+		offset = lastOffset
 	}
 	orders, err := s.listOrders(ctx,
 		"WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC LIMIT $2 OFFSET $3", userID, limit, offset)
