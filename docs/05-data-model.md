@@ -40,6 +40,7 @@ data are not stored. See [services](services-and-local-discovery.md).
 | Identity | `users` | Accounts. `role` is `user`, `staff`, `admin`, `partner` or `courier`. Case-insensitive unique usernames are the public handles. |
 | | `sessions` | SHA-256 of the session token, user, CSRF token, expiry |
 | | `password_reset_tokens` | SHA-256 of the token, expiry, `used_at` |
+| | `password_reset_email_outbox` | AES-GCM sealed recipient and reset URL, expiry, retry schedule and lease |
 | | `partner_users` | Links a `partner` user to one partner (migration 2) |
 | Marketplace | `store_settings` | Single row (`id = 1`): store name, slug, description, contact email |
 | | `partners` | Vendors: name, slug, contact email, `active` or `suspended` |

@@ -131,12 +131,12 @@ page instead of a half-written document.
    - production: `CheckSchema` only, which fails if any embedded migration is
      missing or the database has a version the binary does not know.
 6. Compose services, build the router and middleware, log a startup summary.
-7. `lifecycle.Run` binds the listener, then starts `Maintain` in the
-   background and serves.
+7. `lifecycle.Run` binds the listener, then starts `Maintain` and the
+   password-reset outbox worker when reset email is enabled, and serves.
 
 `Maintain` releases expired stock reservations and cancels unpaid online
-orders every minute, and deletes expired sessions and password-reset tokens
-every five minutes. Each pass runs under a PostgreSQL advisory lock
+orders every minute, and deletes expired sessions, reset tokens and outbox
+entries every five minutes. Each pass runs under a PostgreSQL advisory lock
 (`Store.RunExclusive`), so with several replicas only one does the work; if
 the lock cannot be checked the pass runs anyway, since every job is
 idempotent.
