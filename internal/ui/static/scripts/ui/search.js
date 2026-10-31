@@ -57,6 +57,9 @@ export class UISearch extends HTMLElement {
       const link = document.createElement("a");
       link.href = `/products/${encodeURIComponent(item.slug)}`;
       link.setAttribute("role", "option");
+      link.setAttribute("tabindex", "-1");
+      link.setAttribute("aria-selected", "false");
+      link.addEventListener("mousedown", (event) => event.preventDefault());
       link.id = `${this.list.id}-${this.list.childElementCount}`;
       const name = document.createElement("span");
       name.className = "truncate";
@@ -70,6 +73,9 @@ export class UISearch extends HTMLElement {
     const all = document.createElement("a");
     all.href = `/search?q=${encodeURIComponent(query)}`;
     all.setAttribute("role", "option");
+    all.setAttribute("tabindex", "-1");
+    all.setAttribute("aria-selected", "false");
+    all.addEventListener("mousedown", (event) => event.preventDefault());
     all.id = `${this.list.id}-all`;
     all.textContent = items.length ? `All results for “${query}”` : `No quick matches. Search “${query}”`;
     this.list.append(all);
