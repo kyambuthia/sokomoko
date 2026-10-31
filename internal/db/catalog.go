@@ -346,10 +346,18 @@ func (s *Store) DeleteProduct(ctx context.Context, id int) error {
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "UPDATE products SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id); err != nil {
+		result, err := tx.ExecContext(ctx, "UPDATE products SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id)
+		if err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, "DELETE FROM cart_items WHERE product_id = $1", id)
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if updated == 0 {
+			return ErrProductNotFound
+		}
+		_, err = tx.ExecContext(ctx, "DELETE FROM cart_items WHERE product_id = $1", id)
 		return err
 	})
 }

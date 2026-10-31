@@ -13,6 +13,7 @@ type store interface {
 	CreateProduct(ctx context.Context, product db.Product) (int64, error)
 	GetProductByID(ctx context.Context, id int) (*db.Product, error)
 	UpdateProduct(ctx context.Context, product db.Product) error
+	DeleteProduct(context.Context, int) error
 	GetAllCategories(ctx context.Context) ([]db.Category, error)
 	GetPartnerOrderSummary(ctx context.Context) (db.PartnerOrderSummary, error)
 	GetStoreSettings(ctx context.Context) (*db.StoreSettings, error)

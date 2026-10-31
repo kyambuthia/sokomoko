@@ -90,7 +90,11 @@ func (s *Service) AddToCart(ctx context.Context, userID, productID, quantity int
 	if existing+quantity > MaxLineQuantity {
 		return ErrInvalidQuantity
 	}
-	return s.store.AddToCart(ctx, userID, productID, quantity)
+	err = s.store.AddToCart(ctx, userID, productID, quantity)
+	if errors.Is(err, db.ErrProductNotFound) {
+		return ErrProductNotFound
+	}
+	return err
 }
 
 // UpdateCartItem sets the quantity of a line; zero removes it.

@@ -565,6 +565,22 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	return nil
 }
 
+// DeleteProductForActor soft-deletes a product the actor may manage and removes it from carts.
+func (s *Service) DeleteProductForActor(ctx context.Context, actor *Actor, idRaw string) error {
+	product, err := s.productForActor(ctx, actor, idRaw)
+	if err != nil {
+		return err
+	}
+	if err := s.store.DeleteProduct(ctx, product.ID); err != nil {
+		if errors.Is(err, db.ErrProductNotFound) {
+			return ErrProductNotFound
+		}
+		return fmt.Errorf("delete product: %w", err)
+	}
+	s.logAudit(ctx, actor.ID, "product.delete", "product", product.ID, product.Name)
+	return nil
+}
+
 func (s *Service) OrdersForActor(ctx context.Context, actor *Actor, filter string) (OrdersData, error) {
 	if !canUseWorkspace(actor) {
 		return OrdersData{}, ErrForbiddenWorkspace

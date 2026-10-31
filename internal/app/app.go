@@ -121,6 +121,7 @@ type PartnerService interface {
 	CreateProductForActor(ctx context.Context, actor *partnersvc.Actor, input partnersvc.CreateProductInput) error
 	ProductForEdit(ctx context.Context, actor *partnersvc.Actor, id string) (int, partnersvc.ProductInput, error)
 	UpdateProductForActor(ctx context.Context, actor *partnersvc.Actor, id string, input partnersvc.ProductInput) error
+	DeleteProductForActor(ctx context.Context, actor *partnersvc.Actor, id string) error
 	DashboardForActor(context.Context, *partnersvc.Actor) (partnersvc.DashboardData, error)
 	OrdersForActor(ctx context.Context, actor *partnersvc.Actor, filter string) (partnersvc.OrdersData, error)
 	OrdersPageForActor(context.Context, *partnersvc.Actor, string, int, int) (partnersvc.OrdersData, int, error)

@@ -21,7 +21,15 @@
           <td class="muted">{{ if .Category }}{{ .Category }}{{ else }}–{{ end }}</td>
           <td class="num">{{ money .Price }}</td>
           <td class="num">{{ if gt .StockQuantity 0 }}{{ .StockQuantity }}{{ else }}<span class="badge">out</span>{{ end }}</td>
-          <td class="actions"><a class="btn btn-secondary btn-sm" href="/products/{{ .ID }}/edit" aria-label="Edit {{ .Name }}">{{ icon "pencil" }}Edit</a></td>
+          <td class="actions">
+            <a class="btn btn-secondary btn-sm" href="/products/{{ .ID }}/edit" aria-label="Edit {{ .Name }}">{{ icon "pencil" }}Edit</a>
+            <ui-confirm title="Delete {{ .Name }}?" message="This removes it from the storefront and active carts. Past orders stay unchanged." confirm-label="Delete">
+              <form method="POST" action="/products/{{ .ID }}/delete" class="inline-form" data-submit-once>
+                {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+                <button type="submit" class="btn btn-secondary btn-sm">{{ icon "trash" }}Delete</button>
+              </form>
+            </ui-confirm>
+          </td>
         </tr>
         {{ end }}
       </tbody>

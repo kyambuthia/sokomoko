@@ -41,6 +41,22 @@ func (s *Store) AddToCart(ctx context.Context, userID, productID, quantity int) 
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		// Serialize cart additions with product deletion. The shared row lock
+		// conflicts with the soft-delete update and is held through cart insert.
+		var activeProductID int
+		err := tx.QueryRowContext(ctx,
+			`SELECT p.id FROM products p
+			 WHERE p.id = $1 AND p.deleted_at IS NULL AND `+activePartnerSQL+`
+			 FOR SHARE OF p`,
+			productID,
+		).Scan(&activeProductID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrProductNotFound
+		}
+		if err != nil {
+			return err
+		}
+
 		cartID, err := ensureCartTx(ctx, tx, userID)
 		if err != nil {
 			return err

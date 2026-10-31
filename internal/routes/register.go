@@ -125,6 +125,7 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/services/{id}/preview", withRole(a, db.RolePartner, PartnerServicePreview(a)))
 	mux.Handle("/services/{id}/edit", withRole(a, db.RolePartner, PartnerServiceEdit(a)))
 	mux.Handle("/products/{id}/edit", staff(PartnerProductEdit(a)))
+	mux.Handle("/products/{id}/delete", staff(PartnerProductDelete(a)))
 	mux.Handle("/password", staff(a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/dashboard")))
 	mux.Handle("/orders", staff(PartnerOrders(a)))
 	registerMessaging(a, mux, "partner", []string{db.RolePartner})

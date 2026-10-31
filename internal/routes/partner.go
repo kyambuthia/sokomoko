@@ -371,3 +371,25 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		a.RenderStatus(w, a.Templates.PartnerProductNew, status, data)
 	}
 }
+
+// PartnerProductDelete soft-deletes a product after the product service verifies ownership.
+func PartnerProductDelete(a *app.App) http.HandlerFunc {
+	svc := a.Partner
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		err := svc.DeleteProductForActor(r.Context(), partnerActorFromContext(r), r.PathValue("id"))
+		switch {
+		case errors.Is(err, partnersvc.ErrProductNotFound):
+			http.NotFound(w, r)
+			return
+		case err != nil:
+			log.Printf("partner delete product: %v", err)
+			http.Error(w, "Unable to delete product", http.StatusInternalServerError)
+			return
+		}
+		redirectWithFlash(w, r, "/products", "success", "Product deleted")
+	}
+}

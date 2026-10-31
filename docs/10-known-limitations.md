@@ -22,9 +22,11 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Catalog and vendor management
 
-- **No product deletion or image upload.** `db.DeleteProduct` exists but only
-  tests call it; product images are written only with a new product (seed
-  data). New products show a bundled fallback image.
+- **No product image upload.** Product managers can delete products from the
+  workspace; deleted products disappear from the storefront and active carts,
+  while past orders retain their product records. Product images are written
+  only with a new product (seed data), and new products show a bundled fallback
+  image.
 - **A product's partner cannot be changed after creation.**
 
 ## Services and local discovery

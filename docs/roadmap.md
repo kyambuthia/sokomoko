@@ -82,7 +82,7 @@ reachable.
 
 ## Later
 
-- Product image upload and deletion.
+- Product image upload.
 - [ ] Finish shared rate limiting verification. POST IP limits and
   authentication abuse backoff now use PostgreSQL across replicas, with a
   bounded process-local fallback on database errors. Add database-backed tests
