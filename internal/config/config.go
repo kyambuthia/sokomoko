@@ -201,6 +201,9 @@ func (c Config) Validate() error {
 		}
 		hosts[host] = true
 	}
+	if c.PostRateLimitMax == int(^uint(0)>>1) {
+		problems = append(problems, "POST_RATE_LIMIT_MAX must be less than the maximum integer value")
+	}
 	if c.PostRateLimitMax > 0 && c.PostRateLimitWindow <= 0 {
 		problems = append(problems, "POST_RATE_LIMIT_WINDOW_SECONDS must be positive when rate limiting is enabled")
 	}
