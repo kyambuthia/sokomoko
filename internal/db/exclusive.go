@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql/driver"
+	"log/slog"
 	"time"
 )
 
@@ -26,7 +28,13 @@ func (s *Store) RunExclusive(ctx context.Context, key int64, fn func(context.Con
 		// would release it anyway, but the pool keeps connections open.
 		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_, _ = conn.ExecContext(unlockCtx, "SELECT pg_advisory_unlock($1)", key)
+		var unlocked bool
+		err := conn.QueryRowContext(unlockCtx, "SELECT pg_advisory_unlock($1)", key).Scan(&unlocked)
+		if err != nil || !unlocked {
+			slog.Warn("maintenance advisory unlock failed; discarding connection", "key", key, "unlocked", unlocked, "error", err)
+			// Do not return a possibly lock-holding session to the pool.
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
 	}()
 	fn(ctx)
 	return true, nil
