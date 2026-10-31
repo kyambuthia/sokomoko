@@ -13,7 +13,7 @@ SMTP or host settings.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `ENV` | `development` | `development`, `test`, or `production`. Production turns on strict validation, `Secure` cookies, JSON logs, schema check instead of auto-migrate, and refuses seeding. |
-| `BIND_HOST` | empty (all interfaces) | Optional unbracketed IPv4 or IPv6 listener address. Use `127.0.0.1` for local previews (`.env.example`), or `::1` for IPv6 loopback. Containers must listen on their network interface; local Compose explicitly uses `0.0.0.0` and publishes only to host loopback. This controls the listener, independently of `ALLOWED_HOSTS`. |
+| `BIND_HOST` | empty (all interfaces) | Optional unbracketed IPv4 or IPv6 listener address. `make run` defaults to `127.0.0.1`; override with `make run BIND_HOST=0.0.0.0` for LAN access. Containers must listen on their network interface; local Compose explicitly uses `0.0.0.0` and publishes only to host loopback. This controls the listener, independently of `ALLOWED_HOSTS`. |
 | `PORT` | `6969` | 1 to 65535. The container image sets `8080`. |
 | `LOG_FORMAT` | `text` (`json` in production) | `json` or `text` |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |

@@ -36,8 +36,11 @@ Without Docker (needs a local PostgreSQL):
 
 ```bash
 make db-up    # start PostgreSQL from docker-compose.yml, or set DATABASE_URL to your own server
-make run      # migrate, seed demo data, and serve on :6969
+make run      # migrate, seed demo data, and serve on :6969 (loopback only)
 ```
+
+`make run` binds to loopback by default. Use `make run BIND_HOST=0.0.0.0`
+when another machine needs to reach the development server.
 
 The binary reads only process environment variables; it does not load `.env`
 files. `.env.example` lists every setting. See

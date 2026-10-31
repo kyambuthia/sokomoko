@@ -27,8 +27,8 @@ migrate: ## Apply database migrations
 seed: ## Apply migrations and seed demo data
 	$(GO) run ./cmd/sokomoko seed
 
-run: ## Run the server with demo data
-	$(GO) run ./cmd/sokomoko serve --seed
+run: ## Run the server with demo data (loopback by default)
+	BIND_HOST="$(if $(BIND_HOST),$(BIND_HOST),127.0.0.1)" $(GO) run ./cmd/sokomoko serve --seed
 
 build: ## Build the binary into bin/
 	CGO_ENABLED=0 $(GO) build -trimpath -o bin/sokomoko ./cmd/sokomoko
