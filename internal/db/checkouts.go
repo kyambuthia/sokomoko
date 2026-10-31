@@ -156,6 +156,23 @@ func (s *Store) loadCheckout(ctx context.Context, q querier, where string, args 
 	return checkout, nil
 }
 
+func (s *Store) loadCheckoutSnapshot(ctx context.Context, where string, args ...any) (*Checkout, error) {
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	checkout, err := s.loadCheckout(ctx, tx, where, args...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, wrapDBError(err)
+	}
+	return checkout, nil
+}
+
 func (s *Store) GetCheckoutByToken(ctx context.Context, userID int, token string) (*Checkout, error) {
 	key := strings.TrimSpace(token)
 	if key == "" {
@@ -163,14 +180,14 @@ func (s *Store) GetCheckoutByToken(ctx context.Context, userID int, token string
 	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	return s.loadCheckout(ctx, s.DB, "WHERE user_id = $1 AND token = $2", userID, key)
+	return s.loadCheckoutSnapshot(ctx, "WHERE user_id = $1 AND token = $2", userID, key)
 }
 
 // GetLatestOpenCheckout returns the user's most recent unexpired open checkout.
 func (s *Store) GetLatestOpenCheckout(ctx context.Context, userID int) (*Checkout, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	return s.loadCheckout(ctx, s.DB,
+	return s.loadCheckoutSnapshot(ctx,
 		`WHERE user_id = $1 AND status = 'open' AND expires_at > now()
 		 ORDER BY updated_at DESC, id DESC LIMIT 1`,
 		userID,
