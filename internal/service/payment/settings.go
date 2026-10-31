@@ -301,9 +301,12 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 			supportedProviders = append(supportedProviders, provider.Descriptor().ID)
 		}
 	}
-	if err := s.store.UpdateCommerceSettingsForActor(ctx, actor.ID, settings, supportedProviders); err != nil {
+	if err := s.store.UpdateCommerceSettingsForActorIfUnchanged(ctx, actor.ID, settings, supportedProviders, current); err != nil {
 		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 			return Pricing{}, ErrForbidden
+		}
+		if errors.Is(err, db.ErrCommerceSettingsChanged) {
+			return Pricing{}, fmt.Errorf("%w: pricing changed; reload and retry", ErrInvalidPricing)
 		}
 		if errors.Is(err, db.ErrPaymentProviderCurrencyMismatch) {
 			return Pricing{}, fmt.Errorf("%w: payment settings changed; reload and retry", ErrCurrencyMismatch)

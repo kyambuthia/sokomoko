@@ -52,15 +52,21 @@ func (s *Store) GetCommerceSettings(ctx context.Context) (CommerceSettings, erro
 // enabled payment providers. Call UpdateCommerceSettingsForActor when provider
 // capability data is available.
 func (s *Store) UpdateCommerceSettings(ctx context.Context, c CommerceSettings) error {
-	return s.updateCommerceSettings(ctx, 0, c, nil, false)
+	return s.updateCommerceSettings(ctx, 0, c, nil, false, nil)
 }
 
 // UpdateCommerceSettingsForActor revalidates the admin in the settings transaction.
 func (s *Store) UpdateCommerceSettingsForActor(ctx context.Context, actorID int, c CommerceSettings, supportedProviders []string) error {
-	return s.updateCommerceSettings(ctx, actorID, c, supportedProviders, true)
+	return s.updateCommerceSettings(ctx, actorID, c, supportedProviders, true, nil)
 }
 
-func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c CommerceSettings, supportedProviders []string, requireAdmin bool) error {
+// UpdateCommerceSettingsForActorIfUnchanged saves only if settings still match
+// the snapshot used to validate the submitted values.
+func (s *Store) UpdateCommerceSettingsForActorIfUnchanged(ctx context.Context, actorID int, c CommerceSettings, supportedProviders []string, expected CommerceSettings) error {
+	return s.updateCommerceSettings(ctx, actorID, c, supportedProviders, true, &expected)
+}
+
+func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c CommerceSettings, supportedProviders []string, requireAdmin bool, expected *CommerceSettings) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -69,15 +75,22 @@ func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c Comme
 				return err
 			}
 		}
-		var current string
-		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR UPDATE").Scan(&current); err != nil {
+		var current CommerceSettings
+		var flat, free int64
+		if err := tx.QueryRowContext(ctx,
+			"SELECT currency, shipping_flat_cents, free_shipping_threshold_cents, tax_rate_bp FROM commerce_settings WHERE id = 1 FOR UPDATE",
+		).Scan(&current.Currency, &flat, &free, &current.TaxRateBP); err != nil {
 			return err
+		}
+		current.ShippingFlat, current.FreeShippingThreshold = money.Cents(flat), money.Cents(free)
+		if expected != nil && current != *expected {
+			return ErrCommerceSettingsChanged
 		}
 		if requireAdmin {
 			if err := ensurePaymentProvidersSupportCurrencyTx(ctx, tx, supportedProviders); err != nil {
 				return err
 			}
-		} else if current != c.Currency {
+		} else if current.Currency != c.Currency {
 			// The compatibility API has no provider capability data. Fail closed
 			// on currency changes so it cannot bypass the invariant enforced by
 			// the actor-scoped API while holding the same settings-row lock.
@@ -85,7 +98,7 @@ func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c Comme
 				return err
 			}
 		}
-		if current != c.Currency {
+		if current.Currency != c.Currency {
 			currency, ok := money.LookupCurrency(c.Currency)
 			if ok && currency.MinorDigits < 2 {
 				if !c.ShippingFlat.FitsCurrency(c.Currency) || !c.FreeShippingThreshold.FitsCurrency(c.Currency) {

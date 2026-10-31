@@ -55,6 +55,7 @@ type store interface {
 	GetCommerceSettings(ctx context.Context) (db.CommerceSettings, error)
 	UpdateCommerceSettings(context.Context, db.CommerceSettings) error
 	UpdateCommerceSettingsForActor(ctx context.Context, actorID int, settings db.CommerceSettings, supportedProviders []string) error
+	UpdateCommerceSettingsForActorIfUnchanged(ctx context.Context, actorID int, settings db.CommerceSettings, supportedProviders []string, expected db.CommerceSettings) error
 	ListPaymentProviderConfigs(ctx context.Context) ([]db.PaymentProviderConfig, error)
 	GetPaymentProviderConfig(ctx context.Context, provider string) (*db.PaymentProviderConfig, error)
 	SavePaymentProviderConfig(context.Context, db.PaymentProviderConfig) error

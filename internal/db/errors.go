@@ -14,6 +14,7 @@ var (
 	ErrTransient                       = errors.New("transient database error")
 	ErrProductSlugConflict             = errors.New("product slug conflict")
 	ErrProductCurrencyChanged          = errors.New("product currency changed")
+	ErrCommerceSettingsChanged         = errors.New("commerce settings changed")
 	ErrDeliveryAddressRequired         = errors.New("delivery address required")
 	ErrCartEmpty                       = errors.New("cart is empty")
 	ErrCartItemNotFound                = errors.New("cart item not found")
