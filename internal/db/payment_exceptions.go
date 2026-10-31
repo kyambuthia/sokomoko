@@ -9,6 +9,10 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
+// Paystack's HTTP client times out after 20 seconds; wait a minute before
+// allowing a manual resolution to race an uncertain provider request.
+const paymentRefundResolveGrace = time.Minute
+
 var ErrPaymentExceptionNotFound = errors.New("payment exception not found")
 
 // PaymentException is one confirmed charge that needs an operator refund.
@@ -156,9 +160,16 @@ func (s *Store) setPaymentExceptionStatus(ctx context.Context, actorID, id int, 
 		}
 		var paymentID int
 		var reason, current string
+		var providerRequestInProgress bool
 		if err := tx.QueryRowContext(ctx,
-			"SELECT payment_id, reason, status FROM payment_exceptions WHERE id = $1 FOR UPDATE", id).
-			Scan(&paymentID, &reason, &current); err != nil {
+			`SELECT payment_id, reason, status,
+       status = 'requested' AND provider = 'paystack'
+           AND updated_at > clock_timestamp() - ($2::double precision * interval '1 microsecond')
+FROM payment_exceptions
+WHERE id = $1
+FOR UPDATE`,
+			id, paymentRefundResolveGrace.Microseconds()).
+			Scan(&paymentID, &reason, &current, &providerRequestInProgress); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentExceptionNotFound
 			}
@@ -166,6 +177,9 @@ func (s *Store) setPaymentExceptionStatus(ctx context.Context, actorID, id int, 
 		}
 		if current == "refunded" {
 			return nil
+		}
+		if requireAdmin && status == "refunded" && providerRequestInProgress {
+			return ErrPaymentRefundRequestInProgress
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE payment_exceptions SET status = $2,

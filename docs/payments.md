@@ -78,7 +78,7 @@ On `/payments`, the exceptions table offers:
 | --- | --- |
 | Paystack | **Request refund** calls Paystack's refund API once. The row moves to `pending` and **Check status** reads the result. A processed refund marks it `refunded`. |
 | M-Pesa | Reverse the transaction in the M-Pesa portal, then **Record refund** with the reversal receipt. |
-| any, stuck | A row in `requested`, `pending`, or `review` can be closed with **Mark refunded** and the provider's reference after reconciling it in the provider dashboard. |
+| any, stuck | A row in `pending` or `review` can be closed with **Mark refunded** and the provider's reference after reconciliation. A Paystack row left in `requested` can be resolved after one minute if the request did not finish. |
 
 A refund request is claimed in the database before Paystack is called. If the
 call fails or times out, the row goes to `review` and is never sent again

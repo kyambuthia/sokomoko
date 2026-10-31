@@ -15,7 +15,8 @@ var (
 	ErrRefundUnsupported       = errors.New("automatic refunds are unavailable for this provider")
 	ErrRefundReferenceRequired = errors.New("enter the M-Pesa reversal receipt")
 	ErrRefundNotReady          = errors.New("refund has no provider reference to check")
-	ErrRefundNotResolvable     = errors.New("only a refund under review or awaiting the provider can be closed by hand")
+	ErrRefundNotResolvable     = errors.New("only a reconciled refund can be closed by hand")
+	ErrRefundRequestInProgress = errors.New("the provider refund request is still in progress; try again shortly")
 )
 
 func (s *Service) PaymentExceptions(ctx context.Context) ([]db.PaymentException, error) {
@@ -127,6 +128,9 @@ func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, refer
 	if err := s.store.SetPaymentExceptionStatusForActor(ctx, actor.ID, id, "refunded", reference, ""); err != nil {
 		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 			return nil, ErrForbidden
+		}
+		if errors.Is(err, db.ErrPaymentRefundRequestInProgress) {
+			return nil, ErrRefundRequestInProgress
 		}
 		return nil, err
 	}

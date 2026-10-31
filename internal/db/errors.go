@@ -42,6 +42,7 @@ var (
 	ErrPasswordChanged                 = errors.New("account password changed during request")
 	ErrWorkspaceActorNotFound          = errors.New("active workspace actor not found")
 	ErrPaymentProviderCurrencyMismatch = errors.New("enabled payment provider does not support currency")
+	ErrPaymentRefundRequestInProgress  = errors.New("payment refund request is still in progress")
 	ErrLastPaymentMethod               = errors.New("at least one payment method must remain enabled")
 )
 

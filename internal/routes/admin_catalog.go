@@ -281,7 +281,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 			case errors.Is(err, db.ErrPaymentExceptionNotFound):
 				page.FormError = "That payment exception no longer exists."
 			case errors.Is(err, paymentsvc.ErrRefundNotReady), errors.Is(err, paymentsvc.ErrRefundUnsupported),
-				errors.Is(err, paymentsvc.ErrRefundNotResolvable):
+				errors.Is(err, paymentsvc.ErrRefundNotResolvable), errors.Is(err, paymentsvc.ErrRefundRequestInProgress):
 				page.FormError = sentence(err)
 			case errors.Is(err, paymentsvc.ErrMissingFields), errors.Is(err, paymentsvc.ErrCurrencyMismatch),
 				errors.Is(err, paymentsvc.ErrInvalidPricing), errors.Is(err, paymentsvc.ErrUnknownProvider):
