@@ -64,16 +64,17 @@ func parseProductImageUpload(w http.ResponseWriter, r *http.Request) (*partnersv
 	if header.Size <= 0 || header.Size > maxProductImageInputBytes {
 		return nil, partnersvc.ErrInvalidProductImage
 	}
-	raw, err := io.ReadAll(io.LimitReader(file, maxProductImageInputBytes+1))
-	if err != nil || len(raw) == 0 || len(raw) > maxProductImageInputBytes {
-		return nil, partnersvc.ErrInvalidProductImage
-	}
 
 	select {
 	case productImageDecodeSemaphore <- struct{}{}:
 		defer func() { <-productImageDecodeSemaphore }()
 	case <-r.Context().Done():
 		return nil, r.Context().Err()
+	}
+
+	raw, err := io.ReadAll(io.LimitReader(file, maxProductImageInputBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > maxProductImageInputBytes {
+		return nil, partnersvc.ErrInvalidProductImage
 	}
 
 	config, format, err := image.DecodeConfig(bytes.NewReader(raw))
