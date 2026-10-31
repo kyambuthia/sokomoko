@@ -184,9 +184,11 @@ container. `seed` and `serve --seed` are refused in production.
 
 ## Scaling
 
-Run **one app instance**. The POST rate limit and the auth abuse limiter are
-in process memory, so extra replicas multiply the allowed rate. Maintenance
-jobs are safe to run concurrently but would be duplicated per replica.
+POST limits are shared through PostgreSQL across app instances, with a
+process-local fallback during database errors. Authentication abuse lockouts
+remain per instance, so extra replicas multiply the attempts allowed before an
+account or client is locked. Maintenance jobs use a PostgreSQL advisory lock,
+so they can run on every replica while only one performs each pass.
 
 ## Backups and recovery
 

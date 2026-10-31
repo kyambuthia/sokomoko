@@ -46,10 +46,12 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Operations
 
-- **Rate limits are per instance.** POST rate limits and auth lockouts live in
-  process memory, so running several replicas weakens them. Maintenance jobs
-  are safe to run on every replica: each pass takes a PostgreSQL advisory lock
-  and only one replica does the work.
+- **Authentication lockouts are per instance.** Running several replicas
+  multiplies the login and reset attempts allowed before a lockout. POST rate
+  limits use shared PostgreSQL counters, but fall back to per-instance counters
+  on database errors; an unlogged-table reset after a database crash or failover
+  also clears those counters. Maintenance jobs use an advisory lock, so one
+  replica performs each pass.
 - **Password-reset email has no outbox.** It is sent from a goroutine and
   retried twice on transient failures (5-second timeout per attempt); a
   process restart during that window loses it.

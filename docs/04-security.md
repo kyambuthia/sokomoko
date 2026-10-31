@@ -129,7 +129,7 @@ For development there is an alternative: `seed` creates an admin from
 
 ## Throttling
 
-Two in-memory mechanisms and one persistent password-reset cooldown:
+Authentication abuse lockouts are process-local; POST limits and password-reset cooldowns use PostgreSQL:
 
 | Mechanism | Scope | Config | Behaviour |
 | --- | --- | --- | --- |
@@ -142,8 +142,9 @@ Client IP is `RemoteAddr`, or the right-most `X-Forwarded-For` entry when
 values a client puts in the header cannot change its rate-limit key. This
 assumes exactly one trusted proxy in front of the app.
 
-Both limiters live in process memory, so limits are per instance and reset on
-restart.
+Authentication lockouts are per instance and reset on restart. POST counters are shared
+across instances; during database errors, requests use a process-local fallback. The
+POST counter table is unlogged, so a database crash or failover can reset those counters.
 
 Messaging also has persistent PostgreSQL budgets for contact lookups,
 conversation creation, sends and reports. These are shared across processes.
