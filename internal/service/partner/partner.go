@@ -380,11 +380,7 @@ func (s *Service) OrdersPageForActor(ctx context.Context, actor *Actor, filter s
 	if actorIsPartner(actor) && partnerID == 0 {
 		return OrdersData{Filter: clean}, 0, nil
 	}
-	orders, total, err := s.store.ListFulfillmentOrdersPage(ctx, partnerID, clean, limit, (page-1)*limit)
-	if err != nil {
-		return OrdersData{}, 0, err
-	}
-	summary, err := s.store.FulfillmentSummary(ctx, partnerID)
+	orders, summary, total, err := s.store.ListFulfillmentOrdersPageWithSummary(ctx, partnerID, clean, limit, (page-1)*limit)
 	if err != nil {
 		return OrdersData{}, 0, err
 	}

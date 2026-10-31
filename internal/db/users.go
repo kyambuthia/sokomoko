@@ -338,37 +338,50 @@ func (s *Store) ListUsersByRoles(ctx context.Context, search UserSearch) ([]User
 		where += " AND (username ILIKE $2 OR email ILIKE $2)"
 	}
 
-	var total int
-	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE "+where, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	if total == 0 {
-		return []User{}, 0, nil
-	}
-	lastOffset := ((total - 1) / search.Limit) * search.Limit
-	if search.Offset > lastOffset {
-		return []User{}, total, nil
-	}
-	args = append(args, search.Limit, search.Offset)
-	rows, err := s.DB.QueryContext(ctx,
-		"SELECT "+userColumns+" FROM users WHERE "+where+
-			fmt.Sprintf(" ORDER BY role, lower(username), id LIMIT $%d OFFSET $%d", len(args)-1, len(args)),
-		args...,
-	)
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer tx.Rollback()
 
-	users := []User{}
-	for rows.Next() {
-		user, err := scanUser(rows)
-		if err != nil {
-			return nil, 0, err
-		}
-		users = append(users, *user)
+	var total int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
 	}
-	return users, total, rows.Err()
+	users := []User{}
+	if total > 0 {
+		lastOffset := ((total - 1) / search.Limit) * search.Limit
+		if search.Offset <= lastOffset {
+			args = append(args, search.Limit, search.Offset)
+			rows, err := tx.QueryContext(ctx,
+				"SELECT "+userColumns+" FROM users WHERE "+where+
+					fmt.Sprintf(" ORDER BY role, lower(username), id LIMIT $%d OFFSET $%d", len(args)-1, len(args)),
+				args...,
+			)
+			if err != nil {
+				return nil, 0, err
+			}
+			for rows.Next() {
+				user, err := scanUser(rows)
+				if err != nil {
+					rows.Close()
+					return nil, 0, err
+				}
+				users = append(users, *user)
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return nil, 0, err
+			}
+			if err := rows.Close(); err != nil {
+				return nil, 0, err
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return users, total, nil
 }
 
 // ErrAdminExists is returned by BootstrapAdmin when an admin already exists.

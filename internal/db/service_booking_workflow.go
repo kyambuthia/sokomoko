@@ -28,9 +28,14 @@ func (s *Store) ServiceBookingsForCustomer(ctx context.Context, customerID, limi
 	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer tx.Rollback()
 
 	var authorizedUserID int
-	err := s.DB.QueryRowContext(ctx,
+	err = tx.QueryRowContext(ctx,
 		`SELECT id FROM users WHERE id=$1 AND role=$2 AND deleted_at IS NULL`,
 		customerID, RoleUser,
 	).Scan(&authorizedUserID)
@@ -42,13 +47,13 @@ func (s *Store) ServiceBookingsForCustomer(ctx context.Context, customerID, limi
 	}
 
 	var total int
-	if err := s.DB.QueryRowContext(ctx,
+	if err := tx.QueryRowContext(ctx,
 		`SELECT count(*) FROM service_bookings WHERE customer_id=$1`,
 		customerID,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.DB.QueryContext(ctx,
+	rows, err := tx.QueryContext(ctx,
 		`SELECT `+serviceBookingColumns+`
 		 FROM service_bookings WHERE customer_id=$1
 		 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`,
@@ -57,16 +62,26 @@ func (s *Store) ServiceBookingsForCustomer(ctx context.Context, customerID, limi
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
 	items := make([]ServiceBooking, 0)
 	for rows.Next() {
 		booking, err := scanServiceBooking(rows)
 		if err != nil {
+			rows.Close()
 			return nil, 0, err
 		}
 		items = append(items, *booking)
 	}
-	return items, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, 0, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return items, total, nil
 }
 
 // ServiceBookingsForPartner scopes the queue through active partner membership.
@@ -76,9 +91,14 @@ func (s *Store) ServiceBookingsForPartner(ctx context.Context, partnerUserID, li
 	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer tx.Rollback()
 
 	var allowed bool
-	err := s.DB.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		SELECT EXISTS (
 		    SELECT 1 FROM users u
 		    JOIN partner_users pu ON pu.user_id=u.id
@@ -101,10 +121,10 @@ func (s *Store) ServiceBookingsForPartner(ctx context.Context, partnerUserID, li
 		JOIN users u ON u.id=pu.user_id
 		WHERE u.id=$1 AND u.role=$2 AND u.deleted_at IS NULL AND p.status='active'`
 	var total int
-	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) `+scope, partnerUserID, RolePartner).Scan(&total); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) `+scope, partnerUserID, RolePartner).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.DB.QueryContext(ctx,
+	rows, err := tx.QueryContext(ctx,
 		`SELECT `+serviceBookingQualifiedColumns+` `+scope+`
 		 ORDER BY CASE b.status WHEN 'in_progress' THEN 0 WHEN 'requested' THEN 1 WHEN 'confirmed' THEN 2 ELSE 3 END,
 		          CASE WHEN b.status='in_progress' THEN b.starts_at END ASC,
@@ -117,16 +137,26 @@ func (s *Store) ServiceBookingsForPartner(ctx context.Context, partnerUserID, li
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
 	items := make([]ServiceBooking, 0)
 	for rows.Next() {
 		booking, err := scanServiceBooking(rows)
 		if err != nil {
+			rows.Close()
 			return nil, 0, err
 		}
 		items = append(items, *booking)
 	}
-	return items, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, 0, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return items, total, nil
 }
 
 // TransitionServiceBooking permits a customer to cancel their own future

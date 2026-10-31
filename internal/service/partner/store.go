@@ -23,6 +23,7 @@ type store interface {
 	ListProductsPage(context.Context, db.ProductFilter) ([]db.Product, int, error)
 	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
 	ListFulfillmentOrdersPage(context.Context, int, string, int, int) ([]db.Order, int, error)
+	ListFulfillmentOrdersPageWithSummary(context.Context, int, string, int, int) ([]db.Order, db.PartnerOrderSummary, int, error)
 	FulfillmentSummary(context.Context, int) (db.PartnerOrderSummary, error)
 	UpdateOrderFulfillmentForActor(ctx context.Context, actorID int, actorRole string, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
 	UpsertStoreSettingsForActor(ctx context.Context, actorID int, actorRole string, settings db.StoreSettings) error

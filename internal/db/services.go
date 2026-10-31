@@ -93,24 +93,40 @@ func (s *Store) BrowseServices(ctx context.Context, f ServiceFilter) ([]ServiceL
 	}
 	const predicate = `s.state='published' AND p.status='active' AND ($1='' OR strpos(lower(s.title||' '||s.description||' '||p.name),lower($1))>0) AND ($2='' OR s.category=$2) AND ($3='' OR strpos(lower(s.public_area),lower($3))>0) AND ($4='' OR s.delivery_mode=$4) AND ($5=0 OR s.partner_id=$5) AND (NOT $6 OR EXISTS(SELECT 1 FROM service_weekly_hours h WHERE h.service_listing_id=s.id))`
 	args := []any{f.Query, f.Category, f.Area, f.DeliveryMode, f.PartnerID, f.HasHours}
-	var total int
-	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate+` ORDER BY lower(s.title),s.id LIMIT $7 OFFSET $8`, append(args, f.Limit, f.Offset)...)
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer tx.Rollback()
+
+	var total int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate+` ORDER BY lower(s.title),s.id LIMIT $7 OFFSET $8`, append(args, f.Limit, f.Offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
 	items := []ServiceListing{}
 	for rows.Next() {
 		v, err := scanService(rows)
 		if err != nil {
+			rows.Close()
 			return nil, 0, err
 		}
 		items = append(items, *v)
 	}
-	return items, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, 0, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return items, total, nil
 }
 func (s *Store) PublicService(ctx context.Context, slug string) (*ServiceListing, error) {
 	ctx, cancel := s.queryContext(ctx)
@@ -151,24 +167,40 @@ func (s *Store) OwnServicesByState(ctx context.Context, userID int, state string
 		return nil, 0, ErrServiceNotFound
 	}
 	const scope = `JOIN partner_users pu ON pu.partner_id=s.partner_id JOIN users u ON u.id=pu.user_id WHERE pu.user_id=$1 AND u.role='partner' AND u.deleted_at IS NULL AND p.status='active' AND ($2='' OR s.state=$2)`
-	var total int
-	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope, userID, state).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope+` ORDER BY s.updated_at DESC,s.id DESC LIMIT $3 OFFSET $4`, userID, state, limit, offset)
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer tx.Rollback()
+
+	var total int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope, userID, state).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id `+scope+` ORDER BY s.updated_at DESC,s.id DESC LIMIT $3 OFFSET $4`, userID, state, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
 	items := []ServiceListing{}
 	for rows.Next() {
 		v, err := scanService(rows)
 		if err != nil {
+			rows.Close()
 			return nil, 0, err
 		}
 		items = append(items, *v)
 	}
-	return items, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, 0, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return items, total, nil
 }
 
 // OwnService reads a draft or archived listing only through current shop membership.

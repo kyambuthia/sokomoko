@@ -513,6 +513,17 @@ func fulfillmentPredicate(partnerID int) string {
 // ListFulfillmentOrdersPage applies role scope and status filtering in
 // SQL before loading order lines. partnerID=0 is the admin/staff queue.
 func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, status string, limit, offset int) ([]Order, int, error) {
+	orders, _, total, err := s.listFulfillmentOrdersPage(ctx, partnerID, status, limit, offset, false)
+	return orders, total, err
+}
+
+// ListFulfillmentOrdersPageWithSummary returns the queue page, its total, and
+// the workspace status counts from one read-only database snapshot.
+func (s *Store) ListFulfillmentOrdersPageWithSummary(ctx context.Context, partnerID int, status string, limit, offset int) ([]Order, PartnerOrderSummary, int, error) {
+	return s.listFulfillmentOrdersPage(ctx, partnerID, status, limit, offset, true)
+}
+
+func (s *Store) listFulfillmentOrdersPage(ctx context.Context, partnerID int, status string, limit, offset int, includeSummary bool) ([]Order, PartnerOrderSummary, int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	if limit < 1 {
@@ -541,13 +552,20 @@ func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, st
 
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
-		return nil, 0, err
+		return nil, PartnerOrderSummary{}, 0, err
 	}
 	defer tx.Rollback()
 
 	var total int
 	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM orders o WHERE "+predicate, args...).Scan(&total); err != nil {
-		return nil, 0, err
+		return nil, PartnerOrderSummary{}, 0, err
+	}
+	var summary PartnerOrderSummary
+	if includeSummary {
+		summary, err = fulfillmentSummaryQuery(ctx, tx, partnerID)
+		if err != nil {
+			return nil, PartnerOrderSummary{}, 0, err
+		}
 	}
 	orders := []Order{}
 	if orderPageHasRows(total, limit, offset) {
@@ -556,24 +574,28 @@ func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, st
 		orders, err = listOrdersQuery(ctx, tx, "WHERE "+predicate+" ORDER BY o.created_at DESC, o.id DESC LIMIT "+limitArg+" OFFSET "+offsetArg,
 			append(args, limit, offset)...)
 		if err != nil {
-			return nil, 0, err
+			return nil, PartnerOrderSummary{}, 0, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, 0, wrapDBError(err)
+		return nil, PartnerOrderSummary{}, 0, wrapDBError(err)
 	}
-	return orders, total, nil
+	return orders, summary, total, nil
 }
 
 func (s *Store) FulfillmentSummary(ctx context.Context, partnerID int) (PartnerOrderSummary, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	return fulfillmentSummaryQuery(ctx, s.DB, partnerID)
+}
+
+func fulfillmentSummaryQuery(ctx context.Context, q querier, partnerID int) (PartnerOrderSummary, error) {
 	args := []any{}
 	if partnerID > 0 {
 		args = append(args, partnerID)
 	}
 	var summary PartnerOrderSummary
-	err := s.DB.QueryRowContext(ctx,
+	err := q.QueryRowContext(ctx,
 		`SELECT count(*) FILTER (WHERE o.partner_status = 'new'),
 		        count(*) FILTER (WHERE o.partner_status IN ('accepted', 'packing')),
 		        count(*) FILTER (WHERE o.partner_status = 'dispatched' AND o.status <> 'delivered'),
