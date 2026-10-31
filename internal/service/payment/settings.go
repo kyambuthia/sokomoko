@@ -204,12 +204,18 @@ func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, inp
 
 // ensureAnotherEnabled keeps checkout usable: some other method must remain.
 func (s *Service) ensureAnotherEnabled(ctx context.Context, id string) error {
-	providers, err := s.enabled(ctx)
+	configs, err := s.store.ListPaymentProviderConfigs(ctx)
 	if err != nil {
 		return err
 	}
-	for _, ep := range providers {
-		if ep.provider.Descriptor().ID != id {
+	for _, record := range configs {
+		if !record.Enabled || record.Provider == id {
+			continue
+		}
+		if _, ok := s.registry.Get(record.Provider); !ok {
+			continue
+		}
+		if _, err := s.decrypt(record); err == nil {
 			return nil
 		}
 	}
