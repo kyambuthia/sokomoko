@@ -307,6 +307,11 @@ func (s *Store) ChatThread(ctx context.Context, actorID, id, before, after int) 
 	defer cancel()
 	var result ChatThread
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		// Keep conversation state, block state, and messages on one snapshot.
+		// loadChatTx also locks related delivery rows, so this transaction stays writable.
+		if _, err := tx.ExecContext(ctx, "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"); err != nil {
+			return err
+		}
 		result = ChatThread{Messages: []ChatMessage{}}
 		c, err := loadChatTx(ctx, tx, actorID, id, false)
 		if err != nil {
