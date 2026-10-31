@@ -7,6 +7,19 @@ import (
 	"time"
 )
 
+// revokeUserCredentialsTx clears sessions and reset artifacts after the caller
+// has locked the user row, serializing cleanup with password reset operations.
+func revokeUserCredentialsTx(ctx context.Context, tx *sql.Tx, userID int) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM password_reset_email_outbox WHERE user_id = $1`, userID); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM password_reset_tokens WHERE user_id = $1`, userID)
+	return err
+}
+
 func (s *Store) CreateSession(ctx context.Context, sess Session) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()

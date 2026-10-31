@@ -125,7 +125,7 @@ func (s *Store) HasAdminUser(ctx context.Context) (bool, error) {
 	return exists, err
 }
 
-// UpdateUserPassword replaces a password hash and revokes all sessions.
+// UpdateUserPassword replaces a password hash and revokes sessions and reset links.
 func (s *Store) UpdateUserPassword(ctx context.Context, userID int, passwordHash string) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -142,8 +142,7 @@ func (s *Store) UpdateUserPassword(ctx context.Context, userID int, passwordHash
 		if err != nil || affected == 0 {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", userID)
-		return err
+		return revokeUserCredentialsTx(ctx, tx, userID)
 	})
 }
 
@@ -231,14 +230,7 @@ func (s *Store) deleteUser(ctx context.Context, actorID, id int, requireAdmin bo
 		); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM password_reset_email_outbox WHERE user_id = $1", id); err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, "DELETE FROM password_reset_tokens WHERE user_id = $1", id)
-		return err
+		return revokeUserCredentialsTx(ctx, tx, id)
 	})
 }
 
