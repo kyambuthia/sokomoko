@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -107,8 +108,18 @@ func (h *Handler) role(roles []string, next http.Handler) http.Handler {
 	}))
 }
 
+const maxJSONBodyBytes = 1 << 20
+
 func decodeJSON(r *http.Request, target any) error {
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxJSONBodyBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(body) > maxJSONBodyBytes {
+		return errors.New("request body exceeds 1 MiB")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
