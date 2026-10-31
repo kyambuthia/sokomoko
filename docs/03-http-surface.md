@@ -101,7 +101,7 @@ address as a draft and re-renders the form with `422`.
 | `/products` | GET | admin, staff | `AdminProducts` (50 per page, `?page=`) |
 | `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` (50 per page, `?page=`; updates keep the current page) |
 | `/reports` | GET | admin, staff | `AdminReports` |
-| `/deliveries` | GET | admin, staff | `AdminDeliveries` (50 pending deliveries per page; counts cover all orders) |
+| `/deliveries` | GET, POST | admin, staff | `AdminDeliveries` (50 pending orders per page; counts include non-cancelled orders; POST assigns couriers) |
 | `/couriers/new` | GET, POST | admin | `auth.CourierSignUp` (create a courier account with username and initial password; no email) |
 | `/courier` | GET | public | Redirect to the courier host's `/login` |
 | `/categories` | GET, POST | admin, staff | `AdminCategories` (list, create, rename with `action=update`, delete); `?edit=<id>` opens the edit form |
