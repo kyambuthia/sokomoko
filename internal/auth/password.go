@@ -163,7 +163,6 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 			renderWithStatus(w, tmpl, http.StatusBadRequest, data)
 			return
 		}
-		s.clearAbuseFailures(scope, identifier, true, r)
 		hash, err := hashPassword(password)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -174,6 +173,7 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		s.clearAbuseFailures(scope, identifier, true, r)
 		if err := s.startSession(w, r, user.ID); err != nil {
 			log.Printf("create session after password change: %v", err)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
