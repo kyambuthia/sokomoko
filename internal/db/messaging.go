@@ -159,13 +159,76 @@ func lockChatActorTx(ctx context.Context, tx *sql.Tx, actorID int) error {
 	return err
 }
 
-// Hold assignment and actor rows while authorizing and mutating. Dispatch
-// locks the order before the delivery; keep that order before locking the actor
-// so assignment changes and account deactivation cannot race with message access.
+func lockChatPartnerTx(ctx context.Context, tx *sql.Tx, actorID int, c chatRecord) error {
+	if c.PartnerID <= 0 {
+		return nil
+	}
+	var partnerID int
+	err := tx.QueryRowContext(ctx,
+		`SELECT id FROM partners WHERE id=$1 AND status='active' FOR SHARE`, c.PartnerID,
+	).Scan(&partnerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrChatNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if actorID != c.CustomerID {
+		var memberID int
+		err = tx.QueryRowContext(ctx,
+			`SELECT user_id FROM partner_users WHERE user_id=$1 AND partner_id=$2 FOR SHARE`, actorID, c.PartnerID,
+		).Scan(&memberID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrChatNotFound
+		}
+		return err
+	}
+	// A customer conversation remains live while at least one active partner
+	// account exists. Pin one such account so its deactivation cannot race sends.
+	var memberID int
+	err = tx.QueryRowContext(ctx,
+		`SELECT pu.user_id FROM partner_users pu JOIN users u ON u.id=pu.user_id
+		 WHERE pu.partner_id=$1 AND u.role='partner' AND u.deleted_at IS NULL
+		 ORDER BY pu.user_id LIMIT 1 FOR SHARE OF pu,u`, c.PartnerID,
+	).Scan(&memberID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	return err
+}
+
+func lockChatServiceTx(ctx context.Context, tx *sql.Tx, serviceID int) error {
+	if serviceID <= 0 {
+		return nil
+	}
+	var lockedID int
+	err := tx.QueryRowContext(ctx, `SELECT id FROM service_listings WHERE id=$1 FOR SHARE`, serviceID).Scan(&lockedID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	return err
+}
+
+func lockChatProductTx(ctx context.Context, tx *sql.Tx, productID int) error {
+	if productID <= 0 {
+		return nil
+	}
+	var lockedID int
+	err := tx.QueryRowContext(ctx, `SELECT id FROM products WHERE id=$1 FOR SHARE`, productID).Scan(&lockedID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	return err
+}
+
+// Hold assignment, actor, and partner rows while authorizing and mutating.
+// Dispatch locks the order before the delivery; keep that order before locking
+// the actor so assignment changes and account deactivation cannot race with message access.
 func loadChatTx(ctx context.Context, tx *sql.Tx, actorID, id int, mutate bool) (chatRecord, error) {
-	var deliveryID sql.NullInt64
-	var orderID, serviceID sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT delivery_id,order_id,service_id FROM chat_conversations WHERE id=$1`, id).Scan(&deliveryID, &orderID, &serviceID); err != nil {
+	var deliveryID, partnerID sql.NullInt64
+	var orderID, serviceID, productID sql.NullInt64
+	var customerID int
+	if err := tx.QueryRowContext(ctx, `SELECT delivery_id,order_id,service_id,partner_id,customer_user_id,product_id FROM chat_conversations WHERE id=$1`, id).Scan(&deliveryID, &orderID, &serviceID, &partnerID, &customerID, &productID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return chatRecord{}, ErrChatNotFound
 		}
@@ -185,11 +248,21 @@ func loadChatTx(ctx context.Context, tx *sql.Tx, actorID, id int, mutate bool) (
 		if err := lockChatActorTx(ctx, tx, actorID); err != nil {
 			return chatRecord{}, err
 		}
+		if partnerID.Valid {
+			if err := lockChatPartnerTx(ctx, tx, actorID, chatRecord{PartnerID: int(partnerID.Int64), CustomerID: customerID}); err != nil {
+				return chatRecord{}, err
+			}
+		}
 	}
 	if serviceID.Valid && mutate {
 		// SaveService locks the actor before the listing; use the same order
 		// while pinning the service state against archiving.
-		if _, err := tx.ExecContext(ctx, `SELECT id FROM service_listings WHERE id=$1 FOR SHARE`, serviceID.Int64); err != nil {
+		if err := lockChatServiceTx(ctx, tx, int(serviceID.Int64)); err != nil {
+			return chatRecord{}, err
+		}
+	}
+	if productID.Valid && mutate {
+		if err := lockChatProductTx(ctx, tx, int(productID.Int64)); err != nil {
 			return chatRecord{}, err
 		}
 	}

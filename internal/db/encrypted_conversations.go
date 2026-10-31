@@ -29,6 +29,15 @@ func startEncryptedChat(ctx context.Context, tx *sql.Tx, actorID int, r Encrypte
 	if err = lockChatActorTx(ctx, tx, actorID); err != nil {
 		return err
 	}
+	if err = lockChatPartnerTx(ctx, tx, actorID, c); err != nil {
+		return err
+	}
+	if err = lockChatServiceTx(ctx, tx, c.ServiceID); err != nil {
+		return err
+	}
+	if err = lockChatProductTx(ctx, tx, c.ProductID); err != nil {
+		return err
+	}
 	if err = c.lockPair(ctx, tx); err != nil {
 		return err
 	}
@@ -53,8 +62,12 @@ func startEncryptedChat(ctx context.Context, tx *sql.Tx, actorID int, r Encrypte
 	if err != nil {
 		return err
 	}
-	if _, err = loadChatTx(ctx, tx, actorID, id, true); err != nil {
+	loaded, err := loadChatTx(ctx, tx, actorID, id, true)
+	if err != nil {
 		return err
+	}
+	if !loaded.Live {
+		return ErrChatClosed
 	}
 	out.ConversationID = id
 	return nil

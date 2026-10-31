@@ -228,6 +228,15 @@ func (s *Store) StartChat(ctx context.Context, actorID int, target ChatTarget, b
 		if err := lockChatActorTx(ctx, tx, actorID); err != nil {
 			return err
 		}
+		if err := lockChatPartnerTx(ctx, tx, actorID, c); err != nil {
+			return err
+		}
+		if err := lockChatServiceTx(ctx, tx, c.ServiceID); err != nil {
+			return err
+		}
+		if err := lockChatProductTx(ctx, tx, c.ProductID); err != nil {
+			return err
+		}
 		if err := c.lockPair(ctx, tx); err != nil {
 			return err
 		}

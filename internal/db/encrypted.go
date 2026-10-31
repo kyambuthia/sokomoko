@@ -122,6 +122,17 @@ func (s *Store) EncryptedChat(ctx context.Context, userID int, r EncryptedReques
 			if savedHash != hash {
 				return ErrChatConflict
 			}
+			if r.Op == "start" {
+				var replayRole string
+				if err := tx.QueryRowContext(ctx,
+					`SELECT role FROM users WHERE id=$1 AND deleted_at IS NULL FOR SHARE`, userID,
+				).Scan(&replayRole); err != nil {
+					return ErrChatNotFound
+				}
+				if replayRole != RoleUser && replayRole != RolePartner && replayRole != RoleCourier {
+					return ErrChatNotFound
+				}
+			}
 			return json.Unmarshal(saved, &out)
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
