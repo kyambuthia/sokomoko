@@ -1,6 +1,9 @@
 package app
 
 import (
+	"container/list"
+	"crypto/sha256"
+	"encoding/hex"
 	"math"
 	"net/http"
 	"strconv"
@@ -9,9 +12,15 @@ import (
 	"time"
 )
 
+const (
+	maxRateLimitEntries  = 50_000
+	maxRateLimitKeyBytes = 256
+)
+
 type rateLimitEntry struct {
 	windowStart time.Time
 	count       int
+	lru         *list.Element
 }
 
 type ipRateLimiter struct {
@@ -19,6 +28,7 @@ type ipRateLimiter struct {
 	window          time.Duration
 	max             int
 	entries         map[string]rateLimitEntry
+	lru             *list.List
 	lastCleanup     time.Time
 	cleanupInterval time.Duration
 }
@@ -28,6 +38,7 @@ func newIPRateLimiter(max int, window time.Duration) *ipRateLimiter {
 		window:          window,
 		max:             max,
 		entries:         make(map[string]rateLimitEntry),
+		lru:             list.New(),
 		cleanupInterval: window,
 	}
 }
@@ -38,11 +49,16 @@ func (l *ipRateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 
 	l.cleanupLocked(now)
 
+	key = boundedRateLimitKey(key)
 	entry, ok := l.entries[key]
 	if !ok || now.Sub(entry.windowStart) >= l.window {
-		l.entries[key] = rateLimitEntry{windowStart: now, count: 1}
+		if ok {
+			l.removeLocked(key, entry)
+		}
+		l.putLocked(key, rateLimitEntry{windowStart: now, count: 1})
 		return true, 0
 	}
+	l.touchLocked(key, entry)
 
 	if entry.count >= l.max {
 		retryAfter := l.window - now.Sub(entry.windowStart)
@@ -57,16 +73,71 @@ func (l *ipRateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 	return true, 0
 }
 
+func (l *ipRateLimiter) putLocked(key string, entry rateLimitEntry) {
+	if l.lru == nil {
+		l.lru = list.New()
+	}
+	if _, exists := l.entries[key]; !exists && len(l.entries) >= maxRateLimitEntries {
+		l.evictOldestLocked()
+	}
+	entry.lru = l.lru.PushFront(key)
+	l.entries[key] = entry
+}
+
+func (l *ipRateLimiter) touchLocked(key string, entry rateLimitEntry) {
+	if l.lru == nil {
+		l.lru = list.New()
+	}
+	if entry.lru == nil {
+		entry.lru = l.lru.PushFront(key)
+	} else {
+		l.lru.MoveToFront(entry.lru)
+	}
+	l.entries[key] = entry
+}
+
+func (l *ipRateLimiter) removeLocked(key string, entry rateLimitEntry) {
+	if entry.lru != nil && l.lru != nil {
+		l.lru.Remove(entry.lru)
+	}
+	delete(l.entries, key)
+}
+
+func (l *ipRateLimiter) evictOldestLocked() {
+	if l.lru != nil {
+		if oldest := l.lru.Back(); oldest != nil {
+			key := oldest.Value.(string)
+			l.lru.Remove(oldest)
+			delete(l.entries, key)
+			return
+		}
+	}
+	// Entries inserted directly by package tests or older callers may not yet
+	// have an LRU node, so still enforce the hard map bound in that case.
+	for key := range l.entries {
+		delete(l.entries, key)
+		return
+	}
+}
+
 func (l *ipRateLimiter) cleanupLocked(now time.Time) {
 	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < l.cleanupInterval {
 		return
 	}
 	for key, entry := range l.entries {
 		if now.Sub(entry.windowStart) >= l.window {
-			delete(l.entries, key)
+			l.removeLocked(key, entry)
 		}
 	}
 	l.lastCleanup = now
+}
+
+func boundedRateLimitKey(key string) string {
+	if len(key) <= maxRateLimitKeyBytes {
+		return key
+	}
+	digest := sha256.Sum256([]byte(key))
+	return "\x00rate-sha256:" + hex.EncodeToString(digest[:])
 }
 
 // RateLimitByKey limits requests per key, for example a proxy-aware client IP.
