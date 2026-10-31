@@ -39,7 +39,7 @@ type store interface {
 	BootstrapAdmin(ctx context.Context, admin db.User, staffPasswordHashes []string, name db.StaffNamer) ([]db.User, error)
 	UsePasswordResetToken(ctx context.Context, token, passwordHash string) (bool, error)
 	PartnerIDForUser(ctx context.Context, userID int) (int, error)
-	UpdateUserPassword(ctx context.Context, userID int, passwordHash string) error
+	ChangeUserPassword(ctx context.Context, userID int, expectedPasswordHash, passwordHash string, session db.Session) error
 }
 
 type Config struct {

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -169,17 +170,24 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		if err := s.store.UpdateUserPassword(r.Context(), user.ID, hash); err != nil {
+		session, err := s.newSession(user.ID)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if err := s.store.ChangeUserPassword(r.Context(), user.ID, user.PasswordHash, hash, session); err != nil {
+			if errors.Is(err, db.ErrPasswordChanged) {
+				data.Error = "Your password changed in another request. Sign in again to continue."
+				renderWithStatus(w, tmpl, http.StatusConflict, data)
+				return
+			}
 			log.Printf("password change failed for user_id=%d: %v", user.ID, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		s.clearAbuseFailures(scope, identifier, true, r)
-		if err := s.startSession(w, r, user.ID); err != nil {
-			log.Printf("create session after password change: %v", err)
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
+		s.revokeRequestSessions(r.Context(), r, "password change: revoke previous session")
+		s.setSessionCookie(w, r, session)
 		http.Redirect(w, r, action+"?changed=1", http.StatusSeeOther)
 	}
 }

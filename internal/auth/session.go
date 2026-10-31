@@ -45,32 +45,40 @@ func (s *Service) shouldUseSecureCookies(r *http.Request) bool {
 // already carried so a pre-login session ID can never be promoted (session
 // fixation).
 func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int) error {
-	cookieName := s.sessionCookieNameFor(r)
 	s.revokeRequestSessions(r.Context(), r, "sign-in: revoke previous session")
-	sessionToken, err := generateOpaqueToken(32)
+	session, err := s.newSession(userID)
 	if err != nil {
 		return err
+	}
+	if err := s.store.CreateSession(r.Context(), session); err != nil {
+		return err
+	}
+	s.setSessionCookie(w, r, session)
+	return nil
+}
+
+func (s *Service) newSession(userID int) (db.Session, error) {
+	sessionToken, err := generateOpaqueToken(32)
+	if err != nil {
+		return db.Session{}, err
 	}
 	csrfToken, err := generateOpaqueToken(32)
 	if err != nil {
-		return err
+		return db.Session{}, err
 	}
-	expiresAt := time.Now().Add(sessionDuration)
-
-	err = s.store.CreateSession(r.Context(), db.Session{
+	return db.Session{
 		ID:        sessionToken,
 		UserID:    userID,
 		CSRFToken: csrfToken,
-		ExpiresAt: expiresAt,
-	})
-	if err != nil {
-		return err
-	}
+		ExpiresAt: time.Now().Add(sessionDuration),
+	}, nil
+}
 
+func (s *Service) setSessionCookie(w http.ResponseWriter, r *http.Request, session db.Session) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     cookieName,
-		Value:    sessionToken,
-		Expires:  expiresAt,
+		Name:     s.sessionCookieNameFor(r),
+		Value:    session.ID,
+		Expires:  session.ExpiresAt,
 		MaxAge:   int(sessionDuration.Seconds()),
 		Domain:   s.sessionCookieDomain,
 		Path:     "/",
@@ -79,7 +87,6 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID in
 		SameSite: http.SameSiteLaxMode,
 	})
 	s.clearLegacySessionCookie(w, r)
-	return nil
 }
 
 // Logout revokes the session and clears the cookie.

@@ -39,6 +39,7 @@ var (
 	ErrCourierHasActiveDeliveries      = errors.New("courier has active deliveries")
 	ErrLastAdmin                       = errors.New("cannot deactivate the last active admin")
 	ErrUserInactive                    = errors.New("user is inactive")
+	ErrPasswordChanged                 = errors.New("account password changed during request")
 	ErrWorkspaceActorNotFound          = errors.New("active workspace actor not found")
 	ErrPaymentProviderCurrencyMismatch = errors.New("enabled payment provider does not support currency")
 	ErrLastPaymentMethod               = errors.New("at least one payment method must remain enabled")

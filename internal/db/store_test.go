@@ -155,16 +155,20 @@ func TestPasswordReset_SingleUseAndRevokesSessions(t *testing.T) {
 	}
 }
 
-func TestUpdateUserPassword_RevokesSessions(t *testing.T) {
+func TestChangeUserPassword_ReplacesCredentials(t *testing.T) {
 	s := newTestStore(t)
 	userID := mustCreateUser(t, s, RoleUser)
 	_ = s.CreateSession(t.Context(), Session{ID: "sess", UserID: userID, CSRFToken: "c", ExpiresAt: time.Now().Add(time.Hour)})
 
-	if err := s.UpdateUserPassword(t.Context(), userID, "rotated"); err != nil {
-		t.Fatalf("update password: %v", err)
+	newSession := Session{ID: "new-sess", UserID: userID, CSRFToken: "new-csrf", ExpiresAt: time.Now().Add(time.Hour)}
+	if err := s.ChangeUserPassword(t.Context(), userID, "hash", "rotated", newSession); err != nil {
+		t.Fatalf("change password: %v", err)
 	}
 	if sess, _ := s.GetSession(t.Context(), "sess"); sess != nil {
-		t.Fatalf("session survived password change")
+		t.Fatalf("old session survived password change")
+	}
+	if sess, _ := s.GetSession(t.Context(), "new-sess"); sess == nil {
+		t.Fatalf("replacement session missing after password change")
 	}
 }
 

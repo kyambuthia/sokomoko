@@ -125,24 +125,35 @@ func (s *Store) HasAdminUser(ctx context.Context) (bool, error) {
 	return exists, err
 }
 
-// UpdateUserPassword replaces a password hash and revokes sessions and reset links.
-func (s *Store) UpdateUserPassword(ctx context.Context, userID int, passwordHash string) error {
+// ChangeUserPassword compares the hash verified by the request, replaces it,
+// revokes old credentials, and creates the replacement session atomically.
+func (s *Store) ChangeUserPassword(ctx context.Context, userID int, expectedPasswordHash, passwordHash string, session Session) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx,
-			"UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL",
-			passwordHash, userID,
+			"UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL AND password_hash = $3",
+			passwordHash, userID, expectedPasswordHash,
 		)
 		if err != nil {
 			return err
 		}
 		affected, err := rowsAffected(result)
-		if err != nil || affected == 0 {
+		if err != nil {
 			return err
 		}
-		return revokeUserCredentialsTx(ctx, tx, userID)
+		if affected == 0 {
+			return ErrPasswordChanged
+		}
+		if err := revokeUserCredentialsTx(ctx, tx, userID); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx,
+			"INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES ($1, $2, $3, $4)",
+			hashOpaqueToken(session.ID), userID, session.CSRFToken, session.ExpiresAt.UTC(),
+		)
+		return err
 	})
 }
 
