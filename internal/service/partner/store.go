@@ -25,7 +25,7 @@ type store interface {
 	ListFulfillmentOrdersPage(context.Context, int, string, int, int) ([]db.Order, int, error)
 	FulfillmentSummary(context.Context, int) (db.PartnerOrderSummary, error)
 	UpdateOrderFulfillmentForActor(ctx context.Context, actorID int, actorRole string, orderID int, partnerStatus, deliveryStatus, deliveryNotice string) error
-	UpsertStoreSettings(ctx context.Context, settings db.StoreSettings) error
+	UpsertStoreSettingsForActor(ctx context.Context, actorID int, actorRole string, settings db.StoreSettings) error
 }
 
 var _ store = (*db.Store)(nil)

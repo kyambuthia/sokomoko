@@ -205,12 +205,15 @@ func (s *Service) SaveStoreSettings(ctx context.Context, actor *Actor, input Sto
 	if addr, err := mail.ParseAddress(settings.ContactEmail); err != nil || addr.Address != settings.ContactEmail {
 		return settings, ErrInvalidContactEmail
 	}
-	err := s.store.UpsertStoreSettings(ctx, db.StoreSettings{
+	err := s.store.UpsertStoreSettingsForActor(ctx, actor.ID, actor.Role, db.StoreSettings{
 		StoreName:    settings.StoreName,
 		StoreSlug:    settings.StoreSlug,
 		Description:  settings.Description,
 		ContactEmail: settings.ContactEmail,
 	})
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return settings, ErrForbiddenSettingsUpdate
+	}
 	return settings, err
 }
 

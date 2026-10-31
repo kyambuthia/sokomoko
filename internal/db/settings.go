@@ -33,23 +33,40 @@ func (s *Store) GetStoreSettings(ctx context.Context) (*StoreSettings, error) {
 	return settings, nil
 }
 
+// UpsertStoreSettings writes marketplace settings for a trusted internal caller.
 func (s *Store) UpsertStoreSettings(ctx context.Context, settings StoreSettings) error {
+	return s.upsertStoreSettings(ctx, 0, "", settings, false)
+}
+
+// UpsertStoreSettingsForActor revalidates an admin or staff actor in the write transaction.
+func (s *Store) UpsertStoreSettingsForActor(ctx context.Context, actorID int, actorRole string, settings StoreSettings) error {
+	return s.upsertStoreSettings(ctx, actorID, actorRole, settings, true)
+}
+
+func (s *Store) upsertStoreSettings(ctx context.Context, actorID int, actorRole string, settings StoreSettings, requireActor bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx,
-		`INSERT INTO store_settings (id, store_name, store_slug, description, contact_email)
-		 VALUES (1, $1, $2, $3, $4)
-		 ON CONFLICT (id) DO UPDATE SET
-		   store_name = EXCLUDED.store_name,
-		   store_slug = EXCLUDED.store_slug,
-		   description = EXCLUDED.description,
-		   contact_email = EXCLUDED.contact_email`,
-		strings.TrimSpace(settings.StoreName),
-		strings.TrimSpace(settings.StoreSlug),
-		strings.TrimSpace(settings.Description),
-		strings.TrimSpace(settings.ContactEmail),
-	)
-	return wrapDBError(err)
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireActor {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, actorRole); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO store_settings (id, store_name, store_slug, description, contact_email)
+			 VALUES (1, $1, $2, $3, $4)
+			 ON CONFLICT (id) DO UPDATE SET
+			   store_name = EXCLUDED.store_name,
+			   store_slug = EXCLUDED.store_slug,
+			   description = EXCLUDED.description,
+			   contact_email = EXCLUDED.contact_email`,
+			strings.TrimSpace(settings.StoreName),
+			strings.TrimSpace(settings.StoreSlug),
+			strings.TrimSpace(settings.Description),
+			strings.TrimSpace(settings.ContactEmail),
+		)
+		return wrapDBError(err)
+	})
 }
 
 // UpsertPartner creates or updates a partner identified by slug and returns its id.
