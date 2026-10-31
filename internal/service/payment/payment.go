@@ -80,6 +80,10 @@ type store interface {
 
 var _ store = (*db.Store)(nil)
 
+type paymentVerificationThrottle interface {
+	TryAcquirePaymentVerification(context.Context, int, time.Duration) (bool, error)
+}
+
 // Actor is the admin making a settings change.
 type Actor struct {
 	ID   int
@@ -516,7 +520,7 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 		return view, nil
 	}
 	view.Status = "pending"
-	if view.Attempted && s.dueForVerify(payment.ExternalReference) {
+	if view.Attempted && s.dueForVerify(ctx, payment.AttemptID, payment.ExternalReference) {
 		if err := s.verifyAndApply(ctx, payment, payload); err != nil {
 			slog.Warn("payment verification failed", "payment_id", payment.ID, "error", err)
 		}
@@ -538,9 +542,22 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 	return view, nil
 }
 
-// dueForVerify throttles provider checks per attempt. A retry has a new
-// reference, so it is checked straight away.
-func (s *Service) dueForVerify(reference string) bool {
+// dueForVerify coordinates status-page provider checks across replicas when
+// the store supports it, falling back to a bounded process-local throttle.
+func (s *Service) dueForVerify(ctx context.Context, attemptID int, reference string) bool {
+	if throttle, ok := s.store.(paymentVerificationThrottle); ok {
+		allowed, err := throttle.TryAcquirePaymentVerification(ctx, attemptID, verifyInterval)
+		if err == nil {
+			return allowed
+		}
+		slog.WarnContext(ctx, "shared payment verification throttle unavailable; using process-local fallback", "attempt_id", attemptID, "error", err)
+	}
+	return s.dueForVerifyLocal(reference)
+}
+
+// dueForVerifyLocal throttles provider checks per attempt in this process. A
+// retry has a new reference, so it is checked straight away.
+func (s *Service) dueForVerifyLocal(reference string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

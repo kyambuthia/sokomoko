@@ -48,9 +48,10 @@ missing credentials, cannot charge the store currency, or has no public URL.
 4. Every success is confirmed with the provider's own status API before the
    payment is captured, and the confirmed amount and currency must match what
    was charged. The status page also polls the provider, at most once per
-   reference per interval. An M-Pesa status poll can confirm a payment before
-   its callback arrives; a later verified callback fills in the receipt on the
-   completed attempt and any refund exception.
+   attempt every five seconds across replicas through PostgreSQL, with a
+   process-local fallback during database errors. An M-Pesa status poll can
+   confirm a payment before its callback arrives; a later verified callback
+   fills in the receipt on the completed attempt and any refund exception.
 
 A retry creates a new attempt. Older attempts stay on record and remain
 addressable, so a delayed success for an earlier prompt still counts.
