@@ -56,6 +56,10 @@ func parseProductImageUpload(w http.ResponseWriter, r *http.Request) (*partnersv
 		defer func() { <-productImageUploadSemaphore }()
 	default:
 		w.Header().Set("Retry-After", "1")
+		if r.ProtoMajor == 1 {
+			// Avoid waiting for net/http to drain an unread upload before the 503.
+			w.Header().Set("Connection", "close")
+		}
 		return nil, errProductImageBusy
 	}
 	if err := r.ParseMultipartForm(32 << 10); err != nil {

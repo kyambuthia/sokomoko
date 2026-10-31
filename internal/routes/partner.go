@@ -255,9 +255,6 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 
 		imageUpload, imageErr := parseProductImageUpload(w, r)
 		if errors.Is(imageErr, errProductImageBusy) {
-			if r.ProtoMajor == 1 {
-				w.Header().Set("Connection", "close")
-			}
 			data.Error = productImageBusyMessage
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusServiceUnavailable, data)
 			return
@@ -363,9 +360,6 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 
 		imageUpload, imageErr := parseProductImageUpload(w, r)
 		if errors.Is(imageErr, errProductImageBusy) {
-			if r.ProtoMajor == 1 {
-				w.Header().Set("Connection", "close")
-			}
 			data.Error = productImageBusyMessage
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusServiceUnavailable, data)
 			return
