@@ -34,6 +34,13 @@ func NewSMTPSender(cfg SMTPConfig) (*SMTPSender, error) {
 	cfg.Password = strings.TrimSpace(cfg.Password)
 	cfg.From = strings.TrimSpace(cfg.From)
 	cfg.AppName = strings.TrimSpace(cfg.AppName)
+	if (cfg.Username == "") != (cfg.Password == "") {
+		return nil, fmt.Errorf("smtp username and password must be set together")
+	}
+	// Never send SMTP credentials to a server that does not offer STARTTLS.
+	if cfg.Username != "" {
+		cfg.RequireTLS = true
+	}
 
 	if cfg.Port == "" {
 		cfg.Port = defaultSMTPPort

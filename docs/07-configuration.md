@@ -60,7 +60,7 @@ SMTP or host settings.
 | `PASSWORD_RESET_BASE_URL` | empty (use request host) | Absolute `http(s)` origin with no path, query, or credentials. Production requires HTTPS and a host from `ALLOWED_HOSTS`. |
 | `SMTP_HOST`, `SMTP_FROM` | empty | Set together. Required in production. |
 | `SMTP_PORT` | `587` | |
-| `SMTP_USERNAME`, `SMTP_PASSWORD` | empty | Set together |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | empty | Set together; authenticated SMTP requires STARTTLS in every environment. |
 
 When neither `SMTP_HOST` nor `SMTP_FROM` is set, no email is sent. Outside
 production the reset link is shown on the page instead.
