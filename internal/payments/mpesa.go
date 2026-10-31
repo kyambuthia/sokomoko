@@ -18,12 +18,14 @@ import (
 )
 
 const (
-	maxMpesaTokenCacheEntries = 16
-	mpesaOAuthTimeout         = 20 * time.Second
-	mpesaSandboxAPI           = "https://sandbox.safaricom.co.ke"
-	mpesaProductionAPI        = "https://api.safaricom.co.ke"
-	mpesaPayBill              = "CustomerPayBillOnline"
-	mpesaBuyGoods             = "CustomerBuyGoodsOnline"
+	maxMpesaTokenCacheEntries  = 16
+	mpesaOAuthTimeout          = 20 * time.Second
+	maxMpesaTokenLifetimeSecs  = 24 * 60 * 60
+	mpesaTokenSafetyMarginSecs = 60
+	mpesaSandboxAPI            = "https://sandbox.safaricom.co.ke"
+	mpesaProductionAPI         = "https://api.safaricom.co.ke"
+	mpesaPayBill               = "CustomerPayBillOnline"
+	mpesaBuyGoods              = "CustomerBuyGoodsOnline"
 )
 
 // Kenya does not observe daylight saving, and the distroless runtime image
@@ -168,12 +170,16 @@ func (m *Mpesa) fetchToken(ctx context.Context, cfg Config, key, secret, cacheKe
 		return "", fmt.Errorf("%w: M-Pesa rejected the consumer key or secret (%s)", ErrProviderFailure, firstNonEmpty(resp.ErrorMessage, http.StatusText(status)))
 	}
 	lifetime, _ := strconv.Atoi(resp.ExpiresIn)
-	if lifetime <= 0 {
+	if lifetime <= 0 || lifetime > maxMpesaTokenLifetimeSecs {
 		lifetime = 3599
+	}
+	cacheLifetime := lifetime - mpesaTokenSafetyMarginSecs
+	if cacheLifetime < 0 {
+		cacheLifetime = 0
 	}
 	m.cacheToken(cacheKey, cachedToken{
 		value:   resp.AccessToken,
-		expires: time.Now().Add(time.Duration(lifetime-60) * time.Second),
+		expires: time.Now().Add(time.Duration(cacheLifetime) * time.Second),
 	})
 	return resp.AccessToken, nil
 }
