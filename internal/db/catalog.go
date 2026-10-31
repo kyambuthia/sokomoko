@@ -415,18 +415,30 @@ func (s *Store) getProduct(ctx context.Context, predicate string, arg any) (*Pro
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
-	product, err := scanProduct(s.DB.QueryRowContext(ctx,
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	product, err := scanProduct(tx.QueryRowContext(ctx,
 		productSelect+" WHERE "+predicate+" AND p.deleted_at IS NULL", arg,
 	))
 	if err != nil || product == nil {
 		return product, err
 	}
 
-	images, err := s.getProductImagesByProductIDs(ctx, []int{product.ID})
+	images, err := getProductImagesByProductIDs(ctx, tx, []int{product.ID})
 	if err != nil {
 		return nil, err
 	}
 	product.Images = images[product.ID]
+	if err := tx.Commit(); err != nil {
+		return nil, wrapDBError(err)
+	}
 	return product, nil
 }
 
@@ -654,6 +666,15 @@ type ProductFilter struct {
 func (s *Store) ListProducts(ctx context.Context, filter ProductFilter) ([]Product, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	where, args, orderBy := productFilterSQL(filter)
 	addArg := func(value any) string {
 		args = append(args, value)
@@ -667,7 +688,7 @@ func (s *Store) ListProducts(ctx context.Context, filter ProductFilter) ([]Produ
 		query += " OFFSET " + addArg(filter.Offset)
 	}
 
-	rows, err := s.DB.QueryContext(ctx, query, args...)
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -686,13 +707,19 @@ func (s *Store) ListProducts(ctx context.Context, filter ProductFilter) ([]Produ
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 
-	images, err := s.getProductImagesByProductIDs(ctx, ids)
+	images, err := getProductImagesByProductIDs(ctx, tx, ids)
 	if err != nil {
 		return nil, err
 	}
 	for i := range products {
 		products[i].Images = images[products[i].ID]
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, wrapDBError(err)
 	}
 	return products, nil
 }
@@ -780,13 +807,13 @@ func (s *Store) CountProducts(ctx context.Context) (int, error) {
 	return count, err
 }
 
-func (s *Store) getProductImagesByProductIDs(ctx context.Context, productIDs []int) (map[int][]ProductImage, error) {
+func getProductImagesByProductIDs(ctx context.Context, q querier, productIDs []int) (map[int][]ProductImage, error) {
 	imagesByProduct := map[int][]ProductImage{}
 	if len(productIDs) == 0 {
 		return imagesByProduct, nil
 	}
 
-	rows, err := s.DB.QueryContext(ctx,
+	rows, err := q.QueryContext(ctx,
 		`SELECT id, product_id, url, alt_text, position, created_at
 		 FROM product_images
 		 WHERE product_id = ANY($1)
