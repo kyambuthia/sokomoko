@@ -235,7 +235,20 @@ func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 }
 
 func (s *Store) listOrders(ctx context.Context, suffix string, args ...any) ([]Order, error) {
-	return listOrdersQuery(ctx, s.DB, suffix, args...)
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	orders, err := listOrdersQuery(ctx, tx, suffix, args...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, wrapDBError(err)
+	}
+	return orders, nil
 }
 
 func listOrdersQuery(ctx context.Context, q querier, suffix string, args ...any) ([]Order, error) {
