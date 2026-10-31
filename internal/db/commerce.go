@@ -443,16 +443,17 @@ func (s *Store) CapturePayment(ctx context.Context, attemptID int, confirmed mon
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	captured := false
+	backfillExceptionReceipt := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		var paymentID, orderID int
-		var status, cur, provider, reference, attemptStatus string
+		var status, cur, provider, reference, attemptStatus, paymentReference string
 		var amount int64
 		var payload []byte
 		// Lock payment before attempt so callback and payload updates share one order.
-		if err := tx.QueryRowContext(ctx, `SELECT p.id, p.order_id, p.status, p.currency, p.provider, p.amount_cents
+		if err := tx.QueryRowContext(ctx, `SELECT p.id, p.order_id, p.status, p.currency, p.provider, p.amount_cents, COALESCE(p.external_reference, '')
 		FROM payments p JOIN payment_attempts a ON a.payment_id = p.id
 		WHERE a.id = $1 FOR UPDATE OF p`, attemptID).
-			Scan(&paymentID, &orderID, &status, &cur, &provider, &amount); err != nil {
+			Scan(&paymentID, &orderID, &status, &cur, &provider, &amount, &paymentReference); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentNotFound
 			}
@@ -468,6 +469,34 @@ func (s *Store) CapturePayment(ctx context.Context, attemptID int, confirmed mon
 			return err
 		}
 		if attemptStatus == PaymentAttemptStatusCompleted {
+			if receipt == "" {
+				return nil
+			}
+			var data map[string]string
+			if err := json.Unmarshal(payload, &data); err != nil {
+				return err
+			}
+			expected := money.Cents(amount)
+			if charged, err := strconv.ParseInt(data["charged_cents"], 10, 64); err == nil && charged > 0 {
+				expected = money.Cents(charged)
+			}
+			if confirmed != expected || !strings.EqualFold(cur, currency) {
+				return ErrPaymentAmountMatch
+			}
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE payment_attempts SET external_reference = $2
+				 WHERE id = $1 AND (external_reference IS NULL OR external_reference = '' OR external_reference = request_reference)`,
+				attemptID, receipt); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE payments SET provider_payload = provider_payload || jsonb_build_object('receipt', $2::text)
+				 WHERE id = $1 AND external_reference = $3
+				 AND COALESCE(provider_payload->>'receipt', '') = ''`,
+				paymentID, receipt, paymentReference); err != nil {
+				return err
+			}
+			backfillExceptionReceipt = true
 			return nil
 		}
 		if status != PaymentStatusPending && status != PaymentStatusFailed && status != PaymentStatusCaptured && status != PaymentStatusRefunded {
@@ -529,7 +558,17 @@ func (s *Store) CapturePayment(ctx context.Context, attemptID int, confirmed mon
 		captured = true
 		return nil
 	})
-	return captured, err
+	if err != nil {
+		return false, err
+	}
+	if backfillExceptionReceipt {
+		if _, err := s.DB.ExecContext(ctx,
+			`UPDATE payment_exceptions SET receipt = $2
+			 WHERE attempt_id = $1 AND receipt = ''`, attemptID, receipt); err != nil {
+			return false, err
+		}
+	}
+	return captured, nil
 }
 
 // FailPaymentAttempt records a failed provider attempt. The payment stays

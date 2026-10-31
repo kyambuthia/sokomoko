@@ -738,10 +738,13 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 			return err
 		}
 	}
-	if payment.AttemptStatus == db.PaymentAttemptStatusCompleted || event.Result == nil {
+	if event.Result == nil {
 		return nil
 	}
 	if event.Result.Status == payments.StatusFailed {
+		if payment.AttemptStatus == db.PaymentAttemptStatusCompleted {
+			return nil
+		}
 		return s.store.FailPaymentAttempt(ctx, payment.AttemptID, event.Result.Reason)
 	}
 	confirmed, err := s.verifyWith(ctx, provider, cfg, payment, payload)
