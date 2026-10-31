@@ -159,14 +159,16 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-			created, err := s.store.RequestPasswordResetToken(r.Context(), user.ID, resetToken, time.Now().Add(resetTokenDuration))
+			resetLink := s.buildPasswordResetLink(r, resetToken)
+			created, queued, err := s.requestPasswordResetToken(r.Context(), user.ID, resetToken, time.Now().Add(resetTokenDuration), user.Email, resetLink)
 			if err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
 			if created {
-				resetLink := s.buildPasswordResetLink(r, resetToken)
-				s.dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
+				if !queued {
+					s.dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
+				}
 				if s.shouldExposeResetLink() {
 					data.ResetLink = resetLink
 				}

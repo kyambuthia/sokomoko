@@ -94,4 +94,4 @@ reachable.
   authentication abuse backoff now use PostgreSQL across replicas, with a
   bounded process-local fallback on database errors. Add database-backed tests
   and run the full suite before marking this item done.
-- [ ] An email outbox.
+- [x] Durable encrypted password-reset email outbox with transactional enqueue and retry.

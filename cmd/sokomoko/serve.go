@@ -99,10 +99,18 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 			PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
 			PasswordResetDisabled:    cfg.PasswordResetDisabled,
 			PasswordResetEmailSender: resetEmailSender,
+			PasswordResetOutboxBox:   secrets,
 			TrustProxyHeaders:        cfg.TrustProxyHeaders,
 		},
 	})
 	server, allowedHosts := buildServer(cfg, application)
+	if resetEmailSender != nil && !cfg.PasswordResetDisabled {
+		if worker, ok := application.Auth.(interface {
+			MaintainPasswordResetEmailOutbox(context.Context)
+		}); ok {
+			server.Background = append(server.Background, worker.MaintainPasswordResetEmailOutbox)
+		}
+	}
 	printStartupSummary(cfg, server, allowedHosts, seedOnServe)
 
 	return wrapCommandError(commandServe, "serve http", runHTTPServerFunc(server, store))

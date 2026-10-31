@@ -118,9 +118,11 @@ For development there is an alternative: `seed` creates an admin from
 3. The link is built from `PASSWORD_RESET_BASE_URL` when set, otherwise from
    the request host. Production requires the base URL, so reset links never
    trust the `Host` header.
-4. The email is sent in a background goroutine with a 5-second timeout through
-   `notify.SMTPSender`. Production requires STARTTLS. Send failures are
-   logged, not shown to the user.
+4. The email request and reset token are committed atomically. The outbox stores
+   only an AES-GCM encrypted recipient and reset link, using `SECRETS_KEY`; a
+   background worker claims messages across replicas, retries transient SMTP
+   failures until expiry, and deletes delivered or expired messages. Production
+   requires STARTTLS. Send failures are logged, not shown to the user.
 5. Outside production the link is also shown on the page, so local
    development works without SMTP.
 6. `/password-reset/confirm` checks the token and role again. Using it sets the

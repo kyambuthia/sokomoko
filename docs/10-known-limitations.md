@@ -66,8 +66,8 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   durability settings; POST counters are unlogged and can reset after a crash or
   failover. Maintenance jobs use an advisory lock, so one replica performs each
   pass.
-- **Password-reset email has no outbox.** It is sent from a goroutine and
-  retried twice on transient failures (5-second timeout per attempt); a
-  process restart during that window loses it.
+- **Password-reset email delivery is at-least-once.** A crash after SMTP
+  accepts a message but before the outbox row is deleted can cause a duplicate
+  email after the lease expires.
 - **No distributed tracing.** The optional bearer-authenticated /metrics
   endpoint exposes bounded-cardinality HTTP metrics and Go runtime gauges.

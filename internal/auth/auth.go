@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/secret"
 )
 
 const (
@@ -53,6 +54,7 @@ type Config struct {
 	PasswordResetBaseURL     string
 	PasswordResetDisabled    bool
 	PasswordResetEmailSender PasswordResetEmailSender
+	PasswordResetOutboxBox   *secret.Box
 	// TrustProxyHeaders makes X-Forwarded-For and X-Forwarded-Proto authoritative.
 	// Enable it only behind a reverse proxy that overwrites those headers.
 	TrustProxyHeaders bool
@@ -70,6 +72,7 @@ type Service struct {
 	passwordResetBaseURL     string
 	passwordResetDisabled    bool
 	passwordResetEmailSender PasswordResetEmailSender
+	passwordResetOutboxBox   *secret.Box
 	trustProxyHeaders        bool
 }
 
@@ -94,6 +97,7 @@ func NewService(store store, cfg Config) *Service {
 		passwordResetBaseURL:     strings.TrimSpace(cfg.PasswordResetBaseURL),
 		passwordResetDisabled:    cfg.PasswordResetDisabled,
 		passwordResetEmailSender: cfg.PasswordResetEmailSender,
+		passwordResetOutboxBox:   cfg.PasswordResetOutboxBox,
 		trustProxyHeaders:        cfg.TrustProxyHeaders,
 	}
 }

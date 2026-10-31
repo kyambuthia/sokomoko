@@ -172,6 +172,7 @@ func TestValidate_ProductionRequiresExplicitSettings(t *testing.T) {
 	cfg.SMTPHost = "smtp.example.com"
 	cfg.SMTPPort = "587"
 	cfg.SMTPFrom = "support@example.com"
+	cfg.SecretsKey = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("valid production config rejected: %v", err)
 	}
@@ -184,6 +185,7 @@ func productionConfig() Config {
 		AllowedHostsRaw:      "shop.example.com,admin.example.com,partner.example.com",
 		PasswordResetBaseURL: "https://shop.example.com",
 		SMTPHost:             "smtp.example.com", SMTPPort: "587", SMTPFrom: "support@example.com",
+		SecretsKey: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
 	}
 }
 

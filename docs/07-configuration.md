@@ -83,7 +83,7 @@ production the reset link is shown on the page instead.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `PUBLIC_BASE_URL` | `PASSWORD_RESET_BASE_URL` | Storefront origin for provider return and callback URLs. Production requires HTTPS and an allowed host. |
-| `SECRETS_KEY` | empty | Base64 encoding of 32 random bytes (`openssl rand -base64 32`). Required to save provider credentials; development uses a fixed local key when empty. |
+| `SECRETS_KEY` | empty | Base64 encoding of 32 random bytes (`openssl rand -base64 32`). Production requires it when password-reset email is enabled so queued reset links are encrypted; it also seals provider credentials. Development uses a fixed local key when empty. |
 | `SECRETS_KEY_PREVIOUS` | empty | Previous key accepted for decryption during a planned rotation; new credentials are always sealed with `SECRETS_KEY`. |
 
 Keep the key with encrypted database backups. To rotate it, back up the

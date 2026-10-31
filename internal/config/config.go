@@ -207,6 +207,9 @@ func (c Config) Validate() error {
 		if !c.PasswordResetDisabled && (c.SMTPHost == "" || c.SMTPFrom == "") {
 			problems = append(problems, "SMTP_HOST and SMTP_FROM are required in production for password recovery")
 		}
+		if !c.PasswordResetDisabled && c.SecretsKey == "" {
+			problems = append(problems, "SECRETS_KEY is required in production to encrypt the password-reset email outbox")
+		}
 		if c.AdminSetupToken != "" && len(c.AdminSetupToken) < 32 {
 			problems = append(problems, "ADMIN_SETUP_TOKEN must contain at least 32 bytes in production")
 		}

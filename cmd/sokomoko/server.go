@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,14 +21,31 @@ import (
 
 type httpServer struct {
 	*http.Server
-	Drain func()
+	Drain      func()
+	Background []func(context.Context)
 }
 
 func runHTTPServer(server *httpServer, store *db.Store) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err := lifecycle.Run(ctx, server.Server, server.Drain, func(ctx context.Context) {
-		lifecycle.Maintain(ctx, store)
+		var workers sync.WaitGroup
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			lifecycle.Maintain(ctx, store)
+		}()
+		for _, worker := range server.Background {
+			if worker == nil {
+				continue
+			}
+			workers.Add(1)
+			go func(worker func(context.Context)) {
+				defer workers.Done()
+				worker(ctx)
+			}(worker)
+		}
+		workers.Wait()
 	})
 	if err == nil {
 		log.Println("[shutdown] server stopped gracefully")

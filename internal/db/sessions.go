@@ -112,6 +112,11 @@ func (s *Store) CountActiveSessions(ctx context.Context) (int, error) {
 func (s *Store) CleanupPasswordResetTokens(ctx context.Context) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	if _, err := s.DB.ExecContext(ctx,
+		"DELETE FROM password_reset_email_outbox WHERE expires_at <= now()",
+	); err != nil {
+		return err
+	}
 	_, err := s.DB.ExecContext(ctx,
 		"DELETE FROM password_reset_tokens WHERE used_at IS NOT NULL OR expires_at <= now()",
 	)
@@ -121,17 +126,26 @@ func (s *Store) CleanupPasswordResetTokens(ctx context.Context) error {
 // CreatePasswordResetToken stores a new reset token, invalidating any earlier
 // tokens for the same user.
 func (s *Store) CreatePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) error {
-	_, err := s.replacePasswordResetToken(ctx, userID, token, expiresAt, false)
+	_, err := s.replacePasswordResetToken(ctx, userID, token, expiresAt, false, nil)
 	return err
 }
 
 // RequestPasswordResetToken issues at most one reset email per user every five
 // minutes, even when requests arrive through different identifiers or replicas.
 func (s *Store) RequestPasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) (bool, error) {
-	return s.replacePasswordResetToken(ctx, userID, token, expiresAt, true)
+	return s.replacePasswordResetToken(ctx, userID, token, expiresAt, true, nil)
 }
 
-func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time, enforceCooldown bool) (bool, error) {
+// RequestPasswordResetTokenWithOutbox atomically creates a reset token and a
+// sealed email payload, subject to the same per-user cooldown as the legacy API.
+func (s *Store) RequestPasswordResetTokenWithOutbox(ctx context.Context, userID int, token string, expiresAt time.Time, sealedPayload []byte) (bool, error) {
+	if len(sealedPayload) == 0 {
+		return false, errors.New("sealed password reset email payload is required")
+	}
+	return s.replacePasswordResetToken(ctx, userID, token, expiresAt, true, sealedPayload)
+}
+
+func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time, enforceCooldown bool, sealedPayload []byte) (bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
@@ -156,6 +170,10 @@ func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token
 				return nil
 			}
 		}
+		// Replacing a token also cancels any older email that has not been sent.
+		if _, err := tx.ExecContext(ctx, "DELETE FROM password_reset_email_outbox WHERE user_id = $1", userID); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM password_reset_tokens WHERE user_id = $1", userID); err != nil {
 			return err
 		}
@@ -169,6 +187,14 @@ func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token
 			"UPDATE users SET password_reset_requested_at = clock_timestamp() WHERE id = $1", userID,
 		); err != nil {
 			return err
+		}
+		if len(sealedPayload) > 0 {
+			if _, err := tx.ExecContext(ctx,
+				"INSERT INTO password_reset_email_outbox (user_id, sealed_payload, expires_at) VALUES ($1, $2, $3)",
+				userID, sealedPayload, expiresAt.UTC(),
+			); err != nil {
+				return err
+			}
 		}
 		created = true
 		return nil
@@ -268,6 +294,9 @@ func (s *Store) UsePasswordResetToken(ctx context.Context, token, passwordHash s
 		}
 
 		if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", userID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM password_reset_email_outbox WHERE user_id = $1", userID); err != nil {
 			return err
 		}
 		used = true
