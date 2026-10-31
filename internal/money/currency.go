@@ -43,12 +43,12 @@ func Format(c Cents, code string) string {
 	if !ok {
 		currency = Currency{Code: code, Prefix: strings.ToUpper(code) + " "}
 	}
-	sign := ""
-	if c < 0 {
-		sign = "-"
-		c = -c
-	}
 	plain := c.String()
+	sign := ""
+	if strings.HasPrefix(plain, "-") {
+		sign = "-"
+		plain = strings.TrimPrefix(plain, "-")
+	}
 	whole, frac, _ := strings.Cut(plain, ".")
 	return sign + currency.Prefix + groupThousands(whole) + "." + frac
 }
@@ -77,5 +77,10 @@ func (c Cents) WholeUnitsCeil() int64 {
 	if c <= 0 {
 		return 0
 	}
-	return (int64(c) + 99) / 100
+	amount := int64(c)
+	whole := amount / 100
+	if amount%100 != 0 {
+		whole++
+	}
+	return whole
 }
