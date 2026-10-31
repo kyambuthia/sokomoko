@@ -184,9 +184,16 @@ func messageStart(a *app.App, workspace string) http.HandlerFunc {
 		if len(r.PostForm.Get("body")) <= 16000 {
 			p.Body = r.PostForm.Get("body")
 		}
-		p.Contacts, _ = a.Messaging.Contacts(r.Context(), messagingActor(r), t)
+		p.Contacts, err = a.Messaging.Contacts(r.Context(), messagingActor(r), t)
+		if err != nil {
+			status, p.Error = messageError(err)
+		}
 		if p.Nonce == "" {
-			p.Nonce, _ = messagingSvc.Nonce()
+			p.Nonce, err = messagingSvc.Nonce()
+			if err != nil {
+				messageFailure(w, r, err)
+				return
+			}
 		}
 		a.RenderStatus(w, a.Templates.Messages, status, p)
 	}
