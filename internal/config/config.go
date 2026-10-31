@@ -43,6 +43,7 @@ type Config struct {
 	BindHost              string
 	DatabaseURL           string
 	DatabaseURLExplicit   bool
+	RateLimitHMACKey      string
 	DBMaxOpenConns        int
 	DBMaxIdleConns        int
 	DBConnMaxLifetime     int
@@ -92,6 +93,7 @@ func LoadFromEnv() Config {
 		BindHost:              strings.TrimSpace(os.Getenv("BIND_HOST")),
 		DatabaseURL:           databaseURL,
 		DatabaseURLExplicit:   databaseURL != "",
+		RateLimitHMACKey:      strings.TrimSpace(os.Getenv("RATE_LIMIT_HMAC_KEY")),
 		DBMaxOpenConns:        readInt("DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns),
 		DBMaxIdleConns:        readInt("DB_MAX_IDLE_CONNS", defaultDBMaxIdleConns),
 		DBConnMaxLifetime:     readInt("DB_CONN_MAX_LIFETIME_SECONDS", defaultDBConnMaxLifetimeSeconds),
@@ -134,6 +136,15 @@ func LoadFromEnv() Config {
 		}
 	}
 	return cfg
+}
+
+// RateLimitHMACKeyMaterial returns the shared key used to pseudonymize rate
+// limit identifiers. The database URL fallback preserves existing deployments.
+func (c Config) RateLimitHMACKeyMaterial() []byte {
+	if c.RateLimitHMACKey != "" {
+		return []byte(c.RateLimitHMACKey)
+	}
+	return []byte(c.DatabaseURL)
 }
 
 func (c Config) IsProduction() bool {

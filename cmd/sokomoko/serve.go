@@ -95,7 +95,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 			AuthAbuseBackoffBase:     time.Duration(cfg.AuthAbuseBackoffBase) * time.Second,
 			AuthAbuseBackoffMax:      time.Duration(cfg.AuthAbuseBackoffMax) * time.Second,
 			AuthAbuseStore:           store,
-			AuthAbuseKey:             []byte(cfg.DatabaseURL),
+			AuthAbuseKey:             cfg.RateLimitHMACKeyMaterial(),
 			PasswordResetBaseURL:     cfg.PasswordResetBaseURL,
 			PasswordResetDisabled:    cfg.PasswordResetDisabled,
 			PasswordResetEmailSender: resetEmailSender,

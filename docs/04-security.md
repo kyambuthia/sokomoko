@@ -135,9 +135,14 @@ Authentication lockouts, POST limits, and password-reset cooldowns use PostgreSQ
 
 | Mechanism | Scope | Config | Behaviour |
 | --- | --- | --- | --- |
-| Auth abuse limiter | Login (per area), reset request, reset confirm | `AUTH_ABUSE_MAX_FAILURES`, `..._BACKOFF_BASE_SECONDS`, `..._BACKOFF_MAX_SECONDS` | PostgreSQL-shared exponential backoff keyed by an HMAC of scope, client IP (exact IPv4 or IPv6 /64), and identifier, using `DATABASE_URL` as shared key material. Failed login/reset-confirm attempts count; reset requests count every non-empty identifier equally. Successful login/confirmation clears the key. DB errors fall back to the bounded process-local limiter. Locked requests get `429` with `Retry-After`. Off when max failures is 0. |
-| POST rate limit | Every POST | `POST_RATE_LIMIT_MAX`, `POST_RATE_LIMIT_WINDOW_SECONDS` | PostgreSQL-shared fixed window per IPv4 address or IPv6 /64 using an HMAC digest keyed from the shared `DATABASE_URL`. `429` with `Retry-After`; process-local fallback during database errors. Off when max is 0. |
+| Auth abuse limiter | Login (per area), reset request, reset confirm | `AUTH_ABUSE_MAX_FAILURES`, `..._BACKOFF_BASE_SECONDS`, `..._BACKOFF_MAX_SECONDS` | PostgreSQL-shared exponential backoff keyed by an HMAC of scope, client IP (exact IPv4 or IPv6 /64), and identifier. `RATE_LIMIT_HMAC_KEY` supplies shared key material; when unset, `DATABASE_URL` remains the compatibility fallback. Failed login/reset-confirm attempts count; reset requests count every non-empty identifier equally. Successful login/confirmation clears the key. DB errors fall back to the bounded process-local limiter. Locked requests get `429` with `Retry-After`. Off when max failures is 0. |
+| POST rate limit | Every POST | `POST_RATE_LIMIT_MAX`, `POST_RATE_LIMIT_WINDOW_SECONDS` | PostgreSQL-shared fixed window per IPv4 address or IPv6 /64 using an HMAC digest keyed by `RATE_LIMIT_HMAC_KEY`, with `DATABASE_URL` as the compatibility fallback. `429` with `Retry-After`; process-local fallback during database errors. Off when max is 0. |
 | Reset email cooldown | Per user across instances | None | PostgreSQL allows one reset email every five minutes. Requests during the cooldown preserve the current link and send no additional email. |
+
+Set `RATE_LIMIT_HMAC_KEY` to a random value shared by every app
+replica. This keeps pseudonymization independent from database credentials.
+Rotating it changes the digest for existing entries, so active rate limits and
+lockouts will not carry over until their windows expire.
 
 Client IP is `RemoteAddr`, or the right-most `X-Forwarded-For` entry when
 `TRUST_PROXY_HEADERS=true`. The right-most entry is the one the proxy wrote, so

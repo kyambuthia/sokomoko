@@ -65,7 +65,8 @@ hostnames still return `/readyz` successfully. Keep the DNS records orange-cloud
 proxied; the demo EC2 instance has no IPv6 address.
 
 Copy `deploy/production.env.example` to `.env.production`, fill in real values,
-and restrict its permissions. Set `COURIER_HOST` to the courier workspace
+and restrict its permissions. Generate `RATE_LIMIT_HMAC_KEY` with `openssl rand -hex 32`
+and use the same value for every app replica. Set `COURIER_HOST` to the courier workspace
 hostname and create a matching proxied DNS record. `DOCS_HOST` is the public
 feature guide host. Admin, partner, courier, and docs hostnames must use the
 `admin.`, `partner.`, `courier.`, and `docs.` prefixes because the router
