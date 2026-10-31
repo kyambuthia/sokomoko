@@ -18,19 +18,22 @@ var ErrInvalidAmount = errors.New("invalid amount")
 
 // String renders the amount as a plain decimal string such as "12.50".
 func (c Cents) String() string {
-	sign := ""
 	value := int64(c)
+	sign := ""
+	var magnitude uint64
 	if value < 0 {
 		sign = "-"
-		value = -value
+		magnitude = uint64(-(value + 1)) + 1
+	} else {
+		magnitude = uint64(value)
 	}
-	whole := value / 100
-	frac := value % 100
-	fracStr := strconv.FormatInt(frac, 10)
+	whole := magnitude / 100
+	frac := magnitude % 100
+	fracStr := strconv.FormatUint(frac, 10)
 	if frac < 10 {
 		fracStr = "0" + fracStr
 	}
-	return sign + strconv.FormatInt(whole, 10) + "." + fracStr
+	return sign + strconv.FormatUint(whole, 10) + "." + fracStr
 }
 
 // Float64 returns the amount in major units. It is intended for display and
