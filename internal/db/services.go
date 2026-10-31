@@ -34,6 +34,7 @@ type ServiceListing struct {
 	CreatedAt       time.Time           `json:"created_at"`
 	UpdatedAt       time.Time           `json:"updated_at"`
 	Timezone        string              `json:"timezone"`
+	OpenDays        int                 `json:"open_days"`
 	WeeklyHours     []ServiceWeeklyHour `json:"weekly_hours,omitempty"`
 }
 
@@ -49,11 +50,11 @@ type ServiceFilter struct {
 	PartnerID, Limit, Offset            int
 }
 
-const serviceColumns = `s.id,s.partner_id,p.name,s.slug,s.title,s.description,s.category,s.duration_minutes,s.price_mode,s.price_cents,s.currency,s.public_area,s.delivery_mode,s.state,s.version,s.created_at,s.updated_at,s.timezone`
+const serviceColumns = `s.id,s.partner_id,p.name,s.slug,s.title,s.description,s.category,s.duration_minutes,s.price_mode,s.price_cents,s.currency,s.public_area,s.delivery_mode,s.state,s.version,s.created_at,s.updated_at,s.timezone,(SELECT count(*)::integer FROM service_weekly_hours h WHERE h.service_listing_id=s.id)`
 
 func scanService(row interface{ Scan(...any) error }) (*ServiceListing, error) {
 	v := &ServiceListing{}
-	err := row.Scan(&v.ID, &v.PartnerID, &v.PartnerName, &v.Slug, &v.Title, &v.Description, &v.Category, &v.DurationMinutes, &v.PriceMode, &v.PriceCents, &v.Currency, &v.PublicArea, &v.DeliveryMode, &v.State, &v.Version, &v.CreatedAt, &v.UpdatedAt, &v.Timezone)
+	err := row.Scan(&v.ID, &v.PartnerID, &v.PartnerName, &v.Slug, &v.Title, &v.Description, &v.Category, &v.DurationMinutes, &v.PriceMode, &v.PriceCents, &v.Currency, &v.PublicArea, &v.DeliveryMode, &v.State, &v.Version, &v.CreatedAt, &v.UpdatedAt, &v.Timezone, &v.OpenDays)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrServiceNotFound
 	}

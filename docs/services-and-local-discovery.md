@@ -209,8 +209,10 @@ optional and accepts at most one `HH:MM` interval per weekday, with closing time
 after opening time. An empty or omitted weekday is not shown as open. Public and
 detail responses include `timezone` and a `weekly_hours` array when a schedule is
 published; the field is omitted when no hours are published. Collection responses
-omit `weekly_hours` to keep listing payloads compact. On an update, clients that omit
-either new field retain its saved value; send `weekly_hours: []` to clear the schedule.
+omit `weekly_hours` and return `open_days`, the number of weekdays with published
+hours. HTML service cards show that summary with the listing's timezone. On an update,
+clients that omit either new field retain its saved value; send `weekly_hours: []` to
+clear the schedule.
 Opening times are informational and are not appointment slots.
 
 Service prices in the directory, detail page, private preview and seller list
