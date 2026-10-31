@@ -147,6 +147,8 @@ func (s *Service) Products(ctx context.Context) ([]Product, error) {
 func (s *Service) ProductsPage(ctx context.Context, page, limit int) ([]Product, int, error) {
 	if page < 1 {
 		page = 1
+	} else if page > 1_000_000 {
+		page = 1_000_000
 	}
 	if limit < 1 {
 		limit = 50
@@ -158,12 +160,12 @@ func (s *Service) ProductsPage(ctx context.Context, page, limit int) ([]Product,
 	if err != nil {
 		return nil, 0, err
 	}
-	pages := (total + limit - 1) / limit
-	if pages < 1 {
-		pages = 1
+	if total == 0 {
+		return []Product{}, 0, nil
 	}
-	if page > pages {
-		page = pages
+	lastPage := (total-1)/limit + 1
+	if page > lastPage {
+		return []Product{}, total, nil
 	}
 	filter.Limit, filter.Offset = limit, (page-1)*limit
 	products, err := s.store.ListProducts(ctx, filter)
@@ -195,6 +197,8 @@ func (s *Service) Orders(ctx context.Context) ([]Order, error) {
 func (s *Service) OrdersPage(ctx context.Context, page, limit int) ([]Order, int, error) {
 	if page < 1 {
 		page = 1
+	} else if page > 1_000_000 {
+		page = 1_000_000
 	}
 	if limit < 1 {
 		limit = 50
@@ -322,6 +326,13 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 func (s *Service) TeamMembers(ctx context.Context, query string, page, limit int) ([]TeamMember, int, error) {
 	if page < 1 {
 		page = 1
+	} else if page > 1_000_000 {
+		page = 1_000_000
+	}
+	if limit < 1 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
 	}
 	users, total, err := s.store.ListUsersByRoles(ctx, db.UserSearch{
 		Roles:  []string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleCourier, db.RoleUser},

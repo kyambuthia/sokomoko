@@ -89,6 +89,19 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 		displayPage := min(requestedPage, pageCount(partnerOrdersPageSize, total))
+		if r.Method == http.MethodPost && data.Error != "" && total > 0 && displayPage != requestedPage {
+			view, total, err = svc.OrdersPageForActor(
+				r.Context(),
+				partnerActorFromContext(r),
+				strings.TrimSpace(r.URL.Query().Get("status")),
+				displayPage,
+				partnerOrdersPageSize,
+			)
+			if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
 		page := partnerOrdersPage(view)
 		page.Pager = newPager(r, displayPage, partnerOrdersPageSize, total)
 		page.Role, _ = partnerIdentity(r)

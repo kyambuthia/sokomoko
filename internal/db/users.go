@@ -277,6 +277,14 @@ func (s *Store) ListUsersByRoles(ctx context.Context, search UserSearch) ([]User
 	if len(search.Roles) == 0 {
 		return []User{}, 0, nil
 	}
+	if search.Limit < 1 {
+		search.Limit = 50
+	} else if search.Limit > 100 {
+		search.Limit = 100
+	}
+	if search.Offset < 0 {
+		search.Offset = 0
+	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
@@ -290,6 +298,13 @@ func (s *Store) ListUsersByRoles(ctx context.Context, search UserSearch) ([]User
 	var total int
 	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE "+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
+	}
+	if total == 0 {
+		return []User{}, 0, nil
+	}
+	lastOffset := ((total - 1) / search.Limit) * search.Limit
+	if search.Offset > lastOffset {
+		return []User{}, total, nil
 	}
 	args = append(args, search.Limit, search.Offset)
 	rows, err := s.DB.QueryContext(ctx,

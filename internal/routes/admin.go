@@ -210,6 +210,13 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			http.Redirect(w, r, pageHref(r, displayPage), http.StatusSeeOther)
 			return
 		}
+		if r.Method == http.MethodPost && responseStatus != http.StatusOK && total > 0 && displayPage != requestedPage {
+			orders, total, err = svc.OrdersPage(r.Context(), displayPage, adminOrdersPageSize)
+			if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
 		page.Orders = orders
 		page.OrdersPager = newPager(r, displayPage, adminOrdersPageSize, total)
 		renderAdminPage(a, w, r, responseStatus, page)
@@ -370,12 +377,20 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		if redirectPastLastPage(w, r, pageNum, teamPageSize, total) {
+		displayPage := min(pageNum, pageCount(teamPageSize, total))
+		if r.Method == http.MethodGet && redirectPastLastPage(w, r, pageNum, teamPageSize, total) {
 			return
+		}
+		if r.Method == http.MethodPost && page.TeamError != "" && total > 0 && displayPage != pageNum {
+			teamMembers, total, err = svc.TeamMembers(r.Context(), query, displayPage, teamPageSize)
+			if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
 		}
 		page.TeamMembers = teamMembers
 		page.TeamQuery = query
-		page.TeamPager = newPager(r, pageNum, teamPageSize, total)
+		page.TeamPager = newPager(r, displayPage, teamPageSize, total)
 		if page.Deactivated, err = svc.DeactivatedMembers(r.Context()); err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

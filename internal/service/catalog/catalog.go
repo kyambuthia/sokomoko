@@ -16,6 +16,7 @@ var ErrInvalidProductSlug = errors.New("invalid product slug")
 const (
 	maxQueryLength     = 100
 	defaultSearchLimit = 60
+	maxCatalogPage     = 1_000_000
 	// AllCategories is the header's "no filter" category label.
 	AllCategories = "All Departments"
 )
@@ -67,13 +68,24 @@ func (s *Service) AllProducts(ctx context.Context) ([]Product, error) {
 func (s *Service) Page(ctx context.Context, page, limit int) ([]Product, int, error) {
 	if page < 1 {
 		page = 1
+	} else if page > maxCatalogPage {
+		page = maxCatalogPage
 	}
 	if limit < 1 {
 		limit = 1
+	} else if limit > 50 {
+		limit = 50
 	}
 	total, err := s.store.CountPublicProducts(ctx)
 	if err != nil {
 		return nil, 0, err
+	}
+	if total == 0 {
+		return []Product{}, 0, nil
+	}
+	lastPage := (total-1)/limit + 1
+	if page > lastPage {
+		return []Product{}, total, nil
 	}
 	products, err := s.Browse(ctx, Filter{Limit: limit, Offset: (page - 1) * limit})
 	if err != nil {
@@ -127,8 +139,8 @@ func (s *Service) SearchPage(ctx context.Context, query, category string, page, 
 	}
 	if page < 1 {
 		page = 1
-	} else if page > 1_000_000 {
-		page = 1_000_000
+	} else if page > maxCatalogPage {
+		page = maxCatalogPage
 	}
 	if limit < 1 {
 		limit = 24

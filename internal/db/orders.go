@@ -400,11 +400,12 @@ func (s *Store) ListAllOrdersPage(ctx context.Context, limit, offset int) ([]Ord
 	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders").Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	if total > 0 {
-		lastOffset := ((total - 1) / limit) * limit
-		if offset > lastOffset {
-			offset = lastOffset
-		}
+	if total == 0 {
+		return []Order{}, 0, nil
+	}
+	lastOffset := ((total - 1) / limit) * limit
+	if offset > lastOffset {
+		return []Order{}, total, nil
 	}
 	orders, err := s.listOrders(ctx, "ORDER BY o.created_at DESC, o.id DESC LIMIT $1 OFFSET $2", limit, offset)
 	return orders, total, err
