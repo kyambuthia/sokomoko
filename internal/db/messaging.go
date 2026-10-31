@@ -150,8 +150,18 @@ func chatView(ctx context.Context, q querier, c chatRecord, actorID int) (ChatCo
 	return v, err
 }
 
-// Hold the assignment row while authorizing and reading/writing. Dispatch
-// reassignment locks this same row, so it cannot race with message access.
+func lockChatActorTx(ctx context.Context, tx *sql.Tx, actorID int) error {
+	var lockedActorID int
+	err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR SHARE`, actorID).Scan(&lockedActorID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrChatNotFound
+	}
+	return err
+}
+
+// Hold assignment and actor rows while authorizing and mutating. Dispatch
+// locks the order before the delivery; keep that order before locking the actor
+// so assignment changes and account deactivation cannot race with message access.
 func loadChatTx(ctx context.Context, tx *sql.Tx, actorID, id int, mutate bool) (chatRecord, error) {
 	var deliveryID sql.NullInt64
 	var orderID, serviceID sql.NullInt64
@@ -161,12 +171,6 @@ func loadChatTx(ctx context.Context, tx *sql.Tx, actorID, id int, mutate bool) (
 		}
 		return chatRecord{}, err
 	}
-	if serviceID.Valid && mutate {
-		// Serialize sends with archiving and other listing changes, then recheck live state.
-		if _, err := tx.ExecContext(ctx, `SELECT id FROM service_listings WHERE id=$1 FOR SHARE`, serviceID.Int64); err != nil {
-			return chatRecord{}, err
-		}
-	}
 	if deliveryID.Valid {
 		// Dispatch locks the order before the assignment. Match that order,
 		// including the FK locks required when a first message is inserted.
@@ -174,6 +178,18 @@ func loadChatTx(ctx context.Context, tx *sql.Tx, actorID, id int, mutate bool) (
 			return chatRecord{}, err
 		}
 		if _, err := tx.ExecContext(ctx, `SELECT id FROM courier_deliveries WHERE id=$1 FOR SHARE`, deliveryID.Int64); err != nil {
+			return chatRecord{}, err
+		}
+	}
+	if mutate {
+		if err := lockChatActorTx(ctx, tx, actorID); err != nil {
+			return chatRecord{}, err
+		}
+	}
+	if serviceID.Valid && mutate {
+		// SaveService locks the actor before the listing; use the same order
+		// while pinning the service state against archiving.
+		if _, err := tx.ExecContext(ctx, `SELECT id FROM service_listings WHERE id=$1 FOR SHARE`, serviceID.Int64); err != nil {
 			return chatRecord{}, err
 		}
 	}

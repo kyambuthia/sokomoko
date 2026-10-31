@@ -53,7 +53,17 @@ func (s *Store) EncryptedChat(ctx context.Context, userID int, r EncryptedReques
 		}
 
 		var role string
-		if err := tx.QueryRowContext(ctx, `SELECT role FROM users WHERE id=$1 AND deleted_at IS NULL`, userID).Scan(&role); err != nil {
+		roleQuery := `SELECT role FROM users WHERE id=$1 AND deleted_at IS NULL`
+		switch r.Op {
+		case "start", "roster", "claim", "session", "events", "send", "report", "read":
+			// Conversation operations lock the actor after any order and
+			// delivery rows, preserving the courier dispatch lock order.
+		default:
+			// Device mutations do not need assignment locks, so pin the
+			// account while authorizing them here.
+			roleQuery += " FOR SHARE"
+		}
+		if err := tx.QueryRowContext(ctx, roleQuery, userID).Scan(&role); err != nil {
 			return ErrChatNotFound
 		}
 		if role != RoleUser && role != RolePartner && role != RoleCourier {

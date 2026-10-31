@@ -149,7 +149,7 @@ func resolveChatTarget(ctx context.Context, tx *sql.Tx, actorID int, t ChatTarge
    WHERE svc.id=$1 AND svc.state='published'
    AND EXISTS (SELECT 1 FROM partner_users pu JOIN users u ON u.id=pu.user_id
     WHERE pu.partner_id=p.id AND u.role='partner' AND u.deleted_at IS NULL)
-   FOR SHARE OF svc`, t.ServiceID).Scan(&c.PartnerID, &c.PartnerName, &c.ServiceName)
+`, t.ServiceID).Scan(&c.PartnerID, &c.PartnerName, &c.ServiceName)
 	case t.ProductID > 0:
 		if role != RoleUser {
 			return c, ErrChatNotFound
@@ -223,6 +223,9 @@ func (s *Store) StartChat(ctx context.Context, actorID int, target ChatTarget, b
 		created = false
 		c, err := resolveChatTarget(ctx, tx, actorID, target)
 		if err != nil {
+			return err
+		}
+		if err := lockChatActorTx(ctx, tx, actorID); err != nil {
 			return err
 		}
 		if err := c.lockPair(ctx, tx); err != nil {

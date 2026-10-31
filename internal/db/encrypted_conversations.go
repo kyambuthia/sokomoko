@@ -26,6 +26,9 @@ func startEncryptedChat(ctx context.Context, tx *sql.Tx, actorID int, r Encrypte
 	if err != nil {
 		return err
 	}
+	if err = lockChatActorTx(ctx, tx, actorID); err != nil {
+		return err
+	}
 	if err = c.lockPair(ctx, tx); err != nil {
 		return err
 	}
@@ -47,8 +50,14 @@ func startEncryptedChat(ctx context.Context, tx *sql.Tx, actorID int, r Encrypte
 		err = tx.QueryRowContext(ctx, `INSERT INTO chat_conversations(kind,customer_user_id,other_user_id,partner_id,product_id,order_id,delivery_id,assignment_event_id,requester_user_id,state,last_message_id,service_id)
   VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),NULLIF($6,0),NULLIF($7,0),NULLIF($8,0),$9,$10,nextval(pg_get_serial_sequence('chat_messages','id')),NULLIF($11,0))RETURNING id`, c.Kind, c.CustomerID, c.OtherID, c.PartnerID, c.ProductID, c.OrderID, c.DeliveryID, c.AssignmentID, actorID, c.State, c.ServiceID).Scan(&id)
 	}
+	if err != nil {
+		return err
+	}
+	if _, err = loadChatTx(ctx, tx, actorID, id, true); err != nil {
+		return err
+	}
 	out.ConversationID = id
-	return err
+	return nil
 }
 func encryptedRoster(ctx context.Context, tx *sql.Tx, c chatRecord) (EncryptedRoster, error) {
 	result := EncryptedRoster{Devices: []ChatDevice{}}
