@@ -113,7 +113,7 @@ func (h *Handler) role(roles []string, next http.Handler) http.Handler {
 	}))
 }
 
-const maxJSONBodyBytes = 1 << 20
+const maxJSONBodyBytes = app.MaxRequestBodyBytes
 
 func decodeJSON(r *http.Request, target any) error {
 	limitedBody := &io.LimitedReader{R: r.Body, N: maxJSONBodyBytes + 1}

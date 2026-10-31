@@ -110,7 +110,7 @@ func buildMiddlewares(cfg config.Config, application *app.App, metrics *app.HTTP
 		app.RequestLogger(),
 		app.Recoverer(),
 		app.SecurityHeadersWithProxy(cfg.TrustProxyHeaders),
-		app.BodyLimit(1<<20),
+		app.BodyLimit(app.MaxRequestBodyBytes),
 		application.Auth.CSRFMiddleware,
 	)
 

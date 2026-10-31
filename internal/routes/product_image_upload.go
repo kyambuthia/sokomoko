@@ -12,12 +12,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kyambuthia/sokomoko/internal/app"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 )
 
 const (
 	maxProductImageInputBytes   = 900 * 1024
-	maxProductImageRequestBytes = 1 << 20
+	maxProductImageRequestBytes = app.MaxRequestBodyBytes
 	maxProductImageDimension    = 2048
 	maxProductImagePixels       = 4_000_000
 	productImageDecodeSlots     = 2
