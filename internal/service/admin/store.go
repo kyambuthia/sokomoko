@@ -32,6 +32,7 @@ type store interface {
 	GetUserByID(ctx context.Context, id int) (*db.User, error)
 	ListAllOrders(ctx context.Context) ([]db.Order, error)
 	ListAllOrdersPage(context.Context, int, int) ([]db.Order, int, error)
+	ListDeliveryBoardPage(context.Context, int, int) ([]db.Order, db.DeliveryBoardSummary, int, error)
 	ListAuditLogs(ctx context.Context, limit int) ([]db.AuditLog, error)
 	ListUsersByRoles(ctx context.Context, search db.UserSearch) ([]db.User, int, error)
 	SumOrderRevenue(ctx context.Context) (money.Cents, error)

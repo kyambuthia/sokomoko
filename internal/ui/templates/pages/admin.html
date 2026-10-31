@@ -167,7 +167,7 @@
               <td><ul class="tiny">{{ range .Items }}<li>{{ .Quantity }} × {{ .ProductName }}</li>{{ end }}</ul>{{ if .FailureNote }}<p class="tiny notice-error">Failed attempt: {{ .FailureNote }}</p>{{ end }}</td>
               <td>{{ if .CourierName }}{{ .CourierName }}{{ else }}<span class="muted">Unassigned</span>{{ end }}</td>
               <td class="actions">
-                <form action="/deliveries" method="POST" class="stack compact">
+                <form action="/deliveries?page={{ $.DeliveriesPager.Page }}" method="POST" class="stack compact">
                   <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
                   <input type="hidden" name="order_id" value="{{ .OrderID }}">
                   <label class="sr-only" for="courier_{{ .OrderID }}">Assign order {{ .OrderID }}</label>
@@ -213,6 +213,7 @@
   {{ else }}
   {{ template "empty" dict "Icon" "truck" "Text" "Nothing awaiting delivery." }}
   {{ end }}
+  {{ template "pager" .DeliveriesPager }}
 {{ end }}
 
 {{ if eq .Title "Categories" }}

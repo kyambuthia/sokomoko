@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	teamPageSize          = 50 // Number of accounts shown on each team page.
-	adminProductsPageSize = 50 // Number of products shown on each admin catalog page.
-	adminOrdersPageSize   = 50 // Number of orders shown on each admin order page.
+	teamPageSize             = 50 // Number of accounts shown on each team page.
+	adminProductsPageSize    = 50 // Number of products shown on each admin catalog page.
+	adminOrdersPageSize      = 50 // Number of orders shown on each admin order page.
+	adminDeliveriesPageSize  = 50 // Pending deliveries shown on each admin page.
 )
 
 type AdminPageData struct {
@@ -39,6 +40,7 @@ type AdminPageData struct {
 	Orders          []adminsvc.Order
 	OrdersPager     Pager
 	Deliveries      adminsvc.DeliveryBoard
+	DeliveriesPager Pager
 	Dispatch        logisticsvc.DispatchBoard
 	DispatchError   string
 	CourierHostURL  string
@@ -259,13 +261,14 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		requestedPage := pageParam(r)
 		status := http.StatusOK
 		dispatchError := ""
 		if r.Method == http.MethodPost {
 			err := a.Logistics.Assign(r.Context(), logisticsActorFromContext(r), r.FormValue("order_id"), r.FormValue("courier_id"))
 			switch {
 			case err == nil:
-				redirectWithFlash(w, r, "/deliveries", "success", "Courier assignment saved")
+				redirectWithFlash(w, r, pageHref(r, requestedPage), "success", "Courier assignment saved")
 				return
 			case errors.Is(err, logisticsvc.ErrForbidden):
 				http.Error(w, "Forbidden", http.StatusForbidden)
@@ -293,10 +296,21 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		board, err := svc.Deliveries(r.Context())
+		board, total, err := svc.DeliveriesPage(r.Context(), requestedPage, adminDeliveriesPageSize)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
+		}
+		displayPage := min(requestedPage, pageCount(adminDeliveriesPageSize, total))
+		if r.Method == http.MethodGet && redirectPastLastPage(w, r, requestedPage, adminDeliveriesPageSize, total) {
+			return
+		}
+		if r.Method == http.MethodPost && dispatchError != "" && total > 0 && displayPage != requestedPage {
+			board, total, err = svc.DeliveriesPage(r.Context(), displayPage, adminDeliveriesPageSize)
+			if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
 		}
 		dispatch, err := a.Logistics.DispatchBoard(r.Context(), logisticsActorFromContext(r))
 		if err != nil {
@@ -304,6 +318,7 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 			return
 		}
 		page := adminDeliveriesPage(metrics, adminRoleFromContext(r), board)
+		page.DeliveriesPager = newPager(r, displayPage, adminDeliveriesPageSize, total)
 		page.Dispatch = dispatch
 		page.DispatchError = dispatchError
 		page.CourierHostURL = siblingURL(r, courierHostPrefix, "/login")

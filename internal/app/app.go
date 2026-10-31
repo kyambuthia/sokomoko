@@ -106,6 +106,7 @@ type AdminService interface {
 	ReactivateUser(ctx context.Context, actor *adminsvc.Actor, userIDRaw string) error
 	DeactivatedMembers(ctx context.Context) ([]adminsvc.TeamMember, error)
 	Deliveries(ctx context.Context) (adminsvc.DeliveryBoard, error)
+	DeliveriesPage(context.Context, int, int) (adminsvc.DeliveryBoard, int, error)
 	Metrics(ctx context.Context) (adminsvc.Metrics, error)
 	Orders(ctx context.Context) ([]adminsvc.Order, error)
 	OrdersPage(context.Context, int, int) ([]adminsvc.Order, int, error)

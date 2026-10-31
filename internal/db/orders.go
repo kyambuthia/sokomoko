@@ -411,6 +411,54 @@ func (s *Store) ListAllOrdersPage(ctx context.Context, limit, offset int) ([]Ord
 	return orders, total, err
 }
 
+const (
+	deliveryBoardSummarySQL = "SELECT " +
+		"count(*) FILTER (WHERE o.status <> 'cancelled' AND o.delivery_status = 'queued'), " +
+		"count(*) FILTER (WHERE o.status <> 'cancelled' AND o.delivery_status = 'processing'), " +
+		"count(*) FILTER (WHERE o.status <> 'cancelled' AND o.delivery_status = 'shipped'), " +
+		"count(*) FILTER (WHERE o.status <> 'cancelled' AND o.delivery_status = 'delivered'), " +
+		"count(*) FILTER (WHERE o.status <> 'cancelled' AND o.delivery_status <> 'delivered') " +
+		"FROM orders o"
+	pendingDeliveryOrdersPredicate = "o.status <> 'cancelled' AND o.delivery_status <> 'delivered'"
+)
+
+// ListDeliveryBoardPage returns delivery counts and one oldest-first page of pending orders.
+func (s *Store) ListDeliveryBoardPage(ctx context.Context, limit, offset int) ([]Order, DeliveryBoardSummary, int, error) {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+	if limit < 1 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var summary DeliveryBoardSummary
+	err := s.DB.QueryRowContext(ctx, deliveryBoardSummarySQL).Scan(
+		&summary.QueuedCount, &summary.ProcessingCount, &summary.ShippedCount,
+		&summary.DeliveredCount, &summary.PendingCount,
+	)
+	if err != nil {
+		return nil, DeliveryBoardSummary{}, 0, err
+	}
+	total := summary.PendingCount
+	if total == 0 {
+		return []Order{}, summary, 0, nil
+	}
+	lastOffset := ((total - 1) / limit) * limit
+	if offset > lastOffset {
+		return []Order{}, summary, total, nil
+	}
+
+	orders, err := s.listOrders(ctx,
+		"WHERE "+pendingDeliveryOrdersPredicate+" ORDER BY o.created_at ASC, o.id ASC LIMIT $1 OFFSET $2",
+		limit, offset,
+	)
+	return orders, summary, total, err
+}
+
 func fulfillmentPredicate(partnerID int) string {
 	if partnerID > 0 {
 		return partnerOwnsOrderSQL

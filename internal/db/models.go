@@ -357,6 +357,14 @@ type PartnerOrderSummary struct {
 	OverdueCount    int
 }
 
+type DeliveryBoardSummary struct {
+	QueuedCount     int
+	ProcessingCount int
+	ShippedCount    int
+	DeliveredCount  int
+	PendingCount    int
+}
+
 type AuditLog struct {
 	ID          int
 	ActorUserID sql.NullInt64

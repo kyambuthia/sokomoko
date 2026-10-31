@@ -238,6 +238,7 @@ type DeliveryBoard struct {
 	ProcessingCount int
 	ShippedCount    int
 	DeliveredCount  int
+	PendingCount    int
 	Pending         []Order
 }
 
@@ -268,7 +269,34 @@ func (s *Service) Deliveries(ctx context.Context) (DeliveryBoard, error) {
 	for i, j := 0, len(board.Pending)-1; i < j; i, j = i+1, j-1 {
 		board.Pending[i], board.Pending[j] = board.Pending[j], board.Pending[i]
 	}
+	board.PendingCount = len(board.Pending)
 	return board, nil
+}
+
+func (s *Service) DeliveriesPage(ctx context.Context, page, limit int) (DeliveryBoard, int, error) {
+	if page < 1 {
+		page = 1
+	} else if page > 1_000_000 {
+		page = 1_000_000
+	}
+	if limit < 1 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
+	}
+	orders, summary, total, err := s.store.ListDeliveryBoardPage(ctx, limit, (page-1)*limit)
+	if err != nil {
+		return DeliveryBoard{}, 0, err
+	}
+	board := DeliveryBoard{
+		QueuedCount: summary.QueuedCount, ProcessingCount: summary.ProcessingCount,
+		ShippedCount: summary.ShippedCount, DeliveredCount: summary.DeliveredCount,
+		PendingCount: total, Pending: make([]Order, 0, len(orders)),
+	}
+	for _, order := range orders {
+		board.Pending = append(board.Pending, mapAdminOrder(order))
+	}
+	return board, total, nil
 }
 
 func (s *Service) Reports(ctx context.Context) (SalesReport, error) {
