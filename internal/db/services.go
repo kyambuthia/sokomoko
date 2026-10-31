@@ -129,18 +129,22 @@ func (s *Store) BrowseServices(ctx context.Context, f ServiceFilter) ([]ServiceL
 	return items, total, nil
 }
 func (s *Store) PublicService(ctx context.Context, slug string) (*ServiceListing, error) {
+	return s.getService(ctx,
+		`SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE s.slug=$1 AND s.state='published' AND p.status='active'`,
+		slug,
+	)
+}
+
+func (s *Store) getService(ctx context.Context, query string, args ...any) (*ServiceListing, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelRepeatableRead,
-		ReadOnly:  true,
-	})
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	v, err := scanService(tx.QueryRowContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE s.slug=$1 AND s.state='published' AND p.status='active'`, slug))
+	v, err := scanService(tx.QueryRowContext(ctx, query, args...))
 	if err != nil {
 		return nil, err
 	}
@@ -205,14 +209,10 @@ func (s *Store) OwnServicesByState(ctx context.Context, userID int, state string
 
 // OwnService reads a draft or archived listing only through current shop membership.
 func (s *Store) OwnService(ctx context.Context, userID, id int) (*ServiceListing, error) {
-	ctx, cancel := s.queryContext(ctx)
-	defer cancel()
-	v, err := scanService(s.DB.QueryRowContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id JOIN partner_users pu ON pu.partner_id=s.partner_id JOIN users u ON u.id=pu.user_id WHERE s.id=$1 AND u.id=$2 AND u.role='partner' AND u.deleted_at IS NULL AND p.status='active'`, id, userID))
-	if err != nil {
-		return nil, err
-	}
-	v.WeeklyHours, err = loadServiceWeeklyHours(ctx, s.DB, v.ID)
-	return v, err
+	return s.getService(ctx,
+		`SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id JOIN partner_users pu ON pu.partner_id=s.partner_id JOIN users u ON u.id=pu.user_id WHERE s.id=$1 AND u.id=$2 AND u.role='partner' AND u.deleted_at IS NULL AND p.status='active'`,
+		id, userID,
+	)
 }
 
 // SaveService locks membership and the shop before the listing. Team removal,
