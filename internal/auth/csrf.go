@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -28,7 +29,17 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		// Only enforce CSRF for cookie-authenticated requests
 		cookie, err := r.Cookie(sessionCookieName)
 		if err != nil {
-			// No session cookie, so no CSRF protection needed
+			// Anonymous forms have no session token yet. Reject browser requests
+			// that identify a different origin, while leaving non-browser clients
+			// without Origin or Referer headers usable.
+			if !s.sameOriginRequest(r) {
+				if isAPIRequest(r) {
+					writeAPIJSONError(w, http.StatusForbidden, "csrf_origin_invalid", "Cross-origin request rejected")
+					return
+				}
+				http.Error(w, "Cross-origin request rejected", http.StatusForbidden)
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -92,6 +103,75 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), csrfTokenContextKey, expectedToken)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// sameOriginRequest guards anonymous state-changing requests such as login
+// and password-reset forms. Browser origin metadata is checked when present;
+// clients that omit it remain compatible.
+func (s *Service) sameOriginRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+
+	fetchSite := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+	if fetchSite != "" && fetchSite != "same-origin" && fetchSite != "none" {
+		return false
+	}
+
+	var source *url.URL
+	origins := r.Header.Values("Origin")
+	if len(origins) > 1 {
+		return false
+	}
+	if len(origins) == 1 && strings.TrimSpace(origins[0]) != "" {
+		parsed, err := url.Parse(strings.TrimSpace(origins[0]))
+		if err != nil || parsed.User != nil || parsed.Host == "" ||
+			(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return false
+		}
+		source = parsed
+	} else {
+		referers := r.Header.Values("Referer")
+		if len(referers) > 1 {
+			return false
+		}
+		if len(referers) == 0 || strings.TrimSpace(referers[0]) == "" {
+			return true
+		}
+		parsed, err := url.Parse(strings.TrimSpace(referers[0]))
+		if err != nil || !parsed.IsAbs() || parsed.User != nil || parsed.Host == "" {
+			return false
+		}
+		source = parsed
+	}
+
+	expectedScheme := requestScheme(r, s.trustProxyHeaders)
+	if !strings.EqualFold(source.Scheme, expectedScheme) {
+		return false
+	}
+
+	sourceHost, sourcePort := originHostAndPort(source.Scheme, source.Host)
+	requestHost, requestPort := originHostAndPort(expectedScheme, r.Host)
+	return sourceHost != "" && requestHost != "" &&
+		sourceHost == requestHost && sourcePort == requestPort
+}
+
+func originHostAndPort(scheme, host string) (string, string) {
+	parsed := url.URL{Host: host}
+	hostname := strings.ToLower(parsed.Hostname())
+	port := parsed.Port()
+	if port == "" {
+		switch strings.ToLower(scheme) {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		}
+	}
+	if hostname == "" || port == "" {
+		return "", ""
+	}
+	return hostname, port
 }
 
 func isAPIRequest(r *http.Request) bool {
