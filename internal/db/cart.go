@@ -143,13 +143,15 @@ func (s *Store) getCartItems(ctx context.Context, userID int, reservationKey str
 		 JOIN products p ON p.id = ci.product_id AND p.deleted_at IS NULL AND `+activePartnerSQL+`
 		 CROSS JOIN LATERAL (
 		     SELECT COALESCE(SUM(s.on_hand_quantity - s.reserved_quantity - s.allocated_quantity), 0)::INTEGER AS available_quantity
-		     FROM inventory_stocks s WHERE s.product_id = p.id
+		     FROM inventory_stocks s
+		     WHERE s.product_id = p.id AND s.warehouse_id = (SELECT id FROM warehouses WHERE is_default)
 		 ) stock
 		 LEFT JOIN LATERAL (
 		     SELECT SUM(r.quantity)::INTEGER AS reserved_quantity
 		     FROM stock_reservations r
 		     WHERE $2 <> '' AND r.user_id = c.user_id AND r.reservation_key = $2
 		       AND r.product_id = p.id AND r.status = 'active'
+		       AND r.warehouse_id = (SELECT id FROM warehouses WHERE is_default)
 		 ) own ON true
 		 LEFT JOIN LATERAL (
 		     SELECT url FROM product_images WHERE product_id = p.id ORDER BY position, id LIMIT 1
@@ -232,9 +234,11 @@ func (s *Store) AvailableForUser(ctx context.Context, userID, productID int) (in
 	err := s.DB.QueryRowContext(ctx,
 		`SELECT
 		    COALESCE((SELECT SUM(on_hand_quantity - reserved_quantity - allocated_quantity)
-		              FROM inventory_stocks WHERE product_id = p.id), 0)
+		              FROM inventory_stocks
+		              WHERE product_id = p.id AND warehouse_id = (SELECT id FROM warehouses WHERE is_default)), 0)
 		  + COALESCE((SELECT SUM(quantity) FROM stock_reservations
-		              WHERE product_id = p.id AND user_id = $1 AND status = 'active'), 0)
+		              WHERE product_id = p.id AND user_id = $1 AND status = 'active'
+		                AND warehouse_id = (SELECT id FROM warehouses WHERE is_default)), 0)
 		 FROM products p
 		 WHERE p.id = $2 AND p.deleted_at IS NULL AND `+activePartnerSQL,
 		userID, productID,
