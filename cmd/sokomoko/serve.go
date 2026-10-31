@@ -205,6 +205,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	courierMux := http.NewServeMux()
 	docsMux := http.NewServeMux()
 	apiMux := http.NewServeMux()
+	metrics := app.NewHTTPMetrics()
 
 	routes.RegisterPublic(application, mainMux)
 	routes.RegisterAdmin(application, adminMux)
@@ -227,8 +228,8 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	log.Printf("Trusted hosts: %s", sortedHostList(allowedHosts))
 
 	handler := app.Chain(
-		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux),
-		buildMiddlewares(cfg, application)...,
+		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux, metrics.Handler(cfg.MetricsToken)),
+		buildMiddlewares(cfg, application, metrics)...,
 	)
 
 	return &httpServer{

@@ -49,6 +49,7 @@ type Config struct {
 	DBQueryTimeout        int
 	AllowedHostsRaw       string
 	AdminSetupToken       string
+	MetricsToken          string
 	SessionCookieDomain   string
 	TrustProxyHeaders     bool
 	PasswordResetDisabled bool
@@ -96,6 +97,7 @@ func LoadFromEnv() Config {
 		DBQueryTimeout:        readInt("DB_QUERY_TIMEOUT_SECONDS", defaultDBQueryTimeoutSeconds),
 		AllowedHostsRaw:       strings.TrimSpace(os.Getenv("ALLOWED_HOSTS")),
 		AdminSetupToken:       strings.TrimSpace(os.Getenv("ADMIN_SETUP_TOKEN")),
+		MetricsToken:          strings.TrimSpace(os.Getenv("METRICS_TOKEN")),
 		SessionCookieDomain:   strings.TrimSpace(strings.ToLower(os.Getenv("SESSION_COOKIE_DOMAIN"))),
 		TrustProxyHeaders:     readEnvBool("TRUST_PROXY_HEADERS", false, &loadErrors),
 		PasswordResetDisabled: readEnvBool("PASSWORD_RESET_DISABLED", false, &loadErrors),
@@ -191,6 +193,9 @@ func (c Config) Validate() error {
 	}
 	if c.AuthAbuseMaxFailures > 0 && (c.AuthAbuseBackoffBase <= 0 || c.AuthAbuseBackoffMax < c.AuthAbuseBackoffBase) {
 		problems = append(problems, "AUTH_ABUSE backoff must be positive with max >= base")
+	}
+	if c.MetricsToken != "" && (len(c.MetricsToken) < 32 || len(strings.Fields(c.MetricsToken)) != 1) {
+		problems = append(problems, "METRICS_TOKEN must contain at least 32 bytes and no whitespace when set")
 	}
 	if c.IsProduction() {
 		if len(hosts) == 0 {

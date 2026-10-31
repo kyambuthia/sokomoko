@@ -18,6 +18,12 @@ SMTP or host settings.
 | `LOG_FORMAT` | `text` (`json` in production) | `json` or `text` |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
+## Metrics
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `METRICS_TOKEN` | empty (disabled) | Optional Bearer token for `GET/HEAD /metrics`. At least 32 bytes with no whitespace; generate one with `openssl rand -hex 32`. The endpoint is served only for allowed hosts and has no path, host, or user labels. |
+
 ## Database
 
 | Variable | Default | Notes |

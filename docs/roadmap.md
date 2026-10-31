@@ -51,6 +51,8 @@ reachable.
   time. Run each pass under a PostgreSQL advisory lock so one replica does it.
 - [x] **Retry password-reset email.** Delivery is one attempt with a 5-second
   timeout. Retry transient failures with bounded backoff.
+- [x] **Metrics endpoint.** Optional bearer-authenticated `/metrics` exposes
+  bounded-cardinality HTTP request metrics and Go runtime gauges.
 
 ## Phase 3: features
 
@@ -93,4 +95,3 @@ reachable.
   bounded process-local fallback on database errors. Add database-backed tests
   and run the full suite before marking this item done.
 - [ ] An email outbox.
-- [ ] A metrics endpoint.

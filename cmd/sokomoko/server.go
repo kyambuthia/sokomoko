@@ -35,11 +35,15 @@ func runHTTPServer(server *httpServer, store *db.Store) error {
 	return err
 }
 
-func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux *http.ServeMux) http.Handler {
+func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux *http.ServeMux, metricsHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := app.CanonicalHost(r.Host)
 		if _, ok := allowedHosts[host]; !ok {
 			http.Error(w, "Invalid host", http.StatusBadRequest)
+			return
+		}
+		if r.URL.Path == "/metrics" {
+			metricsHandler.ServeHTTP(w, r)
 			return
 		}
 		if strings.HasPrefix(host, "docs.") {
@@ -77,15 +81,20 @@ func parseAllowedHosts(raw string) map[string]struct{} {
 	return hosts
 }
 
-func buildMiddlewares(cfg config.Config, application *app.App) []app.Middleware {
+func buildMiddlewares(cfg config.Config, application *app.App, metrics *app.HTTPMetrics) []app.Middleware {
 	middlewares := []app.Middleware{
 		app.RequestID(),
+	}
+	if cfg.MetricsToken != "" {
+		middlewares = append(middlewares, metrics.Middleware)
+	}
+	middlewares = append(middlewares,
 		app.RequestLogger(),
 		app.Recoverer(),
 		app.SecurityHeadersWithProxy(cfg.TrustProxyHeaders),
-		app.BodyLimit(1 << 20),
+		app.BodyLimit(1<<20),
 		application.Auth.CSRFMiddleware,
-	}
+	)
 
 	if cfg.PostRateLimitMax > 0 {
 		window := time.Duration(cfg.PostRateLimitWindow) * time.Second

@@ -7,6 +7,7 @@ All routes are registered in `internal/routes/register.go` (HTML) and
 | --- | --- |
 | `GET/HEAD /healthz` | Process liveness. Always `200 ok`. |
 | `GET/HEAD /readyz` | Database ping with a 2 s deadline. `503` while draining or when the database is unreachable. |
+| `GET/HEAD /metrics` | Prometheus HTTP and Go runtime metrics; Bearer token required when enabled, otherwise `404`. |
 | `/static/...` | Embedded assets. In development, files under `internal/ui/static/` on disk take precedence. |
 
 Workspace pages link to other hosts through the `/storefront`, `/catalog`, and
