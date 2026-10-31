@@ -137,8 +137,8 @@ func (s *Store) GetAllCategories(ctx context.Context) ([]Category, error) {
 // without a partner stay visible. It expects the products table aliased as p.
 const activePartnerSQL = "NOT EXISTS (SELECT 1 FROM partners sp WHERE sp.id = p.partner_id AND sp.status <> 'active')"
 
-// productSelect projects a product with its category, partner, and available
-// stock. The LATERAL sum is driven by the inventory_stocks primary key.
+// productSelect projects a product with its category, partner, and default-warehouse
+// available stock. The LATERAL sum is driven by the inventory_stocks primary key.
 const productSelect = `
 SELECT p.id, p.name, p.slug, p.description, p.price_cents, p.currency,
        stock.available_quantity,
@@ -150,7 +150,7 @@ LEFT JOIN partners pt ON pt.id = p.partner_id
 CROSS JOIN LATERAL (
     SELECT COALESCE(SUM(s.on_hand_quantity - s.reserved_quantity - s.allocated_quantity), 0)::INTEGER AS available_quantity
     FROM inventory_stocks s
-    WHERE s.product_id = p.id
+    WHERE s.product_id = p.id AND s.warehouse_id = (SELECT id FROM warehouses WHERE is_default)
 ) stock`
 
 func scanProduct(row interface{ Scan(...any) error }) (*Product, error) {
@@ -460,7 +460,8 @@ func (s *Store) CountFilteredProducts(ctx context.Context, filter ProductFilter)
 	if filter.InStockOnly {
 		from += ` CROSS JOIN LATERAL (
 			SELECT COALESCE(SUM(s.on_hand_quantity - s.reserved_quantity - s.allocated_quantity), 0)::INTEGER AS available_quantity
-			FROM inventory_stocks s WHERE s.product_id = p.id
+			FROM inventory_stocks s
+			WHERE s.product_id = p.id AND s.warehouse_id = (SELECT id FROM warehouses WHERE is_default)
 		) stock`
 	}
 	var count int
