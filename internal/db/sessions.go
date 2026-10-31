@@ -10,11 +10,25 @@ import (
 func (s *Store) CreateSession(ctx context.Context, sess Session) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx,
-		"INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES ($1, $2, $3, $4)",
-		hashOpaqueToken(sess.ID), sess.UserID, sess.CSRFToken, sess.ExpiresAt.UTC(),
-	)
-	return wrapDBError(err)
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		var userID int
+		err := tx.QueryRowContext(ctx,
+			"SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR SHARE",
+			sess.UserID,
+		).Scan(&userID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserInactive
+		}
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.ExecContext(ctx,
+			"INSERT INTO sessions (id, user_id, csrf_token, expires_at) VALUES ($1, $2, $3, $4)",
+			hashOpaqueToken(sess.ID), sess.UserID, sess.CSRFToken, sess.ExpiresAt.UTC(),
+		)
+		return err
+	})
 }
 
 // GetSession returns the unexpired session for a raw cookie token.

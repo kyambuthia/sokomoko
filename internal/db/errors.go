@@ -35,6 +35,7 @@ var (
 	ErrInvalidCourierView         = errors.New("invalid courier job view")
 	ErrCourierHasActiveDeliveries = errors.New("courier has active deliveries")
 	ErrLastAdmin                  = errors.New("cannot deactivate the last active admin")
+	ErrUserInactive               = errors.New("user is inactive")
 )
 
 const (

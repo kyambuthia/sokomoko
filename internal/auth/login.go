@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -150,6 +151,11 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 		}
 	}
 	if err := s.startSession(w, r, user.ID); err != nil {
+		if errors.Is(err, db.ErrUserInactive) {
+			s.clearSessionCookie(w, r)
+			renderWithStatus(w, cfg.tmpl, http.StatusUnauthorized, withError(data, "Invalid credentials"))
+			return
+		}
 		log.Printf("create session failed: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
