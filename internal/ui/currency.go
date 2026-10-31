@@ -23,6 +23,15 @@ func SetCurrency(code string) {
 // Currency returns the store currency code.
 func Currency() string { return storeCurrency.Load().(string) }
 
+// CurrencyMinorDigits returns the ISO 4217 minor-unit precision for the store.
+func CurrencyMinorDigits() int {
+	currency, ok := money.LookupCurrency(Currency())
+	if !ok {
+		return 2
+	}
+	return currency.MinorDigits
+}
+
 // FormatMoney renders an amount in the store currency, for example
 // "KES 1,250.00".
 func FormatMoney(c money.Cents) string { return money.Format(c, Currency()) }
