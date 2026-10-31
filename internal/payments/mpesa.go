@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -359,8 +360,8 @@ func (m *Mpesa) ParseWebhook(_ Config, _ *http.Request, body []byte) (WebhookEve
 				ResultDesc        string      `json:"ResultDesc"`
 				CallbackMetadata  struct {
 					Item []struct {
-						Name  string `json:"Name"`
-						Value any    `json:"Value"`
+						Name  string          `json:"Name"`
+						Value json.RawMessage `json:"Value"`
 					} `json:"Item"`
 				} `json:"CallbackMetadata"`
 			} `json:"stkCallback"`
@@ -379,12 +380,13 @@ func (m *Mpesa) ParseWebhook(_ Config, _ *http.Request, body []byte) (WebhookEve
 		for _, item := range cb.CallbackMetadata.Item {
 			switch item.Name {
 			case "Amount":
-				if v, ok := item.Value.(float64); ok {
-					result.Amount = money.Cents(int64(v * 100))
+				if amount, ok := parseMpesaAmount(item.Value); ok {
+					result.Amount = amount
 				}
 			case "MpesaReceiptNumber":
 				if result.Receipt == "" {
-					if receipt, ok := item.Value.(string); ok {
+					var receipt string
+					if err := json.Unmarshal(item.Value, &receipt); err == nil {
 						if receipt = strings.TrimSpace(receipt); receipt != "" {
 							result.Receipt = receipt
 						}
@@ -400,6 +402,25 @@ func (m *Mpesa) ParseWebhook(_ Config, _ *http.Request, body []byte) (WebhookEve
 		Data:   map[string]string{"checkout_request_id": cb.CheckoutRequestID, "merchant_request_id": cb.MerchantRequestID},
 		Result: result,
 	}, nil
+}
+
+func parseMpesaAmount(raw json.RawMessage) (money.Cents, bool) {
+	if len(raw) == 0 || len(raw) > 64 {
+		return 0, false
+	}
+	var amount big.Rat
+	if _, ok := amount.SetString(string(raw)); !ok {
+		return 0, false
+	}
+	amount.Mul(&amount, new(big.Rat).SetInt64(100))
+	if amount.Denom().Cmp(big.NewInt(1)) != 0 {
+		return 0, false
+	}
+	cents := amount.Num()
+	if cents.Sign() < 0 || !cents.IsInt64() {
+		return 0, false
+	}
+	return money.Cents(cents.Int64()), true
 }
 
 func truncate(s string, max int) string {
