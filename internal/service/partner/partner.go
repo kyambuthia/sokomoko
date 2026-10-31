@@ -506,6 +506,9 @@ type ProductInput struct {
 	CategoryID  string
 	ImageURL    string
 	Image       *ProductImageUpload
+	// RemoveImage deletes blob-backed uploads when Image is nil. A new upload
+	// replaces those uploads instead, and URL-only images stay either way.
+	RemoveImage bool
 }
 
 // productForActor loads a product the actor may edit. A partner user may only
@@ -557,7 +560,9 @@ func (s *Service) ProductForEdit(ctx context.Context, actor *Actor, idRaw string
 }
 
 // UpdateProductForActor changes a product's details and sets its available
-// stock. The slug stays the same so product links keep working.
+// stock. The slug stays the same so product links keep working. With no new
+// upload and RemoveImage false, existing images stay. RemoveImage deletes
+// only blob-backed uploads. A new upload replaces those uploads instead.
 func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw string, input ProductInput) error {
 	product, err := s.productForActor(ctx, actor, idRaw)
 	if err != nil {
@@ -594,6 +599,8 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 		for i := range product.Images {
 			product.Images[i].DisplayOrder = i
 		}
+	} else if input.RemoveImage {
+		product.RemoveUploadedImages = true
 	}
 	if err := s.store.UpdateProduct(ctx, *product); err != nil {
 		if errors.Is(err, db.ErrProductNotFound) {
@@ -604,6 +611,8 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	details := fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock)
 	if input.Image != nil {
 		details += " image updated"
+	} else if input.RemoveImage {
+		details += " uploaded image removed"
 	}
 	s.logAudit(ctx, actor.ID, "product.update", "product", product.ID, details)
 	return nil

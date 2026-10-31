@@ -46,6 +46,14 @@
       <img src="{{ .Form.ImageURL }}" alt="" width="112" height="112" loading="lazy">
     </div>
     {{ end }}
+    {{ if .EditID }}
+    <div class="field">
+      <label class="choice">
+        <input type="checkbox" id="remove_image" name="remove_image" value="1" {{ if .RemoveImage }}checked{{ end }}>
+        <span class="choice__body"><span>Remove uploaded image</span><span class="tiny muted">Leave this unchecked to keep the current image. This deletes only an uploaded image. Bundled images stay. With no image left, the product uses the usual fallback. A new file replaces the previous upload instead.</span></span>
+      </label>
+    </div>
+    {{ end }}
     <div class="field">
       <label class="label" for="image">Product image (JPEG or PNG)</label>
       <input class="input" type="file" id="image" name="image" accept="image/jpeg,image/png">

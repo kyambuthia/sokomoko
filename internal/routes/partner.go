@@ -61,7 +61,8 @@ type PartnerProductNewData struct {
 	Form        partnersvc.CreateProductInput
 	DefaultName string
 	CSRFToken   string
-	EditID      int // set when the form edits an existing product
+	EditID      int  // set when the form edits an existing product
+	RemoveImage bool // redisplay the explicit remove checkbox after a rejected save
 }
 
 func PartnerRoot(a *app.App) http.HandlerFunc {
@@ -359,10 +360,12 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			CategoryID:  r.FormValue("category_id"),
 			ImageURL:    imageURL,
 			Image:       imageUpload,
+			RemoveImage: r.FormValue("remove_image") == "1",
 		}
 		data.Form = partnersvc.CreateProductInput{Name: input.Name, Description: input.Description,
 			Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID, ImageURL: imageURL}
 		data.DefaultName = strings.TrimSpace(input.Name)
+		data.RemoveImage = input.RemoveImage
 		if imageErr != nil {
 			data.Error = invalidProductImageMessage
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)

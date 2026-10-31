@@ -66,6 +66,11 @@ type Product struct {
 	Images        []ProductImage
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+
+	// RemoveUploadedImages asks UpdateProduct to delete blob-backed images in
+	// the same transaction. URL-only images stay. This is not a stored column.
+	// A new image that carries bytes takes precedence and replaces uploads.
+	RemoveUploadedImages bool
 }
 
 // PrimaryImage returns the raw URL of the first image, or "" when none exist.

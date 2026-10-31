@@ -254,6 +254,19 @@ func hasUploadedProductImage(images []ProductImage) bool {
 	return false
 }
 
+// deleteUploadedProductImagesTx removes images that have stored bytes.
+// Rows with only a URL, such as bundled gallery images, are left in place.
+// Deleting the image row cascades to product_image_blobs.
+func deleteUploadedProductImagesTx(ctx context.Context, q querier, productID int) error {
+	_, err := q.ExecContext(ctx,
+		`DELETE FROM product_images AS image
+		 USING product_image_blobs AS blob
+		 WHERE image.id = blob.product_image_id AND image.product_id = $1`,
+		productID,
+	)
+	return err
+}
+
 func insertProductImageTx(ctx context.Context, q querier, productID int64, image ProductImage, position int) error {
 	if len(image.Data) == 0 {
 		_, err := q.ExecContext(ctx,
@@ -345,7 +358,11 @@ func (s *Store) getProduct(ctx context.Context, predicate string, arg any) (*Pro
 
 // UpdateProduct updates catalog fields and sets the available quantity in the
 // default warehouse to product.StockQuantity, keeping reserved and allocated
-// stock untouched.
+// stock untouched. Image rows change only when product.Images carries new
+// upload bytes, or when RemoveUploadedImages is set. New bytes replace prior
+// blob-backed images. RemoveUploadedImages deletes blob-backed images and
+// leaves URL-only images in place. Either image change commits with the rest
+// of the update.
 func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -378,12 +395,7 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 		}
 
 		if hasUploadedProductImage(product.Images) {
-			if _, err := tx.ExecContext(ctx,
-				`DELETE FROM product_images AS image
-				 USING product_image_blobs AS blob
-				 WHERE image.id = blob.product_image_id AND image.product_id = $1`,
-				product.ID,
-			); err != nil {
+			if err := deleteUploadedProductImagesTx(ctx, tx, product.ID); err != nil {
 				return err
 			}
 			newImageCount := 0
@@ -405,6 +417,10 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 				if err := insertProductImageTx(ctx, tx, int64(product.ID), image, i); err != nil {
 					return err
 				}
+			}
+		} else if product.RemoveUploadedImages {
+			if err := deleteUploadedProductImagesTx(ctx, tx, product.ID); err != nil {
+				return err
 			}
 		}
 
