@@ -39,5 +39,11 @@ func Make(value string) string {
 // dashes, at most MaxLength bytes. This matches the database CHECK constraints
 // for product, category, and store slugs.
 func Valid(s string) bool {
-	return len(s) <= MaxLength && pattern.MatchString(s)
+	return ValidWithMaxLength(s, MaxLength)
+}
+
+// ValidWithMaxLength reports whether s follows the slug syntax and fits the
+// supplied byte limit.
+func ValidWithMaxLength(s string, maxLength int) bool {
+	return maxLength >= 0 && len(s) <= maxLength && pattern.MatchString(s)
 }
