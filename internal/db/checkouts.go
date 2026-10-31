@@ -209,10 +209,6 @@ func (s *Store) UpsertCheckout(ctx context.Context, userID int, input CheckoutIn
 		if !ok {
 			return ErrCheckoutNotFound
 		}
-		if err := validateCheckoutCartTx(ctx, tx, userID, token, expected); err != nil {
-			return err
-		}
-
 		var currentCurrency string
 		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
 			return err
@@ -221,6 +217,10 @@ func (s *Store) UpsertCheckout(ctx context.Context, userID int, input CheckoutIn
 			return ErrCheckoutCurrencyChanged
 		}
 		currency = currentCurrency
+		if err := validateCheckoutCartTx(ctx, tx, userID, token, expected); err != nil {
+			return err
+		}
+
 		if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased,
 			"user_id = $2 AND reservation_key <> $3", userID, token); err != nil {
 			return err
