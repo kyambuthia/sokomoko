@@ -202,6 +202,9 @@ func encryptedConversation(ctx context.Context, tx *sql.Tx, userID int, d ChatDe
 	if !slices.ContainsFunc(roster.Devices, func(x ChatDevice) bool { return x.ID == d.ID }) {
 		return ErrChatNotFound
 	}
+	if (r.Op == "claim" || r.Op == "session") && c.State != "accepted" && c.RequesterID != userID {
+		return ErrChatClosed
+	}
 	switch r.Op {
 	case "claim":
 		if err = chatRate(ctx, tx, userID, "package_claim", 60, 5); err != nil {
@@ -218,6 +221,17 @@ func encryptedConversation(ctx context.Context, tx *sql.Tx, userID int, d ChatDe
 				continue
 			}
 			var kp ChatPackage
+			// Reuse an unused package already claimed for this conversation and peer so
+			// another device or retry cannot drain additional packages.
+			// Keyed per peer in the current roster, so roster changes only claim for new peers.
+			err = tx.QueryRowContext(ctx, `SELECT id,device_id,package FROM chat_device_packages WHERE device_id=$1 AND conversation_id=$2 AND used_session_id IS NULL AND created_at > now()-interval '30 days' ORDER BY claimed_at DESC,id DESC LIMIT 1`, peer.ID, c.ID).Scan(&kp.ID, &kp.DeviceID, &kp.Package)
+			if err == nil {
+				out.Packages = append(out.Packages, kp)
+				continue
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
 			err = tx.QueryRowContext(ctx, `UPDATE chat_device_packages SET claimed_at=now(),claimed_by=$2,conversation_id=$3 WHERE id=(SELECT id FROM chat_device_packages WHERE device_id=$1 AND claimed_at IS NULL AND created_at > now()-interval '30 days' ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id,device_id,package`, peer.ID, d.ID, c.ID).Scan(&kp.ID, &kp.DeviceID, &kp.Package)
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrChatDeviceApproval
@@ -241,7 +255,7 @@ func encryptedConversation(ctx context.Context, tx *sql.Tx, userID int, d ChatDe
 		seen := map[string]bool{}
 		for _, id := range p.Packages {
 			var owner string
-			err = tx.QueryRowContext(ctx, `SELECT device_id FROM chat_device_packages WHERE id=$1 AND claimed_by=$2 AND conversation_id=$3 AND used_session_id IS NULL`, id, d.ID, c.ID).Scan(&owner)
+			err = tx.QueryRowContext(ctx, `SELECT device_id FROM chat_device_packages WHERE id=$1 AND conversation_id=$2 AND used_session_id IS NULL`, id, c.ID).Scan(&owner)
 			if err != nil || owner == d.ID || seen[owner] || !slices.ContainsFunc(roster.Devices, func(x ChatDevice) bool { return x.ID == owner }) {
 				return ErrChatConflict
 			}
