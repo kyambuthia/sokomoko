@@ -90,13 +90,28 @@ func (s *Store) GetPaymentException(ctx context.Context, id int) (*PaymentExcept
 	return scanPaymentException(s.DB.QueryRowContext(ctx, paymentExceptionSelect+" WHERE e.id = $1", id))
 }
 
-// BeginRefund claims an open exception before any provider request. Repeated
-// submissions never send a second refund, including after an unknown timeout.
+// BeginRefund claims an open exception before any provider request for a
+// trusted internal caller. Repeated submissions never send a second refund,
+// including after an unknown timeout.
 func (s *Store) BeginRefund(ctx context.Context, id int) (*PaymentException, bool, error) {
+	return s.beginRefund(ctx, 0, id, false)
+}
+
+// BeginRefundForActor revalidates the admin in the claim transaction.
+func (s *Store) BeginRefundForActor(ctx context.Context, actorID, id int) (*PaymentException, bool, error) {
+	return s.beginRefund(ctx, actorID, id, true)
+}
+
+func (s *Store) beginRefund(ctx context.Context, actorID, id int, requireAdmin bool) (*PaymentException, bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	claimed := false
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
 		var status string
 		if err := tx.QueryRowContext(ctx, "SELECT status FROM payment_exceptions WHERE id = $1 FOR UPDATE", id).Scan(&status); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -121,9 +136,24 @@ func (s *Store) BeginRefund(ctx context.Context, id int) (*PaymentException, boo
 }
 
 func (s *Store) SetPaymentExceptionStatus(ctx context.Context, id int, status, refundReference, lastError string) error {
+	return s.setPaymentExceptionStatus(ctx, 0, id, status, refundReference, lastError, false)
+}
+
+// SetPaymentExceptionStatusForActor revalidates an admin for manual resolution.
+// Provider-result persistence continues through the trusted method.
+func (s *Store) SetPaymentExceptionStatusForActor(ctx context.Context, actorID, id int, status, refundReference, lastError string) error {
+	return s.setPaymentExceptionStatus(ctx, actorID, id, status, refundReference, lastError, true)
+}
+
+func (s *Store) setPaymentExceptionStatus(ctx context.Context, actorID, id int, status, refundReference, lastError string, requireAdmin bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
 		var paymentID int
 		var reason, current string
 		if err := tx.QueryRowContext(ctx,

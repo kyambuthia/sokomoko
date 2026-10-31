@@ -33,6 +33,9 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	if err != nil {
 		return nil, err
 	}
+	if e == nil {
+		return nil, db.ErrPaymentExceptionNotFound
+	}
 	var refundProvider payments.RefundProvider
 	var cfg payments.Config
 	switch e.Provider {
@@ -55,7 +58,10 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	default:
 		return nil, ErrRefundUnsupported
 	}
-	e, claimed, err := s.store.BeginRefund(ctx, id)
+	e, claimed, err := s.store.BeginRefundForActor(ctx, actor.ID, id)
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return nil, ErrForbidden
+	}
 	if err != nil || !claimed {
 		return e, err
 	}
@@ -100,6 +106,9 @@ func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, refer
 	if err != nil {
 		return nil, err
 	}
+	if e == nil {
+		return nil, db.ErrPaymentExceptionNotFound
+	}
 	switch e.Status {
 	case "refunded":
 		return e, nil
@@ -107,7 +116,10 @@ func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, refer
 	default:
 		return nil, ErrRefundNotResolvable
 	}
-	if err := s.store.SetPaymentExceptionStatus(ctx, id, "refunded", reference, ""); err != nil {
+	if err := s.store.SetPaymentExceptionStatusForActor(ctx, actor.ID, id, "refunded", reference, ""); err != nil {
+		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+			return nil, ErrForbidden
+		}
 		return nil, err
 	}
 	s.logAudit(ctx, actor.ID, "payments.refund.resolve", "payment_exception", id, "Refund reconciled by hand: "+truncate(reference, 100))
@@ -134,6 +146,9 @@ func (s *Service) RefreshRefund(ctx context.Context, actor *Actor, id int) (*db.
 	e, err := s.store.GetPaymentException(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if e == nil {
+		return nil, db.ErrPaymentExceptionNotFound
 	}
 	if e.Provider != "paystack" {
 		return nil, ErrRefundUnsupported
