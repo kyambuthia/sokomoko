@@ -14,8 +14,10 @@ import (
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
-// teamPageSize is how many accounts the team page lists at once.
-const teamPageSize = 50
+const (
+	teamPageSize          = 50 // Number of accounts shown on each team page.
+	adminProductsPageSize = 50 // Number of products shown on each admin catalog page.
+)
 
 type AdminPageData struct {
 	Title           string
@@ -28,6 +30,7 @@ type AdminPageData struct {
 	StaffCount      int
 	UserCount       int
 	Products        []adminsvc.Product
+	ProductsPager   Pager
 	TeamMembers     []adminsvc.TeamMember
 	TeamQuery       string
 	TeamPager       Pager
@@ -124,13 +127,23 @@ func AdminProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		products, err := svc.Products(r.Context())
+		requestedPage := pageParam(r)
+		products, total, err := svc.ProductsPage(r.Context(), requestedPage, adminProductsPageSize)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		if total == 0 && requestedPage > 1 {
+			http.Redirect(w, r, pageHref(r, 1), http.StatusSeeOther)
+			return
+		}
+		if redirectPastLastPage(w, r, requestedPage, adminProductsPageSize, total) {
+			return
+		}
 
-		renderAdminPage(a, w, r, http.StatusOK, adminProductsPage(metrics, adminRoleFromContext(r), products))
+		page := adminProductsPage(metrics, adminRoleFromContext(r), products)
+		page.ProductsPager = newPager(r, requestedPage, adminProductsPageSize, total)
+		renderAdminPage(a, w, r, http.StatusOK, page)
 	}
 }
 

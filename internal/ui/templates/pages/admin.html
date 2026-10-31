@@ -52,6 +52,7 @@
       </tbody>
     </table>
   </div>
+  {{ template "pager" .ProductsPager }}
   {{ else }}
   {{ template "empty" dict "Icon" "box" "Text" "No products yet." "Href" "/catalog/new" "Action" "Add product" }}
   {{ end }}
