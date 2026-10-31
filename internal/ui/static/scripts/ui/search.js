@@ -86,8 +86,12 @@ export class UISearch extends HTMLElement {
     if (this.list.hidden || !options.length) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      const delta = event.key === "ArrowDown" ? 1 : -1;
-      this.active = (this.active + delta + options.length) % options.length;
+      if (this.active < 0) {
+        this.active = event.key === "ArrowDown" ? 0 : options.length - 1;
+      } else {
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        this.active = (this.active + delta + options.length) % options.length;
+      }
       options.forEach((option, index) => option.setAttribute("aria-selected", String(index === this.active)));
       this.input.setAttribute("aria-activedescendant", options[this.active].id);
     } else if (event.key === "Enter" && this.active >= 0) {
