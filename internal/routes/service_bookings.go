@@ -16,14 +16,15 @@ import (
 const serviceBookingsPageSize = 20
 
 type serviceBookingCard struct {
-	Booking       db.ServiceBooking
-	StatusLabel   string
-	LocalStart    string
-	LocalDeadline string
-	CanStart      bool
-	CanCancel     bool
-	CanComplete   bool
-	CanMarkNoShow bool
+	Booking           db.ServiceBooking
+	StatusLabel       string
+	StatusDescription string
+	LocalStart        string
+	LocalDeadline     string
+	CanStart          bool
+	CanCancel         bool
+	CanComplete       bool
+	CanMarkNoShow     bool
 }
 
 type serviceBookingsPage struct {
@@ -42,14 +43,15 @@ func serviceBookingCardFor(booking db.ServiceBooking) serviceBookingCard {
 	}
 	now := time.Now()
 	return serviceBookingCard{
-		Booking:       booking,
-		StatusLabel:   bookingStatusLabel(booking.Status),
-		LocalStart:    booking.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
-		LocalDeadline: booking.ResponseDeadline.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
-		CanStart:      booking.Status == "confirmed" && !booking.StartsAt.After(now) && booking.EndsAt.After(now),
-		CanCancel:     booking.Status == "confirmed" && booking.StartsAt.After(now),
-		CanComplete:   booking.Status == "in_progress" && !booking.EndsAt.After(now),
-		CanMarkNoShow: booking.Status == "confirmed" && !booking.EndsAt.After(now),
+		Booking:           booking,
+		StatusLabel:       bookingStatusLabel(booking.Status),
+		StatusDescription: serviceBookingStatusDescription(booking.Status),
+		LocalStart:        booking.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
+		LocalDeadline:     booking.ResponseDeadline.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
+		CanStart:          booking.Status == "confirmed" && !booking.StartsAt.After(now) && booking.EndsAt.After(now),
+		CanCancel:         booking.Status == "confirmed" && booking.StartsAt.After(now),
+		CanComplete:       booking.Status == "in_progress" && !booking.EndsAt.After(now),
+		CanMarkNoShow:     booking.Status == "confirmed" && !booking.EndsAt.After(now),
 	}
 }
 

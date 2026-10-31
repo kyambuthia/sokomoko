@@ -19,6 +19,7 @@
         <span class="badge">{{ .StatusLabel }}</span>
       </div>
       <p>{{ .LocalStart }} · {{ .Booking.Timezone }}</p>
+      {{ if and .StatusDescription (ne .Booking.Status "in_progress") }}<p class="small muted">{{ .StatusDescription }}</p>{{ end }}
       <p class="small muted">{{ .Booking.ServiceArea }} · {{ if eq .Booking.DeliveryMode "premises" }}At the business{{ else if eq .Booking.DeliveryMode "mobile" }}Provider travels to customer{{ else }}Remote{{ end }}</p>
       <p class="small">Customer #{{ .Booking.CustomerID }} · {{ if eq .Booking.PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .Booking.PriceMode "from" }}From {{ end }}{{ moneyInCurrency .Booking.PriceCents .Booking.Currency }}{{ end }}</p>
       {{ if eq .Booking.Status "requested" }}

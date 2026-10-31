@@ -53,27 +53,27 @@ func accountBookingView(booking db.ServiceBooking) AccountBookingView {
 	}
 	return AccountBookingView{
 		Booking: booking, StatusLabel: bookingStatusLabel(booking.Status),
-		StatusDescription: bookingStatusDescription(booking.Status),
+		StatusDescription: serviceBookingStatusDescription(booking.Status),
 		LocalStart:        booking.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
 		LocalDeadline:     booking.ResponseDeadline.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
 		CanCancel:         (booking.Status == "requested" || booking.Status == "confirmed") && booking.StartsAt.After(time.Now()),
 	}
 }
 
-func bookingStatusDescription(status string) string {
+func serviceBookingStatusDescription(status string) string {
 	switch status {
 	case "rejected":
-		return "The provider declined this request."
+		return "This request was declined."
 	case "expired":
-		return "This request expired before the provider responded."
+		return "The response deadline passed before anyone responded."
 	case "cancelled":
 		return "This appointment was cancelled."
 	case "in_progress":
-		return "Your appointment is in progress."
+		return "The appointment is in progress."
 	case "completed":
-		return "Your appointment is complete."
+		return "The appointment is complete."
 	case "no_show":
-		return "This appointment was marked as missed."
+		return "This appointment was marked as a no-show."
 	default:
 		return ""
 	}
