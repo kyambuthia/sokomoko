@@ -186,6 +186,10 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			methodNotAllowed(w, http.MethodGet, http.MethodHead)
+			return
+		}
 		requestedPage := pageParam(r)
 		view, total, err := svc.ProductsPageForActor(r.Context(), partnerActorFromContext(r), requestedPage, partnerProductsPageSize)
 		switch {
