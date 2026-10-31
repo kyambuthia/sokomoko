@@ -15,10 +15,12 @@ import (
 )
 
 const (
-	sessionCookieName  = "session_token"
-	sessionDuration    = 24 * time.Hour
-	resetTokenDuration = 45 * time.Minute
-	resetEmailTimeout  = 5 * time.Second
+	sessionCookieName             = "session_token"
+	hostOnlySessionCookieName     = "__Host-session_token"
+	sharedDomainSessionCookieName = "__Secure-session_token"
+	sessionDuration               = 24 * time.Hour
+	resetTokenDuration            = 45 * time.Minute
+	resetEmailTimeout             = 5 * time.Second
 )
 
 type store interface {

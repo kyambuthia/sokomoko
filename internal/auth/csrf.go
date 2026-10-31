@@ -20,6 +20,7 @@ const csrfTokenContextKey csrfContextKey = "csrf_token"
 // for cookie-authenticated sessions. It exempts safe methods (GET, HEAD, OPTIONS, TRACE).
 func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookieName := s.sessionCookieNameFor(r)
 		// Exempt safe methods from CSRF protection
 		if isSafeMethod(r.Method) {
 			next.ServeHTTP(w, r)
@@ -27,7 +28,7 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Require a token for a valid session cookie and origin checks for anonymous requests
-		cookie, err := r.Cookie(sessionCookieName)
+		cookie, err := r.Cookie(cookieName)
 		if err != nil {
 			if s.rejectCrossOriginAnonymousRequest(w, r) {
 				return
@@ -61,7 +62,7 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 				return
 			}
 			s.clearSessionCookie(w, r)
-			r = withoutSessionCookie(r)
+			r = withoutSessionCookie(r, s.sessionCookieNamesFor(r)...)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -232,7 +233,7 @@ func (s *Service) CSRFTokenForSession(r *http.Request) string {
 	}
 
 	// Fall back to retrieving from session cookie
-	cookie, err := r.Cookie(sessionCookieName)
+	cookie, err := r.Cookie(s.sessionCookieNameFor(r))
 	if err != nil {
 		return ""
 	}
@@ -261,12 +262,19 @@ func (s *Service) CSRFToken(r *http.Request) string {
 
 // withoutSessionCookie returns a shallow copy of r whose Cookie header omits the
 // session cookie.
-func withoutSessionCookie(r *http.Request) *http.Request {
+func withoutSessionCookie(r *http.Request, cookieNames ...string) *http.Request {
 	r2 := r.Clone(r.Context())
 	r2.Header.Del("Cookie")
-	for _, c := range r.Cookies() {
-		if c.Name != sessionCookieName {
-			r2.AddCookie(c)
+	for _, cookie := range r.Cookies() {
+		keep := true
+		for _, name := range cookieNames {
+			if cookie.Name == name {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			r2.AddCookie(cookie)
 		}
 	}
 	return r2

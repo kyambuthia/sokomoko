@@ -34,7 +34,7 @@ SMTP or host settings.
 | --- | --- | --- |
 | `ALLOWED_HOSTS` | `localhost,127.0.0.1,admin.localhost,partner.localhost` when empty | Comma-separated exact hostnames, no scheme, port, path, or wildcard. Required in production. Admin and partner hosts must start with `admin.` and `partner.`. The first entry is used as the `Host` for `sokomoko healthcheck`. |
 | `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For` (right-most entry) and `X-Forwarded-Proto`. Only behind exactly one reverse proxy. |
-| `SESSION_COOKIE_DOMAIN` | empty (host-only cookies) | A DNS domain that contains every allowed host, for example `.example.com`, to share sessions across hosts |
+| `SESSION_COOKIE_DOMAIN` | empty (host-only cookies) | A DNS domain that contains every allowed host, for example `.example.com`, to share sessions across hosts. Sharing trusts every sibling subdomain that can set cookies for that domain. |
 
 ## Admin bootstrap
 

@@ -11,6 +11,26 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
+func (s *Service) sessionCookieNameFor(r *http.Request) string {
+	if !s.shouldUseSecureCookies(r) {
+		return sessionCookieName
+	}
+	if s.sessionCookieDomain == "" {
+		return hostOnlySessionCookieName
+	}
+	return sharedDomainSessionCookieName
+}
+
+// sessionCookieNamesFor includes the legacy name only for cleanup. It is never
+// accepted as an authenticated session when a prefixed secure cookie is active.
+func (s *Service) sessionCookieNamesFor(r *http.Request) []string {
+	active := s.sessionCookieNameFor(r)
+	if active == sessionCookieName {
+		return []string{active}
+	}
+	return []string{active, sessionCookieName}
+}
+
 func (s *Service) shouldUseSecureCookies(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
@@ -25,11 +45,8 @@ func (s *Service) shouldUseSecureCookies(r *http.Request) bool {
 // already carried so a pre-login session ID can never be promoted (session
 // fixation).
 func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int) error {
-	if existing, err := r.Cookie(sessionCookieName); err == nil && existing.Value != "" {
-		if err := s.store.DeleteSession(r.Context(), existing.Value); err != nil {
-			log.Printf("sign-in: revoke previous session: %v", err)
-		}
-	}
+	cookieName := s.sessionCookieNameFor(r)
+	s.revokeRequestSessions(r.Context(), r, "sign-in: revoke previous session")
 	sessionToken, err := generateOpaqueToken(32)
 	if err != nil {
 		return err
@@ -51,7 +68,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID in
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
+		Name:     cookieName,
 		Value:    sessionToken,
 		Expires:  expiresAt,
 		MaxAge:   int(sessionDuration.Seconds()),
@@ -61,6 +78,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID in
 		Secure:   s.shouldUseSecureCookies(r),
 		SameSite: http.SameSiteLaxMode,
 	})
+	s.clearLegacySessionCookie(w, r)
 	return nil
 }
 
@@ -71,21 +89,47 @@ func (s *Service) Logout() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if cookie, err := r.Cookie(sessionCookieName); err == nil {
-			// Revoke the session even if the browser stops waiting; clearing
-			// the cookie alone would leave a copied token valid.
-			if err := s.store.DeleteSession(context.WithoutCancel(r.Context()), cookie.Value); err != nil {
-				log.Printf("logout: revoke session: %v", err)
-			}
-		}
+		s.revokeRequestSessions(context.WithoutCancel(r.Context()), r, "logout: revoke session")
 		s.clearSessionCookie(w, r)
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
 }
 
+func (s *Service) revokeRequestSessions(ctx context.Context, r *http.Request, operation string) {
+	cookieNames := make(map[string]struct{})
+	for _, name := range s.sessionCookieNamesFor(r) {
+		cookieNames[name] = struct{}{}
+	}
+	seen := make(map[string]struct{})
+	for _, cookie := range r.Cookies() {
+		if _, ok := cookieNames[cookie.Name]; !ok || cookie.Value == "" {
+			continue
+		}
+		if _, ok := seen[cookie.Value]; ok {
+			continue
+		}
+		seen[cookie.Value] = struct{}{}
+		if err := s.store.DeleteSession(ctx, cookie.Value); err != nil {
+			log.Printf("%s: %v", operation, err)
+		}
+	}
+}
+
 func (s *Service) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	for _, name := range s.sessionCookieNamesFor(r) {
+		s.clearCookie(w, r, name)
+	}
+}
+
+func (s *Service) clearLegacySessionCookie(w http.ResponseWriter, r *http.Request) {
+	if s.sessionCookieNameFor(r) != sessionCookieName {
+		s.clearCookie(w, r, sessionCookieName)
+	}
+}
+
+func (s *Service) clearCookie(w http.ResponseWriter, r *http.Request, name string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
+		Name:     name,
 		Value:    "",
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
@@ -117,8 +161,11 @@ func (s *Service) AuthMiddleware(next http.Handler) http.Handler {
 			user = s.sessionUser(r)
 		}
 		if user == nil {
-			if _, err := r.Cookie(sessionCookieName); err == nil {
-				s.clearSessionCookie(w, r)
+			for _, name := range s.sessionCookieNamesFor(r) {
+				if cookie, err := r.Cookie(name); err == nil && cookie.Value != "" {
+					s.clearSessionCookie(w, r)
+					break
+				}
 			}
 			if WantsJSON(r) {
 				w.Header().Set("Content-Type", "application/json")
@@ -152,7 +199,7 @@ func (s *Service) OptionalUser(next http.Handler) http.Handler {
 }
 
 func (s *Service) sessionUser(r *http.Request) *db.User {
-	cookie, err := r.Cookie(sessionCookieName)
+	cookie, err := r.Cookie(s.sessionCookieNameFor(r))
 	if err != nil || cookie.Value == "" {
 		return nil
 	}

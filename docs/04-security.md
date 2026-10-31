@@ -18,8 +18,14 @@ Most of this lives in `internal/auth`. HTTP hardening is in
 
 ## Sessions
 
-- Login creates a 32-byte random token, sent as the `session_token` cookie:
-  `HttpOnly`, `SameSite=Lax`, `Path=/`, 24-hour lifetime.
+- Login creates a 32-byte random token, sent in an `HttpOnly`,
+  `SameSite=Lax`, `Path=/` cookie with a 24-hour lifetime.
+  Secure host-only requests use `__Host-session_token`, which browsers
+  reject if a sibling subdomain tries to set it for the parent domain. Secure
+  shared-domain requests use `__Secure-session_token` to reject cookies
+  injected over plain HTTP; it does not protect against HTTPS sibling hosts.
+  Secure deployments replace existing `session_token` cookies with these
+  names, so users sign in again after upgrading to this version.
 - The cookie is `Secure` when the request is TLS, when a trusted proxy reports
   `X-Forwarded-Proto: https`, or whenever `ENV=production`.
 - The database stores only the SHA-256 digest of the token (`sessions.id`), so
@@ -29,7 +35,10 @@ Most of this lives in `internal/auth`. HTTP hardening is in
   session fixation.
 - Cookies are host-only by default. Setting `SESSION_COOKIE_DOMAIN` shares one
   session across the storefront, admin, and partner hosts; config validation
-  requires every allowed host to sit under that domain.
+  requires every allowed host to sit under that domain. Shared-domain mode
+  trusts every sibling subdomain that can set cookies for that domain, including
+  hosts outside `ALLOWED_HOSTS`. Use it only when all such subdomains are
+  controlled by the same security boundary.
 - Logout is `POST` only. It deletes the session row and clears the cookie.
 
 ## Roles and authorization
