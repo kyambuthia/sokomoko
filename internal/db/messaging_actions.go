@@ -153,16 +153,32 @@ func validChatReportReason(reason string) bool {
 func (s *Store) ChatReports(ctx context.Context, actorID int) ([]ChatReport, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	// Bound each source before joining report details. The global top 100 can
+	// contain at most 100 rows from either source, so this preserves the result.
 	rows, err := s.DB.QueryContext(ctx, `SELECT r.id,sender.username,reporter.username,m.body,r.reason,r.created_at,false AS encrypted
-      FROM chat_reports r JOIN chat_messages m ON m.id=r.message_id AND m.conversation_id=r.conversation_id
+      FROM (
+        SELECT id,conversation_id,message_id,reporter_user_id,reason,created_at
+        FROM chat_reports
+        WHERE resolved_at IS NULL
+          AND EXISTS (SELECT 1 FROM users WHERE id=$1 AND role='admin' AND deleted_at IS NULL)
+        ORDER BY created_at,id
+        LIMIT 100
+      ) r
+      JOIN chat_messages m ON m.id=r.message_id AND m.conversation_id=r.conversation_id
       JOIN users sender ON sender.id=m.sender_user_id JOIN users reporter ON reporter.id=r.reporter_user_id
-      WHERE r.resolved_at IS NULL AND EXISTS (SELECT 1 FROM users WHERE id=$1 AND role='admin' AND deleted_at IS NULL)
       UNION ALL
       SELECT r.id,sender.username,reporter.username,r.disclosed_text,r.reason,r.created_at,true AS encrypted
-      FROM chat_encrypted_reports r JOIN chat_encrypted_events e ON e.id=r.event_id
+      FROM (
+        SELECT id,event_id,reporter_user_id,reason,disclosed_text,created_at
+        FROM chat_encrypted_reports
+        WHERE resolved_at IS NULL
+          AND EXISTS (SELECT 1 FROM users WHERE id=$1 AND role='admin' AND deleted_at IS NULL)
+        ORDER BY created_at,id
+        LIMIT 100
+      ) r
+      JOIN chat_encrypted_events e ON e.id=r.event_id
       JOIN chat_devices d ON d.id=e.sender_device_id JOIN users sender ON sender.id=d.user_id
       JOIN users reporter ON reporter.id=r.reporter_user_id
-      WHERE r.resolved_at IS NULL AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='admin' AND deleted_at IS NULL)
       ORDER BY created_at,id LIMIT 100`, actorID)
 	if err != nil {
 		return nil, err
