@@ -132,9 +132,6 @@ func (s *Service) Start(ctx context.Context, a *Actor, t db.ChatTarget, body, no
 	if !validActor(a) {
 		return 0, db.ErrChatNotFound
 	}
-	if err := s.store.AllowChatLookup(ctx, a.ID); err != nil {
-		return 0, err
-	}
 	if _, err := normalizeTarget(t); err != nil {
 		return 0, err
 	}
