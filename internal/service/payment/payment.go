@@ -32,7 +32,8 @@ const (
 	providerCashManual   = "manual_cash_on_delivery"
 
 	// verifyInterval throttles status polls that ask the provider directly.
-	verifyInterval = 5 * time.Second
+	verifyInterval        = 5 * time.Second
+	maxVerifiedReferences = 10_000
 )
 
 var (
@@ -84,8 +85,9 @@ type Service struct {
 	registry *payments.Registry
 	box      *secret.Box
 
-	mu       sync.Mutex
-	verified map[string]time.Time // attempt reference -> last provider check
+	mu                  sync.Mutex
+	verified            map[string]time.Time // hashed attempt reference -> last provider check
+	lastVerifiedCleanup time.Time
 }
 
 func New(store store, registry *payments.Registry, box *secret.Box) *Service {
@@ -516,13 +518,32 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 func (s *Service) dueForVerify(reference string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if last, ok := s.verified[reference]; ok && time.Since(last) < verifyInterval {
+
+	now := time.Now()
+	key := hashToken(reference)
+	if s.verified == nil {
+		s.verified = make(map[string]time.Time)
+	}
+	if last, ok := s.verified[key]; ok && now.Sub(last) < verifyInterval {
 		return false
 	}
-	if len(s.verified) > 10000 {
-		s.verified = map[string]time.Time{}
+	if s.lastVerifiedCleanup.IsZero() || now.Sub(s.lastVerifiedCleanup) >= verifyInterval {
+		for candidate, last := range s.verified {
+			if now.Sub(last) >= verifyInterval {
+				delete(s.verified, candidate)
+			}
+		}
+		s.lastVerifiedCleanup = now
 	}
-	s.verified[reference] = time.Now()
+	if _, exists := s.verified[key]; exists {
+		s.verified[key] = now
+		return true
+	}
+	if len(s.verified) >= maxVerifiedReferences {
+		// Keep known throttles intact and defer unseen checks until a slot expires.
+		return false
+	}
+	s.verified[key] = now
 	return true
 }
 
