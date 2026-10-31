@@ -16,7 +16,7 @@ var (
 	ErrRefundReferenceRequired = errors.New("enter the M-Pesa reversal receipt")
 	ErrRefundNotReady          = errors.New("refund has no provider reference to check")
 	ErrRefundNotResolvable     = errors.New("only a reconciled refund can be closed by hand")
-	ErrRefundRequestInProgress = errors.New("the provider refund request is still in progress; try again shortly")
+	ErrRefundRequestInProgress = errors.New("the provider refund result is still being reconciled; try again shortly")
 )
 
 func (s *Service) PaymentExceptions(ctx context.Context) ([]db.PaymentException, error) {

@@ -163,7 +163,7 @@ func (s *Store) setPaymentExceptionStatus(ctx context.Context, actorID, id int, 
 		var providerRequestInProgress bool
 		if err := tx.QueryRowContext(ctx,
 			`SELECT payment_id, reason, status,
-       status = 'requested' AND provider = 'paystack'
+       status IN ('requested', 'review') AND provider = 'paystack'
            AND updated_at > clock_timestamp() - ($2::double precision * interval '1 microsecond')
 FROM payment_exceptions
 WHERE id = $1

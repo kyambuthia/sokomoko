@@ -515,7 +515,7 @@
   <p class="tiny muted">Other providers (Flutterwave, Stripe, MTN MoMo) plug in the same way. See docs/payments.md.</p>
 
   <h2 class="section-title">Payment exceptions</h2>
-  <p class="tiny muted">Confirmed charges after cancellation or a second charge for one order need a refund. Paystack refunds are requested here; record an M-Pesa reversal after completing it in the M-Pesa portal.</p>
+  <p class="tiny muted">Confirmed charges after cancellation or a second charge for one order need a refund. Request Paystack refunds here and mark them refunded only after checking Paystack; record an M-Pesa reversal after completing it in the M-Pesa portal.</p>
   {{ if .PaymentExceptions }}
   <div class="table-wrap">
     <table class="table">
