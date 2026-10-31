@@ -128,6 +128,11 @@ func PaymentReturn(a *app.App) http.HandlerFunc {
 		}
 		if err != nil {
 			log.Printf("payment return %q: %v", reference, err)
+			if orderID <= 0 {
+				app.RenderErrorPage(w, r, http.StatusServiceUnavailable, "Temporarily Unavailable",
+					"Payment status is temporarily unavailable. Please check your order again shortly.")
+				return
+			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/payments/order/%d", orderID), http.StatusSeeOther)
 	}

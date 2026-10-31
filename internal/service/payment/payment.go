@@ -632,7 +632,14 @@ func (s *Service) findByReference(ctx context.Context, reference string) (*db.On
 		if !p.Descriptor().Online {
 			continue
 		}
-		if payment, err := s.store.GetPaymentByReference(ctx, p.Descriptor().ID, reference); err == nil {
+		payment, err := s.store.GetPaymentByReference(ctx, p.Descriptor().ID, reference)
+		if errors.Is(err, db.ErrPaymentNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if payment != nil {
 			return payment, nil
 		}
 	}
