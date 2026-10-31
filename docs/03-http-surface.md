@@ -26,7 +26,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
 | `/search` | GET | public | `Search` | `q`, `category`, `page`; 24 products per page |
-| `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `partner_id`, `page`; 24 per page |
+| `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `partner_id`, `has_hours`, `page`; 24 per page |
 | `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops only; optional weekly hours are local-time information, not bookable slots |
 | `/api/categories` | GET | public | `CategoriesAPI` | JSON `{categories}` for the header category nav |
 | `/login` | GET, POST | public | `auth.Login` | `user` role only; honours a safe `next` |
@@ -186,7 +186,7 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | --- | --- | --- |
 | `GET /catalog/products` | public | Paginated product list: `{items, page, limit, total}` |
 | `GET /catalog/products/<slug>` | public | One product |
-| `GET /catalog/services?q=&category=&area=&delivery_mode=&partner_id=` | public | Published services; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
+| `GET /catalog/services?q=&category=&area=&delivery_mode=&partner_id=&has_hours=` | public | Published services; optional `has_hours=true` filter; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
 | `GET /catalog/services/<slug>` | public | Published service details; 404 for private, archived or suspended-shop listings |
 | `GET /partner/services` | partner | Own shop listings including drafts; paginated |
 | `POST /partner/services` | partner | Create listing, version 0; owner derived from session |

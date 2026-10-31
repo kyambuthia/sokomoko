@@ -32,7 +32,16 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, total, err := h.app.Directory.Browse(r.Context(), db.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: limit}, page)
+	hasHours := false
+	if raw := r.URL.Query().Get("has_hours"); raw != "" {
+		var err error
+		hasHours, err = strconv.ParseBool(raw)
+		if err != nil {
+			writeServiceError(w, directorysvc.ErrInvalid)
+			return
+		}
+	}
+	items, total, err := h.app.Directory.Browse(r.Context(), db.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), HasHours: hasHours, Limit: limit}, page)
 	if err != nil {
 		writeServiceError(w, err)
 		return

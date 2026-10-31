@@ -48,6 +48,7 @@ type ServiceWeeklyHour struct {
 type ServiceFilter struct {
 	Query, Category, Area, DeliveryMode string
 	PartnerID, Limit, Offset            int
+	HasHours                            bool
 }
 
 const serviceColumns = `s.id,s.partner_id,p.name,s.slug,s.title,s.description,s.category,s.duration_minutes,s.price_mode,s.price_cents,s.currency,s.public_area,s.delivery_mode,s.state,s.version,s.created_at,s.updated_at,s.timezone,(SELECT count(*)::integer FROM service_weekly_hours h WHERE h.service_listing_id=s.id)`
@@ -90,13 +91,13 @@ func (s *Store) BrowseServices(ctx context.Context, f ServiceFilter) ([]ServiceL
 	if f.PartnerID < 0 || f.PartnerID > 2147483647 || f.Limit < 1 || f.Limit > 50 || f.Offset < 0 || f.Offset > 50000 {
 		return nil, 0, ErrServiceNotFound
 	}
-	const predicate = `s.state='published' AND p.status='active' AND ($1='' OR strpos(lower(s.title||' '||s.description||' '||p.name),lower($1))>0) AND ($2='' OR s.category=$2) AND ($3='' OR strpos(lower(s.public_area),lower($3))>0) AND ($4='' OR s.delivery_mode=$4) AND ($5=0 OR s.partner_id=$5)`
-	args := []any{f.Query, f.Category, f.Area, f.DeliveryMode, f.PartnerID}
+	const predicate = `s.state='published' AND p.status='active' AND ($1='' OR strpos(lower(s.title||' '||s.description||' '||p.name),lower($1))>0) AND ($2='' OR s.category=$2) AND ($3='' OR strpos(lower(s.public_area),lower($3))>0) AND ($4='' OR s.delivery_mode=$4) AND ($5=0 OR s.partner_id=$5) AND (NOT $6 OR EXISTS(SELECT 1 FROM service_weekly_hours h WHERE h.service_listing_id=s.id))`
+	args := []any{f.Query, f.Category, f.Area, f.DeliveryMode, f.PartnerID, f.HasHours}
 	var total int
 	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate+` ORDER BY lower(s.title),s.id LIMIT $6 OFFSET $7`, append(args, f.Limit, f.Offset)...)
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate+` ORDER BY lower(s.title),s.id LIMIT $7 OFFSET $8`, append(args, f.Limit, f.Offset)...)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -159,7 +159,7 @@ edit. Sensitive visit details and clinical notes do not belong in listings.
 ### HTTP contract
 
 Public discovery uses `GET /api/v1/catalog/services` with `q`, `category`,
-`area`, `delivery_mode`, `page` and `limit`; details use
+`area`, `delivery_mode`, optional `has_hours=true`, `page` and `limit`; details use
 `GET /api/v1/catalog/services/{slug}`. Only published listings belonging to
 active shops are visible. Search terms are literal text, including `%` and `_`.
 
@@ -291,7 +291,8 @@ validation fails. This follows the [W3C form notification guidance](https://www.
 ### Filtering where a service happens
 
 Public HTML and JSON discovery accept `delivery_mode=premises`, `mobile` or
-`remote`; omit it to include all modes. This combines with category, literal text
+`remote`; omit it to include all modes. `has_hours=true` keeps only services with
+at least one published weekly interval. This combines with category, literal text
 and public-area filters. Results and total counts use the same predicates, and
 pagination keeps the chosen filters. Unknown mode values return 400. The mode
 is also shown on result cards so users can distinguish a business visit, a

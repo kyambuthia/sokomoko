@@ -104,6 +104,13 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 			data.State = r.URL.Query().Get("state")
 			data.Listings, total, err = a.Directory.OwnByState(r.Context(), directoryActor(r), data.State, page, 24)
 		} else {
+			if raw := r.URL.Query().Get("has_hours"); raw != "" {
+				data.Filter.HasHours, err = strconv.ParseBool(raw)
+				if err != nil {
+					servicePageError(w, r, directorysvc.ErrInvalid)
+					return
+				}
+			}
 			if raw := r.URL.Query().Get("partner_id"); raw != "" {
 				data.Filter.PartnerID, err = strconv.Atoi(raw)
 				if err != nil || data.Filter.PartnerID <= 0 {

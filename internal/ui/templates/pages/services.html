@@ -12,6 +12,7 @@
       <div class="field"><label class="label" for="service-area">Neighbourhood or town</label><input class="input" id="service-area" name="area" value="{{ .Filter.Area }}" maxlength="120" placeholder="e.g. Westlands"></div>
       <div class="field"><label class="label" for="service-category">Category</label><select class="select" id="service-category" name="category"><option value="">All categories</option>{{ range .Categories }}<option value="{{ . }}"{{ if eq . $.Filter.Category }} selected{{ end }}>{{ . }}</option>{{ end }}</select></div>
       <div class="field"><label class="label" for="service-mode">Where it happens</label><select class="select" id="service-mode" name="delivery_mode"><option value="">Any location type</option><option value="premises"{{ if eq .Filter.DeliveryMode "premises" }} selected{{ end }}>At the business</option><option value="mobile"{{ if eq .Filter.DeliveryMode "mobile" }} selected{{ end }}>Provider travels to you</option><option value="remote"{{ if eq .Filter.DeliveryMode "remote" }} selected{{ end }}>Remote</option></select></div>
+      <div class="field"><label class="row" for="service-hours"><input id="service-hours" type="checkbox" name="has_hours" value="true"{{ if .Filter.HasHours }} checked{{ end }}>Only show services with published hours</label></div>
     </div>
     <div class="row"><button class="btn" type="submit">Find services</button><a href="/services" class="btn btn-secondary">Clear filters</a></div>
   </form>
