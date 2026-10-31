@@ -303,11 +303,22 @@ func (s *Store) UpdatePaymentPayload(ctx context.Context, attemptID int, payload
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		// Lock the payment before its attempt to match capture and cancellation.
 		var paymentID int
 		if err := tx.QueryRowContext(ctx,
-			`UPDATE payment_attempts SET provider_payload = provider_payload || $1::jsonb WHERE id = $2 RETURNING payment_id`,
-			raw, attemptID).Scan(&paymentID); err != nil {
+			`SELECT p.id FROM payments p
+			 JOIN payment_attempts a ON a.payment_id = p.id
+			 WHERE a.id = $1 FOR UPDATE OF p`, attemptID).Scan(&paymentID); err != nil {
 			return err
+		}
+		var attemptPaymentID int
+		if err := tx.QueryRowContext(ctx,
+			`UPDATE payment_attempts SET provider_payload = provider_payload || $1::jsonb
+			 WHERE id = $2 RETURNING payment_id`, raw, attemptID).Scan(&attemptPaymentID); err != nil {
+			return err
+		}
+		if attemptPaymentID != paymentID {
+			return ErrPaymentNotFound
 		}
 		_, err := tx.ExecContext(ctx,
 			`UPDATE payments SET provider_payload = provider_payload || $1::jsonb WHERE id = $2
@@ -344,11 +355,20 @@ func (s *Store) CapturePayment(ctx context.Context, attemptID int, confirmed mon
 		var status, cur, provider, reference, attemptStatus string
 		var amount int64
 		var payload []byte
-		if err := tx.QueryRowContext(ctx, `SELECT p.id, p.order_id, p.status, p.currency, p.provider, p.amount_cents,
-		        a.request_reference, a.status, a.provider_payload
-			FROM payments p JOIN payment_attempts a ON a.payment_id = p.id
-			WHERE a.id = $1 FOR UPDATE OF p, a`, attemptID).
-			Scan(&paymentID, &orderID, &status, &cur, &provider, &amount, &reference, &attemptStatus, &payload); err != nil {
+		// Lock payment before attempt so callback and payload updates share one order.
+		if err := tx.QueryRowContext(ctx, `SELECT p.id, p.order_id, p.status, p.currency, p.provider, p.amount_cents
+		FROM payments p JOIN payment_attempts a ON a.payment_id = p.id
+		WHERE a.id = $1 FOR UPDATE OF p`, attemptID).
+			Scan(&paymentID, &orderID, &status, &cur, &provider, &amount); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrPaymentNotFound
+			}
+			return err
+		}
+		if err := tx.QueryRowContext(ctx,
+			`SELECT request_reference, status, provider_payload FROM payment_attempts
+			 WHERE id = $1 AND payment_id = $2 FOR UPDATE`, attemptID, paymentID).
+			Scan(&reference, &attemptStatus, &payload); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentNotFound
 			}
