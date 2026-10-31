@@ -124,7 +124,7 @@ func Search(a *app.App) http.HandlerFunc {
 		}
 		query := strings.TrimSpace(r.URL.Query().Get("q"))
 		category := strings.TrimSpace(r.URL.Query().Get("category"))
-		if strings.EqualFold(category, catalogsvc.AllCategories) {
+		if strings.EqualFold(category, catalogsvc.AllCategories) || strings.EqualFold(category, "all") {
 			category = ""
 		}
 
