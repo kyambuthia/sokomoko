@@ -334,12 +334,12 @@ func (s *Service) DeactivateUser(ctx context.Context, actor *Actor, userIDRaw st
 	if target == nil {
 		return ErrUserNotFound
 	}
-	if target.Role == db.RoleAdmin {
-		return ErrProtectedUser
-	}
 	if err := s.store.DeleteUser(ctx, userID); err != nil {
 		if errors.Is(err, db.ErrCourierHasActiveDeliveries) {
 			return ErrCourierHasActiveDeliveries
+		}
+		if errors.Is(err, db.ErrLastAdmin) {
+			return ErrProtectedUser
 		}
 		return err
 	}

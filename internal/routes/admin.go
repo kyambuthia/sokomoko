@@ -324,7 +324,7 @@ func AdminTeam(a *app.App) http.HandlerFunc {
 			case errors.Is(err, adminsvc.ErrUserNotFound):
 				page.TeamError = "User does not exist"
 			case errors.Is(err, adminsvc.ErrProtectedUser):
-				page.TeamError = "Admin accounts cannot be deactivated from this view"
+				page.TeamError = "You cannot deactivate your own account or the last active admin"
 			case errors.Is(err, adminsvc.ErrCourierHasActiveDeliveries):
 				page.TeamError = "This courier has deliveries assigned or in transit. Reassign them before deactivating the account."
 			case err != nil && reactivate:

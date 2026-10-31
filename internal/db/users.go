@@ -179,6 +179,23 @@ func (s *Store) DeleteUser(ctx context.Context, id int) error {
 		if err != nil {
 			return err
 		}
+		if role == RoleAdmin {
+			// Serialize admin deactivations so concurrent requests cannot remove
+			// the last two active administrators at the same time.
+			if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", bootstrapLockKey); err != nil {
+				return err
+			}
+			var activeAdmins int
+			if err := tx.QueryRowContext(ctx,
+				"SELECT count(*) FROM users WHERE role = $1 AND deleted_at IS NULL",
+				RoleAdmin,
+			).Scan(&activeAdmins); err != nil {
+				return err
+			}
+			if activeAdmins <= 1 {
+				return ErrLastAdmin
+			}
+		}
 		if role == RoleCourier {
 			var active bool
 			if err := tx.QueryRowContext(ctx,
@@ -204,8 +221,8 @@ func (s *Store) DeleteUser(ctx context.Context, id int) error {
 	})
 }
 
-// ListDeactivatedUsers returns the most recently deactivated non-admin
-// accounts, newest first.
+// ListDeactivatedUsers returns the most recently deactivated accounts, newest
+// first.
 func (s *Store) ListDeactivatedUsers(ctx context.Context, limit int) ([]User, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -214,7 +231,7 @@ func (s *Store) ListDeactivatedUsers(ctx context.Context, limit int) ([]User, er
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx,
 		"SELECT "+userColumns+` FROM users
-		 WHERE deleted_at IS NOT NULL AND role <> 'admin'
+		 WHERE deleted_at IS NOT NULL
 		 ORDER BY deleted_at DESC, id DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
@@ -231,13 +248,13 @@ func (s *Store) ListDeactivatedUsers(ctx context.Context, limit int) ([]User, er
 	return users, rows.Err()
 }
 
-// ReactivateUser restores a deactivated non-admin account. Usernames and
-// emails stay unique across deactivated rows, so restoring cannot collide.
+// ReactivateUser restores a deactivated account. Usernames and emails stay
+// unique across deactivated rows, so restoring cannot collide.
 func (s *Store) ReactivateUser(ctx context.Context, id int) (bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	result, err := s.DB.ExecContext(ctx,
-		"UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL AND role <> 'admin'", id)
+		"UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL", id)
 	if err != nil {
 		return false, err
 	}

@@ -43,7 +43,6 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 - No email verification and no multi-factor authentication. Profile details
   (username, email) cannot be changed while signed in; `UpdateUser` has no
   callers outside tests.
-- Admin accounts cannot be deactivated or reactivated from the team page.
 
 ## Operations
 

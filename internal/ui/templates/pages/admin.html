@@ -582,15 +582,13 @@
           <td>{{ .Username }}<div class="tiny muted">{{ .Email }}</div></td>
           <td><span class="badge {{ if eq .Role "admin" }}badge-solid{{ end }}">{{ .Role }}</span></td>
           <td class="actions">
-            {{ if ne .Role "admin" }}
-            <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in until an admin reactivates them." confirm-label="Deactivate">
+            <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in until an admin reactivates them. The current admin and last active admin cannot be deactivated." confirm-label="Deactivate">
               <form method="POST" action="/team" class="inline-form">
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="user_id" value="{{ .ID }}">
                 <button type="submit" class="btn btn-secondary btn-sm">Deactivate</button>
               </form>
             </ui-confirm>
-            {{ end }}
           </td>
         </tr>
         {{ else }}
