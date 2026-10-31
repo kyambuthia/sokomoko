@@ -204,6 +204,12 @@ func (s *Store) ResolveChatReport(ctx context.Context, actorID, reportID int) er
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+			if errors.Is(err, ErrWorkspaceActorNotFound) {
+				return ErrChatNotFound
+			}
+			return err
+		}
 		table, kind := "chat_reports", "message_report"
 		if reportID < 0 {
 			table, kind = "chat_encrypted_reports", "encrypted_message_report"
