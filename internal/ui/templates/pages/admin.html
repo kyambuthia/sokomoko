@@ -82,7 +82,7 @@
       <details>
         <summary class="btn btn-secondary btn-sm">Update</summary>
         <ui-order-form scope="admin" order-id="{{ .ID }}">
-          <form action="/orders" method="POST" class="form">
+          <form action="/orders?page={{ $.OrdersPager.Page }}" method="POST" class="form">
             {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
             <input type="hidden" name="order_id" value="{{ .ID }}">
             <div class="form-row">
@@ -117,6 +117,7 @@
     </li>
     {{ end }}
   </ul>
+  {{ template "pager" .OrdersPager }}
   {{ else }}
   {{ template "empty" dict "Icon" "orders" "Text" "No orders yet." }}
   {{ end }}

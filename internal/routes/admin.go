@@ -17,6 +17,7 @@ import (
 const (
 	teamPageSize          = 50 // Number of accounts shown on each team page.
 	adminProductsPageSize = 50 // Number of products shown on each admin catalog page.
+	adminOrdersPageSize   = 50 // Number of orders shown on each admin order page.
 )
 
 type AdminPageData struct {
@@ -36,6 +37,7 @@ type AdminPageData struct {
 	TeamPager       Pager
 	Deactivated     []adminsvc.TeamMember
 	Orders          []adminsvc.Order
+	OrdersPager     Pager
 	Deliveries      adminsvc.DeliveryBoard
 	Dispatch        logisticsvc.DispatchBoard
 	DispatchError   string
@@ -163,6 +165,7 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 		page := adminOrdersPage(metrics, adminRoleFromContext(r), nil)
+		requestedPage := pageParam(r)
 
 		responseStatus := http.StatusOK
 		if r.Method == http.MethodPost {
@@ -190,20 +193,25 @@ func AdminOrders(a *app.App) http.HandlerFunc {
 				page.OrderError = "Unable to update order state"
 				responseStatus = http.StatusBadRequest
 			default:
-				redirectWithFlash(w, r, "/orders", "success", "Order updated")
+				redirectWithFlash(w, r, pageHref(r, requestedPage), "success", "Order updated")
 				return
 			}
 		} else if flash := popFlash(w, r); flash.Message != "" {
 			page.OrderMessage = flash.Message
 		}
 
-		orders, err := svc.Orders(r.Context())
+		orders, total, err := svc.OrdersPage(r.Context(), requestedPage, adminOrdersPageSize)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
+		displayPage := min(requestedPage, pageCount(adminOrdersPageSize, total))
+		if r.Method == http.MethodGet && displayPage != requestedPage {
+			http.Redirect(w, r, pageHref(r, displayPage), http.StatusSeeOther)
+			return
+		}
 		page.Orders = orders
+		page.OrdersPager = newPager(r, displayPage, adminOrdersPageSize, total)
 		renderAdminPage(a, w, r, responseStatus, page)
 	}
 }

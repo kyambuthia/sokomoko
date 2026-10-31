@@ -193,6 +193,14 @@ func (s *Service) Orders(ctx context.Context) ([]Order, error) {
 }
 
 func (s *Service) OrdersPage(ctx context.Context, page, limit int) ([]Order, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
+	}
 	orders, total, err := s.store.ListAllOrdersPage(ctx, limit, (page-1)*limit)
 	if err != nil {
 		return nil, 0, err
