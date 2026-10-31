@@ -377,8 +377,12 @@ func (m *Mpesa) ParseWebhook(_ Config, _ *http.Request, body []byte) (WebhookEve
 					result.Amount = money.Cents(int64(v * 100))
 				}
 			case "MpesaReceiptNumber":
-				if receipt, ok := item.Value.(string); ok {
-					result.Receipt = strings.TrimSpace(receipt)
+				if result.Receipt == "" {
+					if receipt, ok := item.Value.(string); ok {
+						if receipt = strings.TrimSpace(receipt); receipt != "" {
+							result.Receipt = receipt
+						}
+					}
 				}
 			}
 		}
