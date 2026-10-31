@@ -100,11 +100,11 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		products, err := s.store.GetAllProducts(r.Context())
+		productCount, err := s.store.CountProducts(r.Context())
 		if err != nil {
-			products = []db.Product{}
+			productCount = 0
 		}
-		recommendedStaff, rationale := recommendedStaffCount(len(products))
+		recommendedStaff, rationale := recommendedStaffCount(productCount)
 
 		data := AdminSetupPageData{
 			Title:            "Initial Admin Setup",

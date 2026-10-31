@@ -26,7 +26,7 @@ type store interface {
 	CreateSession(ctx context.Context, sess db.Session) error
 	CreateUser(ctx context.Context, user db.User) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
-	GetAllProducts(ctx context.Context) ([]db.Product, error)
+	CountProducts(ctx context.Context) (int, error)
 	GetSession(ctx context.Context, id string) (*db.Session, error)
 	GetUserByEmail(ctx context.Context, email string) (*db.User, error)
 	GetUserByID(ctx context.Context, id int) (*db.User, error)
