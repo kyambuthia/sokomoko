@@ -87,6 +87,8 @@ func (s *Service) Assign(ctx context.Context, actor *Actor, orderIDRaw, courierI
 	}
 	if err := s.store.AssignCourierToOrder(ctx, orderID, courierID, actor.ID); err != nil {
 		switch {
+		case errors.Is(err, db.ErrCourierDispatchForbidden):
+			return ErrForbidden
 		case errors.Is(err, db.ErrCourierUserNotFound):
 			return ErrCourierNotFound
 		case errors.Is(err, db.ErrDeliveryNotReady):

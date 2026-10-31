@@ -32,6 +32,7 @@ var (
 	ErrCourierDeliveryNotFound    = errors.New("courier delivery not found")
 	ErrDeliveryNotReady           = errors.New("order is not ready for courier delivery")
 	ErrDeliveryAlreadyStarted     = errors.New("courier delivery has already started")
+	ErrCourierDispatchForbidden   = errors.New("active dispatch operator required")
 	ErrCourierDeliveryForbidden   = errors.New("courier cannot update this delivery")
 	ErrInvalidCourierTransition   = errors.New("invalid courier delivery transition")
 	ErrInvalidCourierView         = errors.New("invalid courier job view")

@@ -176,6 +176,18 @@ func (s *Store) AssignCourierToOrder(ctx context.Context, orderID, courierUserID
 		if currentOrder.Status != OrderStatusShipped || currentOrder.DeliveryStatus == "delivered" {
 			return ErrDeliveryNotReady
 		}
+		var dispatchActorID int
+		err = tx.QueryRowContext(ctx,
+			`SELECT id FROM users
+			 WHERE id = $1 AND deleted_at IS NULL AND role IN ($2, $3)
+			 FOR SHARE`, actorUserID, RoleAdmin, RoleStaff,
+		).Scan(&dispatchActorID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCourierDispatchForbidden
+		}
+		if err != nil {
+			return err
+		}
 		var role string
 		err = tx.QueryRowContext(ctx,
 			`SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, courierUserID,
@@ -254,6 +266,18 @@ func (s *Store) UpdateCourierDelivery(ctx context.Context, deliveryID, courierUs
 			return err
 		}
 		currentOrder, err := lockOrderTx(ctx, tx, orderID)
+		if err != nil {
+			return err
+		}
+		var activeCourierID int
+		err = tx.QueryRowContext(ctx,
+			`SELECT id FROM users
+			 WHERE id = $1 AND role = $2 AND deleted_at IS NULL
+			 FOR SHARE`, courierUserID, RoleCourier,
+		).Scan(&activeCourierID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCourierDeliveryForbidden
+		}
 		if err != nil {
 			return err
 		}
