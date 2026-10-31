@@ -107,7 +107,9 @@ func (s *Store) ServiceBookingsForPartner(ctx context.Context, partnerUserID, li
 	rows, err := s.DB.QueryContext(ctx,
 		`SELECT `+serviceBookingQualifiedColumns+` `+scope+`
 		 ORDER BY CASE b.status WHEN 'in_progress' THEN 0 WHEN 'requested' THEN 1 WHEN 'confirmed' THEN 2 ELSE 3 END,
-		          CASE WHEN b.status IN ('in_progress','requested','confirmed') THEN b.starts_at END ASC,
+		          CASE WHEN b.status='in_progress' THEN b.starts_at END ASC,
+		          CASE WHEN b.status='requested' THEN b.response_deadline END ASC,
+		          CASE WHEN b.status='confirmed' THEN b.starts_at END ASC,
 		          CASE WHEN b.status NOT IN ('in_progress','requested','confirmed') THEN b.updated_at END DESC,
 		          b.id DESC LIMIT $3 OFFSET $4`,
 		partnerUserID, RolePartner, limit, offset,

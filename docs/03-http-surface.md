@@ -134,7 +134,7 @@ address as a draft and re-renders the form with `422`.
 | `/products/<id>/delete` | POST | admin, staff, partner (own products only; others get 404) | `PartnerProductDelete` (CSRF protected; removes the product from carts and cancels affected open checkouts) |
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (20 per page, `status` filter; updates keep the current page) |
-| `/service-bookings` | GET | partner | `PartnerServiceBookings` (20 per page; active appointments first, then recent history; active shop membership scope) |
+| `/service-bookings` | GET | partner | `PartnerServiceBookings` (20 per page; in-progress first, requests by response deadline, confirmed by start time, then recent history; active shop membership scope) |
 | `/service-bookings/<id>/status` | POST | partner | `PartnerServiceBookingAction` (confirm, reject, cancel, start, complete or mark no-show with the current version) |
 
 Seller-only service pages on the partner host are `GET /services`,
