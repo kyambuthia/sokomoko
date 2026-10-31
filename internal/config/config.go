@@ -67,7 +67,8 @@ type Config struct {
 	// PublicBaseURL is the public storefront origin used in payment return and
 	// callback URLs. It defaults to PASSWORD_RESET_BASE_URL.
 	PublicBaseURL string
-	// SecretsKey (base64, 32 bytes) seals payment provider credentials.
+	// SecretsKey is a base64-encoded 32-byte key for provider credentials and
+	// password-reset outbox payloads.
 	SecretsKey string
 	// SecretsKeyPrevious opens existing credentials while rotating the key.
 	SecretsKeyPrevious string

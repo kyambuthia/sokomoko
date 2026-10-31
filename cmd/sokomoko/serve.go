@@ -116,9 +116,8 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 	return wrapCommandError(commandServe, "serve http", runHTTPServerFunc(server, store))
 }
 
-// secretsBox returns the box that seals payment credentials. Outside
-// production a fixed development key is used when SECRETS_KEY is unset, so
-// local setup works; production without a key cannot store credentials.
+// secretsBox seals provider credentials and password-reset email payloads.
+// Outside production a fixed development key is used when SECRETS_KEY is unset.
 func secretsBox(cfg config.Config) (*secret.Box, error) {
 	box, err := secret.NewWithPrevious(cfg.SecretsKey, cfg.SecretsKeyPrevious)
 	if err != nil || box != nil {
