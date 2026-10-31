@@ -90,10 +90,12 @@ Keep the key with encrypted database backups. To rotate it, back up the
 database and old key, set a new `SECRETS_KEY` and the old value as
 `SECRETS_KEY_PREVIOUS`, then restart. Re-enter each enabled provider's secret
 fields in the admin payment settings so they are sealed under the new key.
-Restart once with only the new key to confirm every enabled provider opens,
-then remove `SECRETS_KEY_PREVIOUS`. Production startup checks enabled online
-providers, their required fields, store currency, and public callback origin
-before listening.
+Keep the previous key available for at least 45 minutes after rotation, or
+until every pending password-reset email has drained; otherwise those queued
+links cannot be decrypted. After that, restart with only the new key to confirm
+every enabled provider opens. Production startup checks enabled online providers,
+their required fields, store currency, and public callback origin before
+listening.
 
 ## Tests
 
