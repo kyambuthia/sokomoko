@@ -81,7 +81,7 @@ func (s *Service) CreateCategory(ctx context.Context, actor *Actor, input Catego
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "category.create", "category", int(id), "slug="+categorySlug)
+	s.logAudit(ctx, actor.ID, "category.create", "category", int(id), "slug="+categorySlug)
 	return nil
 }
 
@@ -116,7 +116,7 @@ func (s *Service) UpdateCategory(ctx context.Context, actor *Actor, idRaw string
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "category.update", "category", id, before+" -> "+name)
+	s.logAudit(ctx, actor.ID, "category.update", "category", id, before+" -> "+name)
 	return nil
 }
 
@@ -139,6 +139,6 @@ func (s *Service) DeleteCategory(ctx context.Context, actor *Actor, idRaw string
 	if err := s.store.DeleteCategory(ctx, id); err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "category.delete", "category", id, "slug="+category.Slug)
+	s.logAudit(ctx, actor.ID, "category.delete", "category", id, "slug="+category.Slug)
 	return nil
 }

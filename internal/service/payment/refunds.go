@@ -67,7 +67,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 		if err := s.store.SetPaymentExceptionStatus(ctx, id, "refunded", manualReference, ""); err != nil {
 			return nil, err
 		}
-		_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.refund.manual", "payment_exception", id, "M-Pesa reversal recorded")
+		s.logAudit(ctx, actor.ID, "payments.refund.manual", "payment_exception", id, "M-Pesa reversal recorded")
 		return s.store.GetPaymentException(ctx, id)
 	}
 	result, err := refundProvider.CreateRefund(ctx, cfg, e.RequestReference, e.Amount, e.Currency)
@@ -81,7 +81,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	if err := s.recordRefundResult(ctx, e, result); err != nil {
 		return nil, err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.refund.request", "payment_exception", id, "Paystack refund initiated")
+	s.logAudit(ctx, actor.ID, "payments.refund.request", "payment_exception", id, "Paystack refund initiated")
 	return s.store.GetPaymentException(ctx, id)
 }
 
@@ -110,7 +110,7 @@ func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, refer
 	if err := s.store.SetPaymentExceptionStatus(ctx, id, "refunded", reference, ""); err != nil {
 		return nil, err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.refund.resolve", "payment_exception", id, "Refund reconciled by hand: "+truncate(reference, 100))
+	s.logAudit(ctx, actor.ID, "payments.refund.resolve", "payment_exception", id, "Refund reconciled by hand: "+truncate(reference, 100))
 	return s.store.GetPaymentException(ctx, id)
 }
 

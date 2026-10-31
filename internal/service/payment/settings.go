@@ -188,7 +188,7 @@ func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, inp
 	if input.Enabled {
 		state = "enabled " + mode
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.provider.update", "payment_provider", 0, id+": "+state)
+	s.logAudit(ctx, actor.ID, "payments.provider.update", "payment_provider", 0, id+": "+state)
 	return nil
 }
 
@@ -264,7 +264,7 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 	if err := s.store.UpdateCommerceSettings(ctx, settings); err != nil {
 		return Pricing{}, err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "payments.pricing.update", "commerce_settings", 1,
+	s.logAudit(ctx, actor.ID, "payments.pricing.update", "commerce_settings", 1,
 		fmt.Sprintf("currency=%s shipping=%s free=%s tax_bp=%d", currency.Code, flat, free, taxPct))
 	return Pricing(settings), nil
 }

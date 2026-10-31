@@ -560,7 +560,7 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 		}
 		return fmt.Errorf("update product: %w", err)
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "product.update", "product", product.ID,
+	s.logAudit(ctx, actor.ID, "product.update", "product", product.ID,
 		fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock))
 	return nil
 }
@@ -641,7 +641,7 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 			return err
 		}
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.fulfillment.update", "order", orderID,
+	s.logAudit(ctx, actor.ID, "partner.fulfillment.update", "order", orderID,
 		"partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }

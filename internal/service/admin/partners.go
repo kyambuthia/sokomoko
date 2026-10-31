@@ -108,7 +108,7 @@ func (s *Service) CreatePartner(ctx context.Context, actor *Actor, input Partner
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.create", "partner", int(id), "slug="+partnerSlug)
+	s.logAudit(ctx, actor.ID, "partner.create", "partner", int(id), "slug="+partnerSlug)
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (s *Service) SetPartnerStatus(ctx context.Context, actor *Actor, idRaw, sta
 	if !found {
 		return ErrPartnerNotFound
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.status", "partner", id, "status="+status)
+	s.logAudit(ctx, actor.ID, "partner.status", "partner", id, "status="+status)
 	return nil
 }
 
@@ -161,7 +161,7 @@ func (s *Service) UpdatePartner(ctx context.Context, actor *Actor, idRaw string,
 	if !found {
 		return ErrPartnerNotFound
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.update", "partner", id, "name="+name)
+	s.logAudit(ctx, actor.ID, "partner.update", "partner", id, "name="+name)
 	return nil
 }
 
@@ -197,6 +197,6 @@ func (s *Service) CreatePartnerAccount(ctx context.Context, actor *Actor, input 
 	if err != nil {
 		return err
 	}
-	_ = s.store.CreateAuditLog(ctx, actor.ID, "partner.account.create", "user", int(userID), "partner="+partner.Slug)
+	s.logAudit(ctx, actor.ID, "partner.account.create", "user", int(userID), "partner="+partner.Slug)
 	return nil
 }
