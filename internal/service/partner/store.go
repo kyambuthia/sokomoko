@@ -7,6 +7,7 @@ import (
 )
 
 type store interface {
+	GetCommerceSettings(ctx context.Context) (db.CommerceSettings, error)
 	PartnerIDForUser(ctx context.Context, userID int) (int, error)
 	CountProducts(ctx context.Context) (int, error)
 	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error

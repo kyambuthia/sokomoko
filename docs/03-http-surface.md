@@ -247,12 +247,15 @@ it; only the courier workflow advances post-dispatch delivery states.
 
 Partner-role callers are scoped exactly as in the partner HTML workspace.
 Money responses retain the existing decimal JSON numbers for v1 clients and
-also include exact integer minor-unit fields plus a three-letter `currency`.
+also include exact integer amount fields plus a three-letter `currency`.
 For example, a product priced at KES 12.50 has `"price": 12.5`,
-`"price_minor": 1250`, and `"currency": "KES"`. Cart, checkout, order,
-and payment totals follow the same `*_minor` convention. Clients should use
-the integer fields for arithmetic; all supported store currencies currently
-have two decimal places.
+`"price_minor": 1250`, and `"currency": "KES"`. Existing `*_minor`
+integer fields retain a fixed scale of 100 for every currency for v1
+compatibility: interpret them as hundredths of the major unit, including for
+UGX and RWF, whose ISO minor-unit precision is zero. Clients should use the
+integer fields for arithmetic and divide by 100 to recover the major-unit
+amount. New UGX and RWF product and pricing inputs accept whole units only.
+Cart, checkout, order, and payment totals follow the same integer-field scale.
 
 Courier update retries for the same current action state and failure category
 succeed without duplicate timeline events. An old state submitted after a later

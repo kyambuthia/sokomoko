@@ -106,7 +106,7 @@ func CalculateSummary(subtotal money.Cents, pricing Pricing) (Summary, error) {
 	if subtotal == 0 || (pricing.FreeShippingThreshold > 0 && subtotal >= pricing.FreeShippingThreshold) {
 		shipping = 0
 	}
-	tax := subtotal.MulBasisPoints(pricing.TaxRateBP)
+	tax := subtotal.MulBasisPointsForCurrency(pricing.TaxRateBP, pricing.Currency)
 	subtotalWithShipping, err := subtotal.Add(shipping)
 	if err != nil {
 		return Summary{}, err

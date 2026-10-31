@@ -1,4 +1,4 @@
-// Package money represents currency amounts as integer minor units (cents).
+// Package money represents currency amounts as fixed-point hundredths.
 //
 // Floating point values are never used for stored or computed amounts so that
 // totals, taxes, and aggregates stay exact.
@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Cents is an amount in minor currency units.
+// Cents is an amount in hundredths of a major currency unit.
 type Cents int64
 
 var (
@@ -46,7 +46,7 @@ func (c Cents) Float64() float64 {
 }
 
 // Parse converts a user supplied decimal string ("12", "12.5", "12.50") into
-// cents. Negative values, more than two fractional digits, and non-numeric
+// hundredths. Negative values, more than two fractional digits, and non-numeric
 // input are rejected.
 func Parse(raw string) (Cents, error) {
 	s := strings.TrimSpace(raw)
@@ -81,6 +81,21 @@ func Parse(raw string) (Cents, error) {
 		}
 	}
 	return Cents(whole*100 + frac), nil
+}
+
+// ParseCurrency parses a decimal amount using the supported currency's minor
+// unit precision. Money remains stored in hundredths, but currencies without
+// minor units accept only whole major units.
+func ParseCurrency(raw, code string) (Cents, error) {
+	amount, err := Parse(raw)
+	if err != nil {
+		return 0, err
+	}
+	currency, ok := LookupCurrency(code)
+	if !ok || (currency.MinorDigits == 0 && amount%100 != 0) {
+		return 0, ErrInvalidAmount
+	}
+	return amount, nil
 }
 
 // Add returns the sum unless it falls outside the Cents range.
@@ -125,6 +140,40 @@ func (c Cents) MulBasisPoints(rate int64) Cents {
 			quotient.Add(&quotient, &one)
 		}
 	}
+	if !quotient.IsInt64() {
+		if quotient.Sign() < 0 {
+			return Cents(-1 << 63)
+		}
+		return Cents(1<<63 - 1)
+	}
+	return Cents(quotient.Int64())
+}
+
+// MulBasisPointsForCurrency applies rate/10000 and rounds to the currency's
+// minor unit. A zero-digit currency rounds the result to whole major units.
+func (c Cents) MulBasisPointsForCurrency(rate int64, code string) Cents {
+	currency, ok := LookupCurrency(code)
+	if !ok || currency.MinorDigits != 0 {
+		return c.MulBasisPoints(rate)
+	}
+
+	var product, multiplier, scale, half, quotient, remainder big.Int
+	product.SetInt64(int64(c))
+	multiplier.SetInt64(rate)
+	product.Mul(&product, &multiplier)
+	scale.SetInt64(1_000_000) // 10000 basis points × 100 internal hundredths
+	half.SetInt64(500_000)
+	quotient.QuoRem(&product, &scale, &remainder)
+	if remainder.Abs(&remainder).Cmp(&half) >= 0 {
+		var one big.Int
+		one.SetInt64(1)
+		if product.Sign() < 0 {
+			quotient.Sub(&quotient, &one)
+		} else {
+			quotient.Add(&quotient, &one)
+		}
+	}
+	quotient.Mul(&quotient, big.NewInt(100))
 	if !quotient.IsInt64() {
 		if quotient.Sign() < 0 {
 			return Cents(-1 << 63)

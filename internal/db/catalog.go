@@ -269,6 +269,15 @@ func (s *Store) createProduct(ctx context.Context, product Product, actorID int,
 				product.PartnerID = sql.NullInt64{Int64: int64(partnerID), Valid: true}
 			}
 		}
+		var currentCurrency string
+		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
+			return err
+		}
+		if currency != "" && currency != currentCurrency {
+			return ErrProductCurrencyChanged
+		}
+		currency = currentCurrency
+
 		warehouseID, err := defaultWarehouseID(ctx, tx)
 		if err != nil {
 			return err
@@ -477,6 +486,14 @@ func (s *Store) updateProduct(ctx context.Context, product Product, actorID int,
 				return err
 			}
 		}
+		var currentCurrency string
+		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
+			return err
+		}
+		if expected := strings.ToUpper(strings.TrimSpace(product.Currency)); expected != "" && expected != currentCurrency {
+			return ErrProductCurrencyChanged
+		}
+
 		updateQuery := `UPDATE products
 			SET name = $1, slug = $2, description = $3, price_cents = $4, category_id = $5
 			WHERE id = $6 AND deleted_at IS NULL`

@@ -13,6 +13,7 @@ var (
 	ErrUniqueConstraint                = errors.New("unique constraint violation")
 	ErrTransient                       = errors.New("transient database error")
 	ErrProductSlugConflict             = errors.New("product slug conflict")
+	ErrProductCurrencyChanged          = errors.New("product currency changed")
 	ErrDeliveryAddressRequired         = errors.New("delivery address required")
 	ErrCartEmpty                       = errors.New("cart is empty")
 	ErrCartItemNotFound                = errors.New("cart item not found")

@@ -40,7 +40,10 @@ export function announceCart(cart) {
   document.dispatchEvent(new CustomEvent(CART_CHANGED, { detail: { cart, count } }));
 }
 
-const moneyFormat = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const moneyFormats = {
+  0: new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+  2: new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+};
 
 // Prefixes match internal/money.Currencies so client and server agree.
 const currencyPrefix = {
@@ -51,8 +54,10 @@ export function money(amount) {
   const value = Number(amount);
   if (!Number.isFinite(value)) return "";
   const code = document.querySelector('meta[name="currency"]')?.content || "USD";
-  const prefix = currencyPrefix[code] ?? `${code} `;
-  return `${value < 0 ? "-" : ""}${prefix}${moneyFormat.format(Math.abs(value))}`;
+  const digits = code === "UGX" || code === "RWF" ? 0 : 2;
+  const formatter = moneyFormats[digits];
+  const prefix = currencyPrefix[code] ?? code + " ";
+  return (value < 0 ? "-" : "") + prefix + formatter.format(Math.abs(value));
 }
 
 export function icon(name) {

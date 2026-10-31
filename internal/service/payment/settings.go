@@ -243,6 +243,20 @@ type PricingInput struct {
 	TaxRatePercent        string
 }
 
+func parsePricingAmount(raw, currency, currentCurrency string, existing money.Cents) (money.Cents, error) {
+	amount, err := money.ParseCurrency(raw, currency)
+	if err == nil {
+		return amount, nil
+	}
+	if currency == currentCurrency {
+		legacyAmount, legacyErr := money.Parse(raw)
+		if legacyErr == nil && legacyAmount == existing {
+			return legacyAmount, nil
+		}
+	}
+	return 0, err
+}
+
 // SavePricing validates and stores currency and pricing. Switching currency
 // is refused when an enabled online provider cannot charge it.
 func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingInput) (Pricing, error) {
@@ -253,13 +267,17 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 	if !ok {
 		return Pricing{}, fmt.Errorf("%w: choose a supported currency", ErrInvalidPricing)
 	}
-	flat, err := money.Parse(input.ShippingFlat)
+	current, err := s.store.GetCommerceSettings(ctx)
+	if err != nil {
+		return Pricing{}, err
+	}
+	flat, err := parsePricingAmount(input.ShippingFlat, currency.Code, current.Currency, current.ShippingFlat)
 	if err != nil {
 		return Pricing{}, fmt.Errorf("%w: shipping fee", ErrInvalidPricing)
 	}
 	free := money.Cents(0)
 	if strings.TrimSpace(input.FreeShippingThreshold) != "" {
-		if free, err = money.Parse(input.FreeShippingThreshold); err != nil {
+		if free, err = parsePricingAmount(input.FreeShippingThreshold, currency.Code, current.Currency, current.FreeShippingThreshold); err != nil {
 			return Pricing{}, fmt.Errorf("%w: free shipping threshold", ErrInvalidPricing)
 		}
 	}

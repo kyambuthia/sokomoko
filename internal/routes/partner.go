@@ -286,7 +286,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
 			return
 		case errors.Is(err, partnersvc.ErrInvalidProductPrice):
-			data.Error = "Price must be an amount like 12.50 (up to 100000.00)"
+			data.Error = "Price must be valid for the store currency; UGX and RWF use whole units (up to 100000)"
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
 			return
 		case errors.Is(err, partnersvc.ErrInvalidProductStock):
@@ -396,7 +396,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		case errors.Is(err, partnersvc.ErrMissingProductFields):
 			data.Error = "Name, price and stock are required"
 		case errors.Is(err, partnersvc.ErrInvalidProductPrice):
-			data.Error = "Price must be an amount like 12.50 (up to 100000.00)"
+			data.Error = "Price must be valid for the store currency; UGX and RWF use whole units (up to 100000)"
 		case errors.Is(err, partnersvc.ErrInvalidProductStock):
 			data.Error = "Stock must be a non-negative integer"
 		case errors.Is(err, partnersvc.ErrInvalidProductImage):

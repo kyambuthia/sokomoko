@@ -10,7 +10,7 @@ From the header of `0001_initial_schema.sql`:
 - Keys are `BIGINT GENERATED ALWAYS AS IDENTITY`.
 - Timestamps are `TIMESTAMPTZ DEFAULT now()`. The `set_updated_at()` trigger
   maintains `updated_at`.
-- Money is `BIGINT` cents in `*_cents` columns, with `CHECK (>= 0)`.
+- Money is `BIGINT` hundredths in `*_cents` columns, with `CHECK (>= 0)`.
 - Users, products, and categories are soft-deleted with `deleted_at`. Unique
   indexes on slugs and names apply to active rows only.
 - Rows with financial or audit history are not cascade-deleted from their user
@@ -104,13 +104,17 @@ Keep changes additive so the previous binary keeps working during a release.
 
 ## Money
 
-`internal/money.Cents` is an `int64` count of cents.
+`internal/money.Cents` is an `int64` count of hundredths of the major unit.
+This fixed storage scale is retained for every currency. New UGX and RWF
+amounts accept only whole units and display without `.00`; existing fractional
+records remain visible and can be saved unchanged while being edited.
 
-- `Parse` reads user input such as `12`, `12.5`, `$12.50`. Negative values,
-  more than two fraction digits, and non-numeric input are rejected.
+- `Parse` reads decimal input as fixed hundredths; `ParseCurrency` also
+  enforces the selected ISO currency precision. Negative values, more than two
+  fraction digits, and non-numeric input are rejected.
 - `String()` formats as `12.50`; `Float64()` is used only at the JSON edge.
-- `MulBasisPoints(800)` computes 8%, rounding half away from zero (used for
-  tax).
+- `MulBasisPoints(800)` computes 8%, rounding half away from zero. Checkout
+  uses currency-aware rounding so zero-digit currencies round tax to whole units.
 
 No floating-point arithmetic is used for prices or totals.
 

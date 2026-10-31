@@ -425,11 +425,11 @@
         </div>
         <div class="field">
           <label class="label" for="shipping_flat">Shipping fee</label>
-          <input class="input" type="text" id="shipping_flat" name="shipping_flat" value="{{ .Pricing.ShippingFlat }}" inputmode="decimal" required>
+          <input class="input" type="text" id="shipping_flat" name="shipping_flat" value="{{ moneyInput .Pricing.ShippingFlat .Pricing.Currency }}" inputmode="decimal" required>
         </div>
         <div class="field">
           <label class="label" for="free_shipping_threshold">Free shipping from</label>
-          <input class="input" type="text" id="free_shipping_threshold" name="free_shipping_threshold" value="{{ .Pricing.FreeShippingThreshold }}" inputmode="decimal" aria-describedby="free-hint">
+          <input class="input" type="text" id="free_shipping_threshold" name="free_shipping_threshold" value="{{ moneyInput .Pricing.FreeShippingThreshold .Pricing.Currency }}" inputmode="decimal" aria-describedby="free-hint">
           <small class="hint" id="free-hint">0 turns free shipping off</small>
         </div>
         <div class="field">
@@ -437,7 +437,7 @@
           <input class="input" type="text" id="tax_rate" name="tax_rate" value="{{ percent .Pricing.TaxRateBP }}" inputmode="decimal" required>
         </div>
       </div>
-      <p class="tiny muted">The currency can change only before the first order. Amounts are in the store currency.</p>
+      <p class="tiny muted">The currency can change only before the first order. Amounts are in the store currency; UGX and RWF amounts must be whole units.</p>
       <div><button type="submit" class="btn">Save pricing</button></div>
     </form>
   </section>

@@ -16,6 +16,7 @@ func templateFuncs(demoMode bool) template.FuncMap {
 		"list":            list,
 		"money":           FormatMoney,
 		"moneyInCurrency": money.Format,
+		"moneyInput":      money.InputString,
 		"percent":         basisPoints,
 		"currency":        Currency,
 		"categoryIcon":    CategoryIcon,

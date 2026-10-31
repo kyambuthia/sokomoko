@@ -37,7 +37,7 @@ var (
 	ErrProductNotFound           = errors.New("product not found")
 )
 
-const maxProductPrice money.Cents = 10_000_000 // 100,000.00
+const maxProductPrice money.Cents = 10_000_000 // 100,000 major units
 
 const (
 	MaxProductImageBytes = db.MaxProductImageBytes
@@ -411,6 +411,10 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 	if _, err := s.requireStoreSettings(ctx); err != nil {
 		return err
 	}
+	commerceSettings, err := s.store.GetCommerceSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("get commerce settings: %w", err)
+	}
 
 	name := strings.TrimSpace(input.Name)
 	description := strings.TrimSpace(input.Description)
@@ -423,7 +427,7 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 		return ErrMissingProductFields
 	}
 
-	price, err := money.Parse(priceRaw)
+	price, err := money.ParseCurrency(priceRaw, commerceSettings.Currency)
 	if err != nil || price > maxProductPrice {
 		return ErrInvalidProductPrice
 	}
@@ -436,6 +440,7 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 		Name:          name,
 		Description:   description,
 		Price:         price,
+		Currency:      commerceSettings.Currency,
 		StockQuantity: stock,
 		CategoryID:    parseOptionalID(input.CategoryID),
 		PartnerID:     parseOptionalID(input.PartnerID),
@@ -458,6 +463,9 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 		_, err := s.store.CreateProductForActor(ctx, product, actor.ID, actor.Role)
 		if err == nil {
 			return nil
+		}
+		if errors.Is(err, db.ErrProductCurrencyChanged) {
+			return ErrInvalidProductPrice
 		}
 		if !errors.Is(err, db.ErrProductSlugConflict) {
 			return fmt.Errorf("%w: %w", ErrUnableToCreateProduct, err)
@@ -518,7 +526,7 @@ func (s *Service) ProductForEdit(ctx context.Context, actor *Actor, idRaw string
 	input := ProductInput{
 		Name:        product.Name,
 		Description: product.Description,
-		Price:       product.Price.String(),
+		Price:       money.InputString(product.Price, product.Currency),
 		Stock:       strconv.Itoa(product.StockQuantity),
 		ImageURL:    product.PrimaryImage(),
 	}
@@ -550,7 +558,7 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	if len([]rune(name)) > maxProductName || len([]rune(description)) > maxDescriptionLn {
 		return ErrMissingProductFields
 	}
-	price, err := money.Parse(priceRaw)
+	price, err := parseEditableProductPrice(priceRaw, product)
 	if err != nil || price > maxProductPrice {
 		return ErrInvalidProductPrice
 	}
@@ -575,6 +583,9 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 		if errors.Is(err, db.ErrProductNotFound) {
 			return ErrProductNotFound
 		}
+		if errors.Is(err, db.ErrProductCurrencyChanged) {
+			return ErrInvalidProductPrice
+		}
 		return fmt.Errorf("update product: %w", err)
 	}
 	details := fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock)
@@ -585,6 +596,24 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	}
 	s.logAudit(ctx, actor.ID, "product.update", "product", product.ID, details)
 	return nil
+}
+
+func parseEditableProductPrice(raw string, product *db.Product) (money.Cents, error) {
+	if _, ok := money.LookupCurrency(product.Currency); !ok {
+		return money.Parse(raw)
+	}
+	price, err := money.ParseCurrency(raw, product.Currency)
+	if err == nil {
+		return price, nil
+	}
+	currency, _ := money.LookupCurrency(product.Currency)
+	if currency.MinorDigits == 0 {
+		legacyPrice, legacyErr := money.Parse(raw)
+		if legacyErr == nil && legacyPrice == product.Price {
+			return legacyPrice, nil
+		}
+	}
+	return 0, err
 }
 
 // DeleteProductForActor soft-deletes a product the actor may manage and clears its public data.

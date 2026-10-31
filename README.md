@@ -80,7 +80,7 @@ internal/
   db/              PostgreSQL store, embedded migrations, seed data, test helpers (dbtest/)
   payments/        Payment providers: cash on delivery, M-Pesa Daraja, Paystack
   secret/          Encryption for stored provider credentials
-  money/           Integer cents type
+  money/           Fixed-point hundredths type
   lifecycle/       Graceful shutdown, readiness draining, background maintenance
   bootstrap/       Migrate and seed orchestration
   config/          Environment configuration and validation
