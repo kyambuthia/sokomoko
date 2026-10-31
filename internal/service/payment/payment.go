@@ -354,7 +354,15 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 	base := strings.TrimRight(req.BaseURL, "/")
 	initial := map[string]string{}
 	if payment.Provider == "mpesa" {
-		initial["charged_cents"] = strconv.FormatInt(payment.Amount.WholeUnitsCeil()*100, 10)
+		shillings := payment.Amount.WholeUnitsCeil()
+		if shillings < 1 {
+			return StartOutcome{}, payments.ErrUnsupported
+		}
+		chargedCents, err := money.Cents(shillings).Mul(100)
+		if err != nil {
+			return StartOutcome{}, fmt.Errorf("%w: %w", payments.ErrUnsupported, err)
+		}
+		initial["charged_cents"] = strconv.FormatInt(int64(chargedCents), 10)
 		initial["phone"] = req.Phone
 	}
 	attemptID, err := s.store.StartPaymentAttempt(ctx, payment.ID, reference, hashToken(token), initial)
@@ -434,6 +442,8 @@ func customerReason(err error) string {
 		return "Enter a valid M-Pesa number, for example 0712 345 678."
 	case errors.Is(err, payments.ErrNotConfigured):
 		return "This payment method is not set up yet."
+	case errors.Is(err, money.ErrOverflow):
+		return "The amount is too large for this payment method."
 	case errors.Is(err, payments.ErrUnsupported):
 		return "This payment method cannot charge this order."
 	default:

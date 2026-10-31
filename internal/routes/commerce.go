@@ -405,6 +405,10 @@ func Checkout(a *app.App) http.HandlerFunc {
 		})
 		if err != nil {
 			log.Printf("start payment for order %d: %v", orderID, err)
+			if errors.Is(err, payments.ErrUnsupported) {
+				redirectWithFlash(w, r, fmt.Sprintf("/payments/order/%d", orderID), "danger", "This payment method cannot charge this order.")
+				return
+			}
 		}
 		if err == nil && outcome.RedirectURL != "" {
 			http.Redirect(w, r, outcome.RedirectURL, http.StatusSeeOther)

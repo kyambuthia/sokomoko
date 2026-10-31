@@ -62,6 +62,10 @@ func PaymentPage(a *app.App) http.HandlerFunc {
 					redirectWithFlash(w, r, r.URL.Path, "danger", "This order cannot be paid online.")
 					return
 				}
+				if errors.Is(err, payments.ErrUnsupported) {
+					redirectWithFlash(w, r, r.URL.Path, "danger", "This payment method cannot charge this order.")
+					return
+				}
 			}
 			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 			return

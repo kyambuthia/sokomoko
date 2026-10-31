@@ -234,6 +234,14 @@ func (m *Mpesa) Start(ctx context.Context, cfg Config, req StartRequest) (StartR
 	if err != nil {
 		return StartResult{}, err
 	}
+	shillings := req.Amount.WholeUnitsCeil()
+	if shillings < 1 {
+		return StartResult{}, ErrUnsupported
+	}
+	charged, err := money.Cents(shillings).Mul(100)
+	if err != nil {
+		return StartResult{}, err
+	}
 	token, err := m.token(ctx, cfg)
 	if err != nil {
 		return StartResult{}, err
@@ -250,7 +258,6 @@ func (m *Mpesa) Start(ctx context.Context, cfg Config, req StartRequest) (StartR
 	if txType == mpesaBuyGoods && cfg.Value("till_number") != "" {
 		partyB = cfg.Value("till_number")
 	}
-	shillings := req.Amount.WholeUnitsCeil()
 	body := map[string]any{
 		"BusinessShortCode": cfg.Value("shortcode"),
 		"Password":          password,
@@ -286,7 +293,7 @@ func (m *Mpesa) Start(ctx context.Context, cfg Config, req StartRequest) (StartR
 			"phone":               phone,
 			"charged_shillings":   strconv.FormatInt(shillings, 10),
 		},
-		Charged: money.Cents(shillings * 100),
+		Charged: charged,
 	}, nil
 }
 
