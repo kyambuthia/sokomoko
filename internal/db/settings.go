@@ -137,18 +137,33 @@ func (s *Store) PartnerIDForUser(ctx context.Context, userID int) (int, error) {
 	return id, err
 }
 
-// CreatePartner inserts a new active partner. A taken slug returns
-// ErrUniqueConstraint.
+// CreatePartner inserts a new partner for a trusted internal caller.
 func (s *Store) CreatePartner(ctx context.Context, partner Partner) (int64, error) {
+	return s.createPartner(ctx, 0, partner, false)
+}
+
+// CreatePartnerForActor revalidates the admin in the partner creation transaction.
+func (s *Store) CreatePartnerForActor(ctx context.Context, actorID int, partner Partner) (int64, error) {
+	return s.createPartner(ctx, actorID, partner, true)
+}
+
+func (s *Store) createPartner(ctx context.Context, actorID int, partner Partner, requireAdmin bool) (int64, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var id int64
-	err := s.DB.QueryRowContext(ctx,
-		`INSERT INTO partners (name, slug, contact_email) VALUES ($1, $2, $3) RETURNING id`,
-		strings.TrimSpace(partner.Name),
-		strings.ToLower(strings.TrimSpace(partner.Slug)),
-		strings.ToLower(strings.TrimSpace(partner.ContactEmail)),
-	).Scan(&id)
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
+		return tx.QueryRowContext(ctx,
+			`INSERT INTO partners (name, slug, contact_email) VALUES ($1, $2, $3) RETURNING id`,
+			strings.TrimSpace(partner.Name),
+			strings.ToLower(strings.TrimSpace(partner.Slug)),
+			strings.ToLower(strings.TrimSpace(partner.ContactEmail)),
+		).Scan(&id)
+	})
 	return id, wrapDBError(err)
 }
 
@@ -168,21 +183,36 @@ func (s *Store) GetPartnerByID(ctx context.Context, id int) (*Partner, error) {
 	return partner, nil
 }
 
-// SetPartnerStatus marks a partner active or suspended. Suspending hides the
-// partner's products from customers and stops its accounts from seeing
-// partner data. It reports false when the partner does not exist.
-// UpdatePartnerDetails renames a partner and changes its contact email. The
-// slug stays the same.
+// UpdatePartnerDetails renames a partner for a trusted internal caller.
 func (s *Store) UpdatePartnerDetails(ctx context.Context, id int, name, contactEmail string) (bool, error) {
+	return s.updatePartnerDetails(ctx, 0, id, name, contactEmail, false)
+}
+
+// UpdatePartnerDetailsForActor revalidates the admin in the update transaction.
+func (s *Store) UpdatePartnerDetailsForActor(ctx context.Context, actorID, partnerID int, name, contactEmail string) (bool, error) {
+	return s.updatePartnerDetails(ctx, actorID, partnerID, name, contactEmail, true)
+}
+
+func (s *Store) updatePartnerDetails(ctx context.Context, actorID, partnerID int, name, contactEmail string, requireAdmin bool) (bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	result, err := s.DB.ExecContext(ctx, "UPDATE partners SET name = $1, contact_email = $2 WHERE id = $3",
-		strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(contactEmail)), id)
-	if err != nil {
-		return false, wrapDBError(err)
-	}
-	n, err := rowsAffected(result)
-	return n > 0, err
+	found := false
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
+		result, err := tx.ExecContext(ctx, "UPDATE partners SET name = $1, contact_email = $2 WHERE id = $3",
+			strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(contactEmail)), partnerID)
+		if err != nil {
+			return wrapDBError(err)
+		}
+		n, err := rowsAffected(result)
+		found = n > 0
+		return err
+	})
+	return found, err
 }
 
 // SetPartnerStatus changes a partner's status for a trusted internal caller.
@@ -225,13 +255,26 @@ func (s *Store) setPartnerStatus(ctx context.Context, actorID, partnerID int, st
 	return found, err
 }
 
-// CreatePartnerUser creates a login with the partner role and links it to
-// partnerID in one transaction.
+// CreatePartnerUser creates a partner login for a trusted internal caller.
 func (s *Store) CreatePartnerUser(ctx context.Context, user User, partnerID int) (int64, error) {
+	return s.createPartnerUser(ctx, 0, user, partnerID, false)
+}
+
+// CreatePartnerUserForActor revalidates the admin in the account creation transaction.
+func (s *Store) CreatePartnerUserForActor(ctx context.Context, actorID int, user User, partnerID int) (int64, error) {
+	return s.createPartnerUser(ctx, actorID, user, partnerID, true)
+}
+
+func (s *Store) createPartnerUser(ctx context.Context, actorID int, user User, partnerID int, requireAdmin bool) (int64, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	var id int64
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
 		if err := tx.QueryRowContext(ctx,
 			`INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, 'partner') RETURNING id`,
 			strings.TrimSpace(user.Username), strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash,

@@ -101,7 +101,10 @@ func (s *Service) CreatePartner(ctx context.Context, actor *Actor, input Partner
 			return ErrInvalidPartner
 		}
 	}
-	id, err := s.store.CreatePartner(ctx, db.Partner{Name: name, Slug: partnerSlug, ContactEmail: email})
+	id, err := s.store.CreatePartnerForActor(ctx, actor.ID, db.Partner{Name: name, Slug: partnerSlug, ContactEmail: email})
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return ErrForbiddenPartnerAction
+	}
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicatePartner
 	}
@@ -157,7 +160,10 @@ func (s *Service) UpdatePartner(ctx context.Context, actor *Actor, idRaw string,
 			return ErrInvalidPartner
 		}
 	}
-	found, err := s.store.UpdatePartnerDetails(ctx, id, name, email)
+	found, err := s.store.UpdatePartnerDetailsForActor(ctx, actor.ID, id, name, email)
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return ErrForbiddenPartnerAction
+	}
 	if err != nil {
 		return err
 	}
@@ -193,7 +199,10 @@ func (s *Service) CreatePartnerAccount(ctx context.Context, actor *Actor, input 
 	if err != nil {
 		return err
 	}
-	userID, err := s.store.CreatePartnerUser(ctx, db.User{Username: username, Email: email, PasswordHash: hash}, partnerID)
+	userID, err := s.store.CreatePartnerUserForActor(ctx, actor.ID, db.User{Username: username, Email: email, PasswordHash: hash}, partnerID)
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return ErrForbiddenPartnerAction
+	}
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateAccount
 	}
