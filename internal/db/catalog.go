@@ -449,14 +449,65 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 	})
 }
 
-// DeleteProduct soft-deletes a product, clears affected carts and checkouts,
-// releases their stock holds, and removes the product images.
+// DeleteProduct soft-deletes a product for trusted internal callers.
 func (s *Store) DeleteProduct(ctx context.Context, id int) error {
+	return s.deleteProduct(ctx, id, 0, "")
+}
+
+// DeleteProductForActor rechecks the actor and product ownership in the
+// deletion transaction so a concurrent suspension or membership removal wins.
+func (s *Store) DeleteProductForActor(ctx context.Context, id, actorID int, actorRole string) error {
+	if actorID <= 0 {
+		return ErrProductNotFound
+	}
+	return s.deleteProduct(ctx, id, actorID, actorRole)
+}
+
+func (s *Store) deleteProduct(ctx context.Context, id, actorID int, actorRole string) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, "UPDATE products SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL", id)
+		deleteQuery := `UPDATE products SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL`
+		args := []any{id}
+		if actorID > 0 {
+			switch actorRole {
+			case RolePartner:
+				var partnerID int
+				err := tx.QueryRowContext(ctx, `SELECT p.id
+					FROM partners p
+					JOIN partner_users pu ON pu.partner_id = p.id
+					JOIN users u ON u.id = pu.user_id
+					WHERE u.id = $1 AND u.role = $2 AND u.deleted_at IS NULL AND p.status = 'active'
+					FOR SHARE OF p, pu, u`,
+					actorID, RolePartner,
+				).Scan(&partnerID)
+				if errors.Is(err, sql.ErrNoRows) {
+					return ErrProductNotFound
+				}
+				if err != nil {
+					return err
+				}
+				deleteQuery += ` AND partner_id = $2`
+				args = append(args, partnerID)
+			case RoleAdmin, RoleStaff:
+				var authorizedUserID int
+				err := tx.QueryRowContext(ctx,
+					`SELECT id FROM users WHERE id = $1 AND role = $2 AND deleted_at IS NULL FOR SHARE`,
+					actorID, actorRole,
+				).Scan(&authorizedUserID)
+				if errors.Is(err, sql.ErrNoRows) {
+					return ErrProductNotFound
+				}
+				if err != nil {
+					return err
+				}
+			default:
+				return ErrProductNotFound
+			}
+		}
+
+		result, err := tx.ExecContext(ctx, deleteQuery, args...)
 		if err != nil {
 			return err
 		}
@@ -497,7 +548,7 @@ func (s *Store) DeleteProduct(ctx context.Context, id int) error {
 			return err
 		}
 
-		if _, err := tx.ExecContext(ctx, "DELETE FROM cart_items WHERE product_id = $1", id); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM cart_items WHERE product_id = $1`, id); err != nil {
 			return err
 		}
 		for _, userID := range affectedUsers {
@@ -505,7 +556,7 @@ func (s *Store) DeleteProduct(ctx context.Context, id int) error {
 				return err
 			}
 		}
-		_, err = tx.ExecContext(ctx, "DELETE FROM product_images WHERE product_id = $1", id)
+		_, err = tx.ExecContext(ctx, `DELETE FROM product_images WHERE product_id = $1`, id)
 		return err
 	})
 }

@@ -624,7 +624,7 @@ func (s *Service) DeleteProductForActor(ctx context.Context, actor *Actor, idRaw
 	if err != nil {
 		return err
 	}
-	if err := s.store.DeleteProduct(ctx, product.ID); err != nil {
+	if err := s.store.DeleteProductForActor(ctx, product.ID, actor.ID, actor.Role); err != nil {
 		if errors.Is(err, db.ErrProductNotFound) {
 			return ErrProductNotFound
 		}
