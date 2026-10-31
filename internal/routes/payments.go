@@ -138,14 +138,21 @@ func PaymentReturn(a *app.App) http.HandlerFunc {
 	}
 }
 
+const maxWebhookBodyBytes = 256 << 10
+
 func readWebhookBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w, http.MethodPost)
 		return nil, false
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 256<<10))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWebhookBodyBytes))
 	if err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+		}
 		return nil, false
 	}
 	return body, true
