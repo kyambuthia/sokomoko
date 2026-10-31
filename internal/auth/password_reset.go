@@ -67,15 +67,8 @@ func (s *Service) buildPasswordResetLink(r *http.Request, token string) string {
 }
 
 func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink string, userID int) {
-	s.dispatchPasswordResetEmailWithToken(recipientEmail, resetLink, userID, "", false)
-}
-
-func (s *Service) dispatchPasswordResetEmailWithToken(recipientEmail, resetLink string, userID int, token string, revokeOnFailure bool) {
 	sender := s.passwordResetEmailSender
 	if sender == nil {
-		if revokeOnFailure {
-			s.revokeUndeliveredPasswordResetToken(userID, token)
-		}
 		return
 	}
 
@@ -98,26 +91,8 @@ func (s *Service) dispatchPasswordResetEmailWithToken(recipientEmail, resetLink 
 		}
 		if err != nil {
 			log.Printf("password reset email send failed for user_id=%d: %v", userID, err)
-			if revokeOnFailure {
-				s.revokeUndeliveredPasswordResetToken(userID, token)
-			}
 		}
 	}()
-}
-
-func (s *Service) revokeUndeliveredPasswordResetToken(userID int, token string) {
-	store, ok := s.store.(interface {
-		RevokeUndeliveredPasswordResetToken(context.Context, int, string) error
-	})
-	if !ok {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), resetEmailTimeout)
-	defer cancel()
-	if err := store.RevokeUndeliveredPasswordResetToken(ctx, userID, token); err != nil {
-		log.Printf("password reset: clear failed delivery for user_id=%d: %v", userID, err)
-	}
 }
 
 // defaultResetEmailBackoff is the wait before each retry of a reset email.
@@ -186,7 +161,7 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 			}
 			if created {
 				resetLink := s.buildPasswordResetLink(r, resetToken)
-				s.dispatchPasswordResetEmailWithToken(user.Email, resetLink, user.ID, resetToken, !s.shouldExposeResetLink())
+				s.dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
 				if s.shouldExposeResetLink() {
 					data.ResetLink = resetLink
 				}
