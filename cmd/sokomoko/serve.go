@@ -247,6 +247,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 			IdleTimeout:       60 * time.Second,
 			ReadTimeout:       15 * time.Second,
 			ReadHeaderTimeout: 10 * time.Second,
+			MaxHeaderBytes:    64 << 10,
 			WriteTimeout:      15 * time.Second,
 		},
 	}, allowedHosts
