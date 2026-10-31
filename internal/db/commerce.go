@@ -569,53 +569,85 @@ func (s *Store) LastPaymentError(ctx context.Context, paymentID int) (string, er
 func (s *Store) ExpireUnpaidOrders(ctx context.Context, cutoff time.Time) (int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+
+	// Discover candidates without retaining payment or inventory locks across
+	// orders. Each cancellation commits independently, so a batch cannot hold
+	// stock rows from one order while acquiring a lower-ID row for another.
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT p.id, p.order_id FROM payments p
+		 WHERE p.status = 'pending' AND p.method <> 'cash_on_delivery' AND p.created_at < $1
+		   AND NOT EXISTS (SELECT 1 FROM payment_attempts a WHERE a.payment_id = p.id
+		                   AND a.status = 'pending' AND a.created_at >= $1)
+		 ORDER BY p.order_id, p.id`, cutoff.UTC())
+	if err != nil {
+		return 0, err
+	}
+	type pair struct{ payment, order int }
+	var stale []pair
+	for rows.Next() {
+		var p pair
+		if err := rows.Scan(&p.payment, &p.order); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		stale = append(stale, p)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+
 	expired := 0
-	err := s.withTx(ctx, func(tx *sql.Tx) error {
-		expired = 0
-		rows, err := tx.QueryContext(ctx,
-			`SELECT p.id, p.order_id FROM payments p
-			 WHERE p.status = 'pending' AND p.method <> 'cash_on_delivery' AND p.created_at < $1
-			   AND NOT EXISTS (SELECT 1 FROM payment_attempts a WHERE a.payment_id = p.id
-			                   AND a.status = 'pending' AND a.created_at >= $1)
-			 ORDER BY p.order_id FOR UPDATE SKIP LOCKED`, cutoff.UTC())
-		if err != nil {
-			return err
-		}
-		type pair struct{ payment, order int }
-		var stale []pair
-		for rows.Next() {
-			var p pair
-			if err := rows.Scan(&p.payment, &p.order); err != nil {
-				rows.Close()
-				return err
+	for _, candidate := range stale {
+		expiredThisPayment := false
+		err := s.withTx(ctx, func(tx *sql.Tx) error {
+			expiredThisPayment = false
+			var paymentID int
+			err := tx.QueryRowContext(ctx,
+				`SELECT p.id FROM payments p
+				 WHERE p.id = $1 AND p.status = 'pending' AND p.method <> 'cash_on_delivery' AND p.created_at < $2
+				   AND NOT EXISTS (SELECT 1 FROM payment_attempts a WHERE a.payment_id = p.id
+				                   AND a.status = 'pending' AND a.created_at >= $2)
+				 FOR UPDATE OF p SKIP LOCKED`,
+				candidate.payment, cutoff.UTC(),
+			).Scan(&paymentID)
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil // Another request changed it or a newer attempt is active.
 			}
-			stale = append(stale, p)
-		}
-		if err := rows.Close(); err != nil {
-			return err
-		}
-		for _, p := range stale {
-			current, err := lockOrderTx(ctx, tx, p.order)
 			if err != nil {
 				return err
 			}
-			if err := writeOrderStateTx(ctx, tx, p.order, current, OrderStatusCancelled, "cancelled", current.DeliveryStatus,
+
+			current, err := lockOrderTx(ctx, tx, candidate.order)
+			if err != nil {
+				return err
+			}
+			if err := writeOrderStateTx(ctx, tx, candidate.order, current, OrderStatusCancelled, "cancelled", current.DeliveryStatus,
 				"Payment was not completed in time. The order was cancelled."); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, "UPDATE payments SET status = 'failed' WHERE id = $1", p.payment); err != nil {
+			if _, err := tx.ExecContext(ctx, "UPDATE payments SET status = 'failed' WHERE id = $1", paymentID); err != nil {
 				return err
 			}
 			if _, err := tx.ExecContext(ctx,
 				`UPDATE payment_attempts SET status = 'failed', error_message = 'expired' WHERE payment_id = $1 AND status = 'pending'`,
-				p.payment); err != nil {
+				paymentID); err != nil {
 				return err
 			}
+			expiredThisPayment = true
+			return nil
+		})
+		if err != nil {
+			return expired, err
+		}
+		if expiredThisPayment {
 			expired++
 		}
-		return nil
-	})
-	return expired, err
+	}
+	return expired, nil
 }
 
 // ErrOrderNotCancellable means the order has been accepted by the vendor or
