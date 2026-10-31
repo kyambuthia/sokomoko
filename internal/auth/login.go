@@ -151,8 +151,8 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 			return
 		}
 	}
-	if err := s.startSession(w, r, user.ID); err != nil {
-		if errors.Is(err, db.ErrUserInactive) {
+	if err := s.startSession(w, r, user.ID, user.PasswordHash); err != nil {
+		if errors.Is(err, db.ErrUserInactive) || errors.Is(err, db.ErrPasswordChanged) {
 			s.clearSessionCookie(w, r)
 			renderWithStatus(w, cfg.tmpl, http.StatusUnauthorized, withError(data, "Invalid credentials"))
 			return

@@ -27,6 +27,7 @@ const (
 type store interface {
 	RequestPasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) (bool, error)
 	CreateSession(ctx context.Context, sess db.Session) error
+	CreateSessionForPasswordHash(ctx context.Context, sess db.Session, expectedPasswordHash string) error
 	CreateUser(ctx context.Context, user db.User) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
 	CountProducts(ctx context.Context) (int, error)

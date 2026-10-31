@@ -21,19 +21,32 @@ func revokeUserCredentialsTx(ctx context.Context, tx *sql.Tx, userID int) error 
 }
 
 func (s *Store) CreateSession(ctx context.Context, sess Session) error {
+	return s.createSession(ctx, sess, "", false)
+}
+
+// CreateSessionForPasswordHash binds login session creation to the password
+// hash that was verified, preventing an old password from surviving a reset.
+func (s *Store) CreateSessionForPasswordHash(ctx context.Context, sess Session, expectedPasswordHash string) error {
+	return s.createSession(ctx, sess, expectedPasswordHash, true)
+}
+
+func (s *Store) createSession(ctx context.Context, sess Session, expectedPasswordHash string, requirePasswordMatch bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
-		var userID int
+		var passwordHash string
 		err := tx.QueryRowContext(ctx,
-			"SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR SHARE",
+			"SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL FOR SHARE",
 			sess.UserID,
-		).Scan(&userID)
+		).Scan(&passwordHash)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrUserInactive
 		}
 		if err != nil {
 			return err
+		}
+		if requirePasswordMatch && passwordHash != expectedPasswordHash {
+			return ErrPasswordChanged
 		}
 
 		_, err = tx.ExecContext(ctx,

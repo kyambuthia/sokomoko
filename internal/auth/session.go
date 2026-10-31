@@ -44,13 +44,13 @@ func (s *Service) shouldUseSecureCookies(r *http.Request) bool {
 // startSession issues a fresh session, revoking any session the request
 // already carried so a pre-login session ID can never be promoted (session
 // fixation).
-func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int) error {
+func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID int, expectedPasswordHash string) error {
 	s.revokeRequestSessions(r.Context(), r, "sign-in: revoke previous session")
 	session, err := s.newSession(userID)
 	if err != nil {
 		return err
 	}
-	if err := s.store.CreateSession(r.Context(), session); err != nil {
+	if err := s.store.CreateSessionForPasswordHash(r.Context(), session, expectedPasswordHash); err != nil {
 		return err
 	}
 	s.setSessionCookie(w, r, session)
