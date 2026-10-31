@@ -56,8 +56,19 @@ func (s *Store) ListPaymentExceptions(ctx context.Context, limit int) ([]Payment
 	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	rows, err := s.DB.QueryContext(ctx, paymentExceptionSelect+
-		" ORDER BY (e.status = 'refunded'), e.created_at DESC, e.id DESC LIMIT $1", limit)
+	// Limit the ordered exception set before joining payment details.
+	rows, err := s.DB.QueryContext(ctx, `SELECT e.id,e.payment_id,e.attempt_id,p.order_id,
+    e.reason,e.status,e.provider,e.currency,e.amount_cents,
+    e.request_reference,e.receipt,e.refund_reference,e.last_error,e.created_at
+    FROM (
+        SELECT id,payment_id,attempt_id,reason,status,provider,currency,amount_cents,
+               request_reference,receipt,refund_reference,last_error,created_at
+        FROM payment_exceptions
+        ORDER BY (status = 'refunded'), created_at DESC, id DESC
+        LIMIT $1
+    ) e
+    JOIN payments p ON p.id=e.payment_id
+    ORDER BY (e.status = 'refunded'), e.created_at DESC, e.id DESC`, limit)
 	if err != nil {
 		return nil, err
 	}
