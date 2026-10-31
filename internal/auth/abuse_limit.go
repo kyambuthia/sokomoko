@@ -10,11 +10,12 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kyambuthia/sokomoko/internal/netutil"
 )
 
 const (
@@ -312,9 +313,7 @@ func (s *Service) clientIP(r *http.Request) string {
 }
 
 func abuseScopeKey(scope, ip, identifier string) string {
-	if address, err := netip.ParseAddr(strings.TrimSpace(ip)); err == nil {
-		ip = address.Unmap().String()
-	}
+	ip = netutil.NormalizeRateLimitKey(ip)
 	var key strings.Builder
 	for _, component := range []string{scope, ip, identifier} {
 		component = boundedAbuseKeyComponent(component)

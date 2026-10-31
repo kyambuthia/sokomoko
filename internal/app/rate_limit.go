@@ -9,11 +9,12 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kyambuthia/sokomoko/internal/netutil"
 )
 
 const (
@@ -209,7 +210,7 @@ func RateLimitByKey(max int, window time.Duration, keyFunc func(*http.Request) s
 				next.ServeHTTP(w, r)
 				return
 			}
-			allowed, retryAfter := limiter.allow(normalizeRateLimitKey(keyFunc(r)), time.Now())
+			allowed, retryAfter := limiter.allow(netutil.NormalizeRateLimitKey(keyFunc(r)), time.Now())
 			if !allowed {
 				retryAfterSeconds := int(math.Ceil(retryAfter.Seconds()))
 				if retryAfterSeconds < 1 {
@@ -253,7 +254,7 @@ func SharedRateLimitByKey(store SharedRequestRateLimitStore, secret []byte, max 
 				return
 			}
 
-			key := normalizeRateLimitKey(keyFunc(r))
+			key := netutil.NormalizeRateLimitKey(keyFunc(r))
 			ctx, cancel := context.WithTimeout(r.Context(), 150*time.Millisecond)
 			allowed, retryAfter, err := store.EnforceRequestRateLimit(ctx, requestRateLimitKey(secret, key), max, window)
 			cancel()
@@ -276,25 +277,9 @@ func SharedRateLimitByKey(store SharedRequestRateLimitStore, secret []byte, max 
 }
 
 func requestRateLimitKey(secret []byte, raw string) []byte {
-	key := normalizeRateLimitKey(raw)
+	key := netutil.NormalizeRateLimitKey(raw)
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte("sokomoko:post-rate-limit:v1\x00"))
 	_, _ = mac.Write([]byte(key))
 	return mac.Sum(nil)
-}
-
-// normalizeRateLimitKey canonicalizes IP-based keys so temporary IPv6
-// addresses in one /64 share a bucket. Other keys remain exact after trimming.
-func normalizeRateLimitKey(raw string) string {
-	key := strings.TrimSpace(raw)
-	address, err := netip.ParseAddr(key)
-	if err != nil {
-		return key
-	}
-	address = address.Unmap()
-	if !address.Is6() {
-		return address.String()
-	}
-	address = address.WithZone("")
-	return netip.PrefixFrom(address, 64).Masked().Addr().String()
 }
