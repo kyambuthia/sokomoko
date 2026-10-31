@@ -208,11 +208,6 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 		if redirectPastLastPage(w, r, requestedPage, partnerProductsPageSize, total) {
 			return
 		}
-		if requestedPage > 1000 {
-			http.Redirect(w, r, pageHref(r, 1000), http.StatusSeeOther)
-			return
-		}
-
 		page := partnerProductsPage(view)
 		page.Pager = newPager(r, requestedPage, partnerProductsPageSize, total)
 		page.Role, _ = partnerIdentity(r)

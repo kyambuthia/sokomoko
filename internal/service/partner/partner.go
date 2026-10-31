@@ -290,12 +290,13 @@ func (s *Service) ProductOptionsForActor(ctx context.Context, actor *Actor) (Pro
 	return data, nil
 }
 
+const maxPartnerProductPage = 1_000_000
+
 func (s *Service) ProductsPageForActor(ctx context.Context, actor *Actor, page, limit int) (ProductsData, int, error) {
 	if page < 1 {
 		page = 1
-	}
-	if page > 1000 {
-		page = 1000
+	} else if page > maxPartnerProductPage {
+		page = maxPartnerProductPage
 	}
 	if limit < 1 {
 		limit = 50
@@ -327,6 +328,20 @@ func (s *Service) productsForActor(ctx context.Context, actor *Actor, limit, off
 	total, err := s.store.CountFilteredProducts(ctx, filter)
 	if err != nil {
 		return ProductsData{}, 0, err
+	}
+	if limit > 0 {
+		lastOffset := 0
+		if total > 0 {
+			pages := (total-1)/limit + 1
+			lastOffset = (pages - 1) * limit
+		}
+		if offset < 0 {
+			offset = 0
+		}
+		if offset > lastOffset {
+			offset = lastOffset
+		}
+		filter.Limit, filter.Offset = limit, offset
 	}
 	products, err := s.store.ListProducts(ctx, filter)
 	if err != nil {
