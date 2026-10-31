@@ -74,8 +74,9 @@ fields.
 
 **Product images.** `ui.ProductImageURL` keeps local paths and `data:` images,
 uses `/media/product-images/<id>` for uploaded JPEG/PNG bytes stored in
-PostgreSQL, and replaces remote or empty URLs with a bundled image. The public
-media handler only serves images for active products from active partners.
+PostgreSQL. JPEG uploads apply EXIF orientation before re-encoding; remote or
+empty URLs use a bundled image. The public media handler only serves images
+for active products from active partners.
 
 ## Static assets
 

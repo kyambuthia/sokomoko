@@ -125,7 +125,7 @@ address as a draft and re-renders the form with `422`.
 | `/dashboard` | GET | admin, staff, partner | `PartnerDashboard` |
 | `/products` | GET, HEAD | admin, staff, partner | `PartnerProducts` (50 per page, `?page=`) |
 | `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` (optional JPEG or PNG image upload) |
-| `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` (optional new primary image) |
+| `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` (optional new primary image or removal of an uploaded image) |
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
 | `/products/<id>/delete` | POST | admin, staff, partner (own products only; others get 404) | `PartnerProductDelete` (CSRF protected; removes the product from carts and cancels affected open checkouts) |
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |

@@ -86,8 +86,8 @@ reachable.
   coverage for ownership, cart and checkout cleanup, and concurrent add/delete
   behavior before marking it complete.
 - [ ] Verify product image upload. The workspace flow is implemented; add
-  coverage for format, size, pixel bounds, replacement, and active-product image
-  serving before marking it complete.
+  coverage for format, size, pixel bounds, EXIF orientation, replacement and
+  removal, and active-product image serving before marking it complete.
 - [ ] Finish shared rate limiting verification. POST IP limits and
   authentication abuse backoff now use PostgreSQL across replicas, with a
   bounded process-local fallback on database errors. Add database-backed tests
