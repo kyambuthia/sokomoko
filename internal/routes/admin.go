@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	teamPageSize             = 50 // Number of accounts shown on each team page.
-	adminProductsPageSize    = 50 // Number of products shown on each admin catalog page.
-	adminOrdersPageSize      = 50 // Number of orders shown on each admin order page.
-	adminDeliveriesPageSize  = 50 // Pending deliveries shown on each admin page.
+	teamPageSize            = 50 // Number of accounts shown on each team page.
+	adminProductsPageSize   = 50 // Number of products shown on each admin catalog page.
+	adminOrdersPageSize     = 50 // Number of orders shown on each admin order page.
+	adminDeliveriesPageSize = 50 // Pending deliveries shown on each admin page.
 )
 
 type AdminPageData struct {

@@ -80,6 +80,7 @@ func (s *Service) Browse(ctx context.Context, f db.ServiceFilter, page int) ([]d
 	f.Offset = (page - 1) * f.Limit
 	return s.store.BrowseServices(ctx, f)
 }
+
 const maxServiceSlugLength = 160
 
 func (s *Service) Public(ctx context.Context, key string) (*db.ServiceListing, error) {
