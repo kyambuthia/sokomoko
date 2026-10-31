@@ -153,9 +153,15 @@ func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		created = false
 		// Serialize token replacement and cooldown checks with token use.
+		// Reset links are issued only for active accounts; locking the row also
+		// makes this check atomic with account deactivation.
 		var lockedUserID int
-		if err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", userID).
-			Scan(&lockedUserID); err != nil {
+		err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", userID).
+			Scan(&lockedUserID)
+		if errors.Is(err, sql.ErrNoRows) && enforceCooldown {
+			return nil
+		}
+		if err != nil {
 			return err
 		}
 		if enforceCooldown {

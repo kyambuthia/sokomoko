@@ -231,7 +231,13 @@ func (s *Store) deleteUser(ctx context.Context, actorID, id int, requireAdmin bo
 		); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id)
+		if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM password_reset_email_outbox WHERE user_id = $1", id); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, "DELETE FROM password_reset_tokens WHERE user_id = $1", id)
 		return err
 	})
 }
