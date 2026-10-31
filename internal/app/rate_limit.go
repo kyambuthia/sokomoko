@@ -31,6 +31,7 @@ type ipRateLimiter struct {
 	lru             *list.List
 	lastCleanup     time.Time
 	cleanupInterval time.Duration
+	saturatedUntil  time.Time
 }
 
 func newIPRateLimiter(max int, window time.Duration) *ipRateLimiter {
@@ -55,6 +56,9 @@ func (l *ipRateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 		if ok {
 			l.removeLocked(key, entry)
 		}
+		if retryAfter, full := l.makeRoomLocked(now); full {
+			return false, retryAfter
+		}
 		l.putLocked(key, rateLimitEntry{windowStart: now, count: 1})
 		return true, 0
 	}
@@ -77,9 +81,6 @@ func (l *ipRateLimiter) putLocked(key string, entry rateLimitEntry) {
 	if l.lru == nil {
 		l.lru = list.New()
 	}
-	if _, exists := l.entries[key]; !exists && len(l.entries) >= maxRateLimitEntries {
-		l.evictOldestLocked()
-	}
 	entry.lru = l.lru.PushFront(key)
 	l.entries[key] = entry
 }
@@ -101,23 +102,66 @@ func (l *ipRateLimiter) removeLocked(key string, entry rateLimitEntry) {
 		l.lru.Remove(entry.lru)
 	}
 	delete(l.entries, key)
+	l.saturatedUntil = time.Time{}
 }
 
-func (l *ipRateLimiter) evictOldestLocked() {
+func (l *ipRateLimiter) makeRoomLocked(now time.Time) (time.Duration, bool) {
+	if len(l.entries) < maxRateLimitEntries {
+		return 0, false
+	}
+	if l.saturatedUntil.After(now) {
+		return l.saturatedUntil.Sub(now), true
+	}
+	l.saturatedUntil = time.Time{}
+
+	var earliestExpiry time.Time
 	if l.lru != nil {
-		if oldest := l.lru.Back(); oldest != nil {
-			key := oldest.Value.(string)
-			l.lru.Remove(oldest)
-			delete(l.entries, key)
-			return
+		for element := l.lru.Back(); element != nil; {
+			previous := element.Prev()
+			key, ok := element.Value.(string)
+			if !ok {
+				l.lru.Remove(element)
+				element = previous
+				continue
+			}
+			entry, exists := l.entries[key]
+			if !exists {
+				l.lru.Remove(element)
+				element = previous
+				continue
+			}
+			expiry := entry.windowStart.Add(l.window)
+			if !expiry.After(now) || entry.count < l.max {
+				l.removeLocked(key, entry)
+				return 0, false
+			}
+			if earliestExpiry.IsZero() || expiry.Before(earliestExpiry) {
+				earliestExpiry = expiry
+			}
+			element = previous
 		}
 	}
-	// Entries inserted directly by package tests or older callers may not yet
-	// have an LRU node, so still enforce the hard map bound in that case.
-	for key := range l.entries {
-		delete(l.entries, key)
-		return
+
+	// Map entries without list nodes can occur in package-level fixtures.
+	for key, entry := range l.entries {
+		if entry.lru != nil {
+			continue
+		}
+		expiry := entry.windowStart.Add(l.window)
+		if !expiry.After(now) || entry.count < l.max {
+			l.removeLocked(key, entry)
+			return 0, false
+		}
+		if earliestExpiry.IsZero() || expiry.Before(earliestExpiry) {
+			earliestExpiry = expiry
+		}
 	}
+
+	if earliestExpiry.IsZero() {
+		earliestExpiry = now.Add(l.window)
+	}
+	l.saturatedUntil = earliestExpiry
+	return earliestExpiry.Sub(now), true
 }
 
 func (l *ipRateLimiter) cleanupLocked(now time.Time) {
