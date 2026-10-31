@@ -19,6 +19,7 @@ import (
 
 const (
 	maxMpesaTokenCacheEntries = 16
+	mpesaOAuthTimeout         = 20 * time.Second
 	mpesaSandboxAPI           = "https://sandbox.safaricom.co.ke"
 	mpesaProductionAPI        = "https://api.safaricom.co.ke"
 	mpesaPayBill              = "CustomerPayBillOnline"
@@ -132,7 +133,9 @@ func (m *Mpesa) token(ctx context.Context, cfg Config) (string, error) {
 		if ok && time.Now().Before(cached.expires) {
 			return cached.value, nil
 		}
-		return m.fetchToken(ctx, cfg, key, secret, cacheKey)
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), mpesaOAuthTimeout)
+		defer cancel()
+		return m.fetchToken(fetchCtx, cfg, key, secret, cacheKey)
 	})
 	select {
 	case <-ctx.Done():
