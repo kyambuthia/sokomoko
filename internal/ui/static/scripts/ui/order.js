@@ -76,8 +76,9 @@ export class UIOrderProgress extends HTMLElement {
 }
 
 // <ui-order-form scope="admin|partner" order-id="12"><form>…</form></ui-order-form>
-// Saves fulfillment changes through the API without a page reload. The plain
-// form post still works without JavaScript.
+// Saves fulfillment changes through the API, then reloads server-rendered state
+// so summaries, filters and available controls reflect the committed result.
+// The plain form post still works without JavaScript.
 export class UIOrderForm extends HTMLElement {
   connectedCallback() {
     this.form = this.querySelector("form");
@@ -86,23 +87,28 @@ export class UIOrderForm extends HTMLElement {
 
   async submit(event) {
     event.preventDefault();
+    if (this.pending) return;
     const data = Object.fromEntries(new FormData(this.form));
     const scope = this.getAttribute("scope") === "admin" ? "admin" : "partner";
     const body = { partner_status: data.partner_status, delivery_status: data.delivery_status, delivery_notice: data.delivery_notice || "" };
     if (scope === "admin") body.status = data.status;
-    const button = this.form.querySelector('[type="submit"]');
-    if (button) button.disabled = true;
+    const controls = [...this.form.elements].map((control) => ({ control, disabled: control.disabled }));
+    this.pending = true;
+    this.form.setAttribute("aria-busy", "true");
+    controls.forEach(({ control }) => { control.disabled = true; });
+    let saved = false;
     try {
       await api(`/${scope}/orders/${this.getAttribute("order-id")}`, { method: "PATCH", body });
-      toast(`Order #${this.getAttribute("order-id")} updated`, "success");
-      this.closest("[data-order]")?.querySelectorAll("[data-badge]").forEach((badge) => {
-        const value = body[badge.dataset.badge];
-        if (value) badge.textContent = value;
-      });
+      saved = true;
+      location.reload();
     } catch (error) {
       toast(error.status === 409 ? "That status change is not allowed" : error.message, "error");
     } finally {
-      if (button) button.disabled = false;
+      if (!saved) {
+        this.pending = false;
+        this.form.setAttribute("aria-busy", "false");
+        controls.forEach(({ control, disabled }) => { control.disabled = disabled; });
+      }
     }
   }
 }
