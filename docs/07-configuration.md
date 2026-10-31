@@ -57,13 +57,20 @@ SMTP or host settings.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `PASSWORD_RESET_BASE_URL` | empty (use request host) | Absolute `http(s)` origin with no path, query, or credentials. Production requires HTTPS and a host from `ALLOWED_HOSTS`. |
-| `SMTP_HOST`, `SMTP_FROM` | empty | Set together. Required in production. |
+| `PASSWORD_RESET_BASE_URL` | empty (use request host) | Absolute `http(s)` origin with no path, query, or credentials. Production requires HTTPS and a host from `ALLOWED_HOSTS`, unless password reset is disabled. |
+| `PASSWORD_RESET_DISABLED` | `false` | Hides reset links and returns 404 from reset endpoints. Production can omit the reset URL and SMTP when enabled; signed-in password changes still work. |
+| `SMTP_HOST`, `SMTP_FROM` | empty | Set together. Required in production when password reset is enabled. |
 | `SMTP_PORT` | `587` | |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | empty | Set together; authenticated SMTP requires STARTTLS in every environment. |
 
 When neither `SMTP_HOST` nor `SMTP_FROM` is set, no email is sent. Outside
 production the reset link is shown on the page instead.
+
+## Demo mode
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `DEMO_MODE` | `false` | Shows a notice that listings are sample content and blocks order and payment flows. |
 
 ## Online payments
 
@@ -95,9 +102,10 @@ With `ENV=production`, `serve` refuses to start unless:
 
 - `DATABASE_URL` is set explicitly;
 - `ALLOWED_HOSTS` is non-empty;
-- `PASSWORD_RESET_BASE_URL` is set, uses HTTPS, and names an allowed host;
-- `SMTP_HOST` and `SMTP_FROM` are set (and the server supports STARTTLS when
-  a mail is actually sent);
+- unless `PASSWORD_RESET_DISABLED=true`, `PASSWORD_RESET_BASE_URL` is set,
+  uses HTTPS, and names an allowed host;
+- unless password reset is disabled, `SMTP_HOST` and `SMTP_FROM` are set (and
+  the server supports STARTTLS when a mail is actually sent);
 - `ADMIN_SETUP_TOKEN`, if set, is at least 32 bytes;
 - every embedded migration has been applied and the database has no unknown
   versions.
