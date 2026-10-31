@@ -10,7 +10,7 @@
   {{ template "notice" dict "Kind" "success" "Text" .Message }}
   {{ template "notice" dict "Kind" "danger" "Text" .Error }}
   {{ if .Products }}
-  <ui-table-filter for="partner-products-table" placeholder="Filter products"></ui-table-filter>
+  <ui-table-filter for="partner-products-table" placeholder="Filter this page"></ui-table-filter>
   <div class="table-wrap">
     <table class="table" id="partner-products-table">
       <thead><tr><th>Product</th><th>Category</th><th class="num">Price</th><th class="num">Stock</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
@@ -27,6 +27,7 @@
       </tbody>
     </table>
   </div>
+  {{ template "pager" .Pager }}
   {{ else }}
   {{ template "empty" dict "Icon" "box" "Text" "No products yet." "Href" "/products/new" "Action" "Add product" }}
   {{ end }}

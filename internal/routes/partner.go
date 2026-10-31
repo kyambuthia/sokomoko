@@ -44,6 +44,7 @@ type PartnerProductsData struct {
 	CSRFToken  string
 	StoreName  string
 	Products   []partnersvc.Product
+	Pager      Pager
 	Message    string
 	Error      string
 	Categories []partnersvc.Category
@@ -179,11 +180,14 @@ func PartnerDashboard(a *app.App) http.HandlerFunc {
 	}
 }
 
+const partnerProductsPageSize = 50
+
 func PartnerProducts(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		view, err := svc.ProductsForActor(r.Context(), partnerActorFromContext(r))
+		requestedPage := pageParam(r)
+		view, total, err := svc.ProductsPageForActor(r.Context(), partnerActorFromContext(r), requestedPage, partnerProductsPageSize)
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
@@ -193,7 +197,20 @@ func PartnerProducts(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		if total == 0 && requestedPage > 1 {
+			http.Redirect(w, r, pageHref(r, 1), http.StatusSeeOther)
+			return
+		}
+		if redirectPastLastPage(w, r, requestedPage, partnerProductsPageSize, total) {
+			return
+		}
+		if requestedPage > 1000 {
+			http.Redirect(w, r, pageHref(r, 1000), http.StatusSeeOther)
+			return
+		}
+
 		page := partnerProductsPage(view)
+		page.Pager = newPager(r, requestedPage, partnerProductsPageSize, total)
 		page.Role, _ = partnerIdentity(r)
 		page.CSRFToken = a.Auth.CSRFToken(r)
 		if flash := popFlash(w, r); flash.Message != "" {

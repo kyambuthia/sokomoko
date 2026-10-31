@@ -247,11 +247,22 @@ func (s *Service) partnerIDForActor(ctx context.Context, actor *Actor) (int, err
 }
 
 func (s *Service) ProductsForActor(ctx context.Context, actor *Actor) (ProductsData, error) {
-	data, _, err := s.productsForActor(ctx, actor, 0, 0)
+	data, _, err := s.ProductsPageForActor(ctx, actor, 1, 50)
 	return data, err
 }
 
 func (s *Service) ProductsPageForActor(ctx context.Context, actor *Actor, page, limit int) (ProductsData, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if page > 1000 {
+		page = 1000
+	}
+	if limit < 1 {
+		limit = 50
+	} else if limit > 50 {
+		limit = 50
+	}
 	return s.productsForActor(ctx, actor, limit, (page-1)*limit)
 }
 
