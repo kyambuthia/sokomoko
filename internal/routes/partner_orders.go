@@ -10,11 +10,14 @@ import (
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 )
 
+const partnerOrdersPageSize = 20
+
 type PartnerOrdersPageData struct {
 	Role            string
 	Title           string
 	CSRFToken       string
 	Orders          []partnersvc.Order
+	Pager           Pager
 	Message         string
 	Error           string
 	Filter          string
@@ -30,6 +33,7 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := PartnerOrdersPageData{Title: "Partner Orders"}
+		requestedPage := pageParam(r)
 		responseStatus := http.StatusOK
 
 		if r.Method == http.MethodPost {
@@ -57,11 +61,7 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 				data.Error = "Unable to update order"
 				responseStatus = http.StatusInternalServerError
 			default:
-				target := "/orders"
-				if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-					target += "?status=" + urlQueryEscape(status)
-				}
-				redirectWithFlash(w, r, target, "success", "Order fulfillment updated")
+				redirectWithFlash(w, r, pageHref(r, requestedPage), "success", "Order fulfillment updated")
 				return
 			}
 		} else if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -73,12 +73,24 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		view, err := svc.OrdersForActor(r.Context(), partnerActorFromContext(r), strings.TrimSpace(r.URL.Query().Get("status")))
+		view, total, err := svc.OrdersPageForActor(
+			r.Context(),
+			partnerActorFromContext(r),
+			strings.TrimSpace(r.URL.Query().Get("status")),
+			requestedPage,
+			partnerOrdersPageSize,
+		)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
+			redirectPastLastPage(w, r, requestedPage, partnerOrdersPageSize, total) {
+			return
+		}
+		displayPage := min(requestedPage, pageCount(partnerOrdersPageSize, total))
 		page := partnerOrdersPage(view)
+		page.Pager = newPager(r, displayPage, partnerOrdersPageSize, total)
 		page.Role, _ = partnerIdentity(r)
 		page.Message = data.Message
 		page.Error = data.Error

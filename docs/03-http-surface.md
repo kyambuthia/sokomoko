@@ -126,7 +126,7 @@ address as a draft and re-renders the form with `422`.
 | `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` |
 | `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` |
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
-| `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (`status` filter; POST updates fulfillment) |
+| `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (20 per page, `status` filter; updates keep the current page) |
 
 Seller-only service pages on the partner host are `GET /services`,
 `GET|POST /services/new`, `GET|POST /services/<id>/edit` and

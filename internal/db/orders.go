@@ -422,6 +422,14 @@ func fulfillmentPredicate(partnerID int) string {
 func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, status string, limit, offset int) ([]Order, int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	if limit < 1 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	predicate := fulfillmentPredicate(partnerID)
 	args := []any{}
 	if partnerID > 0 {
@@ -440,6 +448,13 @@ func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, st
 	var total int
 	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders o WHERE "+predicate, args...).Scan(&total); err != nil {
 		return nil, 0, err
+	}
+	if total == 0 {
+		return []Order{}, 0, nil
+	}
+	lastOffset := ((total - 1) / limit) * limit
+	if offset > lastOffset {
+		offset = lastOffset
 	}
 	limitArg := fmt.Sprintf("$%d", len(args)+1)
 	offsetArg := fmt.Sprintf("$%d", len(args)+2)

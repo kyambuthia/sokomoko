@@ -65,5 +65,6 @@
   {{ else }}
   {{ template "empty" dict "Icon" "orders" "Text" "No orders here." }}
   {{ end }}
+  {{ template "pager" .Pager }}
 </div>
 {{ end }}
