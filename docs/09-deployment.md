@@ -179,9 +179,10 @@ container. `seed` and `serve --seed` are refused in production.
   path, host, status, duration, and request ID, plus startup, maintenance, and
   error lines.
 - Every response has `X-Request-Id`; error pages show it.
-- There is no metrics endpoint or tracing. Watch 5xx rate, latency, readiness
-  failures, database connections, disk, backup age, and SMTP send errors from
-  the platform side.
+- An optional bearer-authenticated `/metrics` endpoint exposes Prometheus HTTP
+  and Go runtime metrics when `METRICS_TOKEN` is configured. There is no
+  distributed tracing. Watch 5xx rate, latency, readiness failures, database
+  connections, disk, backup age, and SMTP send errors from the platform side.
 
 ## Scaling
 
