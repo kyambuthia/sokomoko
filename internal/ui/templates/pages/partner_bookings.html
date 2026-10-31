@@ -16,7 +16,7 @@
     <li class="card stack-sm">
       <div class="row-between">
         <strong>{{ .Booking.ServiceTitle }}</strong>
-        <span class="badge">{{ .Booking.Status }}</span>
+        <span class="badge">{{ .StatusLabel }}</span>
       </div>
       <p>{{ .LocalStart }} · {{ .Booking.Timezone }}</p>
       <p class="small muted">{{ .Booking.ServiceArea }} · {{ if eq .Booking.DeliveryMode "premises" }}At the business{{ else if eq .Booking.DeliveryMode "mobile" }}Provider travels to customer{{ else }}Remote{{ end }}</p>
@@ -38,6 +38,26 @@
         </form>
       </div>
       {{ else if eq .Booking.Status "confirmed" }}
+      {{ if .CanStart }}
+      <div class="row">
+        <form method="POST" action="/service-bookings/{{ .Booking.ID }}/status">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="version" value="{{ .Booking.Version }}">
+          <input type="hidden" name="action" value="start">
+          <button class="btn btn-sm" type="submit">Start appointment</button>
+        </form>
+        {{ if .CanMarkNoShow }}
+        <ui-confirm title="Mark customer as a no-show?" message="This releases the reserved time and records the appointment as missed." confirm-label="Mark no-show" cancel-label="Keep appointment">
+          <form method="POST" action="/service-bookings/{{ .Booking.ID }}/status">
+            <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+            <input type="hidden" name="version" value="{{ .Booking.Version }}">
+            <input type="hidden" name="action" value="no_show">
+            <button class="btn btn-secondary btn-sm" type="submit">Mark no-show</button>
+          </form>
+        </ui-confirm>
+        {{ end }}
+      </div>
+      {{ else if .CanCancel }}
       <ui-confirm title="Cancel confirmed appointment?" message="The customer will no longer have this appointment." confirm-label="Cancel appointment" cancel-label="Keep appointment">
         <form method="POST" action="/service-bookings/{{ .Booking.ID }}/status">
           <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
@@ -46,6 +66,20 @@
           <button class="btn btn-secondary btn-sm" type="submit">Cancel appointment</button>
         </form>
       </ui-confirm>
+      {{ else }}
+      <p class="small muted">The appointment is scheduled for a later time.</p>
+      {{ end }}
+      {{ else if eq .Booking.Status "in_progress" }}
+      {{ if .CanComplete }}
+      <form method="POST" action="/service-bookings/{{ .Booking.ID }}/status">
+        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+        <input type="hidden" name="version" value="{{ .Booking.Version }}">
+        <input type="hidden" name="action" value="complete">
+        <button class="btn btn-sm" type="submit">Mark complete</button>
+      </form>
+      {{ else }}
+      <p class="small muted">Appointment in progress.</p>
+      {{ end }}
       {{ end }}
     </li>
     {{ end }}

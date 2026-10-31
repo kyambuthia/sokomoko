@@ -205,6 +205,12 @@ func (s *Service) Respond(ctx context.Context, actor *Actor, bookingID int, expe
 		status = "rejected"
 	case "cancel":
 		status = "cancelled"
+	case "start":
+		status = "in_progress"
+	case "complete":
+		status = "completed"
+	case "no_show":
+		status = "no_show"
 	default:
 		return ErrInvalid
 	}

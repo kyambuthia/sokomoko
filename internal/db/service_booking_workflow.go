@@ -135,7 +135,8 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 	if role == RoleUser && newStatus != "cancelled" {
 		return ErrServiceBookingForbidden
 	}
-	if role == RolePartner && newStatus != "confirmed" && newStatus != "rejected" && newStatus != "cancelled" {
+	if role == RolePartner && newStatus != "confirmed" && newStatus != "rejected" && newStatus != "cancelled" &&
+		newStatus != "in_progress" && newStatus != "completed" && newStatus != "no_show" {
 		return ErrServiceBookingForbidden
 	}
 
@@ -193,6 +194,7 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 			version        int64
 			responseIsOpen bool
 			startsInFuture bool
+			endsInPast     bool
 		}
 		query := `SELECT status,version FROM service_bookings WHERE id=$1`
 		args := []any{bookingID}
@@ -212,10 +214,10 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 			return err
 		}
 		err = tx.QueryRowContext(ctx,
-			`SELECT response_deadline > clock_timestamp(),starts_at > clock_timestamp()
+			`SELECT response_deadline > clock_timestamp(),starts_at > clock_timestamp(),ends_at <= clock_timestamp()
 			 FROM service_bookings WHERE id=$1`,
 			bookingID,
-		).Scan(&current.responseIsOpen, &current.startsInFuture)
+		).Scan(&current.responseIsOpen, &current.startsInFuture, &current.endsInPast)
 		if err != nil {
 			return err
 		}
@@ -238,6 +240,12 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 			if !current.responseIsOpen {
 				return ErrServiceBookingResponseExpired
 			}
+			allowed = true
+		case role == RolePartner && newStatus == "in_progress" && current.status == "confirmed" && !current.startsInFuture && !current.endsInPast:
+			allowed = true
+		case role == RolePartner && newStatus == "completed" && current.status == "in_progress" && current.endsInPast:
+			allowed = true
+		case role == RolePartner && newStatus == "no_show" && current.status == "confirmed" && current.endsInPast:
 			allowed = true
 		case role == RolePartner && newStatus == "cancelled" && current.status == "confirmed" && current.startsInFuture:
 			allowed = true

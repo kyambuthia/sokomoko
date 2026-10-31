@@ -1,9 +1,10 @@
 # Services and local discovery
 
-Status: service listings, public discovery, weekly hours and the first request-to-book
-flow are implemented with migrations 10, 26 and 27. Customers can request and cancel
-appointments; partners can confirm or decline them. Maps and completion/no-show
-operations remain future work. Demo mode disables appointment requests and payments.
+Status: service listings, public discovery, weekly hours and the initial
+request-to-book lifecycle are implemented with migrations 10, 26 and 27.
+Customers can request and cancel appointments; partners can respond, start,
+complete and record no-shows. Maps remain future work. Demo mode disables
+appointment requests and payments.
 
 ## Product model
 
@@ -35,18 +36,19 @@ Use these records:
 
 Start with one resource per booking and capacity one. Use UTC timestamps plus
 an IANA timezone for business rules and presentation. Enforce non-overlapping
-requested and confirmed bookings at the database level with a time-range
+requested, confirmed and in-progress bookings at the database level with a time-range
 exclusion constraint. Check the selected time against the listing's weekly
 hours under a listing lock, snapshot the price, and make requests idempotent.
 A cleanup worker expires unanswered requests through explicit state changes;
 a new request also clears only overdue requests blocking its selected interval.
 
-The implemented request flow uses requested, confirmed, rejected, cancelled
-and expired states. Customers can cancel their own future requests or confirmed
-appointments; partners can confirm or decline requests and cancel a confirmed
-appointment. In-progress, completed and no-show actions, deposits, refunds and
-payment capture remain future work. Service completion should not reuse
-parcel/courier delivery statuses.
+The implemented request flow uses requested, confirmed, rejected, cancelled,
+expired, in-progress, completed and no-show states. Customers can cancel their
+own future requests or confirmed appointments; partners can confirm or decline
+requests, cancel future confirmed appointments, start them at their scheduled
+time, mark them complete after the scheduled end, or record a no-show after the
+scheduled end. Deposits, refunds and payment capture remain future work.
+Service completion should not reuse parcel/courier delivery statuses.
 
 ## Discovery and maps
 
@@ -122,9 +124,9 @@ abuse without exposing their home address.
    discovery and contextual encrypted enquiries. All demo data stays labelled.
 2. Add the optional map with a selected provider, attribution, privacy controls
    and bounded geographic search. Verify on keyboard, mobile and slow networks.
-3. Request-to-book, seller responses, customer cancellation and resource conflict
-   prevention are implemented. Add lifecycle completion/no-show actions and
-   stronger automated coverage before expanding capacity.
+3. Request-to-book, seller responses, customer cancellation, provider lifecycle
+   actions and resource conflict prevention are implemented. Add stronger
+   automated coverage before expanding capacity.
 4. Only then consider instant booking, deposits/refunds, recurring appointments,
    multi-resource capacity and live travel estimates. Rider live tracking is a
    separate, consent-bound feature with its own retention policy.
@@ -242,29 +244,30 @@ payments.
 The HTML storefront accepts requests at `POST /services/{slug}/bookings` for
 signed-in customer accounts. The form sends `starts_at_local` in the listing's
 IANA timezone, the listing version shown to the customer, a CSRF token, and a
-one-use idempotency key. Nonexistent and ambiguous daylight-saving start times are rejected. A
-service interval cannot cross a timezone offset change. Under a transaction, the
-database rechecks the listing version, publication state, full duration against
+random idempotency key. Nonexistent and ambiguous daylight-saving start
+times are rejected. A service interval cannot cross a timezone offset change.
+Under a transaction, the database rechecks the listing version, publication state, full duration against
 weekly hours, and resource conflicts before storing an immutable service, price
 and time snapshot.
 
 A request starts in `requested`. The provider response deadline is the earlier
 of 24 hours after the request and the requested appointment start. A replay with
 the same idempotency key and payload returns the original request. Reusing the
-key with a different payload is rejected. The database blocks overlapping
-requested and confirmed intervals for the default capacity-one resource.
+key with a different payload is rejected. The database blocks overlapping requested, confirmed and in-progress intervals
+for the default capacity-one resource.
 
 Customers see their recent requests on `/account` and can cancel a future
 requested or confirmed appointment with `POST /account/bookings/{id}/cancel`.
 Partners use `GET /service-bookings` to review their shop's queue and
-`POST /service-bookings/{id}/status` with `action=confirm|reject|cancel` and
-the current version. Partner membership and booking ownership are checked in the
-database transaction. A minute-level maintenance job expires requests after
+`POST /service-bookings/{id}/status` with
+`action=confirm|reject|cancel|start|complete|no_show` and the current
+version. Partner membership and booking ownership are checked in the database
+transaction. A minute-level maintenance job expires requests after
 their response deadline and records a system event. No deposit or payment is
 collected for a service request.
 
-There is not yet a JSON booking endpoint, a customer-selected resource, a
-generated availability calendar, or a completion/no-show action.
+There is not yet a JSON booking endpoint, a customer-selected resource, or a
+generated availability calendar.
 
 ### Demo content
 

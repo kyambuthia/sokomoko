@@ -30,7 +30,7 @@
       <li class="card stack-sm">
         <div class="row-between">
           <strong>{{ .Booking.ServiceTitle }}</strong>
-          <span class="badge">{{ .Booking.Status }}</span>
+          <span class="badge">{{ .StatusLabel }}</span>
         </div>
         <p class="small">{{ .LocalStart }} · {{ .Booking.Timezone }}</p>
         <p class="small">
@@ -40,7 +40,7 @@
         {{ if eq .Booking.Status "requested" }}<p class="small muted">Waiting for provider response by {{ .LocalDeadline }}.</p>{{ end }}
         {{ if eq .Booking.Status "confirmed" }}<p class="small muted">The provider confirmed this appointment.</p>{{ end }}
         {{ if .CanCancel }}
-        <ui-confirm title="Cancel appointment request?" message="This will release the requested time and cannot be undone." confirm-label="Cancel appointment" cancel-label="Keep appointment">
+        <ui-confirm title="Cancel appointment?" message="This will release the requested time and cannot be undone." confirm-label="Cancel appointment" cancel-label="Keep appointment">
           <form method="POST" action="/account/bookings/{{ .Booking.ID }}/cancel">
             {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
             <input type="hidden" name="version" value="{{ .Booking.Version }}">

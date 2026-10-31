@@ -30,6 +30,7 @@ type AccountPageData struct {
 
 type AccountBookingView struct {
 	Booking       db.ServiceBooking
+	StatusLabel   string
 	LocalStart    string
 	LocalDeadline string
 	CanCancel     bool
@@ -41,7 +42,8 @@ func accountBookingView(booking db.ServiceBooking) AccountBookingView {
 		loc = time.UTC
 	}
 	return AccountBookingView{
-		Booking: booking, LocalStart: booking.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
+		Booking: booking, StatusLabel: bookingStatusLabel(booking.Status),
+		LocalStart:    booking.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
 		LocalDeadline: booking.ResponseDeadline.In(loc).Format("Mon 2 Jan 2006, 15:04 MST"),
 		CanCancel:     (booking.Status == "requested" || booking.Status == "confirmed") && booking.StartsAt.After(time.Now()),
 	}

@@ -134,7 +134,7 @@ address as a draft and re-renders the form with `422`.
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (20 per page, `status` filter; updates keep the current page) |
 | `/service-bookings` | GET | partner | `PartnerServiceBookings` (20 per page; active shop membership scope) |
-| `/service-bookings/<id>/status` | POST | partner | `PartnerServiceBookingAction` (confirm, reject or cancel with the current version) |
+| `/service-bookings/<id>/status` | POST | partner | `PartnerServiceBookingAction` (confirm, reject, cancel, start, complete or mark no-show with the current version) |
 
 Seller-only service pages on the partner host are `GET /services`,
 `GET|POST /services/new`, `GET|POST /services/<id>/edit` and
