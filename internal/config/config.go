@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/mail"
 	"net/url"
@@ -202,6 +203,9 @@ func (c Config) Validate() error {
 	}
 	if c.PostRateLimitMax > 0 && c.PostRateLimitWindow <= 0 {
 		problems = append(problems, "POST_RATE_LIMIT_WINDOW_SECONDS must be positive when rate limiting is enabled")
+	}
+	if uint64(c.AuthAbuseMaxFailures) > math.MaxInt32 {
+		problems = append(problems, fmt.Sprintf("AUTH_ABUSE_MAX_FAILURES must not exceed %d", math.MaxInt32))
 	}
 	if c.AuthAbuseMaxFailures > 0 && (c.AuthAbuseBackoffBase <= 0 || c.AuthAbuseBackoffMax < c.AuthAbuseBackoffBase) {
 		problems = append(problems, "AUTH_ABUSE backoff must be positive with max >= base")
