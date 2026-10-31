@@ -3,10 +3,9 @@ import { api, toast } from "./core.js";
 const STEPS = ["Placed", "Accepted", "Shipped", "Delivered"];
 
 function stepFor(status, partnerStatus, deliveryStatus) {
-  if (status === "delivered") return 3;
-  if (deliveryStatus === "delivered" || partnerStatus === "completed") return 3;
-  if (deliveryStatus === "shipped" || partnerStatus === "dispatched") return 2;
-  if (partnerStatus === "accepted" || partnerStatus === "packing" || deliveryStatus === "processing") return 1;
+  if (status === "delivered" || deliveryStatus === "delivered" || partnerStatus === "completed") return 3;
+  if (status === "shipped" || deliveryStatus === "shipped" || partnerStatus === "dispatched") return 2;
+  if (status === "processing" || partnerStatus === "accepted" || partnerStatus === "packing" || deliveryStatus === "processing") return 1;
   return 0;
 }
 
@@ -31,8 +30,12 @@ export class UIOrderProgress extends HTMLElement {
     this.generation = (this.generation || 0) + 1;
   }
 
+  cancelled() {
+    return this.getAttribute("status") === "cancelled" || this.getAttribute("partner-status") === "cancelled";
+  }
+
   terminal() {
-    return this.getAttribute("status") === "cancelled" || stepFor(this.getAttribute("status"), this.getAttribute("partner-status"), this.getAttribute("delivery-status")) === 3;
+    return this.cancelled() || stepFor(this.getAttribute("status"), this.getAttribute("partner-status"), this.getAttribute("delivery-status")) === 3;
   }
 
   async refresh() {
@@ -57,7 +60,7 @@ export class UIOrderProgress extends HTMLElement {
   }
 
   render() {
-    const cancelled = this.getAttribute("status") === "cancelled";
+    const cancelled = this.cancelled();
     const current = stepFor(this.getAttribute("status"), this.getAttribute("partner-status"), this.getAttribute("delivery-status"));
     const list = document.createElement("ol");
     list.className = "progress";
