@@ -254,6 +254,11 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 		}
 
 		imageUpload, imageErr := parseProductImageUpload(w, r)
+		if errors.Is(imageErr, errProductImageBusy) {
+			data.Error = productImageBusyMessage
+			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusServiceUnavailable, data)
+			return
+		}
 		input := partnersvc.CreateProductInput{
 			Name:        r.FormValue("name"),
 			Description: r.FormValue("description"),
@@ -354,6 +359,11 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		}
 
 		imageUpload, imageErr := parseProductImageUpload(w, r)
+		if errors.Is(imageErr, errProductImageBusy) {
+			data.Error = productImageBusyMessage
+			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusServiceUnavailable, data)
+			return
+		}
 		input := partnersvc.ProductInput{
 			Name:        r.FormValue("name"),
 			Description: r.FormValue("description"),

@@ -21,12 +21,18 @@ const (
 	maxProductImageRequestBytes = app.MaxRequestBodyBytes
 	maxProductImageDimension    = 2048
 	maxProductImagePixels       = 4_000_000
+	productImageUploadSlots     = 64
 	productImageDecodeSlots     = 2
 )
 
 const invalidProductImageMessage = "Use a JPEG or PNG under 900 KB and no larger than 2048 × 2048 pixels; optimized images must be under 256 KB."
+const productImageBusyMessage = "Image uploads are busy. Try again shortly."
 
-var productImageDecodeSemaphore = make(chan struct{}, productImageDecodeSlots)
+var (
+	errProductImageBusy         = errors.New("product image upload capacity reached")
+	productImageUploadSemaphore = make(chan struct{}, productImageUploadSlots)
+	productImageDecodeSemaphore = make(chan struct{}, productImageDecodeSlots)
+)
 
 func parseProductImageUpload(w http.ResponseWriter, r *http.Request) (*partnersvc.ProductImageUpload, error) {
 	if r.Body != nil {
@@ -42,6 +48,15 @@ func parseProductImageUpload(w http.ResponseWriter, r *http.Request) (*partnersv
 	}
 	if !strings.EqualFold(contentType, "multipart/form-data") {
 		return nil, nil
+	}
+	// Bound concurrent multipart bodies and temporary files per process. The
+	// smaller decode semaphore separately limits image memory and CPU.
+	select {
+	case productImageUploadSemaphore <- struct{}{}:
+		defer func() { <-productImageUploadSemaphore }()
+	default:
+		w.Header().Set("Retry-After", "1")
+		return nil, errProductImageBusy
 	}
 	if err := r.ParseMultipartForm(32 << 10); err != nil {
 		if r.MultipartForm != nil {
