@@ -17,6 +17,32 @@ findings below; no advisory ignore list or success override is configured.
 | `libcrux-kem` 0.0.9, RUSTSEC-2026-0330 and RUSTSEC-2026-0331 | Present in the complete lockfile; absent from `cargo tree --locked -i libcrux-kem` with this application's enabled features. | Resolve the optional dependency graph to a patched version (0.0.10 or later), or an upstream release that removes it. Do not enable it while affected. |
 | `proc-macro-error2` 2.0.1, RUSTSEC-2026-0173 | Unmaintained dependency warning in the lockfile. | Review the upstream replacement path alongside provider updates. |
 
+## Target-specific follow-up (2026-10-31 UTC)
+
+A fresh `cargo-audit 0.22.2` scan loaded 1,395 advisories and reported the
+three Rust findings above. It could not complete some crates.io yanked-version
+checks because requests timed out, so that part of the audit remains incomplete.
+The [crypto-bigint advisory](https://rustsec.org/advisories/RUSTSEC-2026-0387.html)
+lists 0.7.6 as the patched floor; the two
+[libcrux-kem advisories](https://rustsec.org/advisories/RUSTSEC-2026-0330.html)
+and [short-key advisory](https://rustsec.org/advisories/RUSTSEC-2026-0331.html)
+list 0.0.10.
+
+The locked WASM-target graph confirms `crypto-bigint 0.5.5` is compiled through
+`p256`/`p384` in both `openmls_rust_crypto 0.6.0` and
+`openmls_basic_credential 0.6.0`. Those pinned crates declare the curve
+dependencies without feature gates. Switching only to OpenMLS' Libcrux provider
+would leave the basic-credential path in place, so there is no safe
+dependency-only upgrade in the current OpenMLS release train. Keep the
+single-suite validation below as a mitigation, not as resolution of the
+advisory.
+
+`libcrux-kem 0.0.9` remains in the lockfile but is absent from the compiled
+WASM-target tree. The locked `hpke-rs-libcrux 0.7.0` manifest pins it exactly
+to 0.0.9; resolving that optional finding needs an upstream dependency update.
+Do not enable the Libcrux provider until the patched KEM version is available
+through a compatible upstream release.
+
 `make vuln` found no reachable Go vulnerabilities. Its verbose report identified
 [GO-2026-5932](https://pkg.go.dev/vuln/GO-2026-5932), concerning unmaintained
 `golang.org/x/crypto/openpgp`, in the required `golang.org/x/crypto` module. This
