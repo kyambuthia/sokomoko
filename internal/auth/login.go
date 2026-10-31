@@ -105,7 +105,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		methodNotAllowed(w, http.MethodGet, http.MethodHead, http.MethodPost)
 		return
 	}
 

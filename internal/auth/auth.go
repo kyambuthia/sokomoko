@@ -139,6 +139,11 @@ func isTransientDBErr(err error) bool {
 	return db.IsTransientError(err)
 }
 
+func methodNotAllowed(w http.ResponseWriter, allowedMethods ...string) {
+	w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
 func mapAccountCreationError(err error, conflictMessage string) (int, string) {
 	if isUniqueConstraintErr(err) {
 		return http.StatusConflict, conflictMessage

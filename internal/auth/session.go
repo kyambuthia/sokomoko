@@ -93,7 +93,7 @@ func (s *Service) setSessionCookie(w http.ResponseWriter, r *http.Request, sessi
 func (s *Service) Logout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodPost)
 			return
 		}
 		s.revokeRequestSessions(context.WithoutCancel(r.Context()), r, "logout: revoke session")

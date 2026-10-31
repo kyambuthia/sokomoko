@@ -50,7 +50,7 @@ func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
 
@@ -110,7 +110,7 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
 
@@ -162,7 +162,7 @@ func (s *Service) CourierSignUp(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
 

@@ -121,7 +121,7 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
 

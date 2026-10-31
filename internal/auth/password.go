@@ -135,7 +135,7 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 			return
 		}
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet, http.MethodHead, http.MethodPost)
 			return
 		}
 		identifier := strconv.Itoa(user.ID)

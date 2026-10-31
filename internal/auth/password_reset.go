@@ -118,7 +118,7 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 			return
 		}
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
 
@@ -230,7 +230,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 		}
 
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			methodNotAllowed(w, http.MethodGet, http.MethodPost)
 			return
 		}
 
