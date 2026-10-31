@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
 	"strings"
 )
 
@@ -176,27 +177,47 @@ func (s *Store) AssignCourierToOrder(ctx context.Context, orderID, courierUserID
 		if currentOrder.Status != OrderStatusShipped || currentOrder.DeliveryStatus == "delivered" {
 			return ErrDeliveryNotReady
 		}
-		var dispatchActorID int
-		err = tx.QueryRowContext(ctx,
-			`SELECT id FROM users
-			 WHERE id = $1 AND deleted_at IS NULL AND role IN ($2, $3)
-			 FOR SHARE`, actorUserID, RoleAdmin, RoleStaff,
-		).Scan(&dispatchActorID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrCourierDispatchForbidden
-		}
-		if err != nil {
-			return err
-		}
-		var role string
-		err = tx.QueryRowContext(ctx,
-			`SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, courierUserID,
-		).Scan(&role)
-		if errors.Is(err, sql.ErrNoRows) || (err == nil && role != RoleCourier) {
+		if actorUserID == courierUserID {
+			var role string
+			err := tx.QueryRowContext(ctx,
+				`SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR SHARE`, actorUserID,
+			).Scan(&role)
+			if errors.Is(err, sql.ErrNoRows) || (err == nil && role != RoleAdmin && role != RoleStaff) {
+				return ErrCourierDispatchForbidden
+			}
+			if err != nil {
+				return err
+			}
 			return ErrCourierUserNotFound
 		}
-		if err != nil {
-			return err
+
+		// Dispatch actor and courier rows must be acquired by ID order. Different
+		// order locks do not serialize dispatches that use each other as actors
+		// and couriers, so fixed user-row order prevents a cross-dispatch cycle.
+		userIDs := []int{actorUserID, courierUserID}
+		sort.Ints(userIDs)
+		for _, userID := range userIDs {
+			var role string
+			query := `SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR SHARE`
+			if userID == courierUserID {
+				query = `SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`
+			}
+			err := tx.QueryRowContext(ctx, query, userID).Scan(&role)
+			if errors.Is(err, sql.ErrNoRows) {
+				if userID == actorUserID {
+					return ErrCourierDispatchForbidden
+				}
+				return ErrCourierUserNotFound
+			}
+			if err != nil {
+				return err
+			}
+			if userID == actorUserID && role != RoleAdmin && role != RoleStaff {
+				return ErrCourierDispatchForbidden
+			}
+			if userID == courierUserID && role != RoleCourier {
+				return ErrCourierUserNotFound
+			}
 		}
 
 		var deliveryID int
