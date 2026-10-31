@@ -247,8 +247,47 @@ func (s *Service) partnerIDForActor(ctx context.Context, actor *Actor) (int, err
 }
 
 func (s *Service) ProductsForActor(ctx context.Context, actor *Actor) (ProductsData, error) {
-	data, _, err := s.ProductsPageForActor(ctx, actor, 1, 50)
+	data, _, err := s.productsForActor(ctx, actor, 0, 0)
 	return data, err
+}
+
+// ProductOptionsForActor loads the shared form options without reading the catalog.
+func (s *Service) ProductOptionsForActor(ctx context.Context, actor *Actor) (ProductsData, error) {
+	if !canUseWorkspace(actor) {
+		return ProductsData{}, ErrForbiddenWorkspace
+	}
+	settings, err := s.requireStoreSettings(ctx)
+	if err != nil {
+		return ProductsData{}, err
+	}
+	data := ProductsData{Settings: *settings}
+	partnerID := 0
+	if actorIsPartner(actor) {
+		partnerID, err = s.partnerIDForActor(ctx, actor)
+		if err != nil {
+			return ProductsData{}, err
+		}
+		if partnerID == 0 {
+			return data, nil
+		}
+	}
+	categories, err := s.store.GetAllCategories(ctx)
+	if err != nil {
+		return ProductsData{}, err
+	}
+	partners, err := s.store.ListPartners(ctx)
+	if err != nil {
+		return ProductsData{}, err
+	}
+	for _, category := range categories {
+		data.Categories = append(data.Categories, Category{ID: category.ID, Name: category.Name})
+	}
+	for _, partner := range partners {
+		if partner.Status == "active" && (!actorIsPartner(actor) || partner.ID == partnerID) {
+			data.Partners = append(data.Partners, PartnerOption{ID: partner.ID, Name: partner.Name})
+		}
+	}
+	return data, nil
 }
 
 func (s *Service) ProductsPageForActor(ctx context.Context, actor *Actor, page, limit int) (ProductsData, int, error) {

@@ -228,7 +228,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 	svc := a.Partner
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		view, err := svc.ProductsForActor(r.Context(), partnerActorFromContext(r))
+		view, err := svc.ProductOptionsForActor(r.Context(), partnerActorFromContext(r))
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
@@ -300,7 +300,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		actor := partnerActorFromContext(r)
-		view, err := svc.ProductsForActor(r.Context(), actor)
+		view, err := svc.ProductOptionsForActor(r.Context(), actor)
 		switch {
 		case errors.Is(err, partnersvc.ErrStoreNotConfigured):
 			http.Redirect(w, r, "/setup", http.StatusFound)
