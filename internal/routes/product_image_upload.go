@@ -17,7 +17,7 @@ import (
 
 const (
 	maxProductImageInputBytes   = 900 * 1024
-	maxProductImageRequestBytes = maxProductImageInputBytes + 256*1024
+	maxProductImageRequestBytes = 1 << 20
 	maxProductImageDimension    = 2048
 	maxProductImagePixels       = 4_000_000
 	productImageDecodeSlots     = 2
