@@ -52,6 +52,41 @@ func (s *Store) GetSession(ctx context.Context, id string) (*Session, error) {
 	return sess, nil
 }
 
+// GetActiveUserForSession returns the active user and expiry for a raw
+// session cookie token in one query.
+func (s *Store) GetActiveUserForSession(ctx context.Context, id string) (*User, time.Time, error) {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	user := &User{}
+	var expiresAt time.Time
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT u.id, u.username, u.email, u.password_hash, u.role,
+		        u.created_at, u.updated_at, u.deleted_at, ss.expires_at
+		 FROM sessions ss
+		 JOIN users u ON u.id = ss.user_id
+		 WHERE ss.id = $1 AND ss.expires_at > now() AND u.deleted_at IS NULL`,
+		hashOpaqueToken(id),
+	).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.PasswordHash,
+		&user.Role,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.DeletedAt,
+		&expiresAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, time.Time{}, nil
+	}
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	return user, expiresAt, nil
+}
+
 func (s *Store) DeleteSession(ctx context.Context, id string) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()

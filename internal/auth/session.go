@@ -156,6 +156,20 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
+	if store, ok := s.store.(interface {
+		GetActiveUserForSession(context.Context, string) (*db.User, time.Time, error)
+	}); ok {
+		user, expiresAt, err := store.GetActiveUserForSession(r.Context(), cookie.Value)
+		if err != nil {
+			log.Printf("session lookup failed: %v", err)
+			return nil
+		}
+		if user == nil || !expiresAt.After(time.Now()) {
+			return nil
+		}
+		return user
+	}
+
 	sess, err := s.store.GetSession(r.Context(), cookie.Value)
 	if err != nil {
 		log.Printf("session lookup failed: %v", err)
