@@ -52,17 +52,18 @@ type PartnerProductsData struct {
 }
 
 type PartnerProductNewData struct {
-	Role        string
-	Title       string
-	Message     string
-	Error       string
-	Categories  []partnersvc.Category
-	Partners    []partnersvc.PartnerOption
-	Form        partnersvc.CreateProductInput
-	DefaultName string
-	CSRFToken   string
-	EditID      int  // set when the form edits an existing product
-	RemoveImage bool // redisplay the explicit remove checkbox after a rejected save
+	Role           string
+	Title          string
+	Message        string
+	Error          string
+	Categories     []partnersvc.Category
+	Partners       []partnersvc.PartnerOption
+	Form           partnersvc.CreateProductInput
+	DefaultName    string
+	CSRFToken      string
+	EditID         int  // set when the form edits an existing product
+	CanRemoveImage bool // current primary image is a stored upload
+	RemoveImage    bool // redisplay the explicit remove checkbox after a rejected save
 }
 
 func PartnerRoot(a *app.App) http.HandlerFunc {
@@ -338,6 +339,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		data.Title = "Edit Product"
 		data.EditID = id
 		imageURL := ui.ProductImageURL(current.ImageURL, current.Name, current.Name, "")
+		data.CanRemoveImage = strings.HasPrefix(current.ImageURL, "/media/product-images/")
 		data.Form = partnersvc.CreateProductInput{Name: current.Name, Description: current.Description,
 			Price: current.Price, Stock: current.Stock, CategoryID: current.CategoryID, ImageURL: imageURL}
 		data.DefaultName = current.Name
