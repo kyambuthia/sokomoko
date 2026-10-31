@@ -9,6 +9,7 @@ type Templates struct {
 	ServiceDetail        *template.Template
 	PartnerServices      *template.Template
 	PartnerServiceEdit   *template.Template
+	PartnerBookings      *template.Template
 	Index                *template.Template
 	Search               *template.Template
 	Product              *template.Template
@@ -195,11 +196,16 @@ func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
 	if err != nil {
 		return nil, err
 	}
+	partnerBookingsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_bookings.html")
+	if err != nil {
+		return nil, err
+	}
 	return &Templates{
 		Services:             servicesTmpl,
 		ServiceDetail:        serviceDetailTmpl,
 		PartnerServices:      partnerServicesTmpl,
 		PartnerServiceEdit:   partnerServiceEditTmpl,
+		PartnerBookings:      partnerBookingsTmpl,
 		Index:                indexTmpl,
 		Search:               searchTmpl,
 		Product:              productTmpl,

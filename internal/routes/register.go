@@ -41,6 +41,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/search", public(Search(a)))
 	mux.Handle("/services", public(Services(a, false)))
 	mux.Handle("/services/{slug}", public(ServiceDetail(a)))
+	mux.Handle("/services/{slug}/bookings", withRole(a, db.RoleUser, ServiceBookingRequest(a)))
 	mux.HandleFunc("/api/categories", CategoriesAPI(a))
 
 	mux.HandleFunc("/login", a.Auth.Login(a.Templates.Login))
@@ -55,6 +56,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
 	mux.Handle("/account/orders/{id}/cancel", customer(AccountOrderCancel(a)))
+	mux.Handle("/account/bookings/{id}/cancel", withRole(a, db.RoleUser, AccountBookingCancel(a)))
 	mux.Handle("/account/password", customer(a.Auth.PasswordChange(a.Templates.PasswordChange, "/account/password", "/account")))
 	registerMessaging(a, mux, "storefront", roleUser)
 	if a.DemoMode {
@@ -123,6 +125,8 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/media/product-images/{id}", ProductImage(a))
 	mux.Handle("/products/new", staff(PartnerProductNew(a)))
 	mux.Handle("/services", withRole(a, db.RolePartner, Services(a, true)))
+	mux.Handle("/service-bookings", withRole(a, db.RolePartner, PartnerServiceBookings(a)))
+	mux.Handle("/service-bookings/{id}/status", withRole(a, db.RolePartner, PartnerServiceBookingAction(a)))
 	mux.Handle("/services/new", withRole(a, db.RolePartner, PartnerServiceEdit(a)))
 	mux.Handle("/services/{id}/preview", withRole(a, db.RolePartner, PartnerServicePreview(a)))
 	mux.Handle("/services/{id}/edit", withRole(a, db.RolePartner, PartnerServiceEdit(a)))

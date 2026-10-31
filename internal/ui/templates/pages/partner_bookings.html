@@ -1,0 +1,58 @@
+{{ define "title" }}Appointment Requests · partner · sokomoko{{ end }}
+{{ define "layout" }}{{ template "partner-layout" . }}{{ end }}
+{{ define "main-area" }}
+<div class="stack">
+  <div class="page-head">
+    <div>
+      <h1>Appointment requests</h1>
+      <p class="muted small">Requests hold a time until you respond or the response deadline passes.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/services">Services</a>
+  </div>
+  {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
+  {{ if .Bookings }}
+  <ul class="stack">
+    {{ range .Bookings }}
+    <li class="card stack-sm">
+      <div class="row-between">
+        <strong>{{ .Booking.ServiceTitle }}</strong>
+        <span class="badge">{{ .Booking.Status }}</span>
+      </div>
+      <p>{{ .LocalStart }} · {{ .Booking.Timezone }}</p>
+      <p class="small muted">{{ .Booking.ServiceArea }} · {{ if eq .Booking.DeliveryMode "premises" }}At the business{{ else if eq .Booking.DeliveryMode "mobile" }}Provider travels to customer{{ else }}Remote{{ end }}</p>
+      <p class="small">Customer #{{ .Booking.CustomerID }} · {{ if eq .Booking.PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .Booking.PriceMode "from" }}From {{ end }}{{ moneyInCurrency .Booking.PriceCents .Booking.Currency }}{{ end }}</p>
+      {{ if eq .Booking.Status "requested" }}
+      <p class="small muted">Respond by {{ .LocalDeadline }}.</p>
+      <div class="row">
+        <form method="POST" action="/service-bookings/{{ .Booking.ID }}/status">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="version" value="{{ .Booking.Version }}">
+          <input type="hidden" name="action" value="confirm">
+          <button class="btn btn-sm" type="submit">Confirm</button>
+        </form>
+        <form method="POST" action="/service-bookings/{{ .Booking.ID }}/status">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="version" value="{{ .Booking.Version }}">
+          <input type="hidden" name="action" value="reject">
+          <button class="btn btn-secondary btn-sm" type="submit">Decline</button>
+        </form>
+      </div>
+      {{ else if eq .Booking.Status "confirmed" }}
+      <ui-confirm title="Cancel confirmed appointment?" message="The customer will no longer have this appointment." confirm-label="Cancel appointment" cancel-label="Keep appointment">
+        <form method="POST" action="/service-bookings/{{ .Booking.ID }}/status">
+          <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+          <input type="hidden" name="version" value="{{ .Booking.Version }}">
+          <input type="hidden" name="action" value="cancel">
+          <button class="btn btn-secondary btn-sm" type="submit">Cancel appointment</button>
+        </form>
+      </ui-confirm>
+      {{ end }}
+    </li>
+    {{ end }}
+  </ul>
+  {{ else }}
+  <p class="muted">No appointment requests yet.</p>
+  {{ end }}
+  {{ template "pager" .Pager }}
+</div>
+{{ end }}

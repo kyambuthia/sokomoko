@@ -13,6 +13,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
+	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
@@ -47,6 +48,14 @@ type DirectoryService interface {
 	OwnByState(context.Context, *directorysvc.Actor, string, int, int) ([]db.ServiceListing, int, error)
 	Edit(context.Context, *directorysvc.Actor, int) (*db.ServiceListing, error)
 	Save(context.Context, *directorysvc.Actor, int, directorysvc.Input) (*db.ServiceListing, error)
+}
+
+type BookingService interface {
+	Request(context.Context, *bookingsvc.Actor, string, string, int, string) (*db.ServiceBooking, error)
+	ForCustomer(context.Context, *bookingsvc.Actor, int, int) ([]db.ServiceBooking, int, error)
+	ForPartner(context.Context, *bookingsvc.Actor, int, int) ([]db.ServiceBooking, int, error)
+	Cancel(context.Context, *bookingsvc.Actor, int, int64) error
+	Respond(context.Context, *bookingsvc.Actor, int, int64, string) error
 }
 
 type AccountService interface {
@@ -179,6 +188,7 @@ type Dependencies struct {
 	RateLimitStore SharedRequestRateLimitStore
 	Catalog        CatalogService
 	Directory      DirectoryService
+	Bookings       BookingService
 	Account        AccountService
 	Commerce       CommerceService
 	Checkout       CheckoutService
@@ -203,6 +213,7 @@ type App struct {
 	RateLimitStore        SharedRequestRateLimitStore
 	Catalog               CatalogService
 	Directory             DirectoryService
+	Bookings              BookingService
 	Account               AccountService
 	Commerce              CommerceService
 	Checkout              CheckoutService
@@ -226,6 +237,7 @@ func New(deps Dependencies) *App {
 		RateLimitStore:        deps.RateLimitStore,
 		Catalog:               deps.Catalog,
 		Directory:             deps.Directory,
+		Bookings:              deps.Bookings,
 		Account:               deps.Account,
 		Commerce:              deps.Commerce,
 		Checkout:              deps.Checkout,

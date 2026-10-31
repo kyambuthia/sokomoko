@@ -72,6 +72,17 @@ func Maintain(ctx context.Context, store MaintenanceStore) {
 		if expired > 0 {
 			slog.Info("unpaid orders cancelled", "count", expired)
 		}
+		if expirer, ok := store.(interface {
+			ExpireServiceBookingRequests(context.Context) (int, error)
+		}); ok {
+			count, err := expirer.ExpireServiceBookingRequests(ctx)
+			if err != nil && ctx.Err() == nil {
+				slog.Error("service booking expiry failed", "error", err)
+			}
+			if count > 0 {
+				slog.Info("service booking requests expired", "count", count)
+			}
+		}
 	})
 	prune := exclusive(ctx, store, housekeepingJobLockKey, func(ctx context.Context) {
 		for _, cleanup := range []func(context.Context) error{store.CleanupSessions, store.CleanupPasswordResetTokens} {

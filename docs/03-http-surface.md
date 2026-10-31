@@ -27,7 +27,8 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
 | `/search` | GET | public | `Search` | `q`, `category`, `page`; 24 products per page |
 | `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `partner_id`, `has_hours`, `page`; 24 per page |
-| `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops only; optional weekly hours are local-time information, not bookable slots |
+| `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops; customer accounts see a request form when weekly hours are published |
+| `/services/<slug>/bookings` | POST | user | `ServiceBookingRequest` | CSRF protected; sends `starts_at_local`, `listing_version`, and an idempotency key; creates a pending request, not a payment |
 | `/api/categories` | GET | public | `CategoriesAPI` | JSON `{categories}` for the header category nav |
 | `/login` | GET, POST | public | `auth.Login` | `user` role only; honours a safe `next` |
 | `/signup` | GET, POST | public | `auth.SignUp` | Creates a `user` and signs in |
@@ -39,8 +40,9 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/cart/update` | POST | signed in | `CartUpdate` | Quantity 0 removes the line |
 | `/cart/remove` | POST | signed in | `CartRemove` | |
 | `/checkout` | GET, POST | signed in | `Checkout` | See below |
-| `/account` | GET | signed in | `Account` | Order history, newest first, 20 per page (`?page=`) |
+| `/account` | GET | signed in | `Account` | Recent appointment requests and order history; orders are newest first, 20 per page (`?page=`) |
 | `/account/orders/<id>/cancel` | POST | signed in | `AccountOrderCancel` | Own order, while `pending`, partner status `new`, and unpaid |
+| `/account/bookings/<id>/cancel` | POST | user | `AccountBookingCancel` | Cancels the user's own future requested or confirmed service appointment |
 | `/account/password` | GET, POST | signed in | `auth.PasswordChange` | Needs the current password; revokes every session and issues a new one |
 | `/payments/order/<id>` | GET, POST | signed in | `PaymentPage` | Pay or retry an online payment for an own order |
 | `/payments/return` | GET | signed in | `PaymentReturn` | Where Paystack sends the customer back |
@@ -131,6 +133,8 @@ address as a draft and re-renders the form with `422`.
 | `/products/<id>/delete` | POST | admin, staff, partner (own products only; others get 404) | `PartnerProductDelete` (CSRF protected; removes the product from carts and cancels affected open checkouts) |
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (20 per page, `status` filter; updates keep the current page) |
+| `/service-bookings` | GET | partner | `PartnerServiceBookings` (20 per page; active shop membership scope) |
+| `/service-bookings/<id>/status` | POST | partner | `PartnerServiceBookingAction` (confirm, reject or cancel with the current version) |
 
 Seller-only service pages on the partner host are `GET /services`,
 `GET|POST /services/new`, `GET|POST /services/<id>/edit` and

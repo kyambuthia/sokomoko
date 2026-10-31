@@ -9,6 +9,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/secret"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
+	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	commerceSvc "github.com/kyambuthia/sokomoko/internal/service/commerce"
@@ -45,6 +46,7 @@ func Compose(opts ComposeOptions) *App {
 		RateLimitStore:        opts.Store,
 		Catalog:               catalogsvc.New(opts.Store),
 		Directory:             directorysvc.New(opts.Store),
+		Bookings:              bookingsvc.New(opts.Store),
 		Account:               accountsvc.New(opts.Store),
 		Commerce:              commerceSvc.New(opts.Store),
 		Checkout:              checkoutService,

@@ -32,6 +32,7 @@ func requestUserID(r *http.Request) (int, bool) {
 type Viewer struct {
 	SignedIn bool
 	Username string
+	Role     string
 }
 
 func viewerFromRequest(r *http.Request) Viewer {
@@ -39,7 +40,7 @@ func viewerFromRequest(r *http.Request) Viewer {
 	if user == nil {
 		return Viewer{}
 	}
-	return Viewer{SignedIn: true, Username: user.Username}
+	return Viewer{SignedIn: true, Username: user.Username, Role: user.Role}
 }
 
 func methodNotAllowed(w http.ResponseWriter, allowed ...string) {

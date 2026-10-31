@@ -19,6 +19,43 @@
   </div>
   {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
 
+  <section class="section" aria-labelledby="appointments-title">
+    <div class="row-between">
+      <h2 class="section-title" id="appointments-title">Appointments</h2>
+      <a class="btn btn-secondary btn-sm" href="/services">Browse services</a>
+    </div>
+    {{ if .Bookings }}
+    <ul class="stack">
+      {{ range .Bookings }}
+      <li class="card stack-sm">
+        <div class="row-between">
+          <strong>{{ .Booking.ServiceTitle }}</strong>
+          <span class="badge">{{ .Booking.Status }}</span>
+        </div>
+        <p class="small">{{ .LocalStart }} · {{ .Booking.Timezone }}</p>
+        <p class="small">
+          {{ if eq .Booking.PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .Booking.PriceMode "from" }}From {{ end }}{{ moneyInCurrency .Booking.PriceCents .Booking.Currency }}{{ end }}
+          · {{ .Booking.ServiceArea }}
+        </p>
+        {{ if eq .Booking.Status "requested" }}<p class="small muted">Waiting for provider response by {{ .LocalDeadline }}.</p>{{ end }}
+        {{ if eq .Booking.Status "confirmed" }}<p class="small muted">The provider confirmed this appointment.</p>{{ end }}
+        {{ if .CanCancel }}
+        <ui-confirm title="Cancel appointment request?" message="This will release the requested time and cannot be undone." confirm-label="Cancel appointment" cancel-label="Keep appointment">
+          <form method="POST" action="/account/bookings/{{ .Booking.ID }}/cancel">
+            {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+            <input type="hidden" name="version" value="{{ .Booking.Version }}">
+            <button type="submit" class="btn btn-secondary btn-sm">Cancel appointment</button>
+          </form>
+        </ui-confirm>
+        {{ end }}
+      </li>
+      {{ end }}
+    </ul>
+    {{ else }}
+    <p class="muted">No appointment requests yet. <a href="/services">Browse services</a>.</p>
+    {{ end }}
+  </section>
+
   <section class="section" aria-labelledby="orders-title">
     <h2 class="section-title" id="orders-title">Orders</h2>
     {{ if .Orders }}

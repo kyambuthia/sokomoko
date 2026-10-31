@@ -1,14 +1,18 @@
 package routes
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 )
 
@@ -27,6 +31,8 @@ type servicePage struct {
 	ValidationFields              []directorysvc.FieldError
 	Duration                      string
 	Title, Role, CSRFToken, Error string
+	BookingKey                    string
+	Flash                         Flash
 	Viewer                        Viewer
 	Listings                      []db.ServiceListing
 	Listing                       *db.ServiceListing
@@ -146,7 +152,89 @@ func ServiceDetail(a *app.App) http.HandlerFunc {
 			servicePageError(w, r, err)
 			return
 		}
-		a.Render(w, a.Templates.ServiceDetail, servicePage{Title: listing.Title, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours), Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
+		data := servicePage{
+			Title: listing.Title, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours),
+			Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Flash: popFlash(w, r),
+		}
+		if user := requestUserFromContext(r); user != nil && user.Role == db.RoleUser {
+			data.BookingKey, err = newBookingIdempotencyKey()
+			if err != nil {
+				http.Error(w, "Could not prepare appointment form", http.StatusInternalServerError)
+				return
+			}
+		}
+		a.Render(w, a.Templates.ServiceDetail, data)
+	}
+}
+
+func newBookingIdempotencyKey() (string, error) {
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(key[:]), nil
+}
+
+// ServiceBookingRequest creates a pending request for a service appointment.
+func ServiceBookingRequest(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		if a.DemoMode {
+			redirectWithFlash(w, r, "/services", "danger", "Appointment requests are disabled in demo mode.")
+			return
+		}
+		listingSlug := r.PathValue("slug")
+		if strings.TrimSpace(listingSlug) == "" {
+			NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form", http.StatusBadRequest)
+			return
+		}
+		version, err := strconv.Atoi(strings.TrimSpace(r.FormValue("listing_version")))
+		if err != nil || version < 1 {
+			redirectWithFlash(w, r, "/services/"+url.PathEscape(listingSlug), "danger", "Reload this service page before requesting an appointment.")
+			return
+		}
+		user := requestUserFromContext(r)
+		if user == nil || user.Role != db.RoleUser {
+			http.Error(w, "Customer sign-in required", http.StatusForbidden)
+			return
+		}
+		booking, err := a.Bookings.Request(
+			r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, listingSlug,
+			r.FormValue("starts_at_local"), version, r.FormValue("idempotency_key"),
+		)
+		if err != nil {
+			message := ""
+			switch {
+			case errors.Is(err, bookingsvc.ErrInvalid):
+				message = "Choose a valid future date and time, and submit the form again."
+			case errors.Is(err, bookingsvc.ErrListingChanged):
+				message = "This service changed. Reload its page before requesting an appointment."
+			case errors.Is(err, bookingsvc.ErrTimeConflict):
+				message = "That time has already been requested. Choose another time."
+			case errors.Is(err, bookingsvc.ErrUnavailable), errors.Is(err, db.ErrServiceNotFound):
+				message = "That service is not available at the selected time."
+			case errors.Is(err, bookingsvc.ErrIdempotencyConflict):
+				message = "This request has already been used. Reload the service page and try again."
+			default:
+				servicePageError(w, r, err)
+				return
+			}
+			redirectWithFlash(w, r, "/services/"+url.PathEscape(listingSlug), "danger", message)
+			return
+		}
+		message := "Appointment request sent"
+		if booking != nil && booking.ID > 0 {
+			message += " (#" + strconv.FormatInt(booking.ID, 10) + ")"
+		}
+		message += ". The provider has up to 24 hours to respond."
+		redirectWithFlash(w, r, "/services/"+url.PathEscape(listingSlug), "success", message)
 	}
 }
 

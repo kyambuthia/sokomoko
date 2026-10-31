@@ -1,0 +1,268 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+)
+
+var (
+	ErrServiceBookingNotFound        = errors.New("service booking not found")
+	ErrServiceBookingInvalidState    = errors.New("service booking cannot move to that state")
+	ErrServiceBookingVersionConflict = errors.New("service booking changed; reload before updating")
+	ErrServiceBookingResponseExpired = errors.New("provider response deadline has passed")
+)
+
+const serviceBookingQualifiedColumns = `b.id,b.service_listing_id,b.resource_id,b.customer_id,b.service_title,b.service_area,
+	b.delivery_mode,b.duration_minutes,b.price_mode,b.price_cents,b.currency,b.timezone,b.starts_at,b.ends_at,b.status,
+	b.response_deadline,b.version,b.created_at,b.updated_at,b.request_hash`
+
+func validBookingPage(userID, limit, offset int) bool {
+	return userID > 0 && limit >= 1 && limit <= 50 && offset >= 0 && offset <= 50000
+}
+
+// ServiceBookingsForCustomer returns a customer's own appointment requests.
+func (s *Store) ServiceBookingsForCustomer(ctx context.Context, customerID, limit, offset int) ([]ServiceBooking, int, error) {
+	if !validBookingPage(customerID, limit, offset) {
+		return nil, 0, ErrServiceBookingInvalidRequest
+	}
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	var authorizedUserID int
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT id FROM users WHERE id=$1 AND role=$2 AND deleted_at IS NULL`,
+		customerID, RoleUser,
+	).Scan(&authorizedUserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, 0, ErrServiceBookingForbidden
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int
+	if err := s.DB.QueryRowContext(ctx,
+		`SELECT count(*) FROM service_bookings WHERE customer_id=$1`,
+		customerID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT `+serviceBookingColumns+`
+		 FROM service_bookings WHERE customer_id=$1
+		 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`,
+		customerID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]ServiceBooking, 0)
+	for rows.Next() {
+		booking, err := scanServiceBooking(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, *booking)
+	}
+	return items, total, rows.Err()
+}
+
+// ServiceBookingsForPartner scopes the queue through active partner membership.
+func (s *Store) ServiceBookingsForPartner(ctx context.Context, partnerUserID, limit, offset int) ([]ServiceBooking, int, error) {
+	if !validBookingPage(partnerUserID, limit, offset) {
+		return nil, 0, ErrServiceBookingInvalidRequest
+	}
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	var allowed bool
+	err := s.DB.QueryRowContext(ctx, `
+		SELECT EXISTS (
+		    SELECT 1 FROM users u
+		    JOIN partner_users pu ON pu.user_id=u.id
+		    JOIN partners p ON p.id=pu.partner_id
+		    WHERE u.id=$1 AND u.role=$2 AND u.deleted_at IS NULL AND p.status='active'
+		)`,
+		partnerUserID, RolePartner,
+	).Scan(&allowed)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !allowed {
+		return nil, 0, ErrServiceBookingForbidden
+	}
+
+	scope := `FROM service_bookings b
+		JOIN service_listings s ON s.id=b.service_listing_id
+		JOIN partners p ON p.id=s.partner_id
+		JOIN partner_users pu ON pu.partner_id=p.id
+		JOIN users u ON u.id=pu.user_id
+		WHERE u.id=$1 AND u.role=$2 AND u.deleted_at IS NULL AND p.status='active'`
+	var total int
+	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) `+scope, partnerUserID, RolePartner).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT `+serviceBookingQualifiedColumns+` `+scope+`
+		 ORDER BY CASE b.status WHEN 'requested' THEN 0 WHEN 'confirmed' THEN 1 ELSE 2 END,
+		          b.starts_at,b.id LIMIT $3 OFFSET $4`,
+		partnerUserID, RolePartner, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]ServiceBooking, 0)
+	for rows.Next() {
+		booking, err := scanServiceBooking(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, *booking)
+	}
+	return items, total, rows.Err()
+}
+
+// TransitionServiceBooking permits a customer to cancel their own future
+// appointment and an authorized service partner to respond to a request.
+func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID int, role, newStatus string, expectedVersion int64) error {
+	if actorID <= 0 || bookingID <= 0 || expectedVersion <= 0 ||
+		(role != RoleUser && role != RolePartner) {
+		return ErrServiceBookingInvalidRequest
+	}
+	if role == RoleUser && newStatus != "cancelled" {
+		return ErrServiceBookingForbidden
+	}
+	if role == RolePartner && newStatus != "confirmed" && newStatus != "rejected" && newStatus != "cancelled" {
+		return ErrServiceBookingForbidden
+	}
+
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		var actorUserID int
+		userQuery := `SELECT id FROM users WHERE id=$1 AND role=$2 AND deleted_at IS NULL`
+		if role == RoleUser {
+			userQuery += ` FOR SHARE`
+		}
+		err := tx.QueryRowContext(ctx, userQuery, actorID, role).Scan(&actorUserID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrServiceBookingForbidden
+		}
+		if err != nil {
+			return err
+		}
+
+		var listingID int
+		err = tx.QueryRowContext(ctx,
+			`SELECT service_listing_id FROM service_bookings WHERE id=$1`,
+			bookingID,
+		).Scan(&listingID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrServiceBookingNotFound
+		}
+		if err != nil {
+			return err
+		}
+
+		if role == RolePartner {
+			var partnerID int
+			err = tx.QueryRowContext(ctx, `
+				SELECT p.id FROM partners p
+				JOIN partner_users pu ON pu.partner_id=p.id
+				JOIN users u ON u.id=pu.user_id
+				JOIN service_listings l ON l.partner_id=p.id
+				WHERE l.id=$1 AND u.id=$2 AND u.role=$3
+				  AND u.deleted_at IS NULL AND p.status='active'
+				FOR SHARE OF p,pu,u,l`,
+				listingID, actorID, RolePartner,
+			).Scan(&partnerID)
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrServiceBookingNotFound
+			}
+			if err != nil {
+				return err
+			}
+		}
+
+		var current struct {
+			status         string
+			version        int64
+			responseIsOpen bool
+			startsInFuture bool
+		}
+		query := `SELECT status,version FROM service_bookings WHERE id=$1`
+		args := []any{bookingID}
+		if role == RoleUser {
+			query += ` AND customer_id=$2`
+			args = append(args, actorID)
+		} else {
+			query += ` AND service_listing_id=$2`
+			args = append(args, listingID)
+		}
+		query += ` FOR UPDATE`
+		err = tx.QueryRowContext(ctx, query, args...).Scan(&current.status, &current.version)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrServiceBookingNotFound
+		}
+		if err != nil {
+			return err
+		}
+		err = tx.QueryRowContext(ctx,
+			`SELECT response_deadline > clock_timestamp(),starts_at > clock_timestamp()
+			 FROM service_bookings WHERE id=$1`,
+			bookingID,
+		).Scan(&current.responseIsOpen, &current.startsInFuture)
+		if err != nil {
+			return err
+		}
+		if current.version != expectedVersion {
+			return ErrServiceBookingVersionConflict
+		}
+
+		var allowed bool
+		switch {
+		case role == RoleUser && newStatus == "cancelled" &&
+			(current.status == "requested" || current.status == "confirmed") &&
+			current.startsInFuture:
+			allowed = true
+		case role == RolePartner && newStatus == "confirmed" && current.status == "requested":
+			if !current.responseIsOpen {
+				return ErrServiceBookingResponseExpired
+			}
+			allowed = true
+		case role == RolePartner && newStatus == "rejected" && current.status == "requested":
+			if !current.responseIsOpen {
+				return ErrServiceBookingResponseExpired
+			}
+			allowed = true
+		case role == RolePartner && newStatus == "cancelled" && current.status == "confirmed" && current.startsInFuture:
+			allowed = true
+		}
+		if !allowed {
+			return ErrServiceBookingInvalidState
+		}
+
+		var updatedVersion int64
+		err = tx.QueryRowContext(ctx,
+			`UPDATE service_bookings SET status=$1,version=version+1 WHERE id=$2 AND version=$3
+			 RETURNING version`,
+			newStatus, bookingID, expectedVersion,
+		).Scan(&updatedVersion)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrServiceBookingVersionConflict
+		}
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO service_booking_events(booking_id,actor_user_id,from_status,to_status)
+			 VALUES($1,$2,$3,$4)`,
+			bookingID, actorID, current.status, newStatus,
+		)
+		return err
+	})
+}

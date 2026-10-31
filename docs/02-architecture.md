@@ -34,6 +34,7 @@ Supporting packages with no upward dependencies: `money`, `slug`, `config`,
 | `internal/service/catalog` | Product listing, search, categories, product lookup by slug, image URL mapping. |
 | `internal/service/commerce` | Cart operations with stock checks. |
 | `internal/service/checkout` | Pricing (`CalculateSummary`), stock holds, draft saving, idempotent order placement. |
+| `internal/service/booking` | Local-time validation, idempotent service appointment requests, customer cancellation and partner response. |
 | `internal/service/payment` | Enabled payment methods, provider setup and pricing, starting and confirming online payments, webhooks and callbacks, and the refund queue. See [Payments](payments.md). |
 | `internal/payments` | Provider implementations (cash on delivery, M-Pesa Daraja, Paystack) and their registry. |
 | `internal/service/account` | A customer's orders. |

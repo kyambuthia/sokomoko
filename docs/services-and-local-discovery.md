@@ -1,10 +1,9 @@
 # Services and local discovery
 
-Status: service listings, seller forms, public discovery and weekly opening hours are implemented
-with migrations 10 and 26; transactional booking and map integration below remain a design proposal.
-The demo must continue to say that
-listings, bookings and payments are illustrative; no real sale or appointment
-is confirmed.
+Status: service listings, public discovery, weekly hours and the first request-to-book
+flow are implemented with migrations 10, 26 and 27. Customers can request and cancel
+appointments; partners can confirm or decline them. Maps and completion/no-show
+operations remain future work. Demo mode disables appointment requests and payments.
 
 ## Product model
 
@@ -36,18 +35,18 @@ Use these records:
 
 Start with one resource per booking and capacity one. Use UTC timestamps plus
 an IANA timezone for business rules and presentation. Enforce non-overlapping
-active reservations at the database level (a time-range exclusion constraint
-for a resource), including unexpired temporary holds. Confirm in a transaction
-with idempotency and ownership checks; never trust a browser's displayed slot.
-A cleanup worker expires holds through explicit state changes. Test concurrent
-bookings, cancellations, timezone boundaries and rescheduling before release.
+requested and confirmed bookings at the database level with a time-range
+exclusion constraint. Check the selected time against the listing's weekly
+hours under a listing lock, snapshot the price, and make requests idempotent.
+A cleanup worker expires unanswered requests through explicit state changes;
+a new request also clears only overdue requests blocking its selected interval.
 
-Suggested states: requested -> confirmed -> in progress -> completed, with
-explicit rejected, cancelled, expired and no-show branches. For a first release,
-use request-to-book rather than promise automatic confirmation. Show the seller's
-response deadline and what confirmation means. Deposits, refunds and payment
-capture can follow once this lifecycle is reliable. Service completion should
-not reuse parcel/courier delivery statuses.
+The implemented request flow uses requested, confirmed, rejected, cancelled
+and expired states. Customers can cancel their own future requests or confirmed
+appointments; partners can confirm or decline requests and cancel a confirmed
+appointment. In-progress, completed and no-show actions, deposits, refunds and
+payment capture remain future work. Service completion should not reuse
+parcel/courier delivery statuses.
 
 ## Discovery and maps
 
@@ -123,8 +122,9 @@ abuse without exposing their home address.
    discovery and contextual encrypted enquiries. All demo data stays labelled.
 2. Add the optional map with a selected provider, attribution, privacy controls
    and bounded geographic search. Verify on keyboard, mobile and slow networks.
-3. Add request-to-book, seller confirmation, cancellations and resource conflict
-   prevention. Exercise concurrent requests and permission changes.
+3. Request-to-book, seller responses, customer cancellation and resource conflict
+   prevention are implemented. Add lifecycle completion/no-show actions and
+   stronger automated coverage before expanding capacity.
 4. Only then consider instant booking, deposits/refunds, recurring appointments,
    multi-resource capacity and live travel estimates. Rider live tracking is a
    separate, consent-bound feature with its own retention policy.
@@ -146,11 +146,11 @@ Service listings have a shop owner, stable slug, title, category, duration,
 fixed/from/quote pricing in KES or USD, broad public area, premises/mobile/remote
 mode and draft/published/archived state. Each listing can publish a timezone and
 one opening interval per weekday; times are local to the IANA timezone, weekdays
-use Sunday=0 through Saturday=6, and omitted days have no published hours. The
-schedule is informational and does not calculate bookable slots. Public and
-partner service lists show the count of days with published hours and the listing
-timezone; individual detail reads show the local intervals. Listings do not reserve
-stock, accept appointments, store precise coordinates or claim practitioner
+use Sunday=0 through Saturday=6, and omitted days have no published hours. The weekly schedule is shown as local-time information; the request form does
+not generate a slot list. Public and partner service lists show the count of days
+with published hours and the listing timezone; individual detail reads show local
+intervals. A request rechecks the selected time against the current schedule.
+Listings do not reserve stock, store precise coordinates or claim practitioner
 verification.
 Public queries include only published listings of active shops. Seller writes
 lock current membership and role, use optimistic versions to reject stale edits,
@@ -215,7 +215,7 @@ omit `weekly_hours` and return `open_days`, the number of weekdays with publishe
 hours. HTML service cards show that summary with the listing's timezone. On an update,
 clients that omit either new field retain its saved value; send `weekly_hours: []` to
 clear the schedule.
-Opening times are informational and are not appointment slots.
+Opening intervals are not pre-generated appointment slots; each request is checked against them.
 
 Service prices in the directory, detail page, private preview and seller list
 are formatted from minor units using the listing’s saved currency, independently
@@ -223,9 +223,9 @@ of the marketplace currency setting. For example, `50000` cents in `KES` display
 as `KES 500.00`; quote-only listings show a quote prompt instead of an amount.
 
 Price input is a decimal string in `price`; returned `price_cents` is an integer
-in minor currency units. Quote-only listings require zero price. No appointment,
-payment, location tracking or medical-data collection is performed by these
-endpoints. The storefront supports `/services` and `/services/{slug}`. Sellers manage offerings
+in minor currency units. Quote-only listings require zero price. Discovery
+endpoints do not accept location tracking or medical data. The storefront supports
+`/services` and `/services/{slug}`. Sellers manage offerings
 on their workspace host at `/services`, `/services/new` and
 `/services/{id}/edit`. Forms preserve entered text on validation errors and stale
 updates. After a conflict, the edit form shows the current saved listing beside
@@ -233,9 +233,38 @@ an explicit review checkbox. The seller must acknowledge that saved version to
 apply the retained form values; the version check runs again on retry, and an
 intervening edit requires another review. No fields are merged automatically.
 The pages reuse the storefront and workspace brand, font, navigation and form
-styles. Demo mode clearly marks offerings as samples with no appointments or
+styles. Demo mode labels offerings as samples and disables appointment requests and
 payments.
 
+
+### Appointment requests
+
+The HTML storefront accepts requests at `POST /services/{slug}/bookings` for
+signed-in customer accounts. The form sends `starts_at_local` in the listing's
+IANA timezone, the listing version shown to the customer, a CSRF token, and a
+one-use idempotency key. Nonexistent and ambiguous daylight-saving start times are rejected. A
+service interval cannot cross a timezone offset change. Under a transaction, the
+database rechecks the listing version, publication state, full duration against
+weekly hours, and resource conflicts before storing an immutable service, price
+and time snapshot.
+
+A request starts in `requested`. The provider response deadline is the earlier
+of 24 hours after the request and the requested appointment start. A replay with
+the same idempotency key and payload returns the original request. Reusing the
+key with a different payload is rejected. The database blocks overlapping
+requested and confirmed intervals for the default capacity-one resource.
+
+Customers see their recent requests on `/account` and can cancel a future
+requested or confirmed appointment with `POST /account/bookings/{id}/cancel`.
+Partners use `GET /service-bookings` to review their shop's queue and
+`POST /service-bookings/{id}/status` with `action=confirm|reject|cancel` and
+the current version. Partner membership and booking ownership are checked in the
+database transaction. A minute-level maintenance job expires requests after
+their response deadline and records a system event. No deposit or payment is
+collected for a service request.
+
+There is not yet a JSON booking endpoint, a customer-selected resource, a
+generated availability calendar, or a completion/no-show action.
 
 ### Demo content
 

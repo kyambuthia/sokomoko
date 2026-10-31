@@ -41,6 +41,7 @@
     <a class="ws-nav__link" href="/dashboard" {{ if eq .Title "Partner Dashboard" }}aria-current="page"{{ end }}>{{ icon "dashboard" }}Overview</a>
     {{ if eq (field . "Role") "partner" }}<a class="ws-nav__link" href="/messages" {{ if eq .Title "Messages" }}aria-current="page"{{ end }}>{{ icon "users" }}Messages</a>{{ end }}
     <a class="ws-nav__link" href="/orders" {{ if eq .Title "Partner Orders" }}aria-current="page"{{ end }}>{{ icon "orders" }}Orders</a>
+    {{ if eq (field . "Role") "partner" }}<a class="ws-nav__link" href="/service-bookings" {{ if eq .Title "Appointment Requests" }}aria-current="page"{{ end }}>{{ icon "orders" }}Appointments</a>{{ end }}
     <a class="ws-nav__link" href="/products" {{ if eq .Title "Partner Products" }}aria-current="page"{{ end }}>{{ icon "box" }}Products</a>
     {{ if eq (field . "Role") "partner" }}<a class="ws-nav__link" href="/services" {{ if eq .Title "Services" }}aria-current="page"{{ end }}>{{ icon "store" }}Services</a>{{ end }}
     <a class="ws-nav__link" href="/products/new" {{ if eq .Title "Add Product" }}aria-current="page"{{ end }}>{{ icon "plus" }}Add product</a>
