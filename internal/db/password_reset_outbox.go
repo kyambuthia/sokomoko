@@ -13,7 +13,10 @@ const (
 	maxPasswordResetEmailOutboxLease = 5 * time.Minute
 )
 
-var ErrInvalidPasswordResetEmailOutboxClaim = errors.New("invalid password reset email outbox claim parameters")
+var (
+	ErrInvalidPasswordResetEmailOutboxClaim = errors.New("invalid password reset email outbox claim parameters")
+	ErrPasswordResetEmailOutboxLeaseLost    = errors.New("password reset email outbox lease lost")
+)
 
 // PasswordResetEmailOutboxEntry contains only sealed recipient and link data.
 type PasswordResetEmailOutboxEntry struct {
@@ -73,30 +76,50 @@ func (s *Store) ClaimPasswordResetEmails(ctx context.Context, limit int, lease t
 }
 
 // MarkPasswordResetEmailSent removes a successfully delivered message.
-func (s *Store) MarkPasswordResetEmailSent(ctx context.Context, id int64) error {
-	return s.deletePasswordResetEmailOutboxEntry(ctx, id)
+func (s *Store) MarkPasswordResetEmailSent(ctx context.Context, id int64, attempts int) error {
+	return s.deletePasswordResetEmailOutboxEntry(ctx, id, attempts)
 }
 
 // RetryPasswordResetEmail releases a lease and schedules the next delivery
 // attempt, capped at token expiry.
-func (s *Store) RetryPasswordResetEmail(ctx context.Context, id int64, availableAt time.Time) error {
+func (s *Store) RetryPasswordResetEmail(ctx context.Context, id int64, attempts int, availableAt time.Time) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx, `
+	res, err := s.DB.ExecContext(ctx, `
 		UPDATE password_reset_email_outbox
-		SET available_at = LEAST($2, expires_at), lease_until = NULL
-		WHERE id = $1 AND expires_at > clock_timestamp()`, id, availableAt.UTC())
-	return err
+		SET available_at = LEAST($3, expires_at), lease_until = NULL
+		WHERE id = $1 AND attempts = $2 AND lease_until > clock_timestamp() AND expires_at > clock_timestamp()`, id, attempts, availableAt.UTC())
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrPasswordResetEmailOutboxLeaseLost
+	}
+	return nil
 }
 
 // DiscardPasswordResetEmail removes an expired or permanently undeliverable message.
-func (s *Store) DiscardPasswordResetEmail(ctx context.Context, id int64) error {
-	return s.deletePasswordResetEmailOutboxEntry(ctx, id)
+func (s *Store) DiscardPasswordResetEmail(ctx context.Context, id int64, attempts int) error {
+	return s.deletePasswordResetEmailOutboxEntry(ctx, id, attempts)
 }
 
-func (s *Store) deletePasswordResetEmailOutboxEntry(ctx context.Context, id int64) error {
+func (s *Store) deletePasswordResetEmailOutboxEntry(ctx context.Context, id int64, attempts int) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx, "DELETE FROM password_reset_email_outbox WHERE id = $1", id)
-	return err
+	res, err := s.DB.ExecContext(ctx, "DELETE FROM password_reset_email_outbox WHERE id = $1 AND attempts = $2 AND lease_until > clock_timestamp()", id, attempts)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrPasswordResetEmailOutboxLeaseLost
+	}
+	return nil
 }

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -26,9 +27,9 @@ type passwordResetOutboxPayload struct {
 type passwordResetOutboxStore interface {
 	RequestPasswordResetTokenWithOutbox(ctx context.Context, userID int, token string, expiresAt time.Time, sealedPayload []byte) (bool, error)
 	ClaimPasswordResetEmails(ctx context.Context, limit int, lease time.Duration) ([]db.PasswordResetEmailOutboxEntry, error)
-	MarkPasswordResetEmailSent(ctx context.Context, id int64) error
-	RetryPasswordResetEmail(ctx context.Context, id int64, availableAt time.Time) error
-	DiscardPasswordResetEmail(ctx context.Context, id int64) error
+	MarkPasswordResetEmailSent(ctx context.Context, id int64, attempts int) error
+	RetryPasswordResetEmail(ctx context.Context, id int64, attempts int, availableAt time.Time) error
+	DiscardPasswordResetEmail(ctx context.Context, id int64, attempts int) error
 }
 
 func (s *Service) requestPasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time, recipient, resetLink string) (created bool, queued bool, err error) {
@@ -91,7 +92,12 @@ func (s *Service) deliverPasswordResetOutboxEntry(ctx context.Context, outbox pa
 		return operation(opCtx)
 	}
 	discard := func() {
-		if err := finish(func(ctx context.Context) error { return outbox.DiscardPasswordResetEmail(ctx, entry.ID) }); err != nil && ctx.Err() == nil {
+		if err := finish(func(ctx context.Context) error {
+			return outbox.DiscardPasswordResetEmail(ctx, entry.ID, entry.Attempts)
+		}); err != nil && ctx.Err() == nil {
+			if errors.Is(err, db.ErrPasswordResetEmailOutboxLeaseLost) {
+				return
+			}
 			slog.Error("password reset email outbox discard failed", "user_id", entry.UserID, "error", err)
 		}
 	}
@@ -119,7 +125,12 @@ func (s *Service) deliverPasswordResetOutboxEntry(ctx context.Context, outbox pa
 	err = s.passwordResetEmailSender(sendCtx, payload.RecipientEmail, payload.ResetLink)
 	cancel()
 	if err == nil {
-		if markErr := finish(func(ctx context.Context) error { return outbox.MarkPasswordResetEmailSent(ctx, entry.ID) }); markErr != nil {
+		if markErr := finish(func(ctx context.Context) error {
+			return outbox.MarkPasswordResetEmailSent(ctx, entry.ID, entry.Attempts)
+		}); markErr != nil {
+			if errors.Is(markErr, db.ErrPasswordResetEmailOutboxLeaseLost) {
+				return
+			}
 			slog.Error("password reset email outbox completion failed", "user_id", entry.UserID, "error", markErr)
 		}
 		return
@@ -148,7 +159,10 @@ func (s *Service) reschedulePasswordResetOutboxEntry(ctx context.Context, outbox
 	}
 	opCtx, cancel := context.WithTimeout(opCtx, resetEmailOutboxDBTimeout)
 	defer cancel()
-	if err := outbox.RetryPasswordResetEmail(opCtx, entry.ID, availableAt); err != nil && ctx.Err() == nil {
+	if err := outbox.RetryPasswordResetEmail(opCtx, entry.ID, entry.Attempts, availableAt); err != nil && ctx.Err() == nil {
+		if errors.Is(err, db.ErrPasswordResetEmailOutboxLeaseLost) {
+			return
+		}
 		slog.Error("password reset email outbox reschedule failed", "user_id", entry.UserID, "error", err)
 	}
 }
