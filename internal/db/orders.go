@@ -235,7 +235,11 @@ func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 }
 
 func (s *Store) listOrders(ctx context.Context, suffix string, args ...any) ([]Order, error) {
-	rows, err := s.DB.QueryContext(ctx, orderSelect+" "+suffix, args...)
+	return listOrdersQuery(ctx, s.DB, suffix, args...)
+}
+
+func listOrdersQuery(ctx context.Context, q querier, suffix string, args ...any) ([]Order, error) {
+	rows, err := q.QueryContext(ctx, orderSelect+" "+suffix, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +259,7 @@ func (s *Store) listOrders(ctx context.Context, suffix string, args ...any) ([]O
 		return nil, err
 	}
 
-	items, err := s.orderItemsByOrderIDs(ctx, ids)
+	items, err := orderItemsByOrderIDsQuery(ctx, q, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -265,12 +269,20 @@ func (s *Store) listOrders(ctx context.Context, suffix string, args ...any) ([]O
 	return orders, nil
 }
 
-func (s *Store) orderItemsByOrderIDs(ctx context.Context, orderIDs []int) (map[int][]OrderItem, error) {
+func orderPageHasRows(total, limit, offset int) bool {
+	if total == 0 {
+		return false
+	}
+	lastOffset := ((total - 1) / limit) * limit
+	return offset <= lastOffset
+}
+
+func orderItemsByOrderIDsQuery(ctx context.Context, q querier, orderIDs []int) (map[int][]OrderItem, error) {
 	itemsByOrder := map[int][]OrderItem{}
 	if len(orderIDs) == 0 {
 		return itemsByOrder, nil
 	}
-	rows, err := s.DB.QueryContext(ctx,
+	rows, err := q.QueryContext(ctx,
 		`SELECT order_id, product_id, partner_id, product_name, quantity, unit_price_cents, line_total_cents
 		 FROM order_items
 		 WHERE order_id = ANY($1)
@@ -322,20 +334,29 @@ func (s *Store) ListOrdersByUserPage(ctx context.Context, userID, limit, offset 
 	if offset < 0 {
 		offset = 0
 	}
-	var total int
-	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders WHERE user_id = $1", userID).Scan(&total); err != nil {
+
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
 		return nil, 0, err
 	}
-	if total == 0 {
-		return []Order{}, 0, nil
+	defer tx.Rollback()
+
+	var total int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM orders WHERE user_id = $1", userID).Scan(&total); err != nil {
+		return nil, 0, err
 	}
-	lastOffset := ((total - 1) / limit) * limit
-	if offset > lastOffset {
-		return []Order{}, total, nil
+	orders := []Order{}
+	if orderPageHasRows(total, limit, offset) {
+		orders, err = listOrdersQuery(ctx, tx,
+			"WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC LIMIT $2 OFFSET $3", userID, limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
 	}
-	orders, err := s.listOrders(ctx,
-		"WHERE o.user_id = $1 ORDER BY o.created_at DESC, o.id DESC LIMIT $2 OFFSET $3", userID, limit, offset)
-	return orders, total, err
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return orders, total, nil
 }
 
 // ListOrdersForFulfillment returns every order that is not cancelled and is
@@ -405,19 +426,28 @@ func (s *Store) ListAllOrdersPage(ctx context.Context, limit, offset int) ([]Ord
 	if offset < 0 {
 		offset = 0
 	}
-	var total int
-	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders").Scan(&total); err != nil {
+
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
 		return nil, 0, err
 	}
-	if total == 0 {
-		return []Order{}, 0, nil
+	defer tx.Rollback()
+
+	var total int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM orders").Scan(&total); err != nil {
+		return nil, 0, err
 	}
-	lastOffset := ((total - 1) / limit) * limit
-	if offset > lastOffset {
-		return []Order{}, total, nil
+	orders := []Order{}
+	if orderPageHasRows(total, limit, offset) {
+		orders, err = listOrdersQuery(ctx, tx, "ORDER BY o.created_at DESC, o.id DESC LIMIT $1 OFFSET $2", limit, offset)
+		if err != nil {
+			return nil, 0, err
+		}
 	}
-	orders, err := s.listOrders(ctx, "ORDER BY o.created_at DESC, o.id DESC LIMIT $1 OFFSET $2", limit, offset)
-	return orders, total, err
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return orders, total, nil
 }
 
 const (
@@ -444,28 +474,33 @@ func (s *Store) ListDeliveryBoardPage(ctx context.Context, limit, offset int) ([
 		offset = 0
 	}
 
-	var summary DeliveryBoardSummary
-	err := s.DB.QueryRowContext(ctx, deliveryBoardSummarySQL).Scan(
-		&summary.QueuedCount, &summary.ProcessingCount, &summary.ShippedCount,
-		&summary.DeliveredCount, &summary.PendingCount,
-	)
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, DeliveryBoardSummary{}, 0, err
 	}
-	total := summary.PendingCount
-	if total == 0 {
-		return []Order{}, summary, 0, nil
-	}
-	lastOffset := ((total - 1) / limit) * limit
-	if offset > lastOffset {
-		return []Order{}, summary, total, nil
-	}
+	defer tx.Rollback()
 
-	orders, err := s.listOrders(ctx,
-		"WHERE "+pendingDeliveryOrdersPredicate+" ORDER BY o.created_at ASC, o.id ASC LIMIT $1 OFFSET $2",
-		limit, offset,
-	)
-	return orders, summary, total, err
+	var summary DeliveryBoardSummary
+	if err := tx.QueryRowContext(ctx, deliveryBoardSummarySQL).Scan(
+		&summary.QueuedCount, &summary.ProcessingCount, &summary.ShippedCount,
+		&summary.DeliveredCount, &summary.PendingCount,
+	); err != nil {
+		return nil, DeliveryBoardSummary{}, 0, err
+	}
+	total := summary.PendingCount
+	orders := []Order{}
+	if orderPageHasRows(total, limit, offset) {
+		orders, err = listOrdersQuery(ctx, tx,
+			"WHERE "+pendingDeliveryOrdersPredicate+" ORDER BY o.created_at ASC, o.id ASC LIMIT $1 OFFSET $2",
+			limit, offset)
+		if err != nil {
+			return nil, DeliveryBoardSummary{}, 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, DeliveryBoardSummary{}, 0, wrapDBError(err)
+	}
+	return orders, summary, total, nil
 }
 
 func fulfillmentPredicate(partnerID int) string {
@@ -503,22 +538,31 @@ func (s *Store) ListFulfillmentOrdersPage(ctx context.Context, partnerID int, st
 		args = append(args, status)
 		predicate += fmt.Sprintf(" AND o.partner_status = $%d", len(args))
 	}
-	var total int
-	if err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM orders o WHERE "+predicate, args...).Scan(&total); err != nil {
+
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
 		return nil, 0, err
 	}
-	if total == 0 {
-		return []Order{}, 0, nil
+	defer tx.Rollback()
+
+	var total int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM orders o WHERE "+predicate, args...).Scan(&total); err != nil {
+		return nil, 0, err
 	}
-	lastOffset := ((total - 1) / limit) * limit
-	if offset > lastOffset {
-		return []Order{}, total, nil
+	orders := []Order{}
+	if orderPageHasRows(total, limit, offset) {
+		limitArg := fmt.Sprintf("$%d", len(args)+1)
+		offsetArg := fmt.Sprintf("$%d", len(args)+2)
+		orders, err = listOrdersQuery(ctx, tx, "WHERE "+predicate+" ORDER BY o.created_at DESC, o.id DESC LIMIT "+limitArg+" OFFSET "+offsetArg,
+			append(args, limit, offset)...)
+		if err != nil {
+			return nil, 0, err
+		}
 	}
-	limitArg := fmt.Sprintf("$%d", len(args)+1)
-	offsetArg := fmt.Sprintf("$%d", len(args)+2)
-	orders, err := s.listOrders(ctx, "WHERE "+predicate+" ORDER BY o.created_at DESC, o.id DESC LIMIT "+limitArg+" OFFSET "+offsetArg,
-		append(args, limit, offset)...)
-	return orders, total, err
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return orders, total, nil
 }
 
 func (s *Store) FulfillmentSummary(ctx context.Context, partnerID int) (PartnerOrderSummary, error) {
