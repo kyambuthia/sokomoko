@@ -47,7 +47,7 @@ FROM auth_abuse_limits WHERE key_hash=$1`, keyHash).Scan(&generation, &locked, &
 // sets capped exponential backoff in the database. Inactive keys restart at
 // one failure after the configured maximum backoff interval.
 func (s *Store) RecordAuthAbuseFailure(ctx context.Context, keyHash []byte, generation int64, maxFailures int, backoffBase, backoffMax time.Duration) error {
-	if len(keyHash) != 32 || maxFailures <= 0 || uint64(maxFailures) > math.MaxInt32 || backoffBase <= 0 || backoffMax < backoffBase {
+	if len(keyHash) != 32 || generation < 0 || maxFailures <= 0 || uint64(maxFailures) > math.MaxInt32 || backoffBase <= 0 || backoffMax < backoffBase {
 		return errors.New("invalid authentication abuse limit")
 	}
 
@@ -82,7 +82,7 @@ ON CONFLICT(key_hash) DO UPDATE SET
    ELSE auth_abuse_limits.locked_until
  END,
  expires_at=statement_timestamp()+$5::double precision*interval '1 second'
-WHERE $2::bigint<0 OR auth_abuse_limits.success_generation=$2::bigint`,
+WHERE auth_abuse_limits.success_generation=$2::bigint`,
 		keyHash,
 		generation,
 		int64(maxFailures),

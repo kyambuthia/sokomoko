@@ -429,6 +429,10 @@ func (s *Service) recordAbuseAttempt(scope, identifier string, preserveCase bool
 	if s.sharedAbuseStore == nil {
 		return
 	}
+	if generation < 0 {
+		// Without a shared generation, a delayed failure could undo a successful login reset.
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), sharedAuthAbuseTimeout)
 	defer cancel()
 	if err := s.sharedAbuseStore.RecordAuthAbuseFailure(ctx, authAbuseKeyHash(s.abuseKey, key), generation, s.abuseLimiter.maxFailures, s.abuseLimiter.backoffBase, s.abuseLimiter.backoffMax); err != nil {
