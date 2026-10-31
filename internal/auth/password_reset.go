@@ -63,7 +63,7 @@ func (s *Service) buildPasswordResetLink(r *http.Request, token string) string {
 		return relative
 	}
 
-	return requestScheme(r) + "://" + host + relative
+	return requestScheme(r, s.trustProxyHeaders) + "://" + host + relative
 }
 
 func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink string, userID int) {

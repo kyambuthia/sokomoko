@@ -107,8 +107,8 @@ func containsRole(roles []string, role string) bool {
 	return false
 }
 
-func requestScheme(r *http.Request) string {
-	if r != nil && (r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")) {
+func requestScheme(r *http.Request, trustProxy bool) string {
+	if r != nil && (r.TLS != nil || (trustProxy && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))) {
 		return "https"
 	}
 	return "http"
