@@ -12,8 +12,14 @@ import (
 
 const maxProviderResponseBytes = 1 << 20
 
+// defaultClient uses bounded requests and treats unexpected API redirects as responses.
 func defaultClient() *http.Client {
-	return &http.Client{Timeout: 20 * time.Second}
+	return &http.Client{
+		Timeout: 20 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
 // doJSON sends body as JSON (when non-nil) and decodes a JSON response into
