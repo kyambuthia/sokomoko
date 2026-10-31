@@ -145,10 +145,11 @@ func (s *Service) ExceptionsNeedingAttention(ctx context.Context) (int, error) {
 }
 
 func truncate(value string, n int) string {
-	if len(value) <= n {
+	runes := []rune(value)
+	if len(runes) <= n {
 		return value
 	}
-	return value[:n]
+	return string(runes[:n])
 }
 
 func (s *Service) RefreshRefund(ctx context.Context, actor *Actor, id int) (*db.PaymentException, error) {
