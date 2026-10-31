@@ -98,11 +98,10 @@ func (s *Store) Migrate(ctx context.Context) error {
 	defer conn.Close()
 
 	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationLockKey); err != nil {
+		discardSQLConn(conn)
 		return fmt.Errorf("acquire migration lock: %w", err)
 	}
-	defer func() {
-		_, _ = conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", migrationLockKey)
-	}()
+	defer releaseAdvisoryLock(conn, migrationLockKey)
 
 	if _, err := conn.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
