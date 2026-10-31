@@ -21,7 +21,7 @@
     <div class="page-head"><h2><a href="/services/{{ .Slug }}">{{ .Title }}</a></h2><span class="badge">{{ .Category }}</span></div>
     <p class="muted">{{ .PartnerName }} · {{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote{{ end }}</p>
     <p>{{ .DurationMinutes }} minutes · {{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</p>
-    {{ if gt .OpenDays 0 }}<p class="tiny muted">Hours published on {{ .OpenDays }} days · {{ .Timezone }}</p>{{ end }}
+    {{ if gt .OpenDays 0 }}<p class="tiny muted">Hours published on {{ .OpenDays }} {{ if eq .OpenDays 1 }}day{{ else }}days{{ end }} · {{ .Timezone }}</p>{{ end }}
     <a href="/services/{{ .Slug }}">View service</a>
   </article>
   {{ else }}

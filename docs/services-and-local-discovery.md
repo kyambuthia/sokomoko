@@ -147,8 +147,10 @@ fixed/from/quote pricing in KES or USD, broad public area, premises/mobile/remot
 mode and draft/published/archived state. Each listing can publish a timezone and
 one opening interval per weekday; times are local to the IANA timezone, weekdays
 use Sunday=0 through Saturday=6, and omitted days have no published hours. The
-schedule is informational and does not calculate bookable slots. Listings do not
-reserve stock, accept appointments, store precise coordinates or claim practitioner
+schedule is informational and does not calculate bookable slots. Public and
+partner service lists show the count of days with published hours and the listing
+timezone; individual detail reads show the local intervals. Listings do not reserve
+stock, accept appointments, store precise coordinates or claim practitioner
 verification.
 Public queries include only published listings of active shops. Seller writes
 lock current membership and role, use optimistic versions to reject stale edits,
