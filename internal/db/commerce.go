@@ -46,13 +46,26 @@ func (s *Store) GetCommerceSettings(ctx context.Context) (CommerceSettings, erro
 	return c, err
 }
 
-// UpdateCommerceSettings saves the money settings. The currency may only
-// change while no orders exist, because stored prices are minor units of the
-// old currency; product currencies follow the change.
+// UpdateCommerceSettings saves marketplace money settings for a trusted
+// internal caller. Currency may change only while there are no orders.
 func (s *Store) UpdateCommerceSettings(ctx context.Context, c CommerceSettings) error {
+	return s.updateCommerceSettings(ctx, 0, c, false)
+}
+
+// UpdateCommerceSettingsForActor revalidates the admin in the settings transaction.
+func (s *Store) UpdateCommerceSettingsForActor(ctx context.Context, actorID int, c CommerceSettings) error {
+	return s.updateCommerceSettings(ctx, actorID, c, true)
+}
+
+func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c CommerceSettings, requireAdmin bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
 		var current string
 		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR UPDATE").Scan(&current); err != nil {
 			return err
@@ -141,26 +154,41 @@ func (s *Store) GetPaymentProviderConfig(ctx context.Context, provider string) (
 	return scanProviderConfig(s.DB.QueryRowContext(ctx, "SELECT "+providerColumns+" FROM payment_providers WHERE provider = $1", provider))
 }
 
-// SavePaymentProviderConfig upserts a provider. A nil Secrets keeps the stored
-// secrets, so an admin can change settings without re-entering keys.
+// SavePaymentProviderConfig upserts a provider for a trusted internal caller.
 func (s *Store) SavePaymentProviderConfig(ctx context.Context, c PaymentProviderConfig) error {
+	return s.savePaymentProviderConfig(ctx, 0, c, false)
+}
+
+// SavePaymentProviderConfigForActor revalidates the admin in the provider update transaction.
+func (s *Store) SavePaymentProviderConfigForActor(ctx context.Context, actorID int, c PaymentProviderConfig) error {
+	return s.savePaymentProviderConfig(ctx, actorID, c, true)
+}
+
+func (s *Store) savePaymentProviderConfig(ctx context.Context, actorID int, c PaymentProviderConfig, requireAdmin bool) error {
 	settings, err := json.Marshal(c.Settings)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	_, err = s.DB.ExecContext(ctx,
-		`INSERT INTO payment_providers (provider, enabled, mode, settings, secrets)
-		 VALUES ($1, $2, $3, $4, $5)
-		 ON CONFLICT (provider) DO UPDATE SET
-		   enabled = EXCLUDED.enabled,
-		   mode = EXCLUDED.mode,
-		   settings = EXCLUDED.settings,
-		   secrets = COALESCE(EXCLUDED.secrets, payment_providers.secrets)`,
-		c.Provider, c.Enabled, c.Mode, settings, c.Secrets,
-	)
-	return wrapDBError(err)
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO payment_providers (provider, enabled, mode, settings, secrets)
+			 VALUES ($1, $2, $3, $4, $5)
+			 ON CONFLICT (provider) DO UPDATE SET
+			   enabled = EXCLUDED.enabled,
+			   mode = EXCLUDED.mode,
+			   settings = EXCLUDED.settings,
+			   secrets = COALESCE(EXCLUDED.secrets, payment_providers.secrets)`,
+			c.Provider, c.Enabled, c.Mode, settings, c.Secrets,
+		)
+		return wrapDBError(err)
+	})
 }
 
 // OnlinePayment is the payment row an online provider works with.

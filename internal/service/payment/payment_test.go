@@ -22,6 +22,11 @@ func newTestService(t *testing.T) (*Service, *db.Store) {
 	if err := store.ApplySchema(); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.CreateUser(t.Context(), db.User{
+		Username: "payment-admin", Email: "payment-admin@example.com", PasswordHash: "hash", Role: db.RoleAdmin,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	return New(store, payments.NewRegistry(payments.Options{}), secret.Development()), store
 }
 

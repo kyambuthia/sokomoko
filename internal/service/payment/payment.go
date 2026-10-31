@@ -53,9 +53,11 @@ type store interface {
 	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
 	GetCommerceSettings(ctx context.Context) (db.CommerceSettings, error)
 	UpdateCommerceSettings(context.Context, db.CommerceSettings) error
+	UpdateCommerceSettingsForActor(ctx context.Context, actorID int, settings db.CommerceSettings) error
 	ListPaymentProviderConfigs(ctx context.Context) ([]db.PaymentProviderConfig, error)
 	GetPaymentProviderConfig(ctx context.Context, provider string) (*db.PaymentProviderConfig, error)
 	SavePaymentProviderConfig(context.Context, db.PaymentProviderConfig) error
+	SavePaymentProviderConfigForActor(ctx context.Context, actorID int, config db.PaymentProviderConfig) error
 	GetOrderPayment(ctx context.Context, userID, orderID int) (*db.OnlinePayment, error)
 	GetPaymentByReference(ctx context.Context, provider, reference string) (*db.OnlinePayment, error)
 	GetPaymentByCallbackToken(ctx context.Context, provider, tokenHash string) (*db.OnlinePayment, error)

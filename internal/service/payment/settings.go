@@ -3,6 +3,7 @@ package payment
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -181,7 +182,10 @@ func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, inp
 			return err
 		}
 	}
-	if err := s.store.SavePaymentProviderConfig(ctx, record); err != nil {
+	if err := s.store.SavePaymentProviderConfigForActor(ctx, actor.ID, record); err != nil {
+		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+			return ErrForbidden
+		}
 		return err
 	}
 	state := "disabled"
@@ -261,7 +265,10 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 		}
 	}
 	settings := db.CommerceSettings{Currency: currency.Code, ShippingFlat: flat, FreeShippingThreshold: free, TaxRateBP: int64(taxPct)}
-	if err := s.store.UpdateCommerceSettings(ctx, settings); err != nil {
+	if err := s.store.UpdateCommerceSettingsForActor(ctx, actor.ID, settings); err != nil {
+		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+			return Pricing{}, ErrForbidden
+		}
 		return Pricing{}, err
 	}
 	s.logAudit(ctx, actor.ID, "payments.pricing.update", "commerce_settings", 1,
