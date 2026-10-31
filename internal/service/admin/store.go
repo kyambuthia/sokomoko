@@ -37,6 +37,7 @@ type store interface {
 	GetAllProducts(ctx context.Context) ([]db.Product, error)
 	ListProductsPage(context.Context, db.ProductFilter) ([]db.Product, int, error)
 	GetOrderStatusCounts(ctx context.Context) (map[string]int, error)
+	GetOrderReportData(ctx context.Context) (money.Cents, map[string]int, error)
 	GetUserByID(ctx context.Context, id int) (*db.User, error)
 	ListAllOrders(ctx context.Context) ([]db.Order, error)
 	ListAllOrdersPage(context.Context, int, int) ([]db.Order, int, error)

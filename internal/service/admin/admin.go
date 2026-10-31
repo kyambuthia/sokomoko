@@ -289,11 +289,7 @@ func (s *Service) DeliveriesPage(ctx context.Context, page, limit int) (Delivery
 }
 
 func (s *Service) Reports(ctx context.Context) (SalesReport, error) {
-	revenue, err := s.store.SumOrderRevenue(ctx)
-	if err != nil {
-		return SalesReport{}, err
-	}
-	counts, err := s.store.GetOrderStatusCounts(ctx)
+	revenue, counts, err := s.store.GetOrderReportData(ctx)
 	if err != nil {
 		return SalesReport{}, err
 	}

@@ -770,6 +770,52 @@ func (s *Store) GetPartnerOrderSummary(ctx context.Context) (PartnerOrderSummary
 	return summary, err
 }
 
+// GetOrderReportData returns revenue and order-status totals from one snapshot.
+func (s *Store) GetOrderReportData(ctx context.Context) (money.Cents, map[string]int, error) {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return 0, nil, err
+	}
+	defer tx.Rollback()
+
+	var revenue money.Cents
+	if err := tx.QueryRowContext(ctx,
+		"SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE status <> 'cancelled'",
+	).Scan(&revenue); err != nil {
+		return 0, nil, err
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT status, count(*) FROM orders GROUP BY status")
+	if err != nil {
+		return 0, nil, err
+	}
+	counts := make(map[string]int, len(validOrderStatuses))
+	for status := range validOrderStatuses {
+		counts[status] = 0
+	}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			rows.Close()
+			return 0, nil, err
+		}
+		counts[status] = count
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return 0, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, nil, wrapDBError(err)
+	}
+	return revenue, counts, nil
+}
+
 func (s *Store) GetOrderStatusCounts(ctx context.Context) (map[string]int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
