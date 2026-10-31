@@ -16,8 +16,13 @@ func (s *Store) RunExclusive(ctx context.Context, key int64, fn func(context.Con
 		return false, err
 	}
 	defer conn.Close()
+	discard := func() {
+		// database/sql drops the physical session when Raw returns ErrBadConn.
+		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	}
 	var acquired bool
 	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&acquired); err != nil {
+		discard()
 		return false, err
 	}
 	if !acquired {
@@ -33,7 +38,7 @@ func (s *Store) RunExclusive(ctx context.Context, key int64, fn func(context.Con
 		if err != nil || !unlocked {
 			slog.Warn("maintenance advisory unlock failed; discarding connection", "key", key, "unlocked", unlocked, "error", err)
 			// Do not return a possibly lock-holding session to the pool.
-			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+			discard()
 		}
 	}()
 	fn(ctx)
