@@ -11,11 +11,13 @@ import (
 )
 
 const (
-	resetEmailOutboxPollInterval = time.Second
-	resetEmailOutboxLease        = 30 * time.Second
-	resetEmailOutboxRetryBase    = 5 * time.Second
-	resetEmailOutboxRetryMax     = 5 * time.Minute
-	resetEmailOutboxDBTimeout    = 3 * time.Second
+	resetEmailOutboxPollInterval   = time.Second
+	resetEmailOutboxErrorRetryBase = time.Second
+	resetEmailOutboxErrorRetryMax  = 30 * time.Second
+	resetEmailOutboxLease          = 30 * time.Second
+	resetEmailOutboxRetryBase      = 5 * time.Second
+	resetEmailOutboxRetryMax       = 5 * time.Minute
+	resetEmailOutboxDBTimeout      = 3 * time.Second
 )
 
 type passwordResetOutboxPayload struct {
@@ -59,21 +61,25 @@ func (s *Service) MaintainPasswordResetEmailOutbox(ctx context.Context) {
 	if !ok || s.passwordResetEmailSender == nil || s.passwordResetOutboxBox == nil {
 		return
 	}
-	poll := time.NewTicker(resetEmailOutboxPollInterval)
-	defer poll.Stop()
+	retryDelay := resetEmailOutboxErrorRetryBase
 	for ctx.Err() == nil {
 		entries, err := outbox.ClaimPasswordResetEmails(ctx, 1, resetEmailOutboxLease)
 		if err != nil {
 			if ctx.Err() == nil {
 				slog.Error("password reset email outbox claim failed", "error", err)
 			}
-			if !waitForResetEmailOutbox(ctx, poll.C) {
+			if !waitForResetEmailOutbox(ctx, retryDelay) {
 				return
+			}
+			retryDelay *= 2
+			if retryDelay > resetEmailOutboxErrorRetryMax {
+				retryDelay = resetEmailOutboxErrorRetryMax
 			}
 			continue
 		}
+		retryDelay = resetEmailOutboxErrorRetryBase
 		if len(entries) == 0 {
-			if !waitForResetEmailOutbox(ctx, poll.C) {
+			if !waitForResetEmailOutbox(ctx, resetEmailOutboxPollInterval) {
 				return
 			}
 			continue
@@ -188,11 +194,13 @@ func resetEmailOutboxRetryDelay(attempt int) time.Duration {
 	return delay
 }
 
-func waitForResetEmailOutbox(ctx context.Context, tick <-chan time.Time) bool {
+func waitForResetEmailOutbox(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return false
-	case <-tick:
+	case <-timer.C:
 		return true
 	}
 }
