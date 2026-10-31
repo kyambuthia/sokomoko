@@ -548,11 +548,29 @@ func (s *Service) dueForVerify(ctx context.Context, attemptID int, reference str
 	if throttle, ok := s.store.(paymentVerificationThrottle); ok {
 		allowed, err := throttle.TryAcquirePaymentVerification(ctx, attemptID, verifyInterval)
 		if err == nil {
+			s.rememberVerificationLocal(reference, time.Now())
 			return allowed
 		}
 		slog.WarnContext(ctx, "shared payment verification throttle unavailable; using process-local fallback", "attempt_id", attemptID, "error", err)
 	}
 	return s.dueForVerifyLocal(reference)
+}
+
+// rememberVerificationLocal warms the fallback after a healthy shared-throttle
+// result, so a following database error cannot immediately repeat the check.
+func (s *Service) rememberVerificationLocal(reference string, now time.Time) {
+	key := hashToken(reference)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.verified == nil {
+		s.verified = make(map[string]time.Time)
+	}
+	if _, exists := s.verified[key]; exists || len(s.verified) < maxVerifiedReferences {
+		s.verified[key] = now
+		return
+	}
+	s.saturatedUntil = now.Add(verifyInterval)
 }
 
 // dueForVerifyLocal throttles provider checks per attempt in this process. A
