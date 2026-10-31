@@ -86,6 +86,19 @@ func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c Comme
 			}
 		}
 		if current != c.Currency {
+			currency, ok := money.LookupCurrency(c.Currency)
+			if ok && currency.MinorDigits < 2 {
+				if !c.ShippingFlat.FitsCurrency(c.Currency) || !c.FreeShippingThreshold.FitsCurrency(c.Currency) {
+					return money.ErrInvalidCurrencyPrecision
+				}
+				var hasFractionalProduct bool
+				if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM products WHERE deleted_at IS NULL AND price_cents % 100 <> 0)").Scan(&hasFractionalProduct); err != nil {
+					return err
+				}
+				if hasFractionalProduct {
+					return money.ErrInvalidCurrencyPrecision
+				}
+			}
 			var orders int
 			if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM orders").Scan(&orders); err != nil {
 				return err

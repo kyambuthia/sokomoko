@@ -5,6 +5,7 @@ package checkout
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,11 +15,12 @@ import (
 )
 
 var (
-	ErrCartEmpty            = errors.New("cart is empty")
-	ErrDeliveryAddress      = errors.New("delivery address is required")
-	ErrInvalidPaymentMethod = paymentsvc.ErrInvalidMethod
-	ErrInsufficientStock    = errors.New("insufficient stock")
-	ErrAmountOverflow       = money.ErrOverflow
+	ErrCartEmpty                = errors.New("cart is empty")
+	ErrDeliveryAddress          = errors.New("delivery address is required")
+	ErrInvalidPaymentMethod     = paymentsvc.ErrInvalidMethod
+	ErrInsufficientStock        = errors.New("insufficient stock")
+	ErrAmountOverflow           = money.ErrOverflow
+	ErrInvalidCurrencyPrecision = money.ErrInvalidCurrencyPrecision
 )
 
 const (
@@ -102,6 +104,11 @@ func newWithStore(store store, payments paymentService) *Service {
 // CalculateSummary prices a subtotal: flat shipping below the free-shipping
 // threshold plus estimated tax on the subtotal.
 func CalculateSummary(subtotal money.Cents, pricing Pricing) (Summary, error) {
+	if !subtotal.FitsCurrency(pricing.Currency) ||
+		!pricing.ShippingFlat.FitsCurrency(pricing.Currency) ||
+		!pricing.FreeShippingThreshold.FitsCurrency(pricing.Currency) {
+		return Summary{}, ErrInvalidCurrencyPrecision
+	}
 	shipping := pricing.ShippingFlat
 	if subtotal == 0 || (pricing.FreeShippingThreshold > 0 && subtotal >= pricing.FreeShippingThreshold) {
 		shipping = 0
@@ -230,7 +237,15 @@ func (s *Service) prepareOnce(ctx context.Context, userID int, reservationKey st
 		return err
 	}
 	pricing := pricingFrom(settings)
+	for _, item := range items {
+		if !item.UnitPrice.FitsCurrency(pricing.Currency) || !item.LineTotal.FitsCurrency(pricing.Currency) {
+			return s.rejectCurrencyPrecision(ctx, userID, key)
+		}
+	}
 	summary, err := CalculateSummary(subtotal, pricing)
+	if errors.Is(err, ErrInvalidCurrencyPrecision) {
+		return s.rejectCurrencyPrecision(ctx, userID, key)
+	}
 	if errors.Is(err, money.ErrOverflow) {
 		return ErrAmountOverflow
 	}
@@ -337,7 +352,33 @@ func (s *Service) ensureOpen(ctx context.Context, userID int, key string) (*db.C
 	if record == nil || len(record.Lines) == 0 {
 		return nil, ErrCartEmpty
 	}
+	if !checkoutFitsCurrency(record) {
+		return nil, s.rejectCurrencyPrecision(ctx, userID, record.Token)
+	}
 	return record, nil
+}
+
+func checkoutFitsCurrency(checkout *db.Checkout) bool {
+	if checkout == nil ||
+		!checkout.SubtotalAmount.FitsCurrency(checkout.Currency) ||
+		!checkout.ShippingFee.FitsCurrency(checkout.Currency) ||
+		!checkout.TaxAmount.FitsCurrency(checkout.Currency) ||
+		!checkout.TotalAmount.FitsCurrency(checkout.Currency) {
+		return false
+	}
+	for _, line := range checkout.Lines {
+		if !line.UnitPrice.FitsCurrency(checkout.Currency) || !line.LineTotal.FitsCurrency(checkout.Currency) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) rejectCurrencyPrecision(ctx context.Context, userID int, token string) error {
+	if err := s.store.InvalidateCheckoutForCurrencyPrecision(ctx, userID, token); err != nil {
+		return fmt.Errorf("invalidate checkout with unsupported currency precision: %w", err)
+	}
+	return ErrInvalidCurrencyPrecision
 }
 
 func (s *Service) isOpen(checkout *db.Checkout) bool {

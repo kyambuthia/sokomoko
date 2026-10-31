@@ -107,7 +107,8 @@ Keep changes additive so the previous binary keeps working during a release.
 `internal/money.Cents` is an `int64` count of hundredths of the major unit.
 This fixed storage scale is retained for every currency. New UGX and RWF
 amounts accept only whole units and display without `.00`; existing fractional
-records remain visible and can be saved unchanged while being edited.
+records remain visible and can be saved unchanged while being edited. Checkout
+stays blocked until cart line prices and shipping settings use whole units.
 
 - `Parse` reads decimal input as fixed hundredths; `ParseCurrency` also
   enforces the selected ISO currency precision. Negative values, more than two

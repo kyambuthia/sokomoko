@@ -15,8 +15,9 @@ import (
 type Cents int64
 
 var (
-	ErrInvalidAmount = errors.New("invalid amount")
-	ErrOverflow      = errors.New("amount overflow")
+	ErrInvalidAmount            = errors.New("invalid amount")
+	ErrInvalidCurrencyPrecision = errors.New("amount precision does not match currency")
+	ErrOverflow                 = errors.New("amount overflow")
 )
 
 // String renders the amount as a plain decimal string such as "12.50".
@@ -91,11 +92,30 @@ func ParseCurrency(raw, code string) (Cents, error) {
 	if err != nil {
 		return 0, err
 	}
-	currency, ok := LookupCurrency(code)
-	if !ok || (currency.MinorDigits == 0 && amount%100 != 0) {
+	if _, ok := LookupCurrency(code); !ok {
 		return 0, ErrInvalidAmount
 	}
+	if !amount.FitsCurrency(code) {
+		return 0, ErrInvalidCurrencyPrecision
+	}
 	return amount, nil
+}
+
+// FitsCurrency reports whether c is an exact number of the currency's minor
+// units at the internal hundredths scale.
+func (c Cents) FitsCurrency(code string) bool {
+	currency, ok := LookupCurrency(code)
+	if !ok {
+		return false
+	}
+	if currency.MinorDigits >= 2 {
+		return true
+	}
+	scale := int64(1)
+	for digits := currency.MinorDigits; digits < 2; digits++ {
+		scale *= 10
+	}
+	return int64(c)%scale == 0
 }
 
 // Add returns the sum unless it falls outside the Cents range.

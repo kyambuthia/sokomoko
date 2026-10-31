@@ -17,6 +17,7 @@ type store interface {
 	GetCheckoutPlacementByIdempotency(ctx context.Context, userID int, idempotencyKey string) (*db.CheckoutPlacement, error)
 	PlaceOrderFromCheckoutWithPayment(ctx context.Context, userID int, checkoutToken string, deliveryAddress string, deliveryNotice string, payment db.PaymentRecordInput) (db.CheckoutPlacement, error)
 	ReserveCartForCheckout(ctx context.Context, userID int, reservationKey string, expiresAt time.Time) error
+	InvalidateCheckoutForCurrencyPrecision(ctx context.Context, userID int, token string) error
 	UpdateCheckoutDraft(ctx context.Context, userID int, token string, deliveryAddress string, paymentMethod string) (*db.Checkout, error)
 	UpsertCheckout(ctx context.Context, userID int, input db.CheckoutInput) (*db.Checkout, error)
 }

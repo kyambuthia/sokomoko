@@ -195,6 +195,8 @@ func writeCheckoutError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "invalid_payment_method", "Choose a supported payment method")
 	case errors.Is(err, checkoutsvc.ErrCartEmpty):
 		writeError(w, http.StatusConflict, "cart_empty", "Cart is empty or the checkout has expired")
+	case errors.Is(err, checkoutsvc.ErrInvalidCurrencyPrecision):
+		writeError(w, http.StatusConflict, "currency_precision_required", "Store pricing must use whole units before checkout")
 	case errors.Is(err, checkoutsvc.ErrInsufficientStock), errors.Is(err, db.ErrInsufficientStock):
 		writeError(w, http.StatusConflict, "insufficient_stock", "One or more items are unavailable")
 	case errors.Is(err, db.ErrCheckoutNotFound):

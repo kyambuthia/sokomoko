@@ -296,6 +296,8 @@ func checkoutErrorMessage(err error) (string, bool) {
 		return "Delivery address is required", true
 	case errors.Is(err, checkoutsvc.ErrCartEmpty):
 		return "Your cart is empty", true
+	case errors.Is(err, checkoutsvc.ErrInvalidCurrencyPrecision):
+		return "This store has a fractional amount that must be changed to whole units before checkout.", true
 	case errors.Is(err, checkoutsvc.ErrInvalidPaymentMethod):
 		return "Choose a supported payment method", true
 	case errors.Is(err, checkoutsvc.ErrAmountOverflow):

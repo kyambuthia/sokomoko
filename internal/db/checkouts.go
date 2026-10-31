@@ -183,6 +183,28 @@ func (s *Store) GetCheckoutByToken(ctx context.Context, userID int, token string
 	return s.loadCheckoutSnapshot(ctx, "WHERE user_id = $1 AND token = $2", userID, key)
 }
 
+// InvalidateCheckoutForCurrencyPrecision releases a reservation and cancels
+// an open checkout whose stored amounts no longer match its currency.
+func (s *Store) InvalidateCheckoutForCurrencyPrecision(ctx context.Context, userID int, token string) error {
+	key := strings.TrimSpace(token)
+	if userID <= 0 || key == "" {
+		return nil
+	}
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased,
+			"user_id = $2 AND reservation_key = $3", userID, key); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx,
+			"UPDATE checkouts SET status = $1 WHERE user_id = $2 AND token = $3 AND status = $4",
+			CheckoutStatusCancelled, userID, key, CheckoutStatusOpen,
+		)
+		return wrapDBError(err)
+	})
+}
+
 // GetLatestOpenCheckout returns the user's most recent unexpired open checkout.
 func (s *Store) GetLatestOpenCheckout(ctx context.Context, userID int) (*Checkout, error) {
 	ctx, cancel := s.queryContext(ctx)

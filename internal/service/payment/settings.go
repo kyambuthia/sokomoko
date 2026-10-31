@@ -308,6 +308,9 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 		if errors.Is(err, db.ErrPaymentProviderCurrencyMismatch) {
 			return Pricing{}, fmt.Errorf("%w: payment settings changed; reload and retry", ErrCurrencyMismatch)
 		}
+		if errors.Is(err, money.ErrInvalidCurrencyPrecision) {
+			return Pricing{}, fmt.Errorf("%w: update product prices, shipping fee, and free-shipping threshold to whole units before selecting %s", ErrInvalidPricing, currency.Code)
+		}
 		return Pricing{}, err
 	}
 	s.logAudit(ctx, actor.ID, "payments.pricing.update", "commerce_settings", 1,

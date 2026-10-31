@@ -255,7 +255,9 @@ compatibility: interpret them as hundredths of the major unit, including for
 UGX and RWF, whose ISO minor-unit precision is zero. Clients should use the
 integer fields for arithmetic and divide by 100 to recover the major-unit
 amount. New UGX and RWF product and pricing inputs accept whole units only.
-Cart, checkout, order, and payment totals follow the same integer-field scale.
+Checkout rejects legacy fractional cart line prices or shipping settings with
+`currency_precision_required` until the store updates it. Cart, checkout,
+order, and payment totals follow the same integer-field scale.
 
 Courier update retries for the same current action state and failure category
 succeed without duplicate timeline events. An old state submitted after a later
