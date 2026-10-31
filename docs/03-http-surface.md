@@ -98,8 +98,8 @@ address as a draft and re-renders the form with `422`.
 | `/storefront` | GET | public | Redirect to the storefront host |
 | `/catalog`, `/catalog/new` | GET | public | Redirect to the partner host's `/products` and `/products/new` |
 | `/` | GET | admin, staff | `AdminDashboard` |
-| `/products` | GET | admin, staff | `AdminProducts` |
-| `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` |
+| `/products` | GET | admin, staff | `AdminProducts` (50 per page, `?page=`) |
+| `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` (50 per page, `?page=`; updates keep the current page) |
 | `/reports` | GET | admin, staff | `AdminReports` |
 | `/deliveries` | GET | admin, staff | `AdminDeliveries` (delivery board) |
 | `/couriers/new` | GET, POST | admin | `auth.CourierSignUp` (create a courier account with username and initial password; no email) |
@@ -122,7 +122,7 @@ address as a draft and re-renders the form with `422`.
 | `/` | GET | admin, staff, partner | `PartnerRoot`: redirects to `/setup` or `/dashboard` |
 | `/setup` | GET, POST | admin, staff, partner (POST needs admin or staff) | `PartnerSetup` (store settings; read-only for partners) |
 | `/dashboard` | GET | admin, staff, partner | `PartnerDashboard` |
-| `/products` | GET | admin, staff, partner | `PartnerProducts` |
+| `/products` | GET, HEAD | admin, staff, partner | `PartnerProducts` (50 per page, `?page=`) |
 | `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` |
 | `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` |
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
