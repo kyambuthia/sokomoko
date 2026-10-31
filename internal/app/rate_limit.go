@@ -105,6 +105,8 @@ func (l *ipRateLimiter) removeLocked(key string, entry rateLimitEntry) {
 	l.saturatedUntil = time.Time{}
 }
 
+// makeRoomLocked preserves active rate limits. When every slot is penalized,
+// new keys wait until the first window expires instead of evicting a client.
 func (l *ipRateLimiter) makeRoomLocked(now time.Time) (time.Duration, bool) {
 	if len(l.entries) < maxRateLimitEntries {
 		return 0, false
