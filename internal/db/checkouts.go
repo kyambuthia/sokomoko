@@ -92,7 +92,7 @@ func validateCheckoutCartTx(ctx context.Context, tx *sql.Tx, userID int, key str
 	rows, err := tx.QueryContext(ctx,
 		`SELECT product_id, quantity FROM stock_reservations
 		 WHERE user_id = $1 AND reservation_key = $2 AND status = 'active'
-		 ORDER BY product_id, id FOR UPDATE`,
+		 ORDER BY product_id, warehouse_id, id FOR UPDATE`,
 		userID, key,
 	)
 	if err != nil {

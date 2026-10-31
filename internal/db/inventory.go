@@ -67,6 +67,7 @@ func recordStockMovement(ctx context.Context, q querier, productID, warehouseID 
 }
 
 type releasedReservation struct {
+	ID             int64
 	ProductID      int
 	WarehouseID    int
 	Quantity       int
@@ -78,11 +79,21 @@ type releasedReservation struct {
 // WHERE clause that already restricts to active reservations; its parameters
 // start at $2.
 func releaseReservationsTx(ctx context.Context, tx *sql.Tx, newStatus, predicate string, args ...any) (int, error) {
+	// Lock reservation rows in the same stable order as checkout validation.
 	rows, err := tx.QueryContext(ctx,
-		`UPDATE stock_reservations
-		 SET status = $1, released_at = now()
+		`WITH reservations_to_release AS MATERIALIZED (
+		 SELECT id
+		 FROM stock_reservations
 		 WHERE status = 'active' AND `+predicate+`
-		 RETURNING product_id, warehouse_id, quantity, reservation_key`,
+		 ORDER BY product_id, warehouse_id, id
+		 FOR UPDATE
+		)
+		 UPDATE stock_reservations AS reservation
+		 SET status = $1, released_at = now()
+		 FROM reservations_to_release
+		 WHERE reservation.id = reservations_to_release.id
+		 RETURNING reservation.id, reservation.product_id, reservation.warehouse_id,
+		           reservation.quantity, reservation.reservation_key`,
 		append([]any{newStatus}, args...)...,
 	)
 	if err != nil {
@@ -91,7 +102,7 @@ func releaseReservationsTx(ctx context.Context, tx *sql.Tx, newStatus, predicate
 	released := []releasedReservation{}
 	for rows.Next() {
 		var r releasedReservation
-		if err := rows.Scan(&r.ProductID, &r.WarehouseID, &r.Quantity, &r.ReservationKey); err != nil {
+		if err := rows.Scan(&r.ID, &r.ProductID, &r.WarehouseID, &r.Quantity, &r.ReservationKey); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -107,7 +118,10 @@ func releaseReservationsTx(ctx context.Context, tx *sql.Tx, newStatus, predicate
 		if released[i].ProductID != released[j].ProductID {
 			return released[i].ProductID < released[j].ProductID
 		}
-		return released[i].WarehouseID < released[j].WarehouseID
+		if released[i].WarehouseID != released[j].WarehouseID {
+			return released[i].WarehouseID < released[j].WarehouseID
+		}
+		return released[i].ID < released[j].ID
 	})
 
 	reason := "reservation released"
