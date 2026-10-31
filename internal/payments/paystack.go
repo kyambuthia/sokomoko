@@ -118,7 +118,7 @@ func (p *Paystack) Start(ctx context.Context, cfg Config, req StartRequest) (Sta
 	if err := json.Unmarshal(env.Data, &data); err != nil || data.AuthorizationURL == "" {
 		return StartResult{}, fmt.Errorf("%w: missing authorization URL", ErrProviderFailure)
 	}
-	if u, err := url.Parse(data.AuthorizationURL); err != nil || u.Scheme != "https" && p.BaseURL == "" {
+	if !validAuthorizationURL(data.AuthorizationURL, p.BaseURL == "") {
 		return StartResult{}, fmt.Errorf("%w: unexpected authorization URL", ErrProviderFailure)
 	}
 	return StartResult{
@@ -126,6 +126,14 @@ func (p *Paystack) Start(ctx context.Context, cfg Config, req StartRequest) (Sta
 		Data:        map[string]string{"access_code": data.AccessCode},
 		Charged:     req.Amount,
 	}, nil
+}
+
+func validAuthorizationURL(raw string, requireHTTPS bool) bool {
+	u, err := url.Parse(raw)
+	if err != nil || !u.IsAbs() || u.Hostname() == "" || u.User != nil {
+		return false
+	}
+	return !requireHTTPS || strings.EqualFold(u.Scheme, "https")
 }
 
 func (p *Paystack) Verify(ctx context.Context, cfg Config, req VerifyRequest) (Verification, error) {
