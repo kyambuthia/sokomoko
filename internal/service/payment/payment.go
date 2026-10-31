@@ -397,7 +397,10 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 		data["redirect_url"] = result.RedirectURL
 	}
 	if err := s.store.UpdatePaymentPayload(ctx, attemptID, data); err != nil {
-		return StartOutcome{}, err
+		slog.Error("persist payment start response", "attempt_id", attemptID, "error", err)
+		// The request reference and callback token were stored before contacting
+		// the provider, so keep the successful start usable while webhooks,
+		// callbacks, or reference-based verification reconcile its result.
 	}
 	return StartOutcome{RedirectURL: result.RedirectURL}, nil
 }
