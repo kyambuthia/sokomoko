@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -111,15 +110,8 @@ func (h *Handler) role(roles []string, next http.Handler) http.Handler {
 const maxJSONBodyBytes = 1 << 20
 
 func decodeJSON(r *http.Request, target any) error {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxJSONBodyBytes+1))
-	if err != nil {
-		return err
-	}
-	if len(body) > maxJSONBodyBytes {
-		return errors.New("request body exceeds 1 MiB")
-	}
-
-	decoder := json.NewDecoder(bytes.NewReader(body))
+	limitedBody := &io.LimitedReader{R: r.Body, N: maxJSONBodyBytes + 1}
+	decoder := json.NewDecoder(limitedBody)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -127,6 +119,9 @@ func decodeJSON(r *http.Request, target any) error {
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		return errors.New("request body must contain one JSON object")
+	}
+	if limitedBody.N == 0 {
+		return errors.New("request body exceeds 1 MiB")
 	}
 	return nil
 }
