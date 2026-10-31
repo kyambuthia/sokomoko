@@ -90,7 +90,7 @@ func NormalizePhone(raw string) (string, error) {
 	for _, r := range raw {
 		if r >= '0' && r <= '9' {
 			digits.WriteRune(r)
-		} else if !strings.ContainsRune(" +-()", r) {
+		} else if !strings.ContainsRune(" +-()-", r) {
 			return "", ErrInvalidPhone
 		}
 	}
