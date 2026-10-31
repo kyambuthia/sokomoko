@@ -192,6 +192,9 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | `GET /catalog/products/<slug>` | public | One product |
 | `GET /catalog/services?q=&category=&area=&delivery_mode=&partner_id=&has_hours=` | public | Published services; optional `has_hours=true` filter; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
 | `GET /catalog/services/<slug>` | public | Published service details; 404 for private, archived or suspended-shop listings |
+| `POST /services/<slug>/bookings` | customer | Request {`starts_at_local, listing_version, idempotency_key`}; `201` with a booking snapshot; conflicts and unavailability return `409`; disabled in demo mode |
+| `GET /account/service-bookings?page=&limit=` | customer | Own appointment requests, paginated |
+| `POST /account/service-bookings/<id>/cancel?version=` | customer | Cancel own future requested or confirmed appointment; returns `204` |
 | `GET /partner/services` | partner | Own shop listings including drafts; paginated |
 | `POST /partner/services` | partner | Create listing, version 0; owner derived from session |
 | `GET /partner/services/<id>` | partner | Own editable listing; another shop returns 404 |
