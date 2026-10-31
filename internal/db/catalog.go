@@ -456,9 +456,15 @@ func (s *Store) CountFilteredProducts(ctx context.Context, filter ProductFilter)
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	where, args, _ := productFilterSQL(filter)
+	from := `products p LEFT JOIN categories c ON c.id = p.category_id AND c.deleted_at IS NULL`
+	if filter.InStockOnly {
+		from += ` CROSS JOIN LATERAL (
+			SELECT COALESCE(SUM(s.on_hand_quantity - s.reserved_quantity - s.allocated_quantity), 0)::INTEGER AS available_quantity
+			FROM inventory_stocks s WHERE s.product_id = p.id
+		) stock`
+	}
 	var count int
-	err := s.DB.QueryRowContext(ctx,
-		"SELECT count(*) FROM ("+productSelect+" WHERE "+where+") matches", args...).Scan(&count)
+	err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM "+from+" WHERE "+where, args...).Scan(&count)
 	return count, err
 }
 
