@@ -111,16 +111,17 @@ func buildMiddlewares(cfg config.Config, application *app.App, metrics *app.HTTP
 		app.Recoverer(),
 		app.SecurityHeadersWithProxy(cfg.TrustProxyHeaders),
 		app.BodyLimit(app.MaxRequestBodyBytes),
-		application.Auth.CSRFMiddleware,
 	)
 
 	if cfg.PostRateLimitMax > 0 {
 		window := time.Duration(cfg.PostRateLimitWindow) * time.Second
 		clientIP := func(r *http.Request) string { return auth.ClientIP(r, cfg.TrustProxyHeaders) }
 		// Only an HMAC digest of the client IP is persisted by the limiter.
+		// Run it before CSRF checks so rejected POST attempts count too.
 		middlewares = append(middlewares, app.SharedRateLimitByKey(application.RateLimitStore, cfg.RateLimitHMACKeyMaterial(), cfg.PostRateLimitMax, window, clientIP, http.MethodPost))
 	}
 
+	middlewares = append(middlewares, application.Auth.CSRFMiddleware)
 	return middlewares
 }
 
