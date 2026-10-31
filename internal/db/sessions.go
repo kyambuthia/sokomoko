@@ -131,6 +131,44 @@ func (s *Store) RequestPasswordResetToken(ctx context.Context, userID int, token
 	return s.replacePasswordResetToken(ctx, userID, token, expiresAt, true)
 }
 
+// RevokeUndeliveredPasswordResetToken removes a reset token whose email could
+// not be delivered and clears its cooldown without affecting a newer token.
+func (s *Store) RevokeUndeliveredPasswordResetToken(ctx context.Context, userID int, token string) error {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		var lockedUserID int
+		err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&lockedUserID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		result, err := tx.ExecContext(ctx,
+			"DELETE FROM password_reset_tokens WHERE user_id = $1 AND token_hash = $2 AND used_at IS NULL",
+			userID, hashOpaqueToken(token),
+		)
+		if err != nil {
+			return err
+		}
+		deleted, err := rowsAffected(result)
+		if err != nil {
+			return err
+		}
+		if deleted == 0 {
+			return nil
+		}
+		_, err = tx.ExecContext(ctx,
+			"UPDATE users SET password_reset_requested_at = NULL WHERE id = $1",
+			userID,
+		)
+		return err
+	})
+}
+
 func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time, enforceCooldown bool) (bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()

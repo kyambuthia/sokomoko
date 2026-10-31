@@ -316,6 +316,18 @@ func (s *Service) checkAbuseLock(w http.ResponseWriter, scope, identifier string
 	return true
 }
 
+// checkAbuseLockByIP applies an endpoint limit shared across all identifiers
+// from one client. It complements identifier-specific limits where aliases or
+// attacker-chosen values would otherwise create fresh keys.
+func (s *Service) checkAbuseLockByIP(w http.ResponseWriter, scope string, r *http.Request) bool {
+	return s.checkAbuseLock(w, scope+":ip", "", true, r)
+}
+
+// recordAbuseAttemptByIP records a failed request against the client-wide key.
+func (s *Service) recordAbuseAttemptByIP(scope string, r *http.Request) {
+	s.recordAbuseAttempt(scope+":ip", "", true, r)
+}
+
 func (s *Service) markAbuseFailure(scope, identifier string, preserveCase bool, r *http.Request) {
 	s.recordAbuseAttempt(scope, identifier, preserveCase, r)
 }

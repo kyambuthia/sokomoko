@@ -67,8 +67,15 @@ func (s *Service) buildPasswordResetLink(r *http.Request, token string) string {
 }
 
 func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink string, userID int) {
+	s.dispatchPasswordResetEmailWithToken(recipientEmail, resetLink, userID, "", false)
+}
+
+func (s *Service) dispatchPasswordResetEmailWithToken(recipientEmail, resetLink string, userID int, token string, revokeOnFailure bool) {
 	sender := s.passwordResetEmailSender
 	if sender == nil {
+		if revokeOnFailure {
+			s.revokeUndeliveredPasswordResetToken(userID, token)
+		}
 		return
 	}
 
@@ -91,8 +98,26 @@ func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink st
 		}
 		if err != nil {
 			log.Printf("password reset email send failed for user_id=%d: %v", userID, err)
+			if revokeOnFailure {
+				s.revokeUndeliveredPasswordResetToken(userID, token)
+			}
 		}
 	}()
+}
+
+func (s *Service) revokeUndeliveredPasswordResetToken(userID int, token string) {
+	store, ok := s.store.(interface {
+		RevokeUndeliveredPasswordResetToken(context.Context, int, string) error
+	})
+	if !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), resetEmailTimeout)
+	defer cancel()
+	if err := store.RevokeUndeliveredPasswordResetToken(ctx, userID, token); err != nil {
+		log.Printf("password reset: clear failed delivery for user_id=%d: %v", userID, err)
+	}
 }
 
 // defaultResetEmailBackoff is the wait before each retry of a reset email.
@@ -124,18 +149,21 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 
 		identifier := strings.TrimSpace(r.FormValue("identifier"))
 		data.Identifier = identifier
-		if identifier == "" {
-			data.Error = "Enter username or email"
-			renderWithStatus(w, tmpl, 0, data)
-			return
-		}
-
-		if s.checkAbuseLock(w, "password-reset:request", identifier, false, r) {
+		if s.checkAbuseLockByIP(w, "password-reset:request", r) ||
+			(identifier != "" && s.checkAbuseLock(w, "password-reset:request", identifier, false, r)) {
 			data.Error = "Too many attempts. Please wait and try again."
 			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
 			return
 		}
 
+		if identifier == "" {
+			s.recordAbuseAttemptByIP("password-reset:request", r)
+			data.Error = "Enter username or email"
+			renderWithStatus(w, tmpl, 0, data)
+			return
+		}
+
+		s.recordAbuseAttemptByIP("password-reset:request", r)
 		s.recordAbuseAttempt("password-reset:request", identifier, false, r)
 
 		user, err := s.findUserByIdentifier(r.Context(), identifier)
@@ -158,7 +186,7 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 			}
 			if created {
 				resetLink := s.buildPasswordResetLink(r, resetToken)
-				s.dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
+				s.dispatchPasswordResetEmailWithToken(user.Email, resetLink, user.ID, resetToken, !s.shouldExposeResetLink())
 				if s.shouldExposeResetLink() {
 					data.ResetLink = resetLink
 				}
@@ -182,17 +210,13 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 		if r.Method == http.MethodGet {
 			token := strings.TrimSpace(r.URL.Query().Get("token"))
 			data.Token = token
-			abuseIdentifier := token
-			if abuseIdentifier == "" {
-				abuseIdentifier = "missing-token"
-			}
-			if s.checkAbuseLock(w, "password-reset:confirm", abuseIdentifier, true, r) {
+			if s.checkAbuseLockByIP(w, "password-reset:confirm", r) {
 				data.Error = "Too many attempts. Please wait and try again."
 				renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
 				return
 			}
 			if token == "" {
-				s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
+				s.recordAbuseAttemptByIP("password-reset:confirm", r)
 				data.Error = "Missing reset token"
 				renderWithStatus(w, tmpl, 0, data)
 				return
@@ -204,7 +228,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 				return
 			}
 			if resetToken == nil {
-				s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
+				s.recordAbuseAttemptByIP("password-reset:confirm", r)
 				data.Error = "Reset token is invalid or expired"
 				renderWithStatus(w, tmpl, 0, data)
 				return
@@ -212,12 +236,11 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 
 			user, err := s.store.GetUserByID(r.Context(), resetToken.UserID)
 			if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
-				s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
+				s.recordAbuseAttemptByIP("password-reset:confirm", r)
 				data.Error = "Reset token is invalid for this account type"
 				renderWithStatus(w, tmpl, 0, data)
 				return
 			}
-			s.clearAbuseFailures("password-reset:confirm", abuseIdentifier, true, r)
 
 			renderWithStatus(w, tmpl, 0, data)
 			return
@@ -232,12 +255,8 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 		password := r.FormValue("password")
 		confirmPassword := r.FormValue("confirm_password")
 		data.Token = token
-		abuseIdentifier := token
-		if abuseIdentifier == "" {
-			abuseIdentifier = "missing-token"
-		}
 
-		if s.checkAbuseLock(w, "password-reset:confirm", abuseIdentifier, true, r) {
+		if s.checkAbuseLockByIP(w, "password-reset:confirm", r) {
 			data.Error = "Too many attempts. Please wait and try again."
 			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
 			return
@@ -265,7 +284,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 		if resetToken == nil {
-			s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
+			s.recordAbuseAttemptByIP("password-reset:confirm", r)
 			data.Error = "Reset token is invalid or expired"
 			renderWithStatus(w, tmpl, 0, data)
 			return
@@ -273,7 +292,7 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 
 		user, err := s.store.GetUserByID(r.Context(), resetToken.UserID)
 		if err != nil || user == nil || !containsRole(allowedRoles, user.Role) {
-			s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
+			s.recordAbuseAttemptByIP("password-reset:confirm", r)
 			data.Error = "Reset token is invalid for this account type"
 			renderWithStatus(w, tmpl, 0, data)
 			return
@@ -291,12 +310,11 @@ func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []s
 			return
 		}
 		if !used {
-			s.markAbuseFailure("password-reset:confirm", abuseIdentifier, true, r)
+			s.recordAbuseAttemptByIP("password-reset:confirm", r)
 			data.Error = "Reset token is invalid or expired"
 			renderWithStatus(w, tmpl, 0, data)
 			return
 		}
-		s.clearAbuseFailures("password-reset:confirm", abuseIdentifier, true, r)
 
 		data.ShowForm = false
 		data.Message = "Password reset successful. You can now sign in at " + loginPath
