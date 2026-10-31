@@ -37,10 +37,13 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Services and local discovery
 
-- Service listings support discovery and seller management, including optional
-  weekly opening hours in the listing's timezone. Those hours are informational:
-  listings do not reserve appointments, manage practitioner calendars, take
-  deposits or confirm bookings.
+- Appointments use a request-to-book flow. Requests are checked against the
+  listing's timezone and weekly opening hours, and overlapping requested,
+  confirmed or in-progress appointments are blocked for each default
+  capacity-one resource. Customers can cancel future requests or confirmed
+  appointments; partners can respond and record start, completion or no-show.
+  Customers cannot select a resource, and service deposits or payments are not
+  collected.
 - Locality search matches seller-entered neighbourhood/town text. There is no
   geocoding, map display, distance search or live location tracking.
 - Professional qualifications are not verified. The directory does not collect
@@ -66,5 +69,5 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 - **Password-reset email has no outbox.** It is sent from a goroutine and
   retried twice on transient failures (5-second timeout per attempt); a
   process restart during that window loses it.
-- **No metrics or tracing endpoint.** Only structured logs and the health
-  endpoints.
+- **No distributed tracing.** The optional bearer-authenticated /metrics
+  endpoint exposes bounded-cardinality HTTP metrics and Go runtime gauges.

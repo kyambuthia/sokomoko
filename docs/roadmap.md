@@ -79,7 +79,7 @@ reachable.
 - [x] Public browsing by service, category and locality; branded seller forms and JSON API.
 - [x] Development sample listings that preserve seller edits on repeated seeds.
 - [x] Service-context encrypted enquiries.
-- [ ] Transactional appointment reservations, resource availability, conflict prevention and cancellation lifecycle. Service listings now support timezone-aware weekly opening hours, which remain informational until reservation rules are implemented.
+- [ ] Verify transactional appointment reservations, resource availability, conflict prevention and cancellation lifecycle. The request-to-book flow, timezone and opening-hour checks, default capacity-one resources, conflict prevention, customer cancellation, partner status transitions and request expiry are implemented; targeted workflow tests remain before marking this complete.
 - [ ] Privacy-conscious geocoding and local map discovery.
 
 ## Later

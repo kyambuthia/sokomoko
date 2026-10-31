@@ -22,12 +22,16 @@ Migration `0010_service_listings.sql` adds seller-owned `service_listings` besid
 products. Listings have a stable public slug, category, duration, price mode,
 minor-unit price, currency, broad public area and delivery mode. Migration
 `0026_service_weekly_availability.sql` adds each listing's IANA timezone and an
-optional `service_weekly_hours` row for each weekday. These local-time intervals
-are informational; they do not create bookable slots. A version counter protects
-edits; an audit entry and the successful change commit together. Only published
-entries from active shops are public. Draft and archived entries remain available
-to their owning shop. The model still has no appointment, precise location,
-practitioner or clinical-data fields. See [services](services-and-local-discovery.md).
+optional `service_weekly_hours` row for each weekday. Migration
+`0027_service_booking_core.sql` adds a default capacity-one resource per listing,
+appointment requests and status-event history. Requests check the listing's
+weekly hours and save immutable service, price and time snapshots. A GiST
+exclusion constraint blocks overlapping requested, confirmed and in-progress
+appointments on the same resource. A version counter protects listing edits; an
+audit entry and the successful change commit together. Only published entries
+from active shops are public. Draft and archived entries remain available to
+their owning shop. Precise location, customer-selected resources and clinical
+data are not stored. See [services](services-and-local-discovery.md).
 
 ## Tables
 
@@ -43,6 +47,11 @@ practitioner or clinical-data fields. See [services](services-and-local-discover
 | | `products` | Partner, category, name, slug, description, `price_cents`, currency, generated `search_vector` |
 | | `product_images` | URL, alt text, position |
 | | `product_image_blobs` | Normalized JPEG/PNG bytes (up to 256 KiB), keyed to an uploaded product image |
+| Services | `service_listings` | Seller-owned service offers with public listing snapshots |
+| | `service_weekly_hours` | Optional local opening interval for each weekday |
+| | `service_resources` | Named capacity-one resources belonging to a listing |
+| | `service_bookings` | Appointment state, time range, resource, idempotency key and immutable offer snapshot |
+| | `service_booking_events` | Appointment status transition history |
 | Inventory | `warehouses` | One default warehouse is created by the migration |
 | | `inventory_stocks` | Per product and warehouse: `on_hand`, `reserved`, `allocated` |
 | | `stock_reservations` | Checkout holds with status and expiry |
@@ -72,6 +81,8 @@ Constraints that encode business rules:
 - `order_items.line_total_cents` and `checkout_lines.line_total_cents` are
   generated columns (`unit_price * quantity`).
 - `warehouses_single_default_key`: at most one default warehouse.
+- A GiST exclusion constraint on service_bookings(resource_id, time_range)
+  prevents active appointments from overlapping on the same resource.
 
 ## Migrations
 

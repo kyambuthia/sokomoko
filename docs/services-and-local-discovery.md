@@ -259,8 +259,10 @@ the same idempotency key and payload returns the original request. Reusing the
 key with a different payload is rejected. The database blocks overlapping requested, confirmed and in-progress intervals
 for the default capacity-one resource.
 
-Customers see their recent requests on `/account` and can cancel a future
-requested or confirmed appointment with `POST /account/bookings/{id}/cancel`.
+Customers see their 10 most recent requests on `/account` and can browse the
+complete history at `/account/service-bookings` (20 per page). They can cancel
+a future requested or confirmed appointment with
+`POST /account/bookings/{id}/cancel`.
 Partners use `GET /service-bookings` to review their shop's queue and
 `POST /service-bookings/{id}/status` with
 `action=confirm|reject|cancel|start|complete|no_show` and the current
