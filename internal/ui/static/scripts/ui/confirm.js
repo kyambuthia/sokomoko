@@ -1,3 +1,5 @@
+let nextID = 0;
+
 // <ui-confirm message="…" confirm-label="Delete" cancel-label="Keep"><form>…</form></ui-confirm>
 // Asks before a destructive form submits, using a native modal dialog.
 export class UIConfirm extends HTMLElement {
@@ -18,12 +20,22 @@ export class UIConfirm extends HTMLElement {
 
   dialog() {
     if (this.modal) return this.modal;
+    const id = nextID++;
     const modal = document.createElement("dialog");
     const title = document.createElement("h2");
+    title.id = `confirm-title-${id}`;
     title.textContent = this.getAttribute("title") || "Are you sure?";
+    modal.setAttribute("aria-labelledby", title.id);
+
+    const message = this.getAttribute("message") || "";
     const text = document.createElement("p");
     text.className = "muted small";
-    text.textContent = this.getAttribute("message") || "";
+    text.textContent = message;
+    if (message.trim()) {
+      text.id = `confirm-message-${id}`;
+      modal.setAttribute("aria-describedby", text.id);
+    }
+
     const actions = document.createElement("div");
     actions.className = "row-between";
     const cancel = document.createElement("button");
