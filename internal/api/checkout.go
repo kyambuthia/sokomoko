@@ -189,6 +189,8 @@ func writeCheckoutError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, checkoutsvc.ErrDeliveryAddress):
 		writeError(w, http.StatusBadRequest, "delivery_address_required", "Delivery address is required")
+	case errors.Is(err, checkoutsvc.ErrAmountOverflow):
+		writeError(w, http.StatusUnprocessableEntity, "amount_too_large", "Order total is too large to process")
 	case errors.Is(err, checkoutsvc.ErrInvalidPaymentMethod), errors.Is(err, paymentsvc.ErrInvalidMethod):
 		writeError(w, http.StatusBadRequest, "invalid_payment_method", "Choose a supported payment method")
 	case errors.Is(err, checkoutsvc.ErrCartEmpty):

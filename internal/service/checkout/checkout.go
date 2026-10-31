@@ -18,6 +18,7 @@ var (
 	ErrDeliveryAddress      = errors.New("delivery address is required")
 	ErrInvalidPaymentMethod = paymentsvc.ErrInvalidMethod
 	ErrInsufficientStock    = errors.New("insufficient stock")
+	ErrAmountOverflow       = money.ErrOverflow
 )
 
 const (
@@ -100,19 +101,27 @@ func newWithStore(store store, payments paymentService) *Service {
 
 // CalculateSummary prices a subtotal: flat shipping below the free-shipping
 // threshold plus estimated tax on the subtotal.
-func CalculateSummary(subtotal money.Cents, pricing Pricing) Summary {
+func CalculateSummary(subtotal money.Cents, pricing Pricing) (Summary, error) {
 	shipping := pricing.ShippingFlat
 	if subtotal == 0 || (pricing.FreeShippingThreshold > 0 && subtotal >= pricing.FreeShippingThreshold) {
 		shipping = 0
 	}
 	tax := subtotal.MulBasisPoints(pricing.TaxRateBP)
+	subtotalWithShipping, err := subtotal.Add(shipping)
+	if err != nil {
+		return Summary{}, err
+	}
+	total, err := subtotalWithShipping.Add(tax)
+	if err != nil {
+		return Summary{}, err
+	}
 	return Summary{
 		Currency:    pricing.Currency,
 		Subtotal:    subtotal,
 		ShippingFee: shipping,
 		TaxAmount:   tax,
-		Total:       subtotal + shipping + tax,
-	}
+		Total:       total,
+	}, nil
 }
 
 // PreparedCheckout returns the open checkout for checkoutToken, creating (and
@@ -193,6 +202,9 @@ func (s *Service) prepareOnce(ctx context.Context, userID int, reservationKey st
 	}
 
 	items, subtotal, err := s.store.GetCartItemsForCheckout(ctx, userID, key)
+	if errors.Is(err, money.ErrOverflow) {
+		return ErrAmountOverflow
+	}
 	if err != nil {
 		return err
 	}
@@ -218,7 +230,13 @@ func (s *Service) prepareOnce(ctx context.Context, userID int, reservationKey st
 		return err
 	}
 	pricing := pricingFrom(settings)
-	summary := CalculateSummary(subtotal, pricing)
+	summary, err := CalculateSummary(subtotal, pricing)
+	if errors.Is(err, money.ErrOverflow) {
+		return ErrAmountOverflow
+	}
+	if err != nil {
+		return err
+	}
 	_, err = s.store.UpsertCheckout(ctx, userID, db.CheckoutInput{
 		Token:          key,
 		Currency:       pricing.Currency,

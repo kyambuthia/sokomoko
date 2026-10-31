@@ -14,7 +14,10 @@ import (
 // Cents is an amount in minor currency units.
 type Cents int64
 
-var ErrInvalidAmount = errors.New("invalid amount")
+var (
+	ErrInvalidAmount = errors.New("invalid amount")
+	ErrOverflow      = errors.New("amount overflow")
+)
 
 // String renders the amount as a plain decimal string such as "12.50".
 func (c Cents) String() string {
@@ -78,6 +81,29 @@ func Parse(raw string) (Cents, error) {
 		}
 	}
 	return Cents(whole*100 + frac), nil
+}
+
+// Add returns the sum unless it falls outside the Cents range.
+func (c Cents) Add(other Cents) (Cents, error) {
+	amount, delta := int64(c), int64(other)
+	const maxInt64 int64 = 1<<63 - 1
+	const minInt64 int64 = -1 << 63
+	if (delta > 0 && amount > maxInt64-delta) || (delta < 0 && amount < minInt64-delta) {
+		return 0, ErrOverflow
+	}
+	return Cents(amount + delta), nil
+}
+
+// Mul returns the product unless it falls outside the Cents range.
+func (c Cents) Mul(multiplier int64) (Cents, error) {
+	var amount, factor big.Int
+	amount.SetInt64(int64(c))
+	factor.SetInt64(multiplier)
+	amount.Mul(&amount, &factor)
+	if !amount.IsInt64() {
+		return 0, ErrOverflow
+	}
+	return Cents(amount.Int64()), nil
 }
 
 // MulBasisPoints multiplies the amount by rate/10000 rounding half away from

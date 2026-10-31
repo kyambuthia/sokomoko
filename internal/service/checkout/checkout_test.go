@@ -81,18 +81,28 @@ func TestCheckout_ValidationErrors(t *testing.T) {
 }
 
 func TestCalculateSummary(t *testing.T) {
-	summary := CalculateSummary(2000, DefaultPricing())
+	summary, err := CalculateSummary(2000, DefaultPricing())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if summary.Subtotal != 2000 || summary.ShippingFee != 650 || summary.TaxAmount != 160 || summary.Total != 2810 {
 		t.Fatalf("summary = %+v, want 20.00 + 6.50 + 1.60 = 28.10", summary)
 	}
 
-	free := CalculateSummary(8000, DefaultPricing())
+	free, err := CalculateSummary(8000, DefaultPricing())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if free.ShippingFee != 0 || free.Total != 8640 {
 		t.Fatalf("free shipping summary = %+v", free)
 	}
 
 	kes := Pricing{Currency: "KES", ShippingFlat: 20000, FreeShippingThreshold: 0, TaxRateBP: 1600}
-	if s := CalculateSummary(1000000, kes); s.ShippingFee != 20000 || s.TaxAmount != 160000 || s.Total != 1180000 {
+	s, err := CalculateSummary(1000000, kes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ShippingFee != 20000 || s.TaxAmount != 160000 || s.Total != 1180000 {
 		t.Fatalf("KES summary with free shipping off = %+v", s)
 	}
 }

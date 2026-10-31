@@ -298,6 +298,8 @@ func checkoutErrorMessage(err error) (string, bool) {
 		return "Your cart is empty", true
 	case errors.Is(err, checkoutsvc.ErrInvalidPaymentMethod):
 		return "Choose a supported payment method", true
+	case errors.Is(err, checkoutsvc.ErrAmountOverflow):
+		return "Order total is too large to process", true
 	case errors.Is(err, errInvalidPhone):
 		return "Enter a valid M-Pesa number, for example 0712 345 678", true
 	case errors.Is(err, checkoutsvc.ErrInsufficientStock):

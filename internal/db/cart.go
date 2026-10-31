@@ -196,8 +196,14 @@ func (s *Store) getCartItems(ctx context.Context, userID int, reservationKey str
 		); err != nil {
 			return nil, 0, err
 		}
-		item.LineTotal = item.UnitPrice * money.Cents(item.Quantity)
-		subtotal += item.LineTotal
+		item.LineTotal, err = item.UnitPrice.Mul(int64(item.Quantity))
+		if err != nil {
+			return nil, 0, err
+		}
+		subtotal, err = subtotal.Add(item.LineTotal)
+		if err != nil {
+			return nil, 0, err
+		}
 		items = append(items, item)
 	}
 	return items, subtotal, rows.Err()

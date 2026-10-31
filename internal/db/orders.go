@@ -187,8 +187,15 @@ func (s *Store) PlaceOrderFromCart(ctx context.Context, userID int, deliveryAddr
 		lines := make([]orderLine, 0, len(cart))
 		var subtotal money.Cents
 		for _, c := range cart {
+			lineTotal, err := c.UnitPrice.Mul(int64(c.Quantity))
+			if err != nil {
+				return err
+			}
+			subtotal, err = subtotal.Add(lineTotal)
+			if err != nil {
+				return err
+			}
 			lines = append(lines, orderLine(c))
-			subtotal += c.UnitPrice * money.Cents(c.Quantity)
 		}
 		totals := OrderTotals{Subtotal: subtotal, Total: subtotal}
 		orderID, err = createOrderTx(ctx, tx, userID, deliveryAddress, "", totals, lines, allocation{})
