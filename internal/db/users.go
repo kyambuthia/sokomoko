@@ -263,18 +263,37 @@ func (s *Store) ListDeactivatedUsers(ctx context.Context, limit int) ([]User, er
 	return users, rows.Err()
 }
 
-// ReactivateUser restores a deactivated account. Usernames and emails stay
-// unique across deactivated rows, so restoring cannot collide.
+// ReactivateUser restores a deactivated account for a trusted internal caller.
 func (s *Store) ReactivateUser(ctx context.Context, id int) (bool, error) {
+	return s.reactivateUser(ctx, 0, id, false)
+}
+
+// ReactivateUserForActor revalidates an admin in the same transaction as
+// account reactivation.
+func (s *Store) ReactivateUserForActor(ctx context.Context, actorID, targetID int) (bool, error) {
+	return s.reactivateUser(ctx, actorID, targetID, true)
+}
+
+func (s *Store) reactivateUser(ctx context.Context, actorID, targetID int, requireAdmin bool) (bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
-	result, err := s.DB.ExecContext(ctx,
-		"UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL", id)
-	if err != nil {
-		return false, err
-	}
-	n, err := rowsAffected(result)
-	return n > 0, err
+	found := false
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
+		result, err := tx.ExecContext(ctx,
+			"UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL", targetID)
+		if err != nil {
+			return err
+		}
+		n, err := rowsAffected(result)
+		found = n > 0
+		return err
+	})
+	return found, err
 }
 
 // UserSearch selects active users by role, optionally matching query against

@@ -437,7 +437,10 @@ func (s *Service) ReactivateUser(ctx context.Context, actor *Actor, userIDRaw st
 	if err != nil {
 		return ErrInvalidUserID
 	}
-	found, err := s.store.ReactivateUser(ctx, userID)
+	found, err := s.store.ReactivateUserForActor(ctx, actor.ID, userID)
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return ErrForbiddenUserAction
+	}
 	if err != nil {
 		return err
 	}

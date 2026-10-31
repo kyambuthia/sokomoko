@@ -26,6 +26,7 @@ type store interface {
 	DeleteUserForActor(ctx context.Context, actorID, targetID int) error
 	ListDeactivatedUsers(ctx context.Context, limit int) ([]db.User, error)
 	ReactivateUser(ctx context.Context, id int) (bool, error)
+	ReactivateUserForActor(ctx context.Context, actorID, targetID int) (bool, error)
 	GetAllProducts(ctx context.Context) ([]db.Product, error)
 	ListProducts(context.Context, db.ProductFilter) ([]db.Product, error)
 	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
