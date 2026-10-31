@@ -739,9 +739,6 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if confirmed.Status != payments.StatusPaid {
 		return s.apply(ctx, payment, confirmed)
 	}
-	if event.Result.Amount > 0 {
-		confirmed.Amount = event.Result.Amount
-	}
 	if event.Result.Receipt != "" {
 		confirmed.Receipt = event.Result.Receipt
 	}
