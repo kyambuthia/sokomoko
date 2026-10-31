@@ -80,6 +80,32 @@ func (s *Store) MarkPasswordResetEmailSent(ctx context.Context, id int64, attemp
 	return s.deletePasswordResetEmailOutboxEntry(ctx, id, attempts)
 }
 
+// RenewPasswordResetEmailLease extends the worker lease while the message is actively being processed.
+func (s *Store) RenewPasswordResetEmailLease(ctx context.Context, id int64, attempts int, lease time.Duration) error {
+	if lease < minPasswordResetEmailOutboxLease || lease > maxPasswordResetEmailOutboxLease {
+		return ErrInvalidPasswordResetEmailOutboxClaim
+	}
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+	res, err := s.DB.ExecContext(ctx, `
+		UPDATE password_reset_email_outbox
+		SET lease_until = clock_timestamp() + ($3 * interval '1 microsecond')
+		WHERE id = $1 AND attempts = $2 AND lease_until > clock_timestamp() AND expires_at > clock_timestamp()`,
+		id, attempts, lease.Microseconds(),
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrPasswordResetEmailOutboxLeaseLost
+	}
+	return nil
+}
+
 // RetryPasswordResetEmail releases a lease and schedules the next delivery
 // attempt, capped at token expiry.
 func (s *Store) RetryPasswordResetEmail(ctx context.Context, id int64, attempts int, availableAt time.Time) error {

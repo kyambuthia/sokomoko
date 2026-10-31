@@ -27,6 +27,7 @@ type passwordResetOutboxPayload struct {
 type passwordResetOutboxStore interface {
 	RequestPasswordResetTokenWithOutbox(ctx context.Context, userID int, token string, expiresAt time.Time, sealedPayload []byte) (bool, error)
 	ClaimPasswordResetEmails(ctx context.Context, limit int, lease time.Duration) ([]db.PasswordResetEmailOutboxEntry, error)
+	RenewPasswordResetEmailLease(ctx context.Context, id int64, attempts int, lease time.Duration) error
 	MarkPasswordResetEmailSent(ctx context.Context, id int64, attempts int) error
 	RetryPasswordResetEmail(ctx context.Context, id int64, attempts int, availableAt time.Time) error
 	DiscardPasswordResetEmail(ctx context.Context, id int64, attempts int) error
@@ -119,6 +120,15 @@ func (s *Service) deliverPasswordResetOutboxEntry(ctx context.Context, outbox pa
 	}
 	if ctx.Err() != nil {
 		s.reschedulePasswordResetOutboxEntry(ctx, outbox, entry, time.Now())
+		return
+	}
+	if err := finish(func(ctx context.Context) error {
+		return outbox.RenewPasswordResetEmailLease(ctx, entry.ID, entry.Attempts, resetEmailOutboxLease)
+	}); err != nil {
+		if errors.Is(err, db.ErrPasswordResetEmailOutboxLeaseLost) {
+			return
+		}
+		slog.Error("password reset email outbox lease renewal failed", "user_id", entry.UserID, "error", err)
 		return
 	}
 	sendCtx, cancel := context.WithTimeout(ctx, resetEmailTimeout)
