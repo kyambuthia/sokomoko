@@ -11,7 +11,10 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
-const homeProductLimit = 48
+const (
+	homeProductLimit = 48
+	searchPageSize   = 24
+)
 
 type IndexPageData struct {
 	Title       string
@@ -35,13 +38,15 @@ type Breadcrumb struct {
 }
 
 type SearchPageData struct {
-	Title     string
-	Query     string
-	Category  string
-	Products  []catalogsvc.Product
-	NoResults bool
-	Viewer    Viewer
-	CSRFToken string
+	Title        string
+	Query        string
+	Category     string
+	Products     []catalogsvc.Product
+	TotalResults int
+	Pager        Pager
+	NoResults    bool
+	Viewer       Viewer
+	CSRFToken    string
 }
 
 // Root serves the storefront home page.
@@ -123,31 +128,30 @@ func Search(a *app.App) http.HandlerFunc {
 			category = ""
 		}
 
-		var (
-			products []catalogsvc.Product
-			err      error
-		)
-		switch {
-		case query != "":
-			products, err = a.Catalog.SearchInCategory(r.Context(), query, category)
-		case category != "":
-			products, err = a.Catalog.Browse(r.Context(), catalogsvc.Filter{Category: category})
-		}
-		if err != nil {
-			log.Printf("search %q: %v", query, err)
-			serverError(w, r)
-			return
-		}
-
-		a.Render(w, a.Templates.Search, SearchPageData{
+		page := pageParam(r)
+		data := SearchPageData{
 			Title:     "Search",
 			Query:     query,
 			Category:  category,
-			Products:  products,
-			NoResults: len(products) == 0 && (query != "" || category != ""),
 			Viewer:    viewerFromRequest(r),
 			CSRFToken: a.Auth.CSRFToken(r),
-		})
+		}
+		if query != "" || category != "" {
+			products, total, err := a.Catalog.BrowsePage(r.Context(), query, category, page, searchPageSize)
+			if err != nil {
+				log.Printf("search %q: %v", query, err)
+				serverError(w, r)
+				return
+			}
+			if redirectPastLastPage(w, r, page, searchPageSize, total) {
+				return
+			}
+			data.Products = products
+			data.TotalResults = total
+			data.Pager = newPager(r, page, searchPageSize, total)
+		}
+		data.NoResults = len(data.Products) == 0 && (query != "" || category != "")
+		a.Render(w, a.Templates.Search, data)
 	}
 }
 

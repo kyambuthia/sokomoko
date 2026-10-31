@@ -8,12 +8,13 @@
   {{ if or .Query .Category }}
   <div class="page-head">
     <h1>{{ if .Query }}“{{ .Query }}”{{ else }}{{ .Category }}{{ end }}</h1>
-    <span class="muted small">{{ len .Products }} result{{ if ne (len .Products) 1 }}s{{ end }}</span>
+    <span class="muted small">{{ .TotalResults }} result{{ if ne .TotalResults 1 }}s{{ end }}</span>
   </div>
   {{ if .NoResults }}
   {{ template "empty" dict "Icon" "search" "Text" "No matches. Try a broader word." "Href" "/search" "Action" "Clear search" }}
   {{ else }}
   {{ template "product-grid" dict "Products" .Products "CSRFToken" .CSRFToken }}
+  {{ template "pager" .Pager }}
   {{ end }}
   {{ else }}
   {{ template "empty" dict "Icon" "search" "Text" "Search by name or description." }}

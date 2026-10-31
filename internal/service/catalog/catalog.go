@@ -114,27 +114,39 @@ func (s *Service) SearchInCategory(ctx context.Context, query, category string) 
 	return s.Browse(ctx, Filter{Query: query, Category: category, Limit: defaultSearchLimit})
 }
 
-// SearchPage returns one bounded page and the total number of matches. The
-// query and image fetches stop when the HTTP request is cancelled.
-func (s *Service) SearchPage(ctx context.Context, query, category string, page, limit int) ([]Product, int, error) {
+// BrowsePage returns one bounded page and the total number of catalog matches.
+// The query and image fetches stop when the HTTP request is cancelled.
+func (s *Service) BrowsePage(ctx context.Context, query, category string, page, limit int) ([]Product, int, error) {
 	query = normalizeQuery(query)
-	if query == "" {
-		return []Product{}, 0, nil
-	}
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 1
-	}
 	category = strings.TrimSpace(category)
 	if strings.EqualFold(category, AllCategories) || strings.EqualFold(category, "all") {
 		category = ""
 	}
+	if query == "" && category == "" {
+		return []Product{}, 0, nil
+	}
+	if page < 1 {
+		page = 1
+	} else if page > 1_000_000 {
+		page = 1_000_000
+	}
+	if limit < 1 {
+		limit = 24
+	} else if limit > 50 {
+		limit = 50
+	}
+
 	filter := db.ProductFilter{Query: query, Category: category, PublicOnly: true}
 	total, err := s.store.CountFilteredProducts(ctx, filter)
 	if err != nil {
 		return nil, 0, err
+	}
+	if total == 0 {
+		return []Product{}, 0, nil
+	}
+	lastPage := (total-1)/limit + 1
+	if page > lastPage {
+		return []Product{}, total, nil
 	}
 	filter.Limit, filter.Offset = limit, (page-1)*limit
 	products, err := s.store.ListProducts(ctx, filter)

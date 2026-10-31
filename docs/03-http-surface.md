@@ -23,7 +23,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | --- | --- | --- | --- | --- |
 | `/` | GET | public | `Root` | Home page and catalog |
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
-| `/search` | GET | public | `Search` | `q`, `category` |
+| `/search` | GET | public | `Search` | `q`, `category`, `page`; 24 products per page |
 | `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `partner_id`, `page`; 24 per page |
 | `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops only |
 | `/api/categories` | GET | public | `CategoriesAPI` | JSON `{categories}` for the header category nav |
