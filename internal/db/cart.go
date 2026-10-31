@@ -37,6 +37,9 @@ func (s *Store) AddToCart(ctx context.Context, userID, productID, quantity int) 
 	if quantity <= 0 {
 		return ErrInvalidQuantity
 	}
+	if quantity > maxCartLineQuantity {
+		quantity = maxCartLineQuantity
+	}
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
