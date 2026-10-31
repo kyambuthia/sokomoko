@@ -16,17 +16,21 @@ import (
 )
 
 const (
-	maxProductImageInputBytes = 900 * 1024
-	maxProductImageDimension  = 2048
-	maxProductImagePixels     = 4_000_000
-	productImageDecodeSlots   = 2
+	maxProductImageInputBytes   = 900 * 1024
+	maxProductImageRequestBytes = maxProductImageInputBytes + 256*1024
+	maxProductImageDimension    = 2048
+	maxProductImagePixels       = 4_000_000
+	productImageDecodeSlots     = 2
 )
 
 const invalidProductImageMessage = "Use a JPEG or PNG under 900 KB and no larger than 2048 × 2048 pixels; optimized images must be under 256 KB."
 
 var productImageDecodeSemaphore = make(chan struct{}, productImageDecodeSlots)
 
-func parseProductImageUpload(r *http.Request) (*partnersvc.ProductImageUpload, error) {
+func parseProductImageUpload(w http.ResponseWriter, r *http.Request) (*partnersvc.ProductImageUpload, error) {
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxProductImageRequestBytes)
+	}
 	headerContentType := r.Header.Get("Content-Type")
 	contentType, _, err := mime.ParseMediaType(headerContentType)
 	if err != nil {

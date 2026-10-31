@@ -253,7 +253,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		imageUpload, imageErr := parseProductImageUpload(r)
+		imageUpload, imageErr := parseProductImageUpload(w, r)
 		input := partnersvc.CreateProductInput{
 			Name:        r.FormValue("name"),
 			Description: r.FormValue("description"),
@@ -353,7 +353,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		imageUpload, imageErr := parseProductImageUpload(r)
+		imageUpload, imageErr := parseProductImageUpload(w, r)
 		input := partnersvc.ProductInput{
 			Name:        r.FormValue("name"),
 			Description: r.FormValue("description"),
