@@ -6,6 +6,7 @@ package money
 
 import (
 	"errors"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -77,13 +78,31 @@ func Parse(raw string) (Cents, error) {
 }
 
 // MulBasisPoints multiplies the amount by rate/10000 rounding half away from
-// zero. A rate of 800 is 8%.
+// zero. A rate of 800 is 8%. Results outside the Cents range saturate.
 func (c Cents) MulBasisPoints(rate int64) Cents {
-	product := int64(c) * rate
-	if product >= 0 {
-		return Cents((product + 5000) / 10000)
+	var product, multiplier, scale, half, quotient, remainder big.Int
+	product.SetInt64(int64(c))
+	multiplier.SetInt64(rate)
+	product.Mul(&product, &multiplier)
+	scale.SetInt64(10_000)
+	half.SetInt64(5_000)
+	quotient.QuoRem(&product, &scale, &remainder)
+	if remainder.Abs(&remainder).Cmp(&half) >= 0 {
+		var one big.Int
+		one.SetInt64(1)
+		if product.Sign() < 0 {
+			quotient.Sub(&quotient, &one)
+		} else {
+			quotient.Add(&quotient, &one)
+		}
 	}
-	return Cents((product - 5000) / 10000)
+	if !quotient.IsInt64() {
+		if quotient.Sign() < 0 {
+			return Cents(-1 << 63)
+		}
+		return Cents(1<<63 - 1)
+	}
+	return Cents(quotient.Int64())
 }
 
 func isDigits(s string) bool {
