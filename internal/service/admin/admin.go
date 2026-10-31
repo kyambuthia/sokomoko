@@ -334,8 +334,10 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 	deliveryStatus := strings.TrimSpace(input.DeliveryStatus)
 	notice := strings.TrimSpace(input.DeliveryNotice)
 
-	if err := s.store.UpdateOrderByAdmin(ctx, orderID, status, partnerStatus, deliveryStatus, notice); err != nil {
+	if err := s.store.UpdateOrderByAdminForActor(ctx, actor.ID, orderID, status, partnerStatus, deliveryStatus, notice); err != nil {
 		switch {
+		case errors.Is(err, db.ErrWorkspaceActorNotFound):
+			return ErrForbiddenOrderUpdate
 		case errors.Is(err, db.ErrOrderNotFound):
 			return ErrOrderNotFound
 		case errors.Is(err, db.ErrInvalidOrderState), errors.Is(err, db.ErrInsufficientStock):

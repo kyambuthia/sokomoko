@@ -38,6 +38,7 @@ type store interface {
 	ListUsersByRoles(ctx context.Context, search db.UserSearch) ([]db.User, int, error)
 	SumOrderRevenue(ctx context.Context) (money.Cents, error)
 	UpdateOrderByAdmin(ctx context.Context, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
+	UpdateOrderByAdminForActor(ctx context.Context, actorID, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error
 }
 
 var _ store = (*db.Store)(nil)

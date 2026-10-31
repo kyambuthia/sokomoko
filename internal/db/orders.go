@@ -639,10 +639,18 @@ func (s *Store) updateOrderFulfillment(ctx context.Context, actorID int, actorRo
 	})
 }
 
-// UpdateOrderByAdmin lets an admin set any valid combination of statuses, with
-// one guard: cancelled orders cannot be reopened because their stock has been
-// released.
+// UpdateOrderByAdmin lets a trusted internal caller set any valid status
+// combination. Request handlers should use UpdateOrderByAdminForActor.
 func (s *Store) UpdateOrderByAdmin(ctx context.Context, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error {
+	return s.updateOrderByAdmin(ctx, 0, orderID, status, partnerStatus, deliveryStatus, deliveryNotice, false)
+}
+
+// UpdateOrderByAdminForActor revalidates the admin in the order transaction.
+func (s *Store) UpdateOrderByAdminForActor(ctx context.Context, actorID, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string) error {
+	return s.updateOrderByAdmin(ctx, actorID, orderID, status, partnerStatus, deliveryStatus, deliveryNotice, true)
+}
+
+func (s *Store) updateOrderByAdmin(ctx context.Context, actorID, orderID int, status, partnerStatus, deliveryStatus, deliveryNotice string, requireAdmin bool) error {
 	if !validOrderStatuses[status] || !validPartnerStatuses[partnerStatus] || !validDeliveryStatuses[deliveryStatus] {
 		return ErrInvalidOrderState
 	}
@@ -653,6 +661,11 @@ func (s *Store) UpdateOrderByAdmin(ctx context.Context, orderID int, status, par
 		current, err := lockOrderTx(ctx, tx, orderID)
 		if err != nil {
 			return err
+		}
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
 		}
 		if current.InventoryState == "released" && inventoryStateFor(status, partnerStatus) != "released" {
 			return ErrInvalidOrderState
