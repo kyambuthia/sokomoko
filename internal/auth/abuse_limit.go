@@ -429,7 +429,7 @@ func (s *Service) recordAbuseAttempt(scope, identifier string, preserveCase bool
 	if s.sharedAbuseStore == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(requestContext(r), sharedAuthAbuseTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), sharedAuthAbuseTimeout)
 	defer cancel()
 	if err := s.sharedAbuseStore.RecordAuthAbuseFailure(ctx, authAbuseKeyHash(s.abuseKey, key), generation, s.abuseLimiter.maxFailures, s.abuseLimiter.backoffBase, s.abuseLimiter.backoffMax); err != nil {
 		slog.WarnContext(requestContext(r), "shared authentication abuse update failed; retaining process-local fallback", "error", err)
@@ -446,7 +446,7 @@ func (s *Service) clearAbuseFailures(scope, identifier string, preserveCase bool
 	if s.sharedAbuseStore == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(requestContext(r), sharedAuthAbuseTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), sharedAuthAbuseTimeout)
 	defer cancel()
 	if err := s.sharedAbuseStore.ClearAuthAbuseFailures(ctx, authAbuseKeyHash(s.abuseKey, key), s.abuseLimiter.backoffMax); err != nil {
 		slog.WarnContext(requestContext(r), "shared authentication abuse clear failed; retaining database state", "error", err)
