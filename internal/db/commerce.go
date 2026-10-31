@@ -48,7 +48,9 @@ func (s *Store) GetCommerceSettings(ctx context.Context) (CommerceSettings, erro
 }
 
 // UpdateCommerceSettings saves marketplace money settings for a trusted
-// internal caller. Currency may change only while there are no orders.
+// internal caller. Currency may change only while there are no orders or
+// enabled payment providers. Call UpdateCommerceSettingsForActor when provider
+// capability data is available.
 func (s *Store) UpdateCommerceSettings(ctx context.Context, c CommerceSettings) error {
 	return s.updateCommerceSettings(ctx, 0, c, nil, false)
 }
@@ -73,6 +75,13 @@ func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c Comme
 		}
 		if requireAdmin {
 			if err := ensurePaymentProvidersSupportCurrencyTx(ctx, tx, supportedProviders); err != nil {
+				return err
+			}
+		} else if current != c.Currency {
+			// The compatibility API has no provider capability data. Fail closed
+			// on currency changes so it cannot bypass the invariant enforced by
+			// the actor-scoped API while holding the same settings-row lock.
+			if err := ensurePaymentProvidersSupportCurrencyTx(ctx, tx, nil); err != nil {
 				return err
 			}
 		}
@@ -179,6 +188,8 @@ func ensurePaymentProvidersSupportCurrencyTx(ctx context.Context, tx *sql.Tx, su
 }
 
 // SavePaymentProviderConfig upserts a provider for a trusted internal caller.
+// It cannot enable a provider without capability data; use
+// SavePaymentProviderConfigForActor for that operation.
 func (s *Store) SavePaymentProviderConfig(ctx context.Context, c PaymentProviderConfig) error {
 	return s.savePaymentProviderConfig(ctx, 0, c, nil, false)
 }
@@ -209,7 +220,18 @@ func (s *Store) savePaymentProviderConfig(ctx context.Context, actorID int, c Pa
 		if requireAdmin && c.Enabled && !slices.Contains(supportedCurrencies, currency) {
 			return ErrPaymentProviderCurrencyMismatch
 		}
-		if requireAdmin && !c.Enabled {
+		if !requireAdmin && c.Enabled {
+			var alreadyEnabled bool
+			if err := tx.QueryRowContext(ctx,
+				"SELECT EXISTS (SELECT 1 FROM payment_providers WHERE provider = $1 AND enabled)", c.Provider,
+			).Scan(&alreadyEnabled); err != nil {
+				return err
+			}
+			if !alreadyEnabled {
+				return ErrPaymentProviderCurrencyMismatch
+			}
+		}
+		if !c.Enabled {
 			var anotherEnabled bool
 			if err := tx.QueryRowContext(ctx,
 				"SELECT EXISTS (SELECT 1 FROM payment_providers WHERE enabled AND provider <> $1)", c.Provider,
