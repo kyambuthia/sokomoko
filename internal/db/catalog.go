@@ -340,7 +340,8 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 	})
 }
 
-// DeleteProduct soft-deletes a product and removes it from carts.
+// DeleteProduct soft-deletes a product, removes it from carts, and invalidates
+// affected customers' open checkouts and stock holds.
 func (s *Store) DeleteProduct(ctx context.Context, id int) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -357,8 +358,45 @@ func (s *Store) DeleteProduct(ctx context.Context, id int) error {
 		if updated == 0 {
 			return ErrProductNotFound
 		}
-		_, err = tx.ExecContext(ctx, "DELETE FROM cart_items WHERE product_id = $1", id)
-		return err
+
+		rows, err := tx.QueryContext(ctx,
+			`SELECT c.user_id
+			 FROM carts c
+			 JOIN cart_items ci ON ci.cart_id = c.id
+			 WHERE ci.product_id = $1
+			 ORDER BY c.user_id
+			 FOR UPDATE OF c`,
+			id,
+		)
+		if err != nil {
+			return err
+		}
+		affectedUsers := []int{}
+		for rows.Next() {
+			var userID int
+			if err := rows.Scan(&userID); err != nil {
+				rows.Close()
+				return err
+			}
+			affectedUsers = append(affectedUsers, userID)
+		}
+		err = rows.Err()
+		if closeErr := rows.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return err
+		}
+
+		if _, err := tx.ExecContext(ctx, "DELETE FROM cart_items WHERE product_id = $1", id); err != nil {
+			return err
+		}
+		for _, userID := range affectedUsers {
+			if err := invalidateCheckoutsTx(ctx, tx, userID); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

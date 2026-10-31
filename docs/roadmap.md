@@ -82,9 +82,9 @@ reachable.
 
 ## Later
 
-- [ ] Verify product deletion. The workspace flow is implemented; add coverage
-  for ownership, cart cleanup, and the concurrent add/delete boundary before
-  marking it complete.
+- [ ] Verify product deletion. The workspace flow is implemented; add targeted
+  coverage for ownership, cart and checkout cleanup, and concurrent add/delete
+  behavior before marking it complete.
 - [ ] Product image upload.
 - [ ] Finish shared rate limiting verification. POST IP limits and
   authentication abuse backoff now use PostgreSQL across replicas, with a
