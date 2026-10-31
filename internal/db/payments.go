@@ -98,6 +98,9 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(ctx context.Context, userID in
 
 	var placement CheckoutPlacement
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, err := lockCartTx(ctx, tx, userID); err != nil {
+			return err
+		}
 		var currentCurrency string
 		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
 			return err
@@ -120,7 +123,35 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(ctx context.Context, userID in
 		}
 
 		checkout, err := scanCheckout(tx.QueryRowContext(ctx,
-			"SELECT "+checkoutColumns+" FROM checkouts WHERE user_id = $1 AND token = $2 FOR UPDATE",
+			`SELECT `+checkoutColumns+` FROM checkouts WHERE user_id = $1 AND token = $2`,
+			userID, key,
+		))
+		if err != nil {
+			return err
+		}
+		if checkout == nil {
+			return ErrCheckoutNotFound
+		}
+		lines, err := checkoutOrderLinesTx(ctx, tx, checkout.ID)
+		if err != nil {
+			return err
+		}
+		if len(lines) == 0 {
+			return ErrCartEmpty
+		}
+		expected, ok := orderLineQuantities(lines)
+		if !ok {
+			return ErrCheckoutNotFound
+		}
+		validationErr := validateCheckoutCartTx(ctx, tx, userID, key, expected)
+		if validationErr != nil && !errors.Is(validationErr, ErrCheckoutNotFound) {
+			return validationErr
+		}
+
+		// Reservation release locks holds before changing checkout status. Keep
+		// that same order here so an expiry sweep cannot deadlock placement.
+		checkout, err = scanCheckout(tx.QueryRowContext(ctx,
+			`SELECT `+checkoutColumns+` FROM checkouts WHERE user_id = $1 AND token = $2 FOR UPDATE`,
 			userID, key,
 		))
 		if err != nil {
@@ -140,13 +171,8 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(ctx context.Context, userID in
 		case !checkout.ExpiresAt.After(timeNow()):
 			return ErrCheckoutExpired
 		}
-
-		lines, err := checkoutOrderLinesTx(ctx, tx, checkout.ID)
-		if err != nil {
-			return err
-		}
-		if len(lines) == 0 {
-			return ErrCartEmpty
+		if validationErr != nil {
+			return validationErr
 		}
 
 		totals := OrderTotals{
@@ -187,6 +213,15 @@ func (s *Store) PlaceOrderFromCheckoutWithPayment(ctx context.Context, userID in
 			 WHERE user_id = $3 AND operation = $4 AND idempotency_key = $5`,
 			orderID, paymentID, userID, checkoutCompleteOperation, key,
 		); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE checkouts SET status = 'cancelled' WHERE user_id = $1 AND token <> $2 AND status = 'open'",
+			userID, key,
+		); err != nil {
+			return err
+		}
+		if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased, "user_id = $2", userID); err != nil {
 			return err
 		}
 		if err := clearCartTx(ctx, tx, userID); err != nil {

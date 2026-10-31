@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/money"
@@ -18,6 +19,15 @@ func ensureCartTx(ctx context.Context, q querier, userID int) (int64, error) {
 		 RETURNING id`,
 		userID,
 	).Scan(&cartID)
+	return cartID, err
+}
+
+func lockCartTx(ctx context.Context, tx *sql.Tx, userID int) (int64, error) {
+	var cartID int64
+	err := tx.QueryRowContext(ctx, "SELECT id FROM carts WHERE user_id = $1 FOR UPDATE", userID).Scan(&cartID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ensureCartTx(ctx, tx, userID)
+	}
 	return cartID, err
 }
 

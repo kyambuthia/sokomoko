@@ -174,6 +174,9 @@ func (s *Store) PlaceOrderFromCart(ctx context.Context, userID int, deliveryAddr
 
 	var orderID int64
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, err := lockCartTx(ctx, tx, userID); err != nil {
+			return err
+		}
 		if err := invalidateCheckoutsTx(ctx, tx, userID); err != nil {
 			return err
 		}

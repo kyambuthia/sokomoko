@@ -143,6 +143,9 @@ func (s *Store) ReserveCartForCheckout(ctx context.Context, userID int, reservat
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, err := lockCartTx(ctx, tx, userID); err != nil {
+			return err
+		}
 		if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased, "user_id = $2", userID); err != nil {
 			return err
 		}

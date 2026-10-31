@@ -29,6 +29,97 @@ func scanCheckout(row interface{ Scan(...any) error }) (*Checkout, error) {
 	return checkout, nil
 }
 
+func checkoutInputQuantities(lines []CheckoutLineInput) (map[int]int, bool) {
+	quantities := make(map[int]int, len(lines))
+	for _, line := range lines {
+		if line.ProductID <= 0 || line.Quantity <= 0 {
+			return nil, false
+		}
+		if _, exists := quantities[line.ProductID]; exists {
+			return nil, false
+		}
+		quantities[line.ProductID] = line.Quantity
+	}
+	return quantities, true
+}
+
+func orderLineQuantities(lines []orderLine) (map[int]int, bool) {
+	quantities := make(map[int]int, len(lines))
+	for _, line := range lines {
+		if line.ProductID <= 0 || line.Quantity <= 0 {
+			return nil, false
+		}
+		if _, exists := quantities[line.ProductID]; exists {
+			return nil, false
+		}
+		quantities[line.ProductID] = line.Quantity
+	}
+	return quantities, true
+}
+
+func quantitiesMatch(a, b map[int]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for productID, quantity := range a {
+		if b[productID] != quantity {
+			return false
+		}
+	}
+	return true
+}
+
+// validateCheckoutCartTx ties the checkout snapshot and active stock holds to
+// the user's current cart. It locks hold rows before stock rows, matching the
+// reservation release path.
+func validateCheckoutCartTx(ctx context.Context, tx *sql.Tx, userID int, key string, expected map[int]int) error {
+	if len(expected) == 0 {
+		return ErrCartEmpty
+	}
+
+	cart, err := cartLinesTx(ctx, tx, userID)
+	if err != nil {
+		return err
+	}
+	cartQuantities := make(map[int]int, len(cart))
+	for _, line := range cart {
+		cartQuantities[line.ProductID] = line.Quantity
+	}
+	if !quantitiesMatch(cartQuantities, expected) {
+		return ErrCheckoutNotFound
+	}
+
+	rows, err := tx.QueryContext(ctx,
+		`SELECT product_id, quantity FROM stock_reservations
+		 WHERE user_id = $1 AND reservation_key = $2 AND status = 'active'
+		 ORDER BY product_id, id FOR UPDATE`,
+		userID, key,
+	)
+	if err != nil {
+		return err
+	}
+	reservations := make(map[int]int, len(expected))
+	for rows.Next() {
+		var productID, quantity int
+		if err := rows.Scan(&productID, &quantity); err != nil {
+			rows.Close()
+			return err
+		}
+		reservations[productID] += quantity
+	}
+	err = rows.Err()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if !quantitiesMatch(reservations, expected) {
+		return ErrCheckoutNotFound
+	}
+	return nil
+}
+
 func checkoutLines(ctx context.Context, q querier, checkoutID int) ([]CheckoutLine, error) {
 	rows, err := q.QueryContext(ctx,
 		`SELECT id, checkout_id, product_id, product_name, quantity, unit_price_cents, line_total_cents
@@ -111,6 +202,17 @@ func (s *Store) UpsertCheckout(ctx context.Context, userID int, input CheckoutIn
 
 	var checkout *Checkout
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, err := lockCartTx(ctx, tx, userID); err != nil {
+			return err
+		}
+		expected, ok := checkoutInputQuantities(input.Lines)
+		if !ok {
+			return ErrCheckoutNotFound
+		}
+		if err := validateCheckoutCartTx(ctx, tx, userID, token, expected); err != nil {
+			return err
+		}
+
 		var currentCurrency string
 		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR SHARE").Scan(&currentCurrency); err != nil {
 			return err
@@ -119,6 +221,10 @@ func (s *Store) UpsertCheckout(ctx context.Context, userID int, input CheckoutIn
 			return ErrCheckoutCurrencyChanged
 		}
 		currency = currentCurrency
+		if _, err := releaseReservationsTx(ctx, tx, StockReservationStatusReleased,
+			"user_id = $2 AND reservation_key <> $3", userID, token); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx,
 			"UPDATE checkouts SET status = 'cancelled' WHERE user_id = $1 AND status = 'open' AND token <> $2",
 			userID, token,
