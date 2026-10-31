@@ -165,10 +165,30 @@ func (s *Store) UpdateUser(ctx context.Context, user User) error {
 
 // DeleteUser soft-deletes a user and revokes their sessions.
 func (s *Store) DeleteUser(ctx context.Context, id int) error {
+	return s.deleteUser(ctx, 0, id, false)
+}
+
+// DeleteUserForActor revalidates an admin actor in the same transaction as
+// user deactivation.
+func (s *Store) DeleteUserForActor(ctx context.Context, actorID, targetID int) error {
+	return s.deleteUser(ctx, actorID, targetID, true)
+}
+
+func (s *Store) deleteUser(ctx context.Context, actorID, id int, requireAdmin bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		// Acquire this before user-row locks so concurrent deactivations cannot
+		// deadlock while locking one another as actor and target.
+		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", bootstrapLockKey); err != nil {
+			return err
+		}
+		if requireAdmin {
+			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+				return err
+			}
+		}
 		var role string
 		err := tx.QueryRowContext(ctx,
 			"SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", id,
@@ -180,11 +200,6 @@ func (s *Store) DeleteUser(ctx context.Context, id int) error {
 			return err
 		}
 		if role == RoleAdmin {
-			// Serialize admin deactivations so concurrent requests cannot remove
-			// the last two active administrators at the same time.
-			if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", bootstrapLockKey); err != nil {
-				return err
-			}
 			var activeAdmins int
 			if err := tx.QueryRowContext(ctx,
 				"SELECT count(*) FROM users WHERE role = $1 AND deleted_at IS NULL",

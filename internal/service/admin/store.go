@@ -23,6 +23,7 @@ type store interface {
 	SetPartnerStatus(ctx context.Context, id int, status string) (bool, error)
 	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
 	DeleteUser(ctx context.Context, id int) error
+	DeleteUserForActor(ctx context.Context, actorID, targetID int) error
 	ListDeactivatedUsers(ctx context.Context, limit int) ([]db.User, error)
 	ReactivateUser(ctx context.Context, id int) (bool, error)
 	GetAllProducts(ctx context.Context) ([]db.Product, error)
