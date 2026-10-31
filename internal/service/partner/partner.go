@@ -337,29 +337,9 @@ func (s *Service) productsForActor(ctx context.Context, actor *Actor, limit, off
 		}
 		filter.PartnerID = partnerID
 	}
-	total, err := s.store.CountFilteredProducts(ctx, filter)
+	products, total, err := s.store.ListProductsPage(ctx, filter)
 	if err != nil {
 		return ProductsData{}, 0, err
-	}
-	listProducts := limit == 0 && total > 0
-	if limit > 0 {
-		lastOffset := 0
-		if total > 0 {
-			pages := (total-1)/limit + 1
-			lastOffset = (pages - 1) * limit
-		}
-		if offset < 0 {
-			offset = 0
-		}
-		listProducts = total > 0 && offset <= lastOffset
-		filter.Limit, filter.Offset = limit, offset
-	}
-	products := []db.Product{}
-	if listProducts {
-		products, err = s.store.ListProducts(ctx, filter)
-		if err != nil {
-			return ProductsData{}, 0, err
-		}
 	}
 	categories, err := s.store.GetAllCategories(ctx)
 	if err != nil {

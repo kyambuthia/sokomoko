@@ -675,6 +675,48 @@ func (s *Store) ListProducts(ctx context.Context, filter ProductFilter) ([]Produ
 	}
 	defer tx.Rollback()
 
+	products, err := listProductsTx(ctx, tx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, wrapDBError(err)
+	}
+	return products, nil
+}
+
+// ListProductsPage returns matching products and their total from one database
+// snapshot. The image rows are loaded in that same read-only transaction.
+func (s *Store) ListProductsPage(ctx context.Context, filter ProductFilter) ([]Product, int, error) {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer tx.Rollback()
+
+	total, err := countFilteredProducts(ctx, tx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	products := []Product{}
+	if total > 0 && (filter.Offset <= 0 || filter.Offset < total) {
+		products, err = listProductsTx(ctx, tx, filter)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, wrapDBError(err)
+	}
+	return products, total, nil
+}
+
+func listProductsTx(ctx context.Context, q querier, filter ProductFilter) ([]Product, error) {
 	where, args, orderBy := productFilterSQL(filter)
 	addArg := func(value any) string {
 		args = append(args, value)
@@ -688,7 +730,7 @@ func (s *Store) ListProducts(ctx context.Context, filter ProductFilter) ([]Produ
 		query += " OFFSET " + addArg(filter.Offset)
 	}
 
-	rows, err := tx.QueryContext(ctx, query, args...)
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -711,15 +753,12 @@ func (s *Store) ListProducts(ctx context.Context, filter ProductFilter) ([]Produ
 		return nil, err
 	}
 
-	images, err := getProductImagesByProductIDs(ctx, tx, ids)
+	images, err := getProductImagesByProductIDs(ctx, q, ids)
 	if err != nil {
 		return nil, err
 	}
 	for i := range products {
 		products[i].Images = images[products[i].ID]
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, wrapDBError(err)
 	}
 	return products, nil
 }
@@ -763,6 +802,10 @@ func productFilterSQL(filter ProductFilter) (string, []any, string) {
 func (s *Store) CountFilteredProducts(ctx context.Context, filter ProductFilter) (int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
+	return countFilteredProducts(ctx, s.DB, filter)
+}
+
+func countFilteredProducts(ctx context.Context, q querier, filter ProductFilter) (int, error) {
 	where, args, _ := productFilterSQL(filter)
 	from := `products p LEFT JOIN categories c ON c.id = p.category_id AND c.deleted_at IS NULL`
 	if filter.InStockOnly {
@@ -773,7 +816,7 @@ func (s *Store) CountFilteredProducts(ctx context.Context, filter ProductFilter)
 		) stock`
 	}
 	var count int
-	err := s.DB.QueryRowContext(ctx, "SELECT count(*) FROM "+from+" WHERE "+where, args...).Scan(&count)
+	err := q.QueryRowContext(ctx, "SELECT count(*) FROM "+from+" WHERE "+where, args...).Scan(&count)
 	return count, err
 }
 

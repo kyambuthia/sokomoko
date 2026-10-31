@@ -155,20 +155,9 @@ func (s *Service) ProductsPage(ctx context.Context, page, limit int) ([]Product,
 	} else if limit > 100 {
 		limit = 100
 	}
-	filter := db.ProductFilter{}
-	total, err := s.store.CountFilteredProducts(ctx, filter)
-	if err != nil {
-		return nil, 0, err
-	}
-	if total == 0 {
-		return []Product{}, 0, nil
-	}
-	lastPage := (total-1)/limit + 1
-	if page > lastPage {
-		return []Product{}, total, nil
-	}
-	filter.Limit, filter.Offset = limit, (page-1)*limit
-	products, err := s.store.ListProducts(ctx, filter)
+	products, total, err := s.store.ListProductsPage(ctx, db.ProductFilter{
+		Limit: limit, Offset: (page - 1) * limit,
+	})
 	if err != nil {
 		return nil, 0, err
 	}

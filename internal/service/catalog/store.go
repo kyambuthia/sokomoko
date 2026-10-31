@@ -7,12 +7,11 @@ import (
 )
 
 type store interface {
-	CountPublicProducts(ctx context.Context) (int, error)
 	GetAllCategories(ctx context.Context) ([]db.Category, error)
 	GetPublicProductBySlug(ctx context.Context, slug string) (*db.Product, error)
 	GetPublicProductImageByID(ctx context.Context, id int) (*db.ProductImage, error)
 	ListProducts(context.Context, db.ProductFilter) ([]db.Product, error)
-	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
+	ListProductsPage(context.Context, db.ProductFilter) ([]db.Product, int, error)
 }
 
 var _ store = (*db.Store)(nil)

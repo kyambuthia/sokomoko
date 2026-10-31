@@ -76,22 +76,15 @@ func (s *Service) Page(ctx context.Context, page, limit int) ([]Product, int, er
 	} else if limit > 50 {
 		limit = 50
 	}
-	total, err := s.store.CountPublicProducts(ctx)
+	products, total, err := s.store.ListProductsPage(ctx, db.ProductFilter{
+		PublicOnly: true,
+		Limit:      limit,
+		Offset:     (page - 1) * limit,
+	})
 	if err != nil {
 		return nil, 0, err
 	}
-	if total == 0 {
-		return []Product{}, 0, nil
-	}
-	lastPage := (total-1)/limit + 1
-	if page > lastPage {
-		return []Product{}, total, nil
-	}
-	products, err := s.Browse(ctx, Filter{Limit: limit, Offset: (page - 1) * limit})
-	if err != nil {
-		return nil, 0, err
-	}
-	return products, total, nil
+	return mapProducts(products), total, nil
 }
 
 // Browse lists products, optionally filtered by a search query and category.
@@ -148,20 +141,11 @@ func (s *Service) SearchPage(ctx context.Context, query, category string, page, 
 		limit = 50
 	}
 
-	filter := db.ProductFilter{Query: query, Category: category, PublicOnly: true}
-	total, err := s.store.CountFilteredProducts(ctx, filter)
-	if err != nil {
-		return nil, 0, err
+	filter := db.ProductFilter{
+		Query: query, Category: category, PublicOnly: true,
+		Limit: limit, Offset: (page - 1) * limit,
 	}
-	if total == 0 {
-		return []Product{}, 0, nil
-	}
-	lastPage := (total-1)/limit + 1
-	if page > lastPage {
-		return []Product{}, total, nil
-	}
-	filter.Limit, filter.Offset = limit, (page-1)*limit
-	products, err := s.store.ListProducts(ctx, filter)
+	products, total, err := s.store.ListProductsPage(ctx, filter)
 	if err != nil {
 		return nil, 0, err
 	}

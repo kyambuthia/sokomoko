@@ -20,7 +20,7 @@ type store interface {
 	ListOrdersForFulfillment(ctx context.Context) ([]db.Order, error)
 	ListOrdersForPartner(ctx context.Context, partnerID int) ([]db.Order, error)
 	ListPartners(ctx context.Context) ([]db.Partner, error)
-	ListProducts(context.Context, db.ProductFilter) ([]db.Product, error)
+	ListProductsPage(context.Context, db.ProductFilter) ([]db.Product, int, error)
 	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
 	ListFulfillmentOrdersPage(context.Context, int, string, int, int) ([]db.Order, int, error)
 	FulfillmentSummary(context.Context, int) (db.PartnerOrderSummary, error)
