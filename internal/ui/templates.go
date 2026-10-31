@@ -17,6 +17,7 @@ type Templates struct {
 	Checkout             *template.Template
 	Payment              *template.Template
 	Account              *template.Template
+	AccountBookings      *template.Template
 	Messages             *template.Template
 	MessageReports       *template.Template
 	Admin                *template.Template
@@ -88,6 +89,10 @@ func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
 	}
 
 	accountTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/account.html")
+	if err != nil {
+		return nil, err
+	}
+	accountBookingsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/account_service_bookings.html")
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +218,7 @@ func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
 		Checkout:             checkoutTmpl,
 		Payment:              paymentTmpl,
 		Account:              accountTmpl,
+		AccountBookings:      accountBookingsTmpl,
 		Messages:             messagesTmpl,
 		MessageReports:       messageReportsTmpl,
 		Admin:                adminTmpl,

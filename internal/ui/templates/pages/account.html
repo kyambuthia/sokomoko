@@ -22,7 +22,10 @@
   <section class="section" aria-labelledby="appointments-title">
     <div class="row-between">
       <h2 class="section-title" id="appointments-title">Appointments</h2>
-      <a class="btn btn-secondary btn-sm" href="/services">Browse services</a>
+      <div class="row">
+        {{ if eq .Viewer.Role "user" }}<a class="btn btn-secondary btn-sm" href="/account/service-bookings">All appointments</a>{{ end }}
+        <a class="btn btn-secondary btn-sm" href="/services">Browse services</a>
+      </div>
     </div>
     {{ if .Bookings }}
     <ul class="stack">

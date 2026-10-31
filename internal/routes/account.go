@@ -36,6 +36,15 @@ type AccountBookingView struct {
 	CanCancel     bool
 }
 
+type AccountServiceBookingsPage struct {
+	Title     string
+	Flash     Flash
+	Bookings  []AccountBookingView
+	Pager     Pager
+	Viewer    Viewer
+	CSRFToken string
+}
+
 func accountBookingView(booking db.ServiceBooking) AccountBookingView {
 	loc, err := time.LoadLocation(booking.Timezone)
 	if err != nil {
@@ -87,6 +96,42 @@ func Account(a *app.App) http.HandlerFunc {
 			Bookings:  bookingViews,
 			Pager:     newPager(r, page, accountOrdersPerPage, total),
 			Viewer:    viewerFromRequest(r),
+			CSRFToken: a.Auth.CSRFToken(r),
+		})
+	}
+}
+
+// AccountServiceBookings lists the customer's complete appointment history.
+func AccountServiceBookings(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			methodNotAllowed(w, http.MethodGet, http.MethodHead)
+			return
+		}
+		user := requestUserFromContext(r)
+		if user == nil || user.Role != db.RoleUser {
+			http.Error(w, "Customer sign-in required", http.StatusUnauthorized)
+			return
+		}
+		page := pageParam(r)
+		bookings, total, err := a.Bookings.ForCustomer(
+			r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, page, serviceBookingsPageSize,
+		)
+		if err != nil {
+			log.Printf("account service bookings: %v", err)
+			serverError(w, r)
+			return
+		}
+		if redirectPastLastPage(w, r, page, serviceBookingsPageSize, total) {
+			return
+		}
+		views := make([]AccountBookingView, 0, len(bookings))
+		for _, booking := range bookings {
+			views = append(views, accountBookingView(booking))
+		}
+		a.Render(w, a.Templates.AccountBookings, AccountServiceBookingsPage{
+			Title: "Your Appointments", Flash: popFlash(w, r), Bookings: views,
+			Pager: newPager(r, page, serviceBookingsPageSize, total), Viewer: viewerFromRequest(r),
 			CSRFToken: a.Auth.CSRFToken(r),
 		})
 	}

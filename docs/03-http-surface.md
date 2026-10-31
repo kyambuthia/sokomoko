@@ -41,6 +41,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/cart/remove` | POST | signed in | `CartRemove` | |
 | `/checkout` | GET, POST | signed in | `Checkout` | See below |
 | `/account` | GET | signed in | `Account` | Recent appointment requests and order history; orders are newest first, 20 per page (`?page=`) |
+| `/account/service-bookings` | GET, HEAD | user | `AccountServiceBookings` | Complete appointment history, 20 per page (`?page=`) |
 | `/account/orders/<id>/cancel` | POST | signed in | `AccountOrderCancel` | Own order, while `pending`, partner status `new`, and unpaid |
 | `/account/bookings/<id>/cancel` | POST | user | `AccountBookingCancel` | Cancels the user's own future requested or confirmed service appointment |
 | `/account/password` | GET, POST | signed in | `auth.PasswordChange` | Needs the current password; revokes every session and issues a new one |

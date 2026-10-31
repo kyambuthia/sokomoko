@@ -1,0 +1,47 @@
+{{ define "title" }}Your Appointments · sokomoko{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "account" "Page" . }}{{ end }}
+
+{{ define "main-area" }}
+<div class="stack-lg">
+  <div class="page-head">
+    <div>
+      <a class="small" href="/account">← Your account</a>
+      <h1>Your appointments</h1>
+      <p class="small muted">Appointment requests and their current status.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/services">Browse services</a>
+  </div>
+  {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
+  {{ if .Bookings }}
+  <ul class="stack">
+    {{ range .Bookings }}
+    <li class="card stack-sm">
+      <div class="row-between">
+        <strong>{{ .Booking.ServiceTitle }}</strong>
+        <span class="badge">{{ .StatusLabel }}</span>
+      </div>
+      <p class="small">{{ .LocalStart }} · {{ .Booking.Timezone }}</p>
+      <p class="small">
+        {{ if eq .Booking.PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .Booking.PriceMode "from" }}From {{ end }}{{ moneyInCurrency .Booking.PriceCents .Booking.Currency }}{{ end }}
+        · {{ .Booking.ServiceArea }}
+      </p>
+      {{ if eq .Booking.Status "requested" }}<p class="small muted">Waiting for provider response by {{ .LocalDeadline }}.</p>{{ end }}
+      {{ if eq .Booking.Status "confirmed" }}<p class="small muted">The provider confirmed this appointment.</p>{{ end }}
+      {{ if .CanCancel }}
+      <ui-confirm title="Cancel appointment?" message="This will release the requested time and cannot be undone." confirm-label="Cancel appointment" cancel-label="Keep appointment">
+        <form method="POST" action="/account/bookings/{{ .Booking.ID }}/cancel">
+          {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+          <input type="hidden" name="version" value="{{ .Booking.Version }}">
+          <button type="submit" class="btn btn-secondary btn-sm">Cancel appointment</button>
+        </form>
+      </ui-confirm>
+      {{ end }}
+    </li>
+    {{ end }}
+  </ul>
+  {{ template "pager" .Pager }}
+  {{ else }}
+  <p class="muted">No appointment requests yet. <a href="/services">Browse services</a>.</p>
+  {{ end }}
+</div>
+{{ end }}
