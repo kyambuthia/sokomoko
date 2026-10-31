@@ -459,10 +459,16 @@ func (s *Store) LastPaymentError(ctx context.Context, paymentID int) (string, er
 	var msg sql.NullString
 	err := s.DB.QueryRowContext(ctx,
 		`SELECT status, error_message FROM payment_attempts WHERE payment_id = $1 ORDER BY id DESC LIMIT 1`, paymentID).Scan(&status, &msg)
-	if errors.Is(err, sql.ErrNoRows) || status != PaymentAttemptStatusFailed {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
-	return msg.String, err
+	if err != nil {
+		return "", err
+	}
+	if status != PaymentAttemptStatusFailed {
+		return "", nil
+	}
+	return msg.String, nil
 }
 
 // ExpireUnpaidOrders cancels orders whose online payment is still pending
