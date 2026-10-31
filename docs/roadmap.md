@@ -9,8 +9,9 @@ what remains.
 
 ## Audit summary
 
-Checked and found sound, so not on this list: session cookies (`HttpOnly`,
-`SameSite=Lax`, `Secure` behind TLS), CSRF with constant-time comparison,
+Checked and found sound, so not on this list: session cookie flags and prefixes
+(`__Host-` for secure host-only cookies; explicit shared-domain mode uses
+`__Secure-` and trusts sibling subdomains), CSRF with constant-time comparison,
 Paystack webhook HMAC with `hmac.Equal`, hashed M-Pesa callback tokens,
 safe `next` redirects, session revocation on deactivation and password reset,
 partner data scoping (a suspended partner's logins see and change nothing),
