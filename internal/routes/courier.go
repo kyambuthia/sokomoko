@@ -21,11 +21,11 @@ type CourierDashboardData struct {
 	Deliveries []db.CourierDelivery
 }
 
-func RegisterCourier(a *app.App, mux *http.ServeMux) {
+func RegisterCourier(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
 	mux.Handle("/static/", Static(a.StaticFS))
-	mux.HandleFunc("/storefront", redirectToSibling("", "/"))
+	mux.HandleFunc("/storefront", redirectToSiblingWithProxyTrust("", "/", trustProxyHeaders))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			NotFound(w, r)

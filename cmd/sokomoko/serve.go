@@ -215,9 +215,9 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	metrics := app.NewHTTPMetrics()
 
 	routes.RegisterPublic(application, mainMux)
-	routes.RegisterAdmin(application, adminMux)
-	routes.RegisterPartner(application, partnerMux)
-	routes.RegisterCourier(application, courierMux)
+	routes.RegisterAdmin(application, adminMux, cfg.TrustProxyHeaders)
+	routes.RegisterPartner(application, partnerMux, cfg.TrustProxyHeaders)
+	routes.RegisterCourier(application, courierMux, cfg.TrustProxyHeaders)
 	routes.RegisterDocs(application, docsMux)
 	api.Register(application, apiMux)
 

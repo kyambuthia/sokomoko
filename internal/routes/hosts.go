@@ -19,6 +19,10 @@ const (
 // For admin.shop.example:8080 and prefix "partner." it yields
 // partner.shop.example:8080.
 func siblingURL(r *http.Request, prefix, path string) string {
+	return siblingURLWithProxyTrust(r, prefix, path, false)
+}
+
+func siblingURLWithProxyTrust(r *http.Request, prefix, path string, trustProxyHeaders bool) string {
 	host, port, err := net.SplitHostPort(r.Host)
 	if err != nil {
 		host, port = r.Host, ""
@@ -35,7 +39,7 @@ func siblingURL(r *http.Request, prefix, path string) string {
 		host = net.JoinHostPort(host, port)
 	}
 	scheme := "http"
-	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+	if r.TLS != nil || (trustProxyHeaders && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")) {
 		scheme = "https"
 	}
 	return scheme + "://" + host + path
@@ -43,11 +47,15 @@ func siblingURL(r *http.Request, prefix, path string) string {
 
 // redirectToSibling sends GET and HEAD requests to path on a sibling host.
 func redirectToSibling(prefix, path string) http.HandlerFunc {
+	return redirectToSiblingWithProxyTrust(prefix, path, false)
+}
+
+func redirectToSiblingWithProxyTrust(prefix, path string, trustProxyHeaders bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			methodNotAllowed(w, http.MethodGet, http.MethodHead)
 			return
 		}
-		http.Redirect(w, r, siblingURL(r, prefix, path), http.StatusFound)
+		http.Redirect(w, r, siblingURLWithProxyTrust(r, prefix, path, trustProxyHeaders), http.StatusFound)
 	}
 }

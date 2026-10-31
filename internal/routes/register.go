@@ -73,15 +73,15 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 }
 
 // RegisterAdmin wires the platform administration host.
-func RegisterAdmin(a *app.App, mux *http.ServeMux) {
+func RegisterAdmin(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
 	mux.Handle("/static/", Static(a.StaticFS))
 
-	mux.HandleFunc("/storefront", redirectToSibling("", "/"))
-	mux.HandleFunc("/catalog", redirectToSibling(partnerHostPrefix, "/products"))
-	mux.HandleFunc("/catalog/new", redirectToSibling(partnerHostPrefix, "/products/new"))
-	mux.HandleFunc("/courier", redirectToSibling(courierHostPrefix, "/login"))
+	mux.HandleFunc("/storefront", redirectToSiblingWithProxyTrust("", "/", trustProxyHeaders))
+	mux.HandleFunc("/catalog", redirectToSiblingWithProxyTrust(partnerHostPrefix, "/products", trustProxyHeaders))
+	mux.HandleFunc("/catalog/new", redirectToSiblingWithProxyTrust(partnerHostPrefix, "/products/new", trustProxyHeaders))
+	mux.HandleFunc("/courier", redirectToSiblingWithProxyTrust(courierHostPrefix, "/login", trustProxyHeaders))
 
 	mux.HandleFunc("/setup", a.Auth.AdminSetup(a.Templates.AdminSetup))
 	mux.HandleFunc("/login", a.Auth.AdminLogin(a.Templates.AdminLogin))
@@ -107,14 +107,14 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux) {
 }
 
 // RegisterPartner wires the partner workspace host.
-func RegisterPartner(a *app.App, mux *http.ServeMux) {
+func RegisterPartner(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	staff := func(h http.HandlerFunc) http.Handler { return withAnyRole(a, rolePartnerOps, h) }
 
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
 	mux.Handle("/static/", Static(a.StaticFS))
 
-	mux.HandleFunc("/storefront", redirectToSibling("", "/"))
+	mux.HandleFunc("/storefront", redirectToSiblingWithProxyTrust("", "/", trustProxyHeaders))
 
 	mux.Handle("/", staff(PartnerRoot(a)))
 	mux.HandleFunc("/login", a.Auth.WorkspaceLogin(a.Templates.AdminLogin))
