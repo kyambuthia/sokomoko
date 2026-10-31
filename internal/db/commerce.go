@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -49,15 +50,15 @@ func (s *Store) GetCommerceSettings(ctx context.Context) (CommerceSettings, erro
 // UpdateCommerceSettings saves marketplace money settings for a trusted
 // internal caller. Currency may change only while there are no orders.
 func (s *Store) UpdateCommerceSettings(ctx context.Context, c CommerceSettings) error {
-	return s.updateCommerceSettings(ctx, 0, c, false)
+	return s.updateCommerceSettings(ctx, 0, c, nil, false)
 }
 
 // UpdateCommerceSettingsForActor revalidates the admin in the settings transaction.
-func (s *Store) UpdateCommerceSettingsForActor(ctx context.Context, actorID int, c CommerceSettings) error {
-	return s.updateCommerceSettings(ctx, actorID, c, true)
+func (s *Store) UpdateCommerceSettingsForActor(ctx context.Context, actorID int, c CommerceSettings, supportedProviders []string) error {
+	return s.updateCommerceSettings(ctx, actorID, c, supportedProviders, true)
 }
 
-func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c CommerceSettings, requireAdmin bool) error {
+func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c CommerceSettings, supportedProviders []string, requireAdmin bool) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -69,6 +70,11 @@ func (s *Store) updateCommerceSettings(ctx context.Context, actorID int, c Comme
 		var current string
 		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR UPDATE").Scan(&current); err != nil {
 			return err
+		}
+		if requireAdmin {
+			if err := ensurePaymentProvidersSupportCurrencyTx(ctx, tx, supportedProviders); err != nil {
+				return err
+			}
 		}
 		if current != c.Currency {
 			var orders int
@@ -154,17 +160,36 @@ func (s *Store) GetPaymentProviderConfig(ctx context.Context, provider string) (
 	return scanProviderConfig(s.DB.QueryRowContext(ctx, "SELECT "+providerColumns+" FROM payment_providers WHERE provider = $1", provider))
 }
 
+func ensurePaymentProvidersSupportCurrencyTx(ctx context.Context, tx *sql.Tx, supportedProviders []string) error {
+	rows, err := tx.QueryContext(ctx, "SELECT provider FROM payment_providers WHERE enabled ORDER BY provider")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var provider string
+		if err := rows.Scan(&provider); err != nil {
+			return err
+		}
+		if !slices.Contains(supportedProviders, provider) {
+			return ErrPaymentProviderCurrencyMismatch
+		}
+	}
+	return rows.Err()
+}
+
 // SavePaymentProviderConfig upserts a provider for a trusted internal caller.
 func (s *Store) SavePaymentProviderConfig(ctx context.Context, c PaymentProviderConfig) error {
-	return s.savePaymentProviderConfig(ctx, 0, c, false)
+	return s.savePaymentProviderConfig(ctx, 0, c, nil, false)
 }
 
-// SavePaymentProviderConfigForActor revalidates the admin in the provider update transaction.
-func (s *Store) SavePaymentProviderConfigForActor(ctx context.Context, actorID int, c PaymentProviderConfig) error {
-	return s.savePaymentProviderConfig(ctx, actorID, c, true)
+// SavePaymentProviderConfigForActor revalidates the admin and provider currency in
+// the transaction that writes the provider configuration.
+func (s *Store) SavePaymentProviderConfigForActor(ctx context.Context, actorID int, c PaymentProviderConfig, supportedCurrencies []string) error {
+	return s.savePaymentProviderConfig(ctx, actorID, c, supportedCurrencies, true)
 }
 
-func (s *Store) savePaymentProviderConfig(ctx context.Context, actorID int, c PaymentProviderConfig, requireAdmin bool) error {
+func (s *Store) savePaymentProviderConfig(ctx context.Context, actorID int, c PaymentProviderConfig, supportedCurrencies []string, requireAdmin bool) error {
 	settings, err := json.Marshal(c.Settings)
 	if err != nil {
 		return err
@@ -175,6 +200,24 @@ func (s *Store) savePaymentProviderConfig(ctx context.Context, actorID int, c Pa
 		if requireAdmin {
 			if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
 				return err
+			}
+		}
+		var currency string
+		if err := tx.QueryRowContext(ctx, "SELECT currency FROM commerce_settings WHERE id = 1 FOR UPDATE").Scan(&currency); err != nil {
+			return err
+		}
+		if requireAdmin && c.Enabled && !slices.Contains(supportedCurrencies, currency) {
+			return ErrPaymentProviderCurrencyMismatch
+		}
+		if requireAdmin && !c.Enabled {
+			var anotherEnabled bool
+			if err := tx.QueryRowContext(ctx,
+				"SELECT EXISTS (SELECT 1 FROM payment_providers WHERE enabled AND provider <> $1)", c.Provider,
+			).Scan(&anotherEnabled); err != nil {
+				return err
+			}
+			if !anotherEnabled {
+				return ErrLastPaymentMethod
 			}
 		}
 		_, err := tx.ExecContext(ctx,

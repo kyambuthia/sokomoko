@@ -182,11 +182,17 @@ func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, inp
 			return err
 		}
 	}
-	if err := s.store.SavePaymentProviderConfigForActor(ctx, actor.ID, record); err != nil {
-		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+	if err := s.store.SavePaymentProviderConfigForActor(ctx, actor.ID, record, d.Currencies); err != nil {
+		switch {
+		case errors.Is(err, db.ErrWorkspaceActorNotFound):
 			return ErrForbidden
+		case errors.Is(err, db.ErrPaymentProviderCurrencyMismatch):
+			return fmt.Errorf("%w: payment settings changed; reload and retry", ErrCurrencyMismatch)
+		case errors.Is(err, db.ErrLastPaymentMethod):
+			return ErrLastMethod
+		default:
+			return err
 		}
-		return err
 	}
 	state := "disabled"
 	if input.Enabled {
@@ -265,9 +271,18 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 		}
 	}
 	settings := db.CommerceSettings{Currency: currency.Code, ShippingFlat: flat, FreeShippingThreshold: free, TaxRateBP: int64(taxPct)}
-	if err := s.store.UpdateCommerceSettingsForActor(ctx, actor.ID, settings); err != nil {
+	supportedProviders := make([]string, 0, len(s.registry.All()))
+	for _, provider := range s.registry.All() {
+		if provider.Descriptor().SupportsCurrency(currency.Code) {
+			supportedProviders = append(supportedProviders, provider.Descriptor().ID)
+		}
+	}
+	if err := s.store.UpdateCommerceSettingsForActor(ctx, actor.ID, settings, supportedProviders); err != nil {
 		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 			return Pricing{}, ErrForbidden
+		}
+		if errors.Is(err, db.ErrPaymentProviderCurrencyMismatch) {
+			return Pricing{}, fmt.Errorf("%w: payment settings changed; reload and retry", ErrCurrencyMismatch)
 		}
 		return Pricing{}, err
 	}
