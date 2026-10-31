@@ -4,8 +4,8 @@ Work planned from an audit of the code on `codex/commerce-reliability`
 (October 2026). Items are ordered by risk first, then value. Each item is
 done only when it has a test and the full suite passes against PostgreSQL.
 
-Status: `[x]` done, `[ ]` open. Every item below is done; the "Later" list is
-what remains.
+Status: `[x]` done, `[ ]` open. The checked items are complete; Service
+directory and Later list the remaining work.
 
 ## Audit summary
 
@@ -82,9 +82,13 @@ reachable.
 
 ## Later
 
-- Product image upload.
+- [ ] Verify product deletion. The workspace flow is implemented; add coverage
+  for ownership, cart cleanup, and the concurrent add/delete boundary before
+  marking it complete.
+- [ ] Product image upload.
 - [ ] Finish shared rate limiting verification. POST IP limits and
   authentication abuse backoff now use PostgreSQL across replicas, with a
   bounded process-local fallback on database errors. Add database-backed tests
   and run the full suite before marking this item done.
-- An email outbox and a metrics endpoint.
+- [ ] An email outbox.
+- [ ] A metrics endpoint.
