@@ -173,20 +173,21 @@ type AuthService interface {
 }
 
 type Dependencies struct {
-	Readiness ReadinessChecker
-	Catalog   CatalogService
-	Directory DirectoryService
-	Account   AccountService
-	Commerce  CommerceService
-	Checkout  CheckoutService
-	Payment   PaymentService
-	Admin     AdminService
-	Partner   PartnerService
-	Logistics LogisticsService
-	Messaging MessagingService
-	Auth      AuthService
-	Templates *ui.Templates
-	StaticFS  embed.FS
+	Readiness      ReadinessChecker
+	RateLimitStore SharedRequestRateLimitStore
+	Catalog        CatalogService
+	Directory      DirectoryService
+	Account        AccountService
+	Commerce       CommerceService
+	Checkout       CheckoutService
+	Payment        PaymentService
+	Admin          AdminService
+	Partner        PartnerService
+	Logistics      LogisticsService
+	Messaging      MessagingService
+	Auth           AuthService
+	Templates      *ui.Templates
+	StaticFS       embed.FS
 	// PublicBaseURL is the public origin used in payment return and callback
 	// URLs. When empty, development derives it from the request.
 	PublicBaseURL         string
@@ -197,6 +198,7 @@ type Dependencies struct {
 
 type App struct {
 	Readiness             ReadinessChecker
+	RateLimitStore        SharedRequestRateLimitStore
 	Catalog               CatalogService
 	Directory             DirectoryService
 	Account               AccountService
@@ -219,6 +221,7 @@ type App struct {
 func New(deps Dependencies) *App {
 	return &App{
 		Readiness:             deps.Readiness,
+		RateLimitStore:        deps.RateLimitStore,
 		Catalog:               deps.Catalog,
 		Directory:             deps.Directory,
 		Account:               deps.Account,

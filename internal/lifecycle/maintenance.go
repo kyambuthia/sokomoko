@@ -82,6 +82,14 @@ func Maintain(ctx context.Context, store MaintenanceStore) {
 				slog.Error("session or token cleanup failed", "error", err)
 			}
 		}
+		if cleaner, ok := store.(interface{ CleanupRequestRateLimits(context.Context) error }); ok {
+			if ctx.Err() != nil {
+				return
+			}
+			if err := cleaner.CleanupRequestRateLimits(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("request rate limit cleanup failed", "error", err)
+			}
+		}
 	})
 	release()
 	prune()

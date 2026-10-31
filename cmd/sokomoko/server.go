@@ -90,7 +90,9 @@ func buildMiddlewares(cfg config.Config, application *app.App) []app.Middleware 
 	if cfg.PostRateLimitMax > 0 {
 		window := time.Duration(cfg.PostRateLimitWindow) * time.Second
 		clientIP := func(r *http.Request) string { return auth.ClientIP(r, cfg.TrustProxyHeaders) }
-		middlewares = append(middlewares, app.RateLimitByKey(cfg.PostRateLimitMax, window, clientIP, http.MethodPost))
+		// The runtime database URL is shared across replicas; only its HMAC
+		// digest of the client IP is persisted by the limiter.
+		middlewares = append(middlewares, app.SharedRateLimitByKey(application.RateLimitStore, []byte(cfg.DatabaseURL), cfg.PostRateLimitMax, window, clientIP, http.MethodPost))
 	}
 
 	return middlewares

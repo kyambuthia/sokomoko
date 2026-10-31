@@ -103,7 +103,7 @@ Every request passes through this chain, outermost first
 | 4 | `SecurityHeadersWithProxy` | CSP, `X-Frame-Options: DENY`, `nosniff`, referrer policy, `Cache-Control: no-store`, HSTS when the request is HTTPS. |
 | 5 | `BodyLimit(1 MiB)` | Caps request bodies for POST, PUT, PATCH, DELETE. |
 | 6 | `CSRFMiddleware` | Validates the session's CSRF token on unsafe methods (see [Security](04-security.md#csrf)). |
-| 7 | `RateLimitByKey` | Only when `POST_RATE_LIMIT_MAX > 0`: fixed-window POST limit per client IP. |
+| 7 | `SharedRateLimitByKey` | Only when `POST_RATE_LIMIT_MAX > 0`: PostgreSQL-shared fixed-window POST limit per client IP; stores a keyed HMAC digest and falls back to process-local limiting during database errors. |
 | 8 | Host router | Dispatches to a mux as above. |
 
 Per-route wrappers then add authentication: `OptionalUser` (attach the user if

@@ -42,6 +42,7 @@ func Compose(opts ComposeOptions) *App {
 
 	return New(Dependencies{
 		Readiness:             opts.Store,
+		RateLimitStore:        opts.Store,
 		Catalog:               catalogsvc.New(opts.Store),
 		Directory:             directorysvc.New(opts.Store),
 		Account:               accountsvc.New(opts.Store),

@@ -80,8 +80,10 @@ reachable.
 - [ ] Practitioner availability and transactional appointment reservations.
 - [ ] Privacy-conscious geocoding and local map discovery.
 
-## Later (not started)
+## Later
 
 - Product image upload and deletion.
-- Shared rate limits for multiple replicas, an email outbox, and a metrics
-  endpoint.
+- Finish shared rate limiting: POST IP limits now use PostgreSQL across
+  replicas; authentication abuse backoff remains process-local. Share that
+  backoff and add the required verification before marking this item done.
+- An email outbox and a metrics endpoint.

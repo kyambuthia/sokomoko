@@ -2,10 +2,14 @@ package app
 
 import (
 	"container/list"
+	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"math"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -218,4 +222,66 @@ func RateLimitByKey(max int, window time.Duration, keyFunc func(*http.Request) s
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// SharedRequestRateLimitStore persists a privacy-preserving request key across
+// application replicas. Implementations must make each consume atomic.
+type SharedRequestRateLimitStore interface {
+	EnforceRequestRateLimit(context.Context, []byte, int, time.Duration) (bool, time.Duration, error)
+}
+
+// SharedRateLimitByKey enforces a POST limit across replicas. Database errors
+// fall back to the bounded process-local limiter so a transient database issue
+// does not block every form submission.
+func SharedRateLimitByKey(store SharedRequestRateLimitStore, secret []byte, max int, window time.Duration, keyFunc func(*http.Request) string, methods ...string) Middleware {
+	if max <= 0 || window <= 0 {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	if store == nil || len(secret) == 0 {
+		return RateLimitByKey(max, window, keyFunc, methods...)
+	}
+
+	limited := map[string]bool{}
+	for _, method := range methods {
+		limited[strings.ToUpper(strings.TrimSpace(method))] = true
+	}
+	fallback := newIPRateLimiter(max, window)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if len(limited) > 0 && !limited[r.Method] {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			key := keyFunc(r)
+			ctx, cancel := context.WithTimeout(r.Context(), 150*time.Millisecond)
+			allowed, retryAfter, err := store.EnforceRequestRateLimit(ctx, requestRateLimitKey(secret, key), max, window)
+			cancel()
+			if err != nil {
+				slog.WarnContext(r.Context(), "shared request rate limit unavailable; using process-local fallback", "error", err)
+				allowed, retryAfter = fallback.allow(key, time.Now())
+			}
+			if !allowed {
+				retryAfterSeconds := int(math.Ceil(retryAfter.Seconds()))
+				if retryAfterSeconds < 1 {
+					retryAfterSeconds = 1
+				}
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func requestRateLimitKey(secret []byte, raw string) []byte {
+	key := strings.TrimSpace(raw)
+	if address, err := netip.ParseAddr(key); err == nil {
+		key = address.Unmap().String()
+	}
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte("sokomoko:post-rate-limit:v1\x00"))
+	_, _ = mac.Write([]byte(key))
+	return mac.Sum(nil)
 }

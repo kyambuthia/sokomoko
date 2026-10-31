@@ -47,7 +47,7 @@ SMTP or host settings.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `POST_RATE_LIMIT_MAX` | `0` (off) | POST requests per client IP per window |
+| `POST_RATE_LIMIT_MAX` | `0` (off) | POST requests per client IP per window, shared across replicas through PostgreSQL |
 | `POST_RATE_LIMIT_WINDOW_SECONDS` | `60` | Must be positive when the limit is on |
 | `AUTH_ABUSE_MAX_FAILURES` | `0` (off) | Lockout threshold for login failures, reset-request attempts, and reset-confirm failures |
 | `AUTH_ABUSE_BACKOFF_BASE_SECONDS` | `1` | First lockout |
