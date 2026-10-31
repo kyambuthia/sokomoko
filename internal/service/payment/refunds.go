@@ -44,6 +44,21 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 		if manualReference == "" {
 			return nil, ErrRefundReferenceRequired
 		}
+		if e.Status == "refunded" {
+			return e, nil
+		}
+		if e.Status != "open" && e.Status != "requested" && e.Status != "review" {
+			return e, nil
+		}
+		ctx = context.WithoutCancel(ctx)
+		if err := s.store.RecordMpesaRefundForActor(ctx, actor.ID, id, manualReference); err != nil {
+			if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+				return nil, ErrForbidden
+			}
+			return nil, err
+		}
+		s.logAudit(ctx, actor.ID, "payments.refund.manual", "payment_exception", id, "M-Pesa reversal recorded")
+		return s.store.GetPaymentException(ctx, id)
 	case "paystack":
 		provider, config, err := s.providerFor(ctx, e.Provider)
 		if err != nil {
@@ -69,13 +84,6 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	// even if the admin's browser goes away. Provider calls keep their own
 	// timeout.
 	ctx = context.WithoutCancel(ctx)
-	if e.Provider == "mpesa" {
-		if err := s.store.SetPaymentExceptionStatus(ctx, id, "refunded", manualReference, ""); err != nil {
-			return nil, err
-		}
-		s.logAudit(ctx, actor.ID, "payments.refund.manual", "payment_exception", id, "M-Pesa reversal recorded")
-		return s.store.GetPaymentException(ctx, id)
-	}
 	result, err := refundProvider.CreateRefund(ctx, cfg, e.RequestReference, e.Amount, e.Currency)
 	if err != nil {
 		if markErr := s.store.SetPaymentExceptionStatus(ctx, id, "review", "", "Refund request outcome unknown; reconcile in Paystack before retrying."); markErr != nil {

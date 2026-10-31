@@ -71,6 +71,7 @@ type store interface {
 	GetPaymentException(ctx context.Context, id int) (*db.PaymentException, error)
 	BeginRefund(ctx context.Context, id int) (*db.PaymentException, bool, error)
 	BeginRefundForActor(ctx context.Context, actorID, id int) (*db.PaymentException, bool, error)
+	RecordMpesaRefundForActor(ctx context.Context, actorID, id int, receipt string) error
 	SetPaymentExceptionStatus(ctx context.Context, id int, status, refundReference, lastError string) error
 	SetPaymentExceptionStatusForActor(ctx context.Context, actorID, id int, status, refundReference, lastError string) error
 	PaymentExceptionCounts(ctx context.Context) (open, pending, review int, err error)

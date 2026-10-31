@@ -182,6 +182,46 @@ func (s *Store) setPaymentExceptionStatus(ctx context.Context, actorID, id int, 
 	})
 }
 
+// RecordMpesaRefundForActor revalidates the admin and marks an eligible M-Pesa
+// exception refunded, recording the reversal receipt in one transaction.
+func (s *Store) RecordMpesaRefundForActor(ctx context.Context, actorID, id int, receipt string) error {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if _, _, err := lockWorkspaceActorTx(ctx, tx, actorID, RoleAdmin); err != nil {
+			return err
+		}
+		var paymentID int
+		var reason, status, provider string
+		if err := tx.QueryRowContext(ctx,
+			"SELECT payment_id, reason, status, provider FROM payment_exceptions WHERE id = $1 FOR UPDATE", id).
+			Scan(&paymentID, &reason, &status, &provider); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrPaymentExceptionNotFound
+			}
+			return err
+		}
+		if status == "refunded" {
+			return nil
+		}
+		if provider != "mpesa" || (status != "open" && status != "requested" && status != "review") {
+			return nil
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE payment_exceptions SET status = 'refunded',
+			 refund_reference = COALESCE(NULLIF($2, ''), refund_reference), last_error = ''
+			 WHERE id = $1`, id, receipt); err != nil {
+			return err
+		}
+		if reason == "late_capture" {
+			_, err := tx.ExecContext(ctx,
+				"UPDATE payments SET status = 'refunded' WHERE id = $1 AND status = 'captured'", paymentID)
+			return err
+		}
+		return nil
+	})
+}
+
 // PaymentExceptionCounts is a small health signal for operators.
 func (s *Store) PaymentExceptionCounts(ctx context.Context) (open, pending, review int, err error) {
 	ctx, cancel := s.queryContext(ctx)
