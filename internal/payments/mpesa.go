@@ -115,7 +115,7 @@ func (m *Mpesa) token(ctx context.Context, cfg Config) (string, error) {
 	if key == "" || secret == "" {
 		return "", ErrNotConfigured
 	}
-	cacheKey := mpesaTokenCacheKey(m.base(cfg), key)
+	cacheKey := mpesaTokenCacheKey(m.base(cfg), key, secret)
 	m.mu.Lock()
 	if cached, ok := m.tokens[cacheKey]; ok && time.Now().Before(cached.expires) {
 		m.mu.Unlock()
@@ -148,8 +148,8 @@ func (m *Mpesa) token(ctx context.Context, cfg Config) (string, error) {
 	return resp.AccessToken, nil
 }
 
-func mpesaTokenCacheKey(baseURL, consumerKey string) string {
-	digest := sha256.Sum256([]byte(baseURL + "\x00" + consumerKey))
+func mpesaTokenCacheKey(baseURL, consumerKey, consumerSecret string) string {
+	digest := sha256.Sum256([]byte(baseURL + "\x00" + consumerKey + "\x00" + consumerSecret))
 	return hex.EncodeToString(digest[:])
 }
 
