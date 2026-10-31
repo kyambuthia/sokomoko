@@ -85,9 +85,9 @@ type Service struct {
 	registry *payments.Registry
 	box      *secret.Box
 
-	mu                  sync.Mutex
-	verified            map[string]time.Time // hashed attempt reference -> last provider check
-	lastVerifiedCleanup time.Time
+	mu             sync.Mutex
+	verified       map[string]time.Time // hashed attempt reference -> last provider check
+	saturatedUntil time.Time
 }
 
 func New(store store, registry *payments.Registry, box *secret.Box) *Service {
@@ -527,24 +527,36 @@ func (s *Service) dueForVerify(reference string) bool {
 	if last, ok := s.verified[key]; ok && now.Sub(last) < verifyInterval {
 		return false
 	}
-	if s.lastVerifiedCleanup.IsZero() || now.Sub(s.lastVerifiedCleanup) >= verifyInterval {
-		for candidate, last := range s.verified {
-			if now.Sub(last) >= verifyInterval {
-				delete(s.verified, candidate)
-			}
-		}
-		s.lastVerifiedCleanup = now
-	}
 	if _, exists := s.verified[key]; exists {
 		s.verified[key] = now
 		return true
 	}
-	if len(s.verified) >= maxVerifiedReferences {
-		// Keep known throttles intact and defer unseen checks until a slot expires.
+	if len(s.verified) < maxVerifiedReferences {
+		s.verified[key] = now
+		return true
+	}
+	if s.saturatedUntil.After(now) {
 		return false
 	}
-	s.verified[key] = now
-	return true
+
+	var earliestExpiry time.Time
+	for candidate, last := range s.verified {
+		expiry := last.Add(verifyInterval)
+		if !expiry.After(now) {
+			delete(s.verified, candidate)
+			continue
+		}
+		if earliestExpiry.IsZero() || expiry.Before(earliestExpiry) {
+			earliestExpiry = expiry
+		}
+	}
+	if len(s.verified) < maxVerifiedReferences {
+		s.saturatedUntil = time.Time{}
+		s.verified[key] = now
+		return true
+	}
+	s.saturatedUntil = earliestExpiry
+	return false
 }
 
 // verifyAndApply asks the provider for the result and records it.
