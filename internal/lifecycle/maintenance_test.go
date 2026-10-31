@@ -25,6 +25,8 @@ func (s *blockingMaintenance) ExpireUnpaidOrders(context.Context, time.Time) (in
 func (s *blockingMaintenance) ExpireServiceBookingRequests(context.Context) (int, error) {
 	return 0, nil
 }
+func (s *blockingMaintenance) CleanupRequestRateLimits(context.Context) error { return nil }
+func (s *blockingMaintenance) CleanupAuthAbuseLimits(context.Context) error   { return nil }
 
 func TestMaintain_CancelsDatabaseWorkBeforeContinuing(t *testing.T) {
 	store := &blockingMaintenance{started: make(chan struct{})}
@@ -73,6 +75,8 @@ func (s *lockedMaintenance) ExpireUnpaidOrders(context.Context, time.Time) (int,
 func (s *lockedMaintenance) ExpireServiceBookingRequests(context.Context) (int, error) {
 	return 0, nil
 }
+func (s *lockedMaintenance) CleanupRequestRateLimits(context.Context) error { return nil }
+func (s *lockedMaintenance) CleanupAuthAbuseLimits(context.Context) error   { return nil }
 
 func TestExclusive_SkipsWhileAnotherReplicaHoldsTheLock(t *testing.T) {
 	ctx := context.Background()

@@ -13,6 +13,8 @@ type MaintenanceStore interface {
 	CleanupPasswordResetTokens(context.Context) error
 	ExpireUnpaidOrders(ctx context.Context, cutoff time.Time) (int, error)
 	ExpireServiceBookingRequests(context.Context) (int, error)
+	CleanupRequestRateLimits(context.Context) error
+	CleanupAuthAbuseLimits(context.Context) error
 }
 
 // ExclusiveRunner runs a job only when no other process is running it. A
@@ -90,21 +92,17 @@ func Maintain(ctx context.Context, store MaintenanceStore) {
 				slog.Error("session or token cleanup failed", "error", err)
 			}
 		}
-		if cleaner, ok := store.(interface{ CleanupRequestRateLimits(context.Context) error }); ok {
-			if ctx.Err() != nil {
-				return
-			}
-			if err := cleaner.CleanupRequestRateLimits(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("request rate limit cleanup failed", "error", err)
-			}
+		if ctx.Err() != nil {
+			return
 		}
-		if cleaner, ok := store.(interface{ CleanupAuthAbuseLimits(context.Context) error }); ok {
-			if ctx.Err() != nil {
-				return
-			}
-			if err := cleaner.CleanupAuthAbuseLimits(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("authentication abuse cleanup failed", "error", err)
-			}
+		if err := store.CleanupRequestRateLimits(ctx); err != nil && ctx.Err() == nil {
+			slog.Error("request rate limit cleanup failed", "error", err)
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if err := store.CleanupAuthAbuseLimits(ctx); err != nil && ctx.Err() == nil {
+			slog.Error("authentication abuse cleanup failed", "error", err)
 		}
 	})
 	release()
