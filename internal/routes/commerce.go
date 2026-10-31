@@ -187,6 +187,8 @@ func cartErrorMessage(err error) (int, string) {
 		return http.StatusBadRequest, "Invalid product"
 	case errors.Is(err, commerceSvc.ErrInvalidQuantity):
 		return http.StatusBadRequest, fmt.Sprintf("Quantity must be between 1 and %d", commerceSvc.MaxLineQuantity)
+	case errors.Is(err, commerceSvc.ErrCartItemNotFound):
+		return http.StatusNotFound, "Cart item not found"
 	case errors.Is(err, commerceSvc.ErrProductNotFound):
 		return http.StatusNotFound, "Product not found"
 	case errors.Is(err, commerceSvc.ErrOutOfStock):

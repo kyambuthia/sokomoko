@@ -106,6 +106,8 @@ func writeCommerceError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "invalid_product", "Product id is invalid")
 	case errors.Is(err, commerceSvc.ErrInvalidQuantity):
 		writeError(w, http.StatusBadRequest, "invalid_quantity", "Quantity is invalid")
+	case errors.Is(err, commerceSvc.ErrCartItemNotFound):
+		writeError(w, http.StatusNotFound, "cart_item_not_found", "Cart item not found")
 	case errors.Is(err, commerceSvc.ErrProductNotFound):
 		writeError(w, http.StatusNotFound, "product_not_found", "Product not found")
 	case errors.Is(err, commerceSvc.ErrOutOfStock):

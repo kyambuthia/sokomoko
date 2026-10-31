@@ -15,6 +15,7 @@ var (
 	ErrProductSlugConflict        = errors.New("product slug conflict")
 	ErrDeliveryAddressRequired    = errors.New("delivery address required")
 	ErrCartEmpty                  = errors.New("cart is empty")
+	ErrCartItemNotFound           = errors.New("cart item not found")
 	ErrInvalidQuantity            = errors.New("invalid quantity")
 	ErrProductNotFound            = errors.New("product not found")
 	ErrCheckoutNotFound           = errors.New("checkout not found")

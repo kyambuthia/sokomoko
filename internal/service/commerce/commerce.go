@@ -13,6 +13,7 @@ import (
 var (
 	ErrInvalidProduct    = errors.New("invalid product")
 	ErrInvalidQuantity   = errors.New("invalid quantity")
+	ErrCartItemNotFound  = db.ErrCartItemNotFound
 	ErrProductNotFound   = errors.New("product not found")
 	ErrOutOfStock        = errors.New("product is out of stock")
 	ErrInsufficientStock = errors.New("insufficient stock")
