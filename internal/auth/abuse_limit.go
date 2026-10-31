@@ -113,11 +113,11 @@ func (l *authAbuseLimiter) RecordFailure(key string, now time.Time) {
 				lockFor = l.backoffMax
 				break
 			}
-			lockFor *= 2
-			if lockFor > l.backoffMax {
+			if lockFor > l.backoffMax/2 {
 				lockFor = l.backoffMax
 				break
 			}
+			lockFor *= 2
 		}
 		entry.lockedUntil = now.Add(lockFor)
 	}
