@@ -136,6 +136,8 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 			return
 		}
 
+		s.recordAbuseAttempt("password-reset:request", identifier, false, r)
+
 		user, err := s.findUserByIdentifier(r.Context(), identifier)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -149,19 +151,18 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-			if err := s.store.CreatePasswordResetToken(r.Context(), user.ID, resetToken, time.Now().Add(resetTokenDuration)); err != nil {
+			created, err := s.store.RequestPasswordResetToken(r.Context(), user.ID, resetToken, time.Now().Add(resetTokenDuration))
+			if err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-
-			resetLink := s.buildPasswordResetLink(r, resetToken)
-			s.dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
-			if s.shouldExposeResetLink() {
-				data.ResetLink = resetLink
+			if created {
+				resetLink := s.buildPasswordResetLink(r, resetToken)
+				s.dispatchPasswordResetEmail(user.Email, resetLink, user.ID)
+				if s.shouldExposeResetLink() {
+					data.ResetLink = resetLink
+				}
 			}
-			s.clearAbuseFailures("password-reset:request", identifier, false, r)
-		} else {
-			s.markAbuseFailure("password-reset:request", identifier, false, r)
 		}
 
 		renderWithStatus(w, tmpl, 0, data)

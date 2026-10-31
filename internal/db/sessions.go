@@ -86,25 +86,52 @@ func (s *Store) CleanupPasswordResetTokens(ctx context.Context) error {
 // CreatePasswordResetToken stores a new reset token, invalidating any earlier
 // tokens for the same user.
 func (s *Store) CreatePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) error {
+	_, err := s.replacePasswordResetToken(ctx, userID, token, expiresAt, false)
+	return err
+}
+
+// RequestPasswordResetToken issues at most one reset email per user every five
+// minutes, even when requests arrive through different identifiers or replicas.
+func (s *Store) RequestPasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) (bool, error) {
+	return s.replacePasswordResetToken(ctx, userID, token, expiresAt, true)
+}
+
+func (s *Store) replacePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time, enforceCooldown bool) (bool, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
 
-	return s.withTx(ctx, func(tx *sql.Tx) error {
-		// Serialize token replacement with other reset requests and token use.
-		var lockedUserID int
-		if err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", userID).
-			Scan(&lockedUserID); err != nil {
+	created := false
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		created = false
+		// Serialize token replacement and cooldown checks with token use.
+		var blocked bool
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COALESCE(password_reset_requested_at > now() - interval '5 minutes', FALSE)
+			 FROM users WHERE id = $1 FOR UPDATE`, userID,
+		).Scan(&blocked); err != nil {
 			return err
+		}
+		if enforceCooldown && blocked {
+			return nil
 		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM password_reset_tokens WHERE user_id = $1", userID); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx,
+		if _, err := tx.ExecContext(ctx,
 			"INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES ($1, $2, $3)",
 			hashOpaqueToken(token), userID, expiresAt.UTC(),
-		)
-		return err
+		); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE users SET password_reset_requested_at = now() WHERE id = $1", userID,
+		); err != nil {
+			return err
+		}
+		created = true
+		return nil
 	})
+	return created, err
 }
 
 func (s *Store) GetValidPasswordResetToken(ctx context.Context, token string) (*PasswordResetToken, error) {

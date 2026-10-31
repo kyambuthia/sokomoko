@@ -22,7 +22,7 @@ const (
 )
 
 type store interface {
-	CreatePasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) error
+	RequestPasswordResetToken(ctx context.Context, userID int, token string, expiresAt time.Time) (bool, error)
 	CreateSession(ctx context.Context, sess db.Session) error
 	CreateUser(ctx context.Context, user db.User) (int64, error)
 	DeleteSession(ctx context.Context, id string) error

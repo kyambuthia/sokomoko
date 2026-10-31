@@ -49,7 +49,7 @@ SMTP or host settings.
 | --- | --- | --- |
 | `POST_RATE_LIMIT_MAX` | `0` (off) | POST requests per client IP per window |
 | `POST_RATE_LIMIT_WINDOW_SECONDS` | `60` | Must be positive when the limit is on |
-| `AUTH_ABUSE_MAX_FAILURES` | `0` (off) | Failures before lockout for login and password reset |
+| `AUTH_ABUSE_MAX_FAILURES` | `0` (off) | Lockout threshold for login failures, reset-request attempts, and reset-confirm failures |
 | `AUTH_ABUSE_BACKOFF_BASE_SECONDS` | `1` | First lockout |
 | `AUTH_ABUSE_BACKOFF_MAX_SECONDS` | `300` | Lockout cap; must be at least the base |
 

@@ -117,12 +117,13 @@ For development there is an alternative: `seed` creates an admin from
 
 ## Throttling
 
-Two independent, in-memory mechanisms:
+Two in-memory mechanisms and one persistent password-reset cooldown:
 
 | Mechanism | Scope | Config | Behaviour |
 | --- | --- | --- | --- |
-| Auth abuse limiter | Login (per area), reset request, reset confirm | `AUTH_ABUSE_MAX_FAILURES`, `..._BACKOFF_BASE_SECONDS`, `..._BACKOFF_MAX_SECONDS` | Keyed by scope, client IP, and identifier. After the maximum number of failures, locks for the base duration, doubling per further failure up to the maximum. Success clears the key. Locked requests get `429` with `Retry-After`. Off when max failures is 0. |
+| Auth abuse limiter | Login (per area), reset request, reset confirm | `AUTH_ABUSE_MAX_FAILURES`, `..._BACKOFF_BASE_SECONDS`, `..._BACKOFF_MAX_SECONDS` | Keyed by scope, client IP, and identifier. Login and reset-confirm failures count toward lockout; every non-empty reset-request identifier counts equally, whether an account matches or not. Successful login/confirmation clears the key. Locked requests get `429` with `Retry-After`. Off when max failures is 0. |
 | POST rate limit | Every POST | `POST_RATE_LIMIT_MAX`, `POST_RATE_LIMIT_WINDOW_SECONDS` | Fixed window per client IP. `429` with `Retry-After`. Off when max is 0. |
+| Reset email cooldown | Per user across instances | None | PostgreSQL allows one reset email every five minutes. Requests during the cooldown preserve the current link and send no additional email. |
 
 Client IP is `RemoteAddr`, or the right-most `X-Forwarded-For` entry when
 `TRUST_PROXY_HEADERS=true`. The right-most entry is the one the proxy wrote, so

@@ -317,6 +317,10 @@ func (s *Service) checkAbuseLock(w http.ResponseWriter, scope, identifier string
 }
 
 func (s *Service) markAbuseFailure(scope, identifier string, preserveCase bool, r *http.Request) {
+	s.recordAbuseAttempt(scope, identifier, preserveCase, r)
+}
+
+func (s *Service) recordAbuseAttempt(scope, identifier string, preserveCase bool, r *http.Request) {
 	if s.abuseLimiter == nil {
 		return
 	}
