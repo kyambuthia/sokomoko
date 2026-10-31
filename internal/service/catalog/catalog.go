@@ -114,9 +114,9 @@ func (s *Service) SearchInCategory(ctx context.Context, query, category string) 
 	return s.Browse(ctx, Filter{Query: query, Category: category, Limit: defaultSearchLimit})
 }
 
-// BrowsePage returns one bounded page and the total number of catalog matches.
+// SearchPage returns one bounded page and the total number of catalog matches.
 // The query and image fetches stop when the HTTP request is cancelled.
-func (s *Service) BrowsePage(ctx context.Context, query, category string, page, limit int) ([]Product, int, error) {
+func (s *Service) SearchPage(ctx context.Context, query, category string, page, limit int) ([]Product, int, error) {
 	query = normalizeQuery(query)
 	category = strings.TrimSpace(category)
 	if strings.EqualFold(category, AllCategories) || strings.EqualFold(category, "all") {

@@ -137,7 +137,7 @@ func Search(a *app.App) http.HandlerFunc {
 			CSRFToken: a.Auth.CSRFToken(r),
 		}
 		if query != "" || category != "" {
-			products, total, err := a.Catalog.BrowsePage(r.Context(), query, category, page, searchPageSize)
+			products, total, err := a.Catalog.SearchPage(r.Context(), query, category, page, searchPageSize)
 			if err != nil {
 				log.Printf("search %q: %v", query, err)
 				serverError(w, r)
