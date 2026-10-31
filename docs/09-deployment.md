@@ -184,11 +184,11 @@ container. `seed` and `serve --seed` are refused in production.
 
 ## Scaling
 
-POST limits are shared through PostgreSQL across app instances, with a
-process-local fallback during database errors. Authentication abuse lockouts
-remain per instance, so extra replicas multiply the attempts allowed before an
-account or client is locked. Maintenance jobs use a PostgreSQL advisory lock,
-so they can run on every replica while only one performs each pass.
+POST limits and authentication abuse lockouts are shared through PostgreSQL
+across app instances. Both use a process-local fallback during database errors,
+so replicas can each allow additional attempts while the database is unavailable.
+Maintenance jobs use a PostgreSQL advisory lock, so they can run on every replica
+while only one performs each pass.
 
 ## Backups and recovery
 

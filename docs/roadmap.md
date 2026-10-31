@@ -83,7 +83,8 @@ reachable.
 ## Later
 
 - Product image upload and deletion.
-- Finish shared rate limiting: POST IP limits now use PostgreSQL across
-  replicas; authentication abuse backoff remains process-local. Share that
-  backoff and add the required verification before marking this item done.
+- [ ] Finish shared rate limiting verification. POST IP limits and
+  authentication abuse backoff now use PostgreSQL across replicas, with a
+  bounded process-local fallback on database errors. Add database-backed tests
+  and run the full suite before marking this item done.
 - An email outbox and a metrics endpoint.

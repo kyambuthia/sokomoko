@@ -2,10 +2,15 @@ package auth
 
 import (
 	"container/list"
+	"context"
+	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,7 +20,15 @@ import (
 const (
 	maxAuthAbuseEntries       = 50_000
 	maxAbuseKeyComponentBytes = 256
+	sharedAuthAbuseTimeout    = 150 * time.Millisecond
 )
+
+// SharedAuthAbuseStore persists keyed authentication lockouts across replicas.
+type SharedAuthAbuseStore interface {
+	CheckAuthAbuseLock(context.Context, []byte) (bool, time.Duration, int64, error)
+	RecordAuthAbuseFailure(context.Context, []byte, int64, int, time.Duration, time.Duration) error
+	ClearAuthAbuseFailures(context.Context, []byte, time.Duration) error
+}
 
 type abuseEntry struct {
 	failures    int
@@ -117,6 +130,28 @@ func (l *authAbuseLimiter) RecordSuccess(key string) {
 	defer l.mu.Unlock()
 
 	l.removeLocked(key)
+}
+
+func (l *authAbuseLimiter) observeLock(key string, retryAfter time.Duration, now time.Time) {
+	if retryAfter <= 0 {
+		return
+	}
+	key = boundedAbuseKeyComponent(key)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.cleanupLocked(now)
+
+	entry := l.entries[key]
+	if entry.failures < l.maxFailures {
+		entry.failures = l.maxFailures
+	}
+	lockedUntil := now.Add(retryAfter)
+	if entry.lockedUntil.After(lockedUntil) {
+		lockedUntil = entry.lockedUntil
+	}
+	entry.lockedUntil = lockedUntil
+	entry.lastSeenAt = now
+	l.putLocked(key, entry, now)
 }
 
 func (l *authAbuseLimiter) putLocked(key string, entry abuseEntry, now time.Time) {
@@ -277,7 +312,34 @@ func (s *Service) clientIP(r *http.Request) string {
 }
 
 func abuseScopeKey(scope, ip, identifier string) string {
-	return boundedAbuseKeyComponent(scope) + "|" + boundedAbuseKeyComponent(ip) + "|" + boundedAbuseKeyComponent(identifier)
+	if address, err := netip.ParseAddr(strings.TrimSpace(ip)); err == nil {
+		ip = address.Unmap().String()
+	}
+	var key strings.Builder
+	for _, component := range []string{scope, ip, identifier} {
+		component = boundedAbuseKeyComponent(component)
+		key.WriteString(strconv.Itoa(len(component)))
+		key.WriteByte(':')
+		key.WriteString(component)
+	}
+	return key.String()
+}
+
+func authAbuseKeyHash(secret []byte, key string) []byte {
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte("sokomoko:auth-abuse:v1\x00"))
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(key)))
+	_, _ = mac.Write(length[:])
+	_, _ = mac.Write([]byte(key))
+	return mac.Sum(nil)
+}
+
+func requestContext(r *http.Request) context.Context {
+	if r == nil {
+		return context.Background()
+	}
+	return r.Context()
 }
 
 func boundedAbuseKeyComponent(value string) string {
@@ -302,43 +364,76 @@ func (s *Service) throttleStatus(w http.ResponseWriter, retryAfter time.Duration
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 }
 
-func (s *Service) checkAbuseLock(w http.ResponseWriter, scope, identifier string, preserveCase bool, r *http.Request) bool {
+func (s *Service) checkAbuseLock(w http.ResponseWriter, scope, identifier string, preserveCase bool, r *http.Request) (bool, int64) {
 	if s.abuseLimiter == nil {
-		return false
+		return false, -1
 	}
 	ip := s.clientIP(r)
 	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
-	locked, retryAfter := s.abuseLimiter.IsLocked(key, time.Now())
-	if !locked {
-		return false
+	now := time.Now()
+	var locked bool
+	var retryAfter time.Duration
+	if s.sharedAbuseStore == nil {
+		locked, retryAfter = s.abuseLimiter.IsLocked(key, now)
+	} else {
+		ctx, cancel := context.WithTimeout(requestContext(r), sharedAuthAbuseTimeout)
+		locked, retryAfter, generation, err := s.sharedAbuseStore.CheckAuthAbuseLock(ctx, authAbuseKeyHash(s.abuseKey, key))
+		cancel()
+		if err != nil {
+			slog.WarnContext(requestContext(r), "shared authentication abuse check failed; using process-local fallback", "error", err)
+			locked, retryAfter = s.abuseLimiter.IsLocked(key, now)
+			generation = -1
+		} else {
+			// Keep this instance's bounded fallback warm while shared storage works.
+			s.abuseLimiter.IsLocked(key, now)
+			if locked {
+				s.abuseLimiter.observeLock(key, retryAfter, now)
+			}
+		}
+		if locked {
+			s.throttleStatus(w, retryAfter)
+			return true, generation
+		}
+		return false, generation
 	}
-	s.throttleStatus(w, retryAfter)
-	return true
+	if locked {
+		s.throttleStatus(w, retryAfter)
+	}
+	return locked, -1
 }
 
 // checkAbuseLockByIP applies an endpoint limit shared across all identifiers
 // from one client. It complements identifier-specific limits where aliases or
 // attacker-chosen values would otherwise create fresh keys.
-func (s *Service) checkAbuseLockByIP(w http.ResponseWriter, scope string, r *http.Request) bool {
+func (s *Service) checkAbuseLockByIP(w http.ResponseWriter, scope string, r *http.Request) (bool, int64) {
 	return s.checkAbuseLock(w, scope+":ip", "", true, r)
 }
 
 // recordAbuseAttemptByIP records a failed request against the client-wide key.
-func (s *Service) recordAbuseAttemptByIP(scope string, r *http.Request) {
-	s.recordAbuseAttempt(scope+":ip", "", true, r)
+func (s *Service) recordAbuseAttemptByIP(scope string, r *http.Request, generation int64) {
+	s.recordAbuseAttempt(scope+":ip", "", true, r, generation)
 }
 
-func (s *Service) markAbuseFailure(scope, identifier string, preserveCase bool, r *http.Request) {
-	s.recordAbuseAttempt(scope, identifier, preserveCase, r)
+func (s *Service) markAbuseFailure(scope, identifier string, preserveCase bool, r *http.Request, generation int64) {
+	s.recordAbuseAttempt(scope, identifier, preserveCase, r, generation)
 }
 
-func (s *Service) recordAbuseAttempt(scope, identifier string, preserveCase bool, r *http.Request) {
+func (s *Service) recordAbuseAttempt(scope, identifier string, preserveCase bool, r *http.Request, generation int64) {
 	if s.abuseLimiter == nil {
 		return
 	}
 	ip := s.clientIP(r)
 	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
-	s.abuseLimiter.RecordFailure(key, time.Now())
+	now := time.Now()
+	s.abuseLimiter.RecordFailure(key, now)
+	if s.sharedAbuseStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(requestContext(r), sharedAuthAbuseTimeout)
+	defer cancel()
+	if err := s.sharedAbuseStore.RecordAuthAbuseFailure(ctx, authAbuseKeyHash(s.abuseKey, key), generation, s.abuseLimiter.maxFailures, s.abuseLimiter.backoffBase, s.abuseLimiter.backoffMax); err != nil {
+		slog.WarnContext(requestContext(r), "shared authentication abuse update failed; retaining process-local fallback", "error", err)
+	}
 }
 
 func (s *Service) clearAbuseFailures(scope, identifier string, preserveCase bool, r *http.Request) {
@@ -348,4 +443,12 @@ func (s *Service) clearAbuseFailures(scope, identifier string, preserveCase bool
 	ip := s.clientIP(r)
 	key := abuseScopeKey(scope, ip, normalizeIdentifierForAbuse(identifier, preserveCase))
 	s.abuseLimiter.RecordSuccess(key)
+	if s.sharedAbuseStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(requestContext(r), sharedAuthAbuseTimeout)
+	defer cancel()
+	if err := s.sharedAbuseStore.ClearAuthAbuseFailures(ctx, authAbuseKeyHash(s.abuseKey, key), s.abuseLimiter.backoffMax); err != nil {
+		slog.WarnContext(requestContext(r), "shared authentication abuse clear failed; retaining database state", "error", err)
+	}
 }

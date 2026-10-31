@@ -90,6 +90,14 @@ func Maintain(ctx context.Context, store MaintenanceStore) {
 				slog.Error("request rate limit cleanup failed", "error", err)
 			}
 		}
+		if cleaner, ok := store.(interface{ CleanupAuthAbuseLimits(context.Context) error }); ok {
+			if ctx.Err() != nil {
+				return
+			}
+			if err := cleaner.CleanupAuthAbuseLimits(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("authentication abuse cleanup failed", "error", err)
+			}
+		}
 	})
 	release()
 	prune()

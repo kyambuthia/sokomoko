@@ -138,7 +138,8 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 			return
 		}
 		identifier := strconv.Itoa(user.ID)
-		if s.checkAbuseLock(w, scope, identifier, true, r) {
+		locked, abuseGeneration := s.checkAbuseLock(w, scope, identifier, true, r)
+		if locked {
 			data.Error = "Too many attempts. Please wait and try again."
 			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
 			return
@@ -150,7 +151,7 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 		case current == "" || password == "" || confirm == "":
 			data.Error = "All fields are required"
 		case !checkPassword(user, current):
-			s.markAbuseFailure(scope, identifier, true, r)
+			s.markAbuseFailure(scope, identifier, true, r, abuseGeneration)
 			data.Error = "Current password is incorrect"
 		case password != confirm:
 			data.Error = "New passwords do not match"

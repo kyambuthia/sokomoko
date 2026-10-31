@@ -48,6 +48,8 @@ type Config struct {
 	AuthAbuseMaxFailures     int
 	AuthAbuseBackoffBase     time.Duration
 	AuthAbuseBackoffMax      time.Duration
+	AuthAbuseStore           SharedAuthAbuseStore
+	AuthAbuseKey             []byte
 	PasswordResetBaseURL     string
 	PasswordResetDisabled    bool
 	PasswordResetEmailSender PasswordResetEmailSender
@@ -63,6 +65,8 @@ type Service struct {
 	resetEmailBackoff        []time.Duration // nil means defaultResetEmailBackoff
 	sessionCookieDomain      string
 	abuseLimiter             *authAbuseLimiter
+	sharedAbuseStore         SharedAuthAbuseStore
+	abuseKey                 []byte
 	passwordResetBaseURL     string
 	passwordResetDisabled    bool
 	passwordResetEmailSender PasswordResetEmailSender
@@ -75,12 +79,18 @@ func NewService(store store, cfg Config) *Service {
 		environment = "development"
 	}
 
+	sharedAbuseStore := cfg.AuthAbuseStore
+	if len(cfg.AuthAbuseKey) == 0 {
+		sharedAbuseStore = nil
+	}
 	return &Service{
 		store:                    store,
 		environment:              environment,
 		adminSetupToken:          strings.TrimSpace(cfg.AdminSetupToken),
 		sessionCookieDomain:      strings.TrimSpace(strings.ToLower(cfg.SessionCookieDomain)),
 		abuseLimiter:             newAuthAbuseLimiter(cfg.AuthAbuseMaxFailures, cfg.AuthAbuseBackoffBase, cfg.AuthAbuseBackoffMax),
+		sharedAbuseStore:         sharedAbuseStore,
+		abuseKey:                 append([]byte(nil), cfg.AuthAbuseKey...),
 		passwordResetBaseURL:     strings.TrimSpace(cfg.PasswordResetBaseURL),
 		passwordResetDisabled:    cfg.PasswordResetDisabled,
 		passwordResetEmailSender: cfg.PasswordResetEmailSender,

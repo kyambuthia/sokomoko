@@ -129,11 +129,11 @@ For development there is an alternative: `seed` creates an admin from
 
 ## Throttling
 
-Authentication abuse lockouts are process-local; POST limits and password-reset cooldowns use PostgreSQL:
+Authentication lockouts, POST limits, and password-reset cooldowns use PostgreSQL:
 
 | Mechanism | Scope | Config | Behaviour |
 | --- | --- | --- | --- |
-| Auth abuse limiter | Login (per area), reset request, reset confirm | `AUTH_ABUSE_MAX_FAILURES`, `..._BACKOFF_BASE_SECONDS`, `..._BACKOFF_MAX_SECONDS` | Keyed by scope, client IP, and identifier. Login and reset-confirm failures count toward lockout; every non-empty reset-request identifier counts equally, whether an account matches or not. Successful login/confirmation clears the key. Locked requests get `429` with `Retry-After`. Off when max failures is 0. |
+| Auth abuse limiter | Login (per area), reset request, reset confirm | `AUTH_ABUSE_MAX_FAILURES`, `..._BACKOFF_BASE_SECONDS`, `..._BACKOFF_MAX_SECONDS` | PostgreSQL-shared exponential backoff keyed by an HMAC of scope, client IP, and identifier, using `DATABASE_URL` as shared key material. Failed login/reset-confirm attempts count; reset requests count every non-empty identifier equally. Successful login/confirmation clears the key. DB errors fall back to the bounded process-local limiter. Locked requests get `429` with `Retry-After`. Off when max failures is 0. |
 | POST rate limit | Every POST | `POST_RATE_LIMIT_MAX`, `POST_RATE_LIMIT_WINDOW_SECONDS` | PostgreSQL-shared fixed window per client IP using an HMAC digest keyed from the shared `DATABASE_URL`. `429` with `Retry-After`; process-local fallback during database errors. Off when max is 0. |
 | Reset email cooldown | Per user across instances | None | PostgreSQL allows one reset email every five minutes. Requests during the cooldown preserve the current link and send no additional email. |
 
@@ -142,9 +142,10 @@ Client IP is `RemoteAddr`, or the right-most `X-Forwarded-For` entry when
 values a client puts in the header cannot change its rate-limit key. This
 assumes exactly one trusted proxy in front of the app.
 
-Authentication lockouts are per instance and reset on restart. POST counters are shared
-across instances; during database errors, requests use a process-local fallback. The
-POST counter table is unlogged, so a database crash or failover can reset those counters.
+Authentication lockouts and POST counters are shared across instances. If a database
+call fails, both limiters use their bounded process-local fallback. Auth lockout rows
+use a logged table and follow the database replication durability settings; POST
+counters use an unlogged table and can reset after a database crash or failover.
 
 Messaging also has persistent PostgreSQL budgets for contact lookups,
 conversation creation, sends and reports. These are shared across processes.

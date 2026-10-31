@@ -117,7 +117,8 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 		renderWithStatus(w, cfg.tmpl, http.StatusBadRequest, withError(data, "Username and password are required"))
 		return
 	}
-	if s.checkAbuseLock(w, cfg.abuseScope, username, false, r) {
+	locked, abuseGeneration := s.checkAbuseLock(w, cfg.abuseScope, username, false, r)
+	if locked {
 		renderWithStatus(w, cfg.tmpl, http.StatusTooManyRequests, withError(data, "Too many attempts. Please wait and try again."))
 		return
 	}
@@ -132,7 +133,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 		user = nil
 	}
 	if !checkPassword(user, password) {
-		s.markAbuseFailure(cfg.abuseScope, username, false, r)
+		s.markAbuseFailure(cfg.abuseScope, username, false, r, abuseGeneration)
 		renderWithStatus(w, cfg.tmpl, http.StatusUnauthorized, withError(data, "Invalid credentials"))
 		return
 	}

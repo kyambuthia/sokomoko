@@ -30,7 +30,7 @@ Supporting packages with no upward dependencies: `money`, `slug`, `config`,
 | `internal/app` | `App` holds every dependency behind an interface (`CatalogService`, `CheckoutService`, `AuthService`, ...). `Compose` builds the concrete services from a `*db.Store`. Also holds middleware and the `Render`/`RenderStatus`/`JSON` helpers. |
 | `internal/routes` | HTML handlers. They parse forms, call one service, map service errors to messages, and render a template. Uses a one-shot flash cookie for post-redirect messages. |
 | `internal/api` | The versioned JSON API. Same services as `routes`, with DTOs that convert `money.Cents` to JSON numbers. |
-| `internal/auth` | Login, signup, staff signup, first-run setup, password reset, logout, session lookup, role middleware, CSRF middleware, in-memory abuse limiter. |
+| `internal/auth` | Login, signup, staff signup, first-run setup, password reset, logout, session lookup, role middleware, CSRF middleware, shared PostgreSQL abuse lockouts with a bounded process-local fallback. |
 | `internal/service/catalog` | Product listing, search, categories, product lookup by slug, image URL mapping. |
 | `internal/service/commerce` | Cart operations with stock checks. |
 | `internal/service/checkout` | Pricing (`CalculateSummary`), stock holds, draft saving, idempotent order placement. |
