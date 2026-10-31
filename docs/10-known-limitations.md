@@ -51,8 +51,8 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   database call fails, so replicas can each allow additional attempts during an
   outage. Auth lockout state uses a logged table and follows database replication
   durability settings; POST counters are unlogged and can reset after a crash or
-  failover. Maintenance
-  jobs use an advisory lock, so one replica performs each pass.
+  failover. Maintenance jobs use an advisory lock, so one replica performs each
+  pass.
 - **Password-reset email has no outbox.** It is sent from a goroutine and
   retried twice on transient failures (5-second timeout per attempt); a
   process restart during that window loses it.
