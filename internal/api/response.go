@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 type responseEnvelope struct {
@@ -41,7 +42,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, errorEnvelope{Error: errorBody{Code: code, Message: message}})
 }
 
-func methodNotAllowed(w http.ResponseWriter) {
-	w.Header().Set("Allow", "GET, POST, PATCH, DELETE")
+func methodNotAllowed(w http.ResponseWriter, allowed ...string) {
+	w.Header().Set("Allow", strings.Join(allowed, ", "))
 	writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 }

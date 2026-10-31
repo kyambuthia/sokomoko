@@ -166,7 +166,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 	switch resource {
 	case "metrics":
 		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
+			methodNotAllowed(w, http.MethodGet)
 			return
 		}
 		metrics, err := h.app.Admin.Metrics(r.Context())
@@ -180,7 +180,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 		})
 	case "products":
 		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
+			methodNotAllowed(w, http.MethodGet)
 			return
 		}
 		page, limit := pageParams(r)
@@ -203,7 +203,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 		h.adminOrders(w, r, parts)
 	case "reports":
 		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
+			methodNotAllowed(w, http.MethodGet)
 			return
 		}
 		report, err := h.app.Admin.Reports(r.Context())
@@ -219,7 +219,7 @@ func (h *Handler) admin(w http.ResponseWriter, r *http.Request) {
 		h.adminTeam(w, r, parts)
 	case "audit":
 		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
+			methodNotAllowed(w, http.MethodGet)
 			return
 		}
 		if !isAdmin(r) {
@@ -261,8 +261,16 @@ func (h *Handler) adminOrders(w http.ResponseWriter, r *http.Request, parts []st
 		}{Items: items, Page: page, Limit: limit, Total: total})
 		return
 	}
-	if len(parts) != 2 || r.Method != http.MethodPatch {
-		methodNotAllowed(w)
+	if len(parts) == 1 {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	if len(parts) != 2 {
+		h.notFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPatch {
+		methodNotAllowed(w, http.MethodPatch)
 		return
 	}
 	if !isAdmin(r) {
@@ -314,8 +322,16 @@ func (h *Handler) adminTeam(w http.ResponseWriter, r *http.Request, parts []stri
 		}{Items: items, Page: page, Limit: limit, Total: total})
 		return
 	}
-	if len(parts) != 2 || r.Method != http.MethodDelete {
-		methodNotAllowed(w)
+	if len(parts) == 1 {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	if len(parts) != 2 {
+		h.notFound(w, r)
+		return
+	}
+	if r.Method != http.MethodDelete {
+		methodNotAllowed(w, http.MethodDelete)
 		return
 	}
 	if _, ok := parsePositiveID(parts[1]); !ok {
@@ -356,7 +372,7 @@ func (h *Handler) partner(w http.ResponseWriter, r *http.Request) {
 	switch resource {
 	case "dashboard":
 		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
+			methodNotAllowed(w, http.MethodGet)
 			return
 		}
 		actor := partnerActor(r)
@@ -406,8 +422,16 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request, parts 
 		h.patchPartnerProduct(w, r, parts[1])
 		return
 	}
-	if len(parts) != 1 || r.Method != http.MethodPost {
-		methodNotAllowed(w)
+	if len(parts) != 1 {
+		if len(parts) == 2 {
+			methodNotAllowed(w, http.MethodPatch)
+		} else {
+			h.notFound(w, r)
+		}
+		return
+	}
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodGet, http.MethodPost)
 		return
 	}
 	var input partnerProductInput
@@ -472,8 +496,16 @@ func (h *Handler) partnerOrders(w http.ResponseWriter, r *http.Request, parts []
 		}{Items: items, Summary: mapPartnerSummary(data.Summary), Page: page, Limit: limit, Total: total})
 		return
 	}
-	if len(parts) != 2 || r.Method != http.MethodPatch {
-		methodNotAllowed(w)
+	if len(parts) == 1 {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	if len(parts) != 2 {
+		h.notFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPatch {
+		methodNotAllowed(w, http.MethodPatch)
 		return
 	}
 	var input partnerOrderInput
@@ -522,7 +554,7 @@ func (h *Handler) partnerSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		writeData(w, http.StatusOK, mapPartnerSettings(settings))
 	default:
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet, http.MethodPatch)
 	}
 }
 

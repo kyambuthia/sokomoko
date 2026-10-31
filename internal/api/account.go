@@ -13,7 +13,7 @@ import (
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
@@ -31,7 +31,7 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) accountOrders(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	uid, ok := userID(r)
@@ -69,7 +69,7 @@ func (h *Handler) accountOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	if idPart, ok := strings.CutSuffix(tail, "/payment"); ok {
@@ -97,7 +97,7 @@ func (h *Handler) accountOrder(w http.ResponseWriter, r *http.Request) {
 // new and unpaid. It answers with the updated order.
 func (h *Handler) cancelAccountOrder(w http.ResponseWriter, r *http.Request, uid int, idPart string) {
 	if r.Method != http.MethodPost {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPost)
 		return
 	}
 	id, err := strconv.Atoi(idPart)

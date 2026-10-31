@@ -19,7 +19,7 @@ func serviceActor(r *http.Request) *directorysvc.Actor {
 }
 func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	page, limit := pageParams(r)
@@ -50,7 +50,7 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Handler) serviceDetail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	v, err := h.app.Directory.Public(r.Context(), r.PathValue("slug"))
@@ -83,7 +83,7 @@ func (h *Handler) ownServices(w http.ResponseWriter, r *http.Request) {
 		}
 		writeData(w, http.StatusCreated, v)
 	default:
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet, http.MethodPost)
 	}
 }
 func (h *Handler) ownService(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func (h *Handler) ownService(w http.ResponseWriter, r *http.Request) {
 		}
 		writeData(w, http.StatusOK, v)
 	default:
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet, http.MethodPatch)
 	}
 }
 func writeServicePage(w http.ResponseWriter, items []db.ServiceListing, total, page, limit int) {

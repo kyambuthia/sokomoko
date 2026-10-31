@@ -54,7 +54,7 @@ type courierDeliveryDTO struct {
 
 func (h *Handler) adminCourierDeliveries(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	board, err := h.app.Logistics.DispatchBoard(r.Context(), logisticsActor(r))
@@ -78,7 +78,7 @@ func (h *Handler) adminCourierDeliveries(w http.ResponseWriter, r *http.Request)
 
 func (h *Handler) adminCourierAssign(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPost)
 		return
 	}
 	var input courierAssignmentInput
@@ -95,7 +95,7 @@ func (h *Handler) adminCourierAssign(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) courierDeliveries(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	deliveries, err := h.app.Logistics.JobsByView(r.Context(), logisticsActor(r), r.URL.Query().Get("view"))
@@ -112,7 +112,7 @@ func (h *Handler) courierDeliveries(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) courierDeliveryUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPatch)
 		return
 	}
 	id := strings.Trim(strings.TrimPrefix(r.URL.Path, apiPrefix+"/courier/deliveries/"), "/")

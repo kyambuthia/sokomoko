@@ -83,7 +83,7 @@ func (h *Handler) checkout(w http.ResponseWriter, r *http.Request) {
 		}
 		writeData(w, http.StatusOK, h.checkoutDTO(r.Context(), state))
 	default:
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet, http.MethodPost)
 	}
 }
 
@@ -111,7 +111,7 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 				writeData(w, http.StatusOK, h.checkoutDTO(r.Context(), state))
 				return
 			}
-			methodNotAllowed(w)
+			methodNotAllowed(w, http.MethodGet, http.MethodPatch)
 			return
 		}
 		var input checkoutInput
@@ -130,7 +130,7 @@ func (h *Handler) checkoutSession(w http.ResponseWriter, r *http.Request) {
 
 	if len(parts) == 2 && parts[1] == "place-order" {
 		if r.Method != http.MethodPost {
-			methodNotAllowed(w)
+			methodNotAllowed(w, http.MethodPost)
 			return
 		}
 		idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))

@@ -16,7 +16,7 @@ type cartItemInput struct {
 
 func (h *Handler) cart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	h.writeCart(w, r, http.StatusOK)
@@ -24,7 +24,7 @@ func (h *Handler) cart(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) cartItemCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPost)
 		return
 	}
 	uid, ok := userID(r)
@@ -75,7 +75,7 @@ func (h *Handler) cartItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPatch, http.MethodDelete)
 		return
 	}
 	h.writeCart(w, r, http.StatusOK)

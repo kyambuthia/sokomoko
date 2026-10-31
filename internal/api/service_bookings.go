@@ -15,7 +15,7 @@ import (
 
 func (h *Handler) serviceAvailability(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	reader, ok := h.app.Bookings.(interface {
@@ -57,7 +57,7 @@ func (h *Handler) serviceAvailability(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) createServiceBooking(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPost)
 		return
 	}
 	if h.app.DemoMode {
@@ -104,7 +104,7 @@ func (h *Handler) createServiceBooking(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) accountServiceBookings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
@@ -131,7 +131,7 @@ func (h *Handler) accountServiceBookings(w http.ResponseWriter, r *http.Request)
 
 func (h *Handler) partnerServiceBookings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
@@ -158,7 +158,7 @@ func (h *Handler) partnerServiceBookings(w http.ResponseWriter, r *http.Request)
 
 func (h *Handler) partnerServiceBookingAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPost)
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
@@ -200,7 +200,7 @@ func (h *Handler) partnerServiceBookingAction(w http.ResponseWriter, r *http.Req
 
 func (h *Handler) cancelServiceBooking(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodPost)
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())

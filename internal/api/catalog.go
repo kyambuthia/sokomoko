@@ -18,7 +18,7 @@ type catalogListDTO struct {
 
 func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 
@@ -39,7 +39,7 @@ func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) catalogProduct(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
 	slug := pathTail(r.URL.Path, apiPrefix+"/catalog/products/")
