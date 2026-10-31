@@ -37,16 +37,17 @@ const (
 )
 
 var (
-	ErrInvalidMethod     = errors.New("invalid payment method")
-	ErrForbidden         = errors.New("forbidden payment settings change")
-	ErrUnknownProvider   = errors.New("unknown payment provider")
-	ErrMissingFields     = errors.New("required payment fields are missing")
-	ErrCurrencyMismatch  = errors.New("provider does not support the store currency")
-	ErrSecretsKeyMissing = errors.New("SECRETS_KEY is required to store payment credentials")
-	ErrLastMethod        = errors.New("at least one payment method must stay enabled")
-	ErrInvalidPricing    = errors.New("invalid pricing")
-	ErrNotPayable        = errors.New("this order cannot be paid online")
-	ErrNoPublicURL       = errors.New("PUBLIC_BASE_URL is required for online payments")
+	ErrInvalidMethod               = errors.New("invalid payment method")
+	ErrForbidden                   = errors.New("forbidden payment settings change")
+	ErrUnknownProvider             = errors.New("unknown payment provider")
+	ErrMissingFields               = errors.New("required payment fields are missing")
+	ErrCurrencyMismatch            = errors.New("provider does not support the store currency")
+	ErrSecretsKeyMissing           = errors.New("SECRETS_KEY is required to store payment credentials")
+	ErrLastMethod                  = errors.New("at least one payment method must stay enabled")
+	ErrInvalidPricing              = errors.New("invalid pricing")
+	ErrNotPayable                  = errors.New("this order cannot be paid online")
+	ErrNoPublicURL                 = errors.New("PUBLIC_BASE_URL is required for online payments")
+	ErrProviderVerificationPending = errors.New("payment provider verification is pending")
 )
 
 type store interface {
@@ -574,18 +575,26 @@ func (s *Service) dueForVerify(reference string) bool {
 }
 
 // verifyAndApply asks the provider for the result and records it.
-func (s *Service) verifyAndApply(ctx context.Context, payment *db.OnlinePayment, payload map[string]string) error {
+func (s *Service) verify(ctx context.Context, payment *db.OnlinePayment, payload map[string]string) (payments.Verification, error) {
 	provider, cfg, err := s.providerFor(ctx, payment.Provider)
 	if err != nil {
-		return err
+		return payments.Verification{}, err
 	}
+	return s.verifyWith(ctx, provider, cfg, payment, payload)
+}
+
+func (s *Service) verifyWith(ctx context.Context, provider payments.Provider, cfg payments.Config, payment *db.OnlinePayment, payload map[string]string) (payments.Verification, error) {
 	charged := payment.Amount
 	if c, err := strconv.ParseInt(payload["charged_cents"], 10, 64); err == nil && c > 0 {
 		charged = money.Cents(c)
 	}
-	v, err := provider.Verify(ctx, cfg, payments.VerifyRequest{
+	return provider.Verify(ctx, cfg, payments.VerifyRequest{
 		Reference: payment.ExternalReference, Data: payload, Charged: charged, Currency: payment.Currency,
 	})
+}
+
+func (s *Service) verifyAndApply(ctx context.Context, payment *db.OnlinePayment, payload map[string]string) error {
+	v, err := s.verify(ctx, payment, payload)
 	if err != nil {
 		return err
 	}
@@ -685,7 +694,14 @@ func (s *Service) HandleWebhook(ctx context.Context, providerID string, r *http.
 	if err != nil {
 		return err
 	}
-	return s.verifyAndApply(ctx, payment, payload)
+	verified, err := s.verify(ctx, payment, payload)
+	if err != nil {
+		return err
+	}
+	if verified.Status == payments.StatusPending {
+		return ErrProviderVerificationPending
+	}
+	return s.apply(ctx, payment, verified)
 }
 
 // HandleCallback processes an unsigned provider callback (M-Pesa). The
@@ -728,13 +744,12 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if event.Result.Status == payments.StatusFailed {
 		return s.store.FailPaymentAttempt(ctx, payment.AttemptID, event.Result.Reason)
 	}
-	charged := payment.Amount
-	if c, err := strconv.ParseInt(payload["charged_cents"], 10, 64); err == nil && c > 0 {
-		charged = money.Cents(c)
-	}
-	confirmed, err := provider.Verify(ctx, cfg, payments.VerifyRequest{Reference: payment.ExternalReference, Data: payload, Charged: charged, Currency: payment.Currency})
+	confirmed, err := s.verifyWith(ctx, provider, cfg, payment, payload)
 	if err != nil {
 		return err
+	}
+	if confirmed.Status == payments.StatusPending {
+		return ErrProviderVerificationPending
 	}
 	if confirmed.Status != payments.StatusPaid {
 		return s.apply(ctx, payment, confirmed)
