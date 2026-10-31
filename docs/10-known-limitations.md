@@ -24,7 +24,8 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 - **No product image upload.** Product managers can delete products from the
   workspace; deleted products disappear from the storefront and active carts,
-  while past orders retain their product records. Product images are written
+  and affected customers' open checkouts are cancelled with their stock holds
+  released. Past orders retain their product records. Product images are written
   only with a new product (seed data), and new products show a bundled fallback
   image.
 - **A product's partner cannot be changed after creation.**

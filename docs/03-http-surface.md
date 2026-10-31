@@ -125,6 +125,7 @@ address as a draft and re-renders the form with `422`.
 | `/products` | GET, HEAD | admin, staff, partner | `PartnerProducts` (50 per page, `?page=`) |
 | `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` |
 | `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` |
+| `/products/<id>/delete` | POST | admin, staff, partner (own products only; others get 404) | `PartnerProductDelete` (CSRF protected; removes the product from carts and cancels affected open checkouts) |
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (20 per page, `status` filter; updates keep the current page) |
 
