@@ -44,12 +44,13 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	if query == "" {
+	category := strings.TrimSpace(r.URL.Query().Get("category"))
+	if query == "" && category == "" {
 		writeData(w, http.StatusOK, catalogListDTO{Items: []productDTO{}, Page: 1, Limit: defaultPageSize, Total: 0})
 		return
 	}
 	page, limit := pageParams(r)
-	products, total, err := h.app.Catalog.SearchPage(r.Context(), query, r.URL.Query().Get("category"), page, limit)
+	products, total, err := h.app.Catalog.SearchPage(r.Context(), query, category, page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search_unavailable", "Unable to search products")
 		return
