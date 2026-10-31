@@ -49,7 +49,7 @@ func (s *Store) ClaimPasswordResetEmails(ctx context.Context, limit int, lease t
 				LIMIT $1
 			)
 			UPDATE password_reset_email_outbox AS mail
-			SET lease_until = clock_timestamp() + ($2 * interval '1 microsecond'),
+			SET lease_until = clock_timestamp() + ($2::double precision * interval '1 microsecond'),
 			    attempts = mail.attempts + 1
 			FROM due
 			WHERE mail.id = due.id
@@ -89,7 +89,7 @@ func (s *Store) RenewPasswordResetEmailLease(ctx context.Context, id int64, atte
 	defer cancel()
 	res, err := s.DB.ExecContext(ctx, `
 		UPDATE password_reset_email_outbox
-		SET lease_until = clock_timestamp() + ($3 * interval '1 microsecond')
+		SET lease_until = clock_timestamp() + ($3::double precision * interval '1 microsecond')
 		WHERE id = $1 AND attempts = $2 AND lease_until > clock_timestamp() AND expires_at > clock_timestamp()`,
 		id, attempts, lease.Microseconds(),
 	)
