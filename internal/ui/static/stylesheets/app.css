@@ -916,6 +916,7 @@ ui-messages [hidden] { display: none !important; }
 /* Custom elements render as blocks until upgraded */
 ui-quantity, ui-copy, ui-countdown, ui-relative-time, ui-confirm, ui-add-to-cart, ui-order-form { display: contents; }
 ui-search, ui-table-filter, ui-order-progress, ui-category-nav, ui-password, ui-cart-line, ui-payment-status { display: block; }
+ui-booking-availability { display: grid; gap: var(--s2); }
 ui-cart-badge, ui-theme-toggle { display: contents; }
 
 ui-encrypted-chat [hidden] { display: none !important; }

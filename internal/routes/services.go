@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
@@ -32,6 +33,7 @@ type servicePage struct {
 	Duration                      string
 	Title, Role, CSRFToken, Error string
 	BookingKey                    string
+	LocalDate                     string
 	Flash                         Flash
 	Viewer                        Viewer
 	Listings                      []db.ServiceListing
@@ -155,6 +157,7 @@ func ServiceDetail(a *app.App) http.HandlerFunc {
 		data := servicePage{
 			Title: listing.Title, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours),
 			Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Flash: popFlash(w, r),
+			LocalDate: serviceLocalDate(listing.Timezone),
 		}
 		if user := requestUserFromContext(r); user != nil && user.Role == db.RoleUser {
 			data.BookingKey, err = newBookingIdempotencyKey()
@@ -165,6 +168,14 @@ func ServiceDetail(a *app.App) http.HandlerFunc {
 		}
 		a.Render(w, a.Templates.ServiceDetail, data)
 	}
+}
+
+func serviceLocalDate(timezone string) string {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	return time.Now().In(loc).Format("2006-01-02")
 }
 
 func newBookingIdempotencyKey() (string, error) {

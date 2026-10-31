@@ -33,8 +33,17 @@
         <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
         <input type="hidden" name="listing_version" value="{{ .Version }}">
         <input type="hidden" name="idempotency_key" value="{{ $.BookingKey }}">
-        <label for="service-start-local">Appointment start</label>
-        <input id="service-start-local" name="starts_at_local" type="datetime-local" required>
+        <ui-booking-availability data-service-slug="{{ .Slug }}">
+          <label for="service-booking-date">Appointment date</label>
+          <input id="service-booking-date" type="date" class="input" min="{{ $.LocalDate }}" value="{{ $.LocalDate }}" data-availability-date>
+          <label for="service-booking-slot" data-availability-label hidden>Suggested start times</label>
+          <select id="service-booking-slot" class="input" data-availability-slots disabled hidden>
+            <option value="">Choose a date to load suggestions</option>
+          </select>
+          <p class="tiny muted" data-availability-status role="status" aria-live="polite">Suggestions use {{ .Timezone }} local time. Availability is checked again when you submit.</p>
+          <label for="service-start-local">Or enter a start time in {{ .Timezone }}</label>
+          <input id="service-start-local" class="input" name="starts_at_local" type="datetime-local" required data-manual-start>
+        </ui-booking-availability>
         <button type="submit">Send appointment request</button>
       </form>
     </section>

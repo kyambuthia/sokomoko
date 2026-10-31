@@ -2,6 +2,7 @@
 // layout; every component enhances server-rendered HTML that already works
 // without JavaScript. See docs/design.md for the catalogue.
 import { UIAddToCart, UICartBadge, UICartLine } from "./ui/cart.js";
+import { UIBookingAvailability } from "./ui/booking-availability.js";
 import { UIConfirm } from "./ui/confirm.js";
 import { UIOrderForm, UIOrderProgress, UIPaymentStatus } from "./ui/order.js";
 import { UIPassword } from "./ui/password.js";
@@ -16,6 +17,7 @@ const components = {
   "ui-add-to-cart": UIAddToCart,
   "ui-cart-badge": UICartBadge,
   "ui-cart-line": UICartLine,
+  "ui-booking-availability": UIBookingAvailability,
   "ui-category-nav": UICategoryNav,
   "ui-char-counter": UICharCounter,
   "ui-confirm": UIConfirm,
