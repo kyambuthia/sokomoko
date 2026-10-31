@@ -258,14 +258,28 @@ func (s *Store) TransitionServiceBooking(ctx context.Context, actorID, bookingID
 			return ErrServiceBookingInvalidState
 		}
 
+		transitionTimePredicate := ""
+		switch {
+		case role == RolePartner && (newStatus == "confirmed" || newStatus == "rejected"):
+			transitionTimePredicate = " AND response_deadline > statement_timestamp()"
+		case newStatus == "cancelled":
+			transitionTimePredicate = " AND starts_at > statement_timestamp()"
+		case newStatus == "in_progress":
+			transitionTimePredicate = " AND starts_at <= statement_timestamp() AND ends_at > statement_timestamp()"
+		case newStatus == "completed" || newStatus == "no_show":
+			transitionTimePredicate = " AND ends_at <= statement_timestamp()"
+		}
 		var updatedVersion int64
 		err = tx.QueryRowContext(ctx,
-			`UPDATE service_bookings SET status=$1,version=version+1 WHERE id=$2 AND version=$3
+			`UPDATE service_bookings SET status=$1,version=version+1 WHERE id=$2 AND version=$3 AND status=$4`+transitionTimePredicate+`
 			 RETURNING version`,
-			newStatus, bookingID, expectedVersion,
+			newStatus, bookingID, expectedVersion, current.status,
 		).Scan(&updatedVersion)
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrServiceBookingVersionConflict
+			if role == RolePartner && (newStatus == "confirmed" || newStatus == "rejected") {
+				return ErrServiceBookingResponseExpired
+			}
+			return ErrServiceBookingInvalidState
 		}
 		if err != nil {
 			return err
