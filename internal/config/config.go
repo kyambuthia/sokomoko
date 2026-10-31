@@ -206,6 +206,9 @@ func (c Config) Validate() error {
 	if c.AuthAbuseMaxFailures > 0 && (c.AuthAbuseBackoffBase <= 0 || c.AuthAbuseBackoffMax < c.AuthAbuseBackoffBase) {
 		problems = append(problems, "AUTH_ABUSE backoff must be positive with max >= base")
 	}
+	if c.RateLimitHMACKey != "" && (len(c.RateLimitHMACKey) < 32 || len(strings.Fields(c.RateLimitHMACKey)) != 1) {
+		problems = append(problems, "RATE_LIMIT_HMAC_KEY must contain at least 32 bytes and no whitespace when set")
+	}
 	if c.MetricsToken != "" && (len(c.MetricsToken) < 32 || len(strings.Fields(c.MetricsToken)) != 1) {
 		problems = append(problems, "METRICS_TOKEN must contain at least 32 bytes and no whitespace when set")
 	}

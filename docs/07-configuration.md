@@ -55,7 +55,7 @@ SMTP or host settings.
 | --- | --- | --- |
 | `POST_RATE_LIMIT_MAX` | `0` (off) | POST requests per client IP (IPv4 address or IPv6 /64) per window, shared across replicas through PostgreSQL |
 | `POST_RATE_LIMIT_WINDOW_SECONDS` | `60` | Must be positive when the limit is on |
-| `RATE_LIMIT_HMAC_KEY` | `DATABASE_URL` | Optional shared secret for rate-limit and authentication-abuse digests. Set a random value such as `openssl rand -hex 32` and keep it identical across replicas. Rotating it resets active limiter keys. |
+| `RATE_LIMIT_HMAC_KEY` | `DATABASE_URL` | Optional shared secret for rate-limit and authentication-abuse digests. When set, requires at least 32 bytes and no whitespace. Set a random value such as `openssl rand -hex 32` and keep it identical across replicas. Rotating it resets active limiter keys. |
 | `AUTH_ABUSE_MAX_FAILURES` | `0` (off) | Shared lockout threshold for login failures, reset-request attempts, and reset-confirm failures |
 | `AUTH_ABUSE_BACKOFF_BASE_SECONDS` | `1` | First lockout |
 | `AUTH_ABUSE_BACKOFF_MAX_SECONDS` | `300` | Lockout cap; must be at least the base |
