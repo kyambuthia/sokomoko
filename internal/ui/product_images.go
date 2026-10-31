@@ -15,10 +15,10 @@ var bundledProductImages = []string{
 	"images/white_wireless_earbuds_charging_case.png",
 }
 
-// ProductImageURL normalizes a stored product image URL into a cache-busted
-// local static asset URL. Remote URLs are not hot-linked (the CSP only allows
-// same-origin images), so they fall back to a bundled placeholder chosen from
-// the product's slug, name, and category.
+// ProductImageURL normalizes a stored product image reference into a safe
+// same-origin URL. Static asset paths are cache-busted; uploaded-image paths are
+// preserved. Remote URLs fall back to a bundled placeholder chosen from the
+// product's slug, name, and category.
 func ProductImageURL(rawURL, slug, name, category string) string {
 	clean := strings.TrimSpace(rawURL)
 	switch {
@@ -26,6 +26,12 @@ func ProductImageURL(rawURL, slug, name, category string) string {
 		return clean
 	case clean == "", strings.HasPrefix(clean, "http://"), strings.HasPrefix(clean, "https://"), strings.HasPrefix(clean, "//"):
 		return AssetURL(fallbackProductImage(slug, name, category))
+	case strings.HasPrefix(clean, "/media/product-images/"):
+		pathPart := strings.TrimPrefix(clean, "/media/product-images/")
+		if pathPart == "" || strings.Contains(pathPart, "..") || strings.ContainsAny(pathPart, "?#") {
+			return AssetURL(fallbackProductImage(slug, name, category))
+		}
+		return clean
 	}
 
 	pathPart := clean

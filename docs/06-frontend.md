@@ -72,9 +72,10 @@ fields.
 | `field . "Name"`, `signedIn .` | Read optional page data from shared templates. |
 | `json v`, `rfc3339 t` | JSON for attributes; UTC timestamps for components. |
 
-**Product images.** `ui.ProductImageURL` keeps local paths and `data:` images
-and replaces remote or empty URLs with a bundled image, because the CSP allows
-only same-origin images.
+**Product images.** `ui.ProductImageURL` keeps local paths and `data:` images,
+uses `/media/product-images/<id>` for uploaded JPEG/PNG bytes stored in
+PostgreSQL, and replaces remote or empty URLs with a bundled image. The public
+media handler only serves images for active products from active partners.
 
 ## Static assets
 

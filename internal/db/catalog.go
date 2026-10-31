@@ -233,10 +233,7 @@ func (s *Store) CreateProduct(ctx context.Context, product Product) (int64, erro
 			if position <= 0 {
 				position = i
 			}
-			if _, err := tx.ExecContext(ctx,
-				"INSERT INTO product_images (product_id, url, alt_text, position) VALUES ($1, $2, $3, $4)",
-				id, strings.TrimSpace(img.URL), strings.TrimSpace(img.AltText), position,
-			); err != nil {
+			if err := insertProductImageTx(ctx, tx, id, img, position); err != nil {
 				return err
 			}
 		}
@@ -246,6 +243,71 @@ func (s *Store) CreateProduct(ctx context.Context, product Product) (int64, erro
 		return 0, err
 	}
 	return id, nil
+}
+
+func hasUploadedProductImage(images []ProductImage) bool {
+	for _, image := range images {
+		if len(image.Data) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func insertProductImageTx(ctx context.Context, q querier, productID int64, image ProductImage, position int) error {
+	if len(image.Data) == 0 {
+		_, err := q.ExecContext(ctx,
+			"INSERT INTO product_images (product_id, url, alt_text, position) VALUES ($1, $2, $3, $4)",
+			productID, strings.TrimSpace(image.URL), strings.TrimSpace(image.AltText), position,
+		)
+		return err
+	}
+
+	if len(image.Data) > MaxProductImageBytes || (image.ContentType != "image/jpeg" && image.ContentType != "image/png") {
+		return ErrInvalidProductImage
+	}
+	var imageID int64
+	if err := q.QueryRowContext(ctx,
+		`INSERT INTO product_images (product_id, url, alt_text, position)
+		 VALUES ($1, '/media/product-images/pending', $2, $3) RETURNING id`,
+		productID, strings.TrimSpace(image.AltText), position,
+	).Scan(&imageID); err != nil {
+		return err
+	}
+	if _, err := q.ExecContext(ctx,
+		"INSERT INTO product_image_blobs (product_image_id, content_type, data) VALUES ($1, $2, $3)",
+		imageID, image.ContentType, image.Data,
+	); err != nil {
+		return err
+	}
+	_, err := q.ExecContext(ctx,
+		"UPDATE product_images SET url = $1 WHERE id = $2",
+		fmt.Sprintf("/media/product-images/%d", imageID), imageID,
+	)
+	return err
+}
+
+// GetPublicProductImageByID returns image bytes only for an active public product.
+func (s *Store) GetPublicProductImageByID(ctx context.Context, id int) (*ProductImage, error) {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	image := &ProductImage{}
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT i.id, i.product_id, b.content_type, b.data, i.created_at
+		 FROM product_images i
+		 JOIN product_image_blobs b ON b.product_image_id = i.id
+		 JOIN products p ON p.id = i.product_id
+		 WHERE i.id = $1 AND p.deleted_at IS NULL AND `+activePartnerSQL,
+		id,
+	).Scan(&image.ID, &image.ProductID, &image.ContentType, &image.Data, &image.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrProductNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return image, nil
 }
 
 func (s *Store) GetProductByID(ctx context.Context, id int) (*Product, error) {
@@ -315,6 +377,29 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 			return ErrProductNotFound
 		}
 
+		if hasUploadedProductImage(product.Images) {
+			newImageCount := 0
+			for _, image := range product.Images {
+				if len(image.Data) > 0 {
+					newImageCount++
+				}
+			}
+			if _, err := tx.ExecContext(ctx,
+				"UPDATE product_images SET position = position + $1 WHERE product_id = $2",
+				newImageCount, product.ID,
+			); err != nil {
+				return err
+			}
+			for i, image := range product.Images {
+				if len(image.Data) == 0 {
+					continue
+				}
+				if err := insertProductImageTx(ctx, tx, int64(product.ID), image, i); err != nil {
+					return err
+				}
+			}
+		}
+
 		warehouseID, err := defaultWarehouseID(ctx, tx)
 		if err != nil {
 			return err
@@ -340,8 +425,8 @@ func (s *Store) UpdateProduct(ctx context.Context, product Product) error {
 	})
 }
 
-// DeleteProduct soft-deletes a product, removes it from carts, and invalidates
-// affected customers' open checkouts and stock holds.
+// DeleteProduct soft-deletes a product, clears affected carts and checkouts,
+// releases their stock holds, and removes the product images.
 func (s *Store) DeleteProduct(ctx context.Context, id int) error {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -396,7 +481,8 @@ func (s *Store) DeleteProduct(ctx context.Context, id int) error {
 				return err
 			}
 		}
-		return nil
+		_, err = tx.ExecContext(ctx, "DELETE FROM product_images WHERE product_id = $1", id)
+		return err
 	})
 }
 

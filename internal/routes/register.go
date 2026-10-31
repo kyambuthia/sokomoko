@@ -37,6 +37,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 
 	mux.Handle("/", public(Root(a)))
 	mux.Handle("/products/", public(ProductDetail(a)))
+	mux.Handle("/media/product-images/{id}", ProductImage(a))
 	mux.Handle("/search", public(Search(a)))
 	mux.Handle("/services", public(Services(a, false)))
 	mux.Handle("/services/{slug}", public(ServiceDetail(a)))
@@ -119,6 +120,7 @@ func RegisterPartner(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/setup", staff(PartnerSetup(a)))
 	mux.Handle("/dashboard", staff(PartnerDashboard(a)))
 	mux.Handle("/products", staff(PartnerProducts(a)))
+	mux.Handle("/media/product-images/{id}", ProductImage(a))
 	mux.Handle("/products/new", staff(PartnerProductNew(a)))
 	mux.Handle("/services", withRole(a, db.RolePartner, Services(a, true)))
 	mux.Handle("/services/new", withRole(a, db.RolePartner, PartnerServiceEdit(a)))

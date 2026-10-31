@@ -18,6 +18,7 @@ var (
 	ErrCartItemNotFound           = errors.New("cart item not found")
 	ErrInvalidQuantity            = errors.New("invalid quantity")
 	ErrProductNotFound            = errors.New("product not found")
+	ErrInvalidProductImage        = errors.New("invalid product image")
 	ErrCheckoutNotFound           = errors.New("checkout not found")
 	ErrCheckoutExpired            = errors.New("checkout expired")
 	ErrInsufficientStock          = errors.New("insufficient stock")

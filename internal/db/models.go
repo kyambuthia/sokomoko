@@ -76,12 +76,16 @@ func (p Product) PrimaryImage() string {
 	return p.Images[0].URL
 }
 
+const MaxProductImageBytes = 256 * 1024
+
 type ProductImage struct {
 	ID           int
 	ProductID    int
 	URL          string
 	AltText      string
 	DisplayOrder int
+	ContentType  string
+	Data         []byte
 	CreatedAt    time.Time
 }
 

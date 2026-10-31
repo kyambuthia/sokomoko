@@ -1,12 +1,18 @@
 package routes
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/db"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
@@ -73,6 +79,36 @@ func Root(a *app.App) http.HandlerFunc {
 			Viewer:      viewerFromRequest(r),
 			CSRFToken:   a.Auth.CSRFToken(r),
 		})
+	}
+}
+
+// ProductImage serves an uploaded image only while its product and partner are public.
+func ProductImage(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			methodNotAllowed(w, http.MethodGet, http.MethodHead)
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			NotFound(w, r)
+			return
+		}
+		asset, err := a.Catalog.ProductImage(r.Context(), id)
+		if errors.Is(err, db.ErrProductNotFound) {
+			NotFound(w, r)
+			return
+		}
+		if err != nil {
+			log.Printf("product image %d: %v", id, err)
+			serverError(w, r)
+			return
+		}
+		sum := sha256.Sum256(asset.Data)
+		w.Header().Set("Content-Type", asset.ContentType)
+		w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+		w.Header().Set("ETag", `"`+hex.EncodeToString(sum[:])+`"`)
+		http.ServeContent(w, r, fmt.Sprintf("product-image-%d", id), asset.CreatedAt, bytes.NewReader(asset.Data))
 	}
 }
 

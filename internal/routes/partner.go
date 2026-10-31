@@ -8,6 +8,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
+	"github.com/kyambuthia/sokomoko/internal/ui"
 )
 
 type PartnerSetupData struct {
@@ -250,6 +251,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		imageUpload, imageErr := parseProductImageUpload(r)
 		input := partnersvc.CreateProductInput{
 			Name:        r.FormValue("name"),
 			Description: r.FormValue("description"),
@@ -257,9 +259,15 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			Stock:       r.FormValue("stock_quantity"),
 			CategoryID:  r.FormValue("category_id"),
 			PartnerID:   r.FormValue("partner_id"),
+			Image:       imageUpload,
 		}
 		data.Form = input
 		data.DefaultName = strings.TrimSpace(input.Name)
+		if imageErr != nil {
+			data.Error = invalidProductImageMessage
+			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
+			return
+		}
 
 		err = svc.CreateProductForActor(r.Context(), partnerActorFromContext(r), input)
 		switch {
@@ -276,6 +284,10 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		case errors.Is(err, partnersvc.ErrInvalidProductStock):
 			data.Error = "Stock must be a non-negative integer"
+			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
+			return
+		case errors.Is(err, partnersvc.ErrInvalidProductImage):
+			data.Error = invalidProductImageMessage
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
 			return
 		case errors.Is(err, partnersvc.ErrUnableToCreateProductSlug):
@@ -324,8 +336,9 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		data.Role, _ = partnerIdentity(r)
 		data.Title = "Edit Product"
 		data.EditID = id
+		imageURL := ui.ProductImageURL(current.ImageURL, current.Name, current.Name, "")
 		data.Form = partnersvc.CreateProductInput{Name: current.Name, Description: current.Description,
-			Price: current.Price, Stock: current.Stock, CategoryID: current.CategoryID}
+			Price: current.Price, Stock: current.Stock, CategoryID: current.CategoryID, ImageURL: imageURL}
 		data.DefaultName = current.Name
 
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -337,16 +350,24 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			return
 		}
 
+		imageUpload, imageErr := parseProductImageUpload(r)
 		input := partnersvc.ProductInput{
 			Name:        r.FormValue("name"),
 			Description: r.FormValue("description"),
 			Price:       r.FormValue("price"),
 			Stock:       r.FormValue("stock_quantity"),
 			CategoryID:  r.FormValue("category_id"),
+			ImageURL:    imageURL,
+			Image:       imageUpload,
 		}
 		data.Form = partnersvc.CreateProductInput{Name: input.Name, Description: input.Description,
-			Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID}
+			Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID, ImageURL: imageURL}
 		data.DefaultName = strings.TrimSpace(input.Name)
+		if imageErr != nil {
+			data.Error = invalidProductImageMessage
+			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
+			return
+		}
 
 		err = svc.UpdateProductForActor(r.Context(), actor, idRaw, input)
 		status := http.StatusBadRequest
@@ -363,6 +384,8 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			data.Error = "Price must be an amount like 12.50 (up to 100000.00)"
 		case errors.Is(err, partnersvc.ErrInvalidProductStock):
 			data.Error = "Stock must be a non-negative integer"
+		case errors.Is(err, partnersvc.ErrInvalidProductImage):
+			data.Error = invalidProductImageMessage
 		default:
 			log.Printf("partner update product: %v", err)
 			data.Error = "Unable to update product"

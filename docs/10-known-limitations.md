@@ -22,12 +22,15 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Catalog and vendor management
 
-- **No product image upload.** Product managers can delete products from the
-  workspace; deleted products disappear from the storefront and active carts,
-  and affected customers' open checkouts are cancelled with their stock holds
-  released. Past orders retain their product records. Product images are written
-  only with a new product (seed data), and new products show a bundled fallback
-  image.
+- **Limited product image management.** The partner workspace accepts one
+  optional JPEG or PNG upload up to 900 KB, normalized to at most 256 KB and
+  stored in PostgreSQL. A new upload becomes the primary image and existing
+  gallery entries remain; images cannot be reordered or removed independently.
+  Products without a usable image show a bundled fallback. Product managers can
+  delete products from the workspace; deleted products disappear from the
+  storefront and active carts, affected open checkouts are cancelled with stock
+  holds released, and image bytes are removed. Past orders retain product
+  records.
 - **A product's partner cannot be changed after creation.**
 
 ## Services and local discovery

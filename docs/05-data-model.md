@@ -39,6 +39,7 @@ practitioner or clinical-data fields. See [services](services-and-local-discover
 | Catalog | `categories` | Name, slug, optional parent |
 | | `products` | Partner, category, name, slug, description, `price_cents`, currency, generated `search_vector` |
 | | `product_images` | URL, alt text, position |
+| | `product_image_blobs` | Normalized JPEG/PNG bytes (up to 256 KiB), keyed to an uploaded product image |
 | Inventory | `warehouses` | One default warehouse is created by the migration |
 | | `inventory_stocks` | Per product and warehouse: `on_hand`, `reserved`, `allocated` |
 | | `stock_reservations` | Checkout holds with status and expiry |

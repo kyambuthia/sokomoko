@@ -168,6 +168,14 @@ func (s *Service) SearchPage(ctx context.Context, query, category string, page, 
 	return mapProducts(products), total, nil
 }
 
+// ProductImage returns the bytes for an image attached to a public product.
+func (s *Service) ProductImage(ctx context.Context, id int) (*db.ProductImage, error) {
+	if id <= 0 {
+		return nil, db.ErrProductNotFound
+	}
+	return s.store.GetPublicProductImageByID(ctx, id)
+}
+
 func (s *Service) ProductBySlug(ctx context.Context, slug string) (*Product, error) {
 	cleanSlug := strings.TrimSpace(slug)
 	if cleanSlug == "" || strings.Contains(cleanSlug, "/") || len(cleanSlug) > 200 {

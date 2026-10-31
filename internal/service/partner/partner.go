@@ -31,6 +31,7 @@ var (
 	ErrMissingProductFields      = errors.New("missing product fields")
 	ErrInvalidProductPrice       = errors.New("invalid product price")
 	ErrInvalidProductStock       = errors.New("invalid product stock")
+	ErrInvalidProductImage       = db.ErrInvalidProductImage
 	ErrUnableToCreateProduct     = errors.New("unable to create product")
 	ErrUnableToCreateProductSlug = errors.New("unable to create product slug")
 	ErrProductNotFound           = errors.New("product not found")
@@ -39,10 +40,11 @@ var (
 const maxProductPrice money.Cents = 10_000_000 // 100,000.00
 
 const (
-	maxProductStock  = 1_000_000
-	maxProductName   = 200
-	maxNoticeLength  = 500
-	maxDescriptionLn = 5000
+	MaxProductImageBytes = db.MaxProductImageBytes
+	maxProductStock      = 1_000_000
+	maxProductName       = 200
+	maxNoticeLength      = 500
+	maxDescriptionLn     = 5000
 )
 
 type Service struct {
@@ -138,6 +140,11 @@ type OrdersData struct {
 	Summary Summary
 }
 
+type ProductImageUpload struct {
+	ContentType string
+	Data        []byte
+}
+
 type CreateProductInput struct {
 	Name        string
 	Description string
@@ -145,6 +152,8 @@ type CreateProductInput struct {
 	Stock       string
 	CategoryID  string
 	PartnerID   string
+	ImageURL    string
+	Image       *ProductImageUpload
 }
 
 type UpdateOrderInput struct {
@@ -403,9 +412,22 @@ func (s *Service) OrdersPageForActor(ctx context.Context, actor *Actor, filter s
 	return OrdersData{Filter: clean, Orders: mapped, Summary: Summary(summary)}, total, nil
 }
 
+func validateProductImage(image *ProductImageUpload) error {
+	if image == nil {
+		return nil
+	}
+	if len(image.Data) == 0 || len(image.Data) > db.MaxProductImageBytes || (image.ContentType != "image/jpeg" && image.ContentType != "image/png") {
+		return ErrInvalidProductImage
+	}
+	return nil
+}
+
 func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input CreateProductInput) error {
 	if !canUseWorkspace(actor) {
 		return ErrForbiddenWorkspace
+	}
+	if err := validateProductImage(input.Image); err != nil {
+		return err
 	}
 	if _, err := s.requireStoreSettings(ctx); err != nil {
 		return err
@@ -438,6 +460,11 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 		StockQuantity: stock,
 		CategoryID:    parseOptionalID(input.CategoryID),
 		PartnerID:     parseOptionalID(input.PartnerID),
+	}
+	if input.Image != nil {
+		product.Images = []db.ProductImage{{
+			AltText: name, ContentType: input.Image.ContentType, Data: input.Image.Data,
+		}}
 	}
 
 	if actorIsPartner(actor) {
@@ -477,6 +504,8 @@ type ProductInput struct {
 	Price       string
 	Stock       string
 	CategoryID  string
+	ImageURL    string
+	Image       *ProductImageUpload
 }
 
 // productForActor loads a product the actor may edit. A partner user may only
@@ -519,6 +548,7 @@ func (s *Service) ProductForEdit(ctx context.Context, actor *Actor, idRaw string
 		Description: product.Description,
 		Price:       product.Price.String(),
 		Stock:       strconv.Itoa(product.StockQuantity),
+		ImageURL:    product.PrimaryImage(),
 	}
 	if product.CategoryID.Valid {
 		input.CategoryID = strconv.FormatInt(product.CategoryID.Int64, 10)
@@ -531,6 +561,9 @@ func (s *Service) ProductForEdit(ctx context.Context, actor *Actor, idRaw string
 func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw string, input ProductInput) error {
 	product, err := s.productForActor(ctx, actor, idRaw)
 	if err != nil {
+		return err
+	}
+	if err := validateProductImage(input.Image); err != nil {
 		return err
 	}
 	name := strings.TrimSpace(input.Name)
@@ -554,18 +587,29 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	before := fmt.Sprintf("price=%s stock=%d", product.Price, product.StockQuantity)
 	product.Name, product.Description, product.Price, product.StockQuantity = name, description, price, stock
 	product.CategoryID = parseOptionalID(input.CategoryID)
+	if input.Image != nil {
+		product.Images = append([]db.ProductImage{{
+			AltText: name, ContentType: input.Image.ContentType, Data: input.Image.Data,
+		}}, product.Images...)
+		for i := range product.Images {
+			product.Images[i].DisplayOrder = i
+		}
+	}
 	if err := s.store.UpdateProduct(ctx, *product); err != nil {
 		if errors.Is(err, db.ErrProductNotFound) {
 			return ErrProductNotFound
 		}
 		return fmt.Errorf("update product: %w", err)
 	}
-	s.logAudit(ctx, actor.ID, "product.update", "product", product.ID,
-		fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock))
+	details := fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock)
+	if input.Image != nil {
+		details += " image updated"
+	}
+	s.logAudit(ctx, actor.ID, "product.update", "product", product.ID, details)
 	return nil
 }
 
-// DeleteProductForActor soft-deletes a product the actor may manage and removes it from carts.
+// DeleteProductForActor soft-deletes a product the actor may manage and clears its public data.
 func (s *Service) DeleteProductForActor(ctx context.Context, actor *Actor, idRaw string) error {
 	product, err := s.productForActor(ctx, actor, idRaw)
 	if err != nil {
