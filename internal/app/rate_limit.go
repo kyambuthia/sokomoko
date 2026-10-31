@@ -56,13 +56,13 @@ func (l *ipRateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 		if ok {
 			l.removeLocked(key, entry)
 		}
-		if retryAfter, full := l.makeRoomLocked(now); full {
-			return false, retryAfter
+		if l.makeRoomLocked(now) {
+			return true, 0
 		}
 		l.putLocked(key, rateLimitEntry{windowStart: now, count: 1})
 		return true, 0
 	}
-	l.touchLocked(key, entry)
+	entry = l.touchLocked(key, entry)
 
 	if entry.count >= l.max {
 		retryAfter := l.window - now.Sub(entry.windowStart)
@@ -85,7 +85,7 @@ func (l *ipRateLimiter) putLocked(key string, entry rateLimitEntry) {
 	l.entries[key] = entry
 }
 
-func (l *ipRateLimiter) touchLocked(key string, entry rateLimitEntry) {
+func (l *ipRateLimiter) touchLocked(key string, entry rateLimitEntry) rateLimitEntry {
 	if l.lru == nil {
 		l.lru = list.New()
 	}
@@ -95,6 +95,7 @@ func (l *ipRateLimiter) touchLocked(key string, entry rateLimitEntry) {
 		l.lru.MoveToFront(entry.lru)
 	}
 	l.entries[key] = entry
+	return entry
 }
 
 func (l *ipRateLimiter) removeLocked(key string, entry rateLimitEntry) {
@@ -106,13 +107,13 @@ func (l *ipRateLimiter) removeLocked(key string, entry rateLimitEntry) {
 }
 
 // makeRoomLocked preserves active rate limits. When every slot is penalized,
-// new keys wait until the first window expires instead of evicting a client.
-func (l *ipRateLimiter) makeRoomLocked(now time.Time) (time.Duration, bool) {
+// new keys are left untracked until a window expires instead of evicting a client.
+func (l *ipRateLimiter) makeRoomLocked(now time.Time) bool {
 	if len(l.entries) < maxRateLimitEntries {
-		return 0, false
+		return false
 	}
 	if l.saturatedUntil.After(now) {
-		return l.saturatedUntil.Sub(now), true
+		return true
 	}
 	l.saturatedUntil = time.Time{}
 
@@ -135,7 +136,7 @@ func (l *ipRateLimiter) makeRoomLocked(now time.Time) (time.Duration, bool) {
 			expiry := entry.windowStart.Add(l.window)
 			if !expiry.After(now) || entry.count < l.max {
 				l.removeLocked(key, entry)
-				return 0, false
+				return false
 			}
 			if earliestExpiry.IsZero() || expiry.Before(earliestExpiry) {
 				earliestExpiry = expiry
@@ -152,7 +153,7 @@ func (l *ipRateLimiter) makeRoomLocked(now time.Time) (time.Duration, bool) {
 		expiry := entry.windowStart.Add(l.window)
 		if !expiry.After(now) || entry.count < l.max {
 			l.removeLocked(key, entry)
-			return 0, false
+			return false
 		}
 		if earliestExpiry.IsZero() || expiry.Before(earliestExpiry) {
 			earliestExpiry = expiry
@@ -163,7 +164,7 @@ func (l *ipRateLimiter) makeRoomLocked(now time.Time) (time.Duration, bool) {
 		earliestExpiry = now.Add(l.window)
 	}
 	l.saturatedUntil = earliestExpiry
-	return earliestExpiry.Sub(now), true
+	return true
 }
 
 func (l *ipRateLimiter) cleanupLocked(now time.Time) {

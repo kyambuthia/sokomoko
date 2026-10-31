@@ -68,10 +68,6 @@ func (l *authAbuseLimiter) IsLocked(key string, now time.Time) (bool, time.Durat
 
 	entry, ok := l.entries[key]
 	if !ok {
-		retryAfter, saturated := l.saturationRetryLocked(now)
-		if saturated {
-			return true, retryAfter
-		}
 		return false, 0
 	}
 	if entry.lockedUntil.IsZero() || !entry.lockedUntil.After(now) {
@@ -136,7 +132,6 @@ func (l *authAbuseLimiter) putLocked(key string, entry abuseEntry, now time.Time
 		}
 	} else {
 		if len(l.entries) >= maxAuthAbuseEntries && !l.evictOldestUnlockedLocked(now) {
-			l.saturationRetryLocked(now)
 			return
 		}
 		entry.lru = l.lru.PushFront(key)
@@ -168,12 +163,15 @@ func (l *authAbuseLimiter) removeLocked(key string) {
 	l.saturatedUntil = time.Time{}
 }
 
-// evictOldestUnlockedLocked only reclaims entries whose lockout has expired.
+// evictOldestUnlockedLocked protects active lockouts and leaves new keys
+// untracked when every slot is locked, avoiding a global authentication outage.
 func (l *authAbuseLimiter) evictOldestUnlockedLocked(now time.Time) bool {
 	if l.saturatedUntil.After(now) {
 		return false
 	}
 	l.saturatedUntil = time.Time{}
+
+	var earliestExpiry time.Time
 	if l.lru != nil {
 		for element := l.lru.Back(); element != nil; {
 			previous := element.Prev()
@@ -193,67 +191,29 @@ func (l *authAbuseLimiter) evictOldestUnlockedLocked(now time.Time) bool {
 				l.removeLocked(key)
 				return true
 			}
+			if earliestExpiry.IsZero() || entry.lockedUntil.Before(earliestExpiry) {
+				earliestExpiry = entry.lockedUntil
+			}
 			element = previous
 		}
 	}
 
 	for key, entry := range l.entries {
-		if entry.lru == nil && !entry.lockedUntil.After(now) {
-			l.removeLocked(key)
-			return true
-		}
-	}
-	return false
-}
-
-// saturationRetryLocked throttles unseen identifiers only while every slot
-// holds an active lockout, keeping an attacker from flushing those penalties.
-func (l *authAbuseLimiter) saturationRetryLocked(now time.Time) (time.Duration, bool) {
-	if len(l.entries) < maxAuthAbuseEntries {
-		return 0, false
-	}
-	if l.saturatedUntil.After(now) {
-		return l.saturatedUntil.Sub(now), true
-	}
-	l.saturatedUntil = time.Time{}
-
-	var earliestExpiry time.Time
-	if l.lru != nil {
-		for element := l.lru.Back(); element != nil; element = element.Prev() {
-			key, ok := element.Value.(string)
-			if !ok {
-				continue
-			}
-			entry, exists := l.entries[key]
-			if !exists {
-				continue
-			}
-			if !entry.lockedUntil.After(now) {
-				return 0, false
-			}
-			if earliestExpiry.IsZero() || entry.lockedUntil.Before(earliestExpiry) {
-				earliestExpiry = entry.lockedUntil
-			}
-		}
-	}
-
-	for _, entry := range l.entries {
 		if entry.lru != nil {
 			continue
 		}
 		if !entry.lockedUntil.After(now) {
-			return 0, false
+			l.removeLocked(key)
+			return true
 		}
 		if earliestExpiry.IsZero() || entry.lockedUntil.Before(earliestExpiry) {
 			earliestExpiry = entry.lockedUntil
 		}
 	}
-
-	if earliestExpiry.IsZero() {
-		return 0, false
+	if !earliestExpiry.IsZero() {
+		l.saturatedUntil = earliestExpiry
 	}
-	l.saturatedUntil = earliestExpiry
-	return earliestExpiry.Sub(now), true
+	return false
 }
 
 func (l *authAbuseLimiter) cleanupLocked(now time.Time) {
