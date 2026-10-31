@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/money"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -40,8 +41,9 @@ type Mpesa struct {
 	Client  *http.Client
 	BaseURL string // tests override; otherwise chosen by mode
 
-	mu     sync.Mutex
-	tokens map[string]cachedToken
+	mu           sync.Mutex
+	tokens       map[string]cachedToken
+	tokenFlights singleflight.Group
 }
 
 type cachedToken struct {
@@ -117,12 +119,37 @@ func (m *Mpesa) token(ctx context.Context, cfg Config) (string, error) {
 	}
 	cacheKey := mpesaTokenCacheKey(m.base(cfg), key, secret)
 	m.mu.Lock()
-	if cached, ok := m.tokens[cacheKey]; ok && time.Now().Before(cached.expires) {
-		m.mu.Unlock()
+	cached, ok := m.tokens[cacheKey]
+	m.mu.Unlock()
+	if ok && time.Now().Before(cached.expires) {
 		return cached.value, nil
 	}
-	m.mu.Unlock()
 
+	result := m.tokenFlights.DoChan(cacheKey, func() (any, error) {
+		m.mu.Lock()
+		cached, ok := m.tokens[cacheKey]
+		m.mu.Unlock()
+		if ok && time.Now().Before(cached.expires) {
+			return cached.value, nil
+		}
+		return m.fetchToken(ctx, cfg, key, secret, cacheKey)
+	})
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case result := <-result:
+		if result.Err != nil {
+			return "", result.Err
+		}
+		token, ok := result.Val.(string)
+		if !ok {
+			return "", ErrProviderFailure
+		}
+		return token, nil
+	}
+}
+
+func (m *Mpesa) fetchToken(ctx context.Context, cfg Config, key, secret, cacheKey string) (string, error) {
 	var resp struct {
 		AccessToken  string `json:"access_token"`
 		ExpiresIn    string `json:"expires_in"`
