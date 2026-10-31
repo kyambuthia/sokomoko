@@ -126,7 +126,7 @@ func ProductDetail(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("product %q: %v", slug, err)
+			log.Printf("product lookup failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
 			serverError(w, r)
 			return
 		}
@@ -175,7 +175,7 @@ func Search(a *app.App) http.HandlerFunc {
 		if query != "" || category != "" {
 			products, total, err := a.Catalog.SearchPage(r.Context(), query, category, page, searchPageSize)
 			if err != nil {
-				log.Printf("search %q: %v", query, err)
+				log.Printf("catalog search failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
 				serverError(w, r)
 				return
 			}

@@ -131,7 +131,7 @@ func PaymentReturn(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("payment return %q: %v", reference, err)
+			log.Printf("payment return lookup failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
 			if orderID <= 0 {
 				app.RenderErrorPage(w, r, http.StatusServiceUnavailable, "Temporarily Unavailable",
 					"Payment status is temporarily unavailable. Please check your order again shortly.")
