@@ -515,7 +515,7 @@
   <p class="tiny muted">Other providers (Flutterwave, Stripe, MTN MoMo) plug in the same way. See docs/payments.md.</p>
 
   <h2 class="section-title">Payment exceptions</h2>
-  <p class="tiny muted">Confirmed charges after cancellation or a second charge for one order need a refund. Request Paystack refunds here and mark them refunded only after checking Paystack; record an M-Pesa reversal after completing it in the M-Pesa portal.</p>
+  <p class="tiny muted">Late or duplicate charges and M-Pesa amount discrepancies need review. Confirm each transaction in the provider portal before requesting or recording a refund; record an M-Pesa reversal after completing it in the M-Pesa portal.</p>
   {{ if .PaymentExceptions }}
   <div class="table-wrap">
     <table class="table">
@@ -525,7 +525,7 @@
         <tr>
           <td>#{{ .OrderID }}<div class="tiny muted">{{ .RequestReference }}</div></td>
           <td>{{ .Currency }} {{ .Amount }}</td>
-          <td>{{ if eq .Reason "late_capture" }}After cancellation{{ else }}Second charge{{ end }}</td>
+          <td>{{ if eq .Reason "late_capture" }}After cancellation{{ else if eq .Reason "duplicate_charge" }}Second charge{{ else if eq .Reason "amount_unverified" }}M-Pesa amount missing{{ else }}M-Pesa amount mismatch{{ end }}</td>
           <td><span class="badge {{ if eq .Status "refunded" }}badge-solid{{ else }}badge-muted{{ end }}">{{ .Status }}</span>{{ if .LastError }}<div class="tiny muted">{{ .LastError }}</div>{{ end }}{{ if .RefundReference }}<div class="tiny muted">{{ .RefundReference }}</div>{{ end }}</td>
           <td class="actions">
             {{ if eq .Status "open" }}

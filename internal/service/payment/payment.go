@@ -81,6 +81,10 @@ type store interface {
 
 var _ store = (*db.Store)(nil)
 
+type paymentAmountMismatchRecorder interface {
+	RecordPaymentAmountMismatch(context.Context, int, money.Cents, string, string) error
+}
+
 type paymentVerificationThrottle interface {
 	TryAcquirePaymentVerification(context.Context, int, time.Duration) (bool, error)
 }
@@ -630,6 +634,9 @@ func (s *Service) verify(ctx context.Context, payment *db.OnlinePayment, payload
 }
 
 func (s *Service) verifyWith(ctx context.Context, provider payments.Provider, cfg payments.Config, payment *db.OnlinePayment, payload map[string]string) (payments.Verification, error) {
+	if payload["callback_amount_mismatch"] == "true" {
+		return payments.Verification{}, db.ErrPaymentAmountMatch
+	}
 	charged := payment.Amount
 	if c, err := strconv.ParseInt(payload["charged_cents"], 10, 64); err == nil && c > 0 {
 		charged = money.Cents(c)
@@ -784,6 +791,9 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 			return err
 		}
 	}
+	if payload["callback_amount_mismatch"] == "true" {
+		return nil
+	}
 	if event.Result == nil {
 		return nil
 	}
@@ -800,8 +810,26 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if confirmed.Status != payments.StatusPaid {
 		return s.apply(ctx, payment, confirmed)
 	}
-	if event.Result.Status == payments.StatusPaid && event.Result.Receipt != "" {
-		confirmed.Receipt = event.Result.Receipt
+	if event.Result.Status == payments.StatusPaid {
+		reportedCurrency := event.Result.Currency
+		if reportedCurrency == "" {
+			reportedCurrency = payment.Currency
+		}
+		if event.Result.Amount <= 0 || event.Result.Amount != confirmed.Amount || !strings.EqualFold(reportedCurrency, confirmed.Currency) {
+			recorder, ok := s.store.(paymentAmountMismatchRecorder)
+			if !ok {
+				return db.ErrPaymentAmountMatch
+			}
+			if err := recorder.RecordPaymentAmountMismatch(ctx, payment.AttemptID, event.Result.Amount, reportedCurrency, event.Result.Receipt); err != nil {
+				return err
+			}
+			slog.ErrorContext(ctx, "M-Pesa callback amount requires review", "payment_id", payment.ID, "attempt_id", payment.AttemptID,
+				"requested_cents", confirmed.Amount, "reported_cents", event.Result.Amount, "reported_currency", reportedCurrency)
+			return nil
+		}
+		if event.Result.Receipt != "" {
+			confirmed.Receipt = event.Result.Receipt
+		}
 	}
 	return s.apply(ctx, payment, confirmed)
 }

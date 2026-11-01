@@ -75,12 +75,20 @@ and opens a row in `payment_exceptions`, and the cancelled order stays out of
 the fulfilment queue. The admin dashboard shows how many exceptions need a
 decision.
 
+M-Pesa's status query confirms success but does not return the amount. The
+callback amount is checked against the requested charge before capture. A
+mismatch or missing amount is recorded for operator review, and that attempt is
+blocked from later status checks silently capturing it. A mismatched positive
+amount is queued at the reported amount; a missing amount is queued at the
+requested amount and labeled unverified so an operator can check the M-Pesa
+portal before taking action.
+
 On `/payments`, the exceptions table offers:
 
 | Provider | Action |
 | --- | --- |
 | Paystack | **Request refund** calls Paystack's refund API once. The row moves to `pending` and **Check status** reads the result. A processed refund marks it `refunded`. |
-| M-Pesa | Reverse the transaction in the M-Pesa portal, then **Record refund** with the reversal receipt. |
+| M-Pesa | For amount discrepancies, first verify the actual charge in the M-Pesa portal. Reverse the transaction there, then **Record refund** with the reversal receipt. |
 | any, stuck | A row in `pending` or `review` can be closed with **Mark refunded** and the provider's reference after reconciliation. Paystack rows in `requested` or recently moved to `review` are held for one minute before manual resolution. |
 
 A refund request is claimed in the database before Paystack is called. If the
