@@ -5,6 +5,8 @@
 Sokomoko is a server-rendered marketplace written in Go. One binary serves
 four web workspaces and a JSON API from a single PostgreSQL database:
 
+**Live demo:** [asiliano.online](https://asiliano.online)
+
 | Host | Who uses it | What it does |
 | --- | --- | --- |
 | `localhost` (storefront) | Customers | Browse, search, cart, checkout, order history |
