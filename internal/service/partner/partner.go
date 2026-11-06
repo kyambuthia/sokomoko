@@ -32,6 +32,8 @@ var (
 	ErrInvalidProductPrice       = errors.New("invalid product price")
 	ErrInvalidProductStock       = errors.New("invalid product stock")
 	ErrInvalidProductImage       = db.ErrInvalidProductImage
+	ErrInvalidProductVideo       = db.ErrInvalidProductVideo
+	ErrInvalidProductMedia       = db.ErrInvalidProductMedia
 	ErrUnableToCreateProduct     = errors.New("unable to create product")
 	ErrUnableToCreateProductSlug = errors.New("unable to create product slug")
 	ErrProductNotFound           = errors.New("product not found")
@@ -41,6 +43,7 @@ const maxProductPrice money.Cents = 10_000_000 // 100,000 major units
 
 const (
 	MaxProductImageBytes = db.MaxProductImageBytes
+	MaxProductVideoBytes = db.MaxProductVideoBytes
 	maxProductStock      = 1_000_000
 	maxProductName       = 200
 	maxNoticeLength      = 500
@@ -145,6 +148,11 @@ type ProductImageUpload struct {
 	Data        []byte
 }
 
+type ProductVideoUpload struct {
+	ContentType string
+	Data        []byte
+}
+
 type CreateProductInput struct {
 	Name        string
 	Description string
@@ -154,6 +162,9 @@ type CreateProductInput struct {
 	PartnerID   string
 	ImageURL    string
 	Image       *ProductImageUpload
+	VideoURL    string
+	Video       *ProductVideoUpload
+	RemoveVideo bool
 }
 
 type UpdateOrderInput struct {
@@ -401,11 +412,25 @@ func validateProductImage(image *ProductImageUpload) error {
 	return nil
 }
 
+func validateProductVideo(video *ProductVideoUpload) error {
+	if video == nil {
+		return nil
+	}
+	if len(video.Data) == 0 || len(video.Data) > db.MaxProductVideoBytes ||
+		(video.ContentType != "video/mp4" && video.ContentType != "video/webm") {
+		return ErrInvalidProductVideo
+	}
+	return nil
+}
+
 func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input CreateProductInput) error {
 	if !canUseWorkspace(actor) {
 		return ErrForbiddenWorkspace
 	}
 	if err := validateProductImage(input.Image); err != nil {
+		return err
+	}
+	if err := validateProductVideo(input.Video); err != nil {
 		return err
 	}
 	if _, err := s.requireStoreSettings(ctx); err != nil {
@@ -450,6 +475,9 @@ func (s *Service) CreateProductForActor(ctx context.Context, actor *Actor, input
 			AltText: name, ContentType: input.Image.ContentType, Data: input.Image.Data,
 		}}
 	}
+	if input.Video != nil {
+		product.Video = &db.ProductVideo{ContentType: input.Video.ContentType, Data: input.Video.Data}
+	}
 
 	slugBase := slug.Make(name)
 	if slugBase == "" {
@@ -483,9 +511,12 @@ type ProductInput struct {
 	CategoryID  string
 	ImageURL    string
 	Image       *ProductImageUpload
+	VideoURL    string
+	Video       *ProductVideoUpload
 	// RemoveImage deletes blob-backed uploads when Image is nil. A new upload
 	// replaces those uploads instead, and URL-only images stay either way.
 	RemoveImage bool
+	RemoveVideo bool
 }
 
 // productForActor loads a product the actor may edit. A partner user may only
@@ -529,6 +560,7 @@ func (s *Service) ProductForEdit(ctx context.Context, actor *Actor, idRaw string
 		Price:       money.InputString(product.Price, product.Currency),
 		Stock:       strconv.Itoa(product.StockQuantity),
 		ImageURL:    product.PrimaryImage(),
+		VideoURL:    product.VideoURL,
 	}
 	if product.CategoryID.Valid {
 		input.CategoryID = strconv.FormatInt(product.CategoryID.Int64, 10)
@@ -540,12 +572,16 @@ func (s *Service) ProductForEdit(ctx context.Context, actor *Actor, idRaw string
 // stock. The slug stays the same so product links keep working. With no new
 // upload and RemoveImage false, existing images stay. RemoveImage deletes
 // only blob-backed uploads. A new upload replaces those uploads instead.
+// Product videos stay unchanged unless a replacement is uploaded or removed.
 func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw string, input ProductInput) error {
 	product, err := s.productForActor(ctx, actor, idRaw)
 	if err != nil {
 		return err
 	}
 	if err := validateProductImage(input.Image); err != nil {
+		return err
+	}
+	if err := validateProductVideo(input.Video); err != nil {
 		return err
 	}
 	name := strings.TrimSpace(input.Name)
@@ -579,6 +615,11 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	} else if input.RemoveImage {
 		product.RemoveUploadedImages = true
 	}
+	if input.Video != nil {
+		product.Video = &db.ProductVideo{ContentType: input.Video.ContentType, Data: input.Video.Data}
+	} else if input.RemoveVideo {
+		product.RemoveUploadedVideo = true
+	}
 	if err := s.store.UpdateProductForActor(ctx, *product, actor.ID, actor.Role); err != nil {
 		if errors.Is(err, db.ErrProductNotFound) {
 			return ErrProductNotFound
@@ -593,6 +634,11 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 		details += " image updated"
 	} else if input.RemoveImage {
 		details += " uploaded image removed"
+	}
+	if input.Video != nil {
+		details += " video updated"
+	} else if input.RemoveVideo {
+		details += " video removed"
 	}
 	s.logAudit(ctx, actor.ID, "product.update", "product", product.ID, details)
 	return nil

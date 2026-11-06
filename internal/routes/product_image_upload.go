@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
@@ -17,61 +18,126 @@ import (
 )
 
 const (
-	maxProductImageInputBytes   = 900 * 1024
-	maxProductImageRequestBytes = app.MaxRequestBodyBytes
-	maxProductImageDimension    = 2048
-	maxProductImagePixels       = 4_000_000
-	productImageUploadSlots     = 64
-	productImageDecodeSlots     = 2
+	maxProductImageInputBytes         = 900 * 1024
+	maxProductMediaRequestBytes int64 = 12 << 20
+	maxProductImageDimension          = 2048
+	maxProductImagePixels             = 4_000_000
+	productMediaUploadSlots           = 2
+	productImageDecodeSlots           = 2
 )
 
 const invalidProductImageMessage = "Use a JPEG or PNG under 900 KB and no larger than 2048 × 2048 pixels; optimized images must be under 256 KB."
-const productImageBusyMessage = "Image uploads are busy. Try again shortly."
+const invalidProductVideoMessage = "Use an MP4 or WebM video under 10 MB."
+const invalidProductMediaMessage = "Use a JPEG or PNG image or an MP4 or WebM video within the listed limits."
+const productMediaBusyMessage = "Product media uploads are busy. Try again shortly."
 
 var (
-	errProductImageBusy         = errors.New("product image upload capacity reached")
-	productImageUploadSemaphore = make(chan struct{}, productImageUploadSlots)
+	errProductMediaBusy         = errors.New("product media upload capacity reached")
+	productMediaUploadSemaphore = make(chan struct{}, productMediaUploadSlots)
 	productImageDecodeSemaphore = make(chan struct{}, productImageDecodeSlots)
 )
 
-func parseProductImageUpload(w http.ResponseWriter, r *http.Request) (*partnersvc.ProductImageUpload, error) {
+// MaxProductMediaRequestBytes is the request-body limit for seller product
+// image and video uploads. Other routes retain the smaller global limit.
+const MaxProductMediaRequestBytes = maxProductMediaRequestBytes
+
+// ProductMediaRequestLimit returns an override only for product uploads on the
+// partner host, leaving other routes on the shared request-body limit.
+func ProductMediaRequestLimit(r *http.Request) int64 {
+	if r.Method != http.MethodPost || !strings.HasPrefix(app.CanonicalHost(r.Host), "partner.") {
+		return 0
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !strings.EqualFold(mediaType, "multipart/form-data") {
+		return 0
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) == 2 && parts[0] == "products" && parts[1] == "new" {
+		return maxProductMediaRequestBytes
+	}
+	if len(parts) == 3 && parts[0] == "products" && parts[2] == "edit" && isPositiveDecimal(parts[1]) {
+		return maxProductMediaRequestBytes
+	}
+	return 0
+}
+
+func isPositiveDecimal(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return strings.Trim(value, "0") != ""
+}
+
+func parseProductMediaUpload(w http.ResponseWriter, r *http.Request) (*partnersvc.ProductImageUpload, *partnersvc.ProductVideoUpload, error) {
 	if r.Body != nil {
-		r.Body = http.MaxBytesReader(w, r.Body, maxProductImageRequestBytes)
+		r.Body = http.MaxBytesReader(w, r.Body, maxProductMediaRequestBytes)
 	}
 	headerContentType := r.Header.Get("Content-Type")
 	contentType, _, err := mime.ParseMediaType(headerContentType)
 	if err != nil {
 		if strings.HasPrefix(strings.ToLower(headerContentType), "multipart/form-data") {
-			return nil, partnersvc.ErrInvalidProductImage
+			return nil, nil, partnersvc.ErrInvalidProductMedia
 		}
-		return nil, nil
+		return nil, nil, nil
 	}
 	if !strings.EqualFold(contentType, "multipart/form-data") {
-		return nil, nil
+		return nil, nil, nil
 	}
-	// Bound concurrent multipart bodies and temporary files per process. The
-	// smaller decode semaphore separately limits image memory and CPU.
+	// Bound concurrent multipart forms and in-memory video data. Parsing keeps
+	// files in memory so the read-only production container does not need /tmp.
 	select {
-	case productImageUploadSemaphore <- struct{}{}:
-		defer func() { <-productImageUploadSemaphore }()
+	case productMediaUploadSemaphore <- struct{}{}:
+		defer func() { <-productMediaUploadSemaphore }()
 	default:
 		w.Header().Set("Retry-After", "1")
 		if r.ProtoMajor == 1 {
-			// Avoid waiting for net/http to drain an unread upload before the 503.
 			w.Header().Set("Connection", "close")
 		}
-		return nil, errProductImageBusy
+		return nil, nil, errProductMediaBusy
 	}
-	if err := r.ParseMultipartForm(32 << 10); err != nil {
+	if err := r.ParseMultipartForm(maxProductMediaRequestBytes); err != nil {
 		if r.MultipartForm != nil {
 			_ = r.MultipartForm.RemoveAll()
 		}
-		return nil, partnersvc.ErrInvalidProductImage
+		return nil, nil, partnersvc.ErrInvalidProductMedia
 	}
 	if r.MultipartForm != nil {
 		defer r.MultipartForm.RemoveAll()
+		for name, files := range r.MultipartForm.File {
+			if (name != "image" && name != "video") || len(files) > 1 {
+				return nil, nil, partnersvc.ErrInvalidProductMedia
+			}
+		}
 	}
 
+	imageUpload, err := parseProductImagePart(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	videoUpload, err := parseProductVideoPart(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	return imageUpload, videoUpload, nil
+}
+
+func productMediaUploadMessage(err error) string {
+	switch {
+	case errors.Is(err, partnersvc.ErrInvalidProductImage):
+		return invalidProductImageMessage
+	case errors.Is(err, partnersvc.ErrInvalidProductVideo):
+		return invalidProductVideoMessage
+	default:
+		return invalidProductMediaMessage
+	}
+}
+
+func parseProductImagePart(r *http.Request) (*partnersvc.ProductImageUpload, error) {
 	file, header, err := r.FormFile("image")
 	if err != nil {
 		if errors.Is(err, http.ErrMissingFile) {
@@ -121,6 +187,51 @@ func parseProductImageUpload(w http.ResponseWriter, r *http.Request) (*partnersv
 		return nil, partnersvc.ErrInvalidProductImage
 	}
 	return &partnersvc.ProductImageUpload{ContentType: storedType, Data: normalized.Bytes()}, nil
+}
+
+func parseProductVideoPart(r *http.Request) (*partnersvc.ProductVideoUpload, error) {
+	file, header, err := r.FormFile("video")
+	if err != nil {
+		if errors.Is(err, http.ErrMissingFile) {
+			return nil, nil
+		}
+		return nil, partnersvc.ErrInvalidProductVideo
+	}
+	defer file.Close()
+	if header.Size <= 0 || header.Size > partnersvc.MaxProductVideoBytes {
+		return nil, partnersvc.ErrInvalidProductVideo
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, partnersvc.MaxProductVideoBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > partnersvc.MaxProductVideoBytes {
+		return nil, partnersvc.ErrInvalidProductVideo
+	}
+
+	declaredType := ""
+	if rawType := strings.TrimSpace(header.Header.Get("Content-Type")); rawType != "" {
+		parsedType, _, parseErr := mime.ParseMediaType(rawType)
+		if parseErr != nil {
+			return nil, partnersvc.ErrInvalidProductVideo
+		}
+		declaredType = strings.ToLower(parsedType)
+	}
+
+	contentType := ""
+	switch strings.ToLower(filepath.Ext(header.Filename)) {
+	case ".mp4":
+		if len(raw) >= 12 && string(raw[4:8]) == "ftyp" &&
+			(declaredType == "" || declaredType == "application/octet-stream" || declaredType == "video/mp4") {
+			contentType = "video/mp4"
+		}
+	case ".webm":
+		if len(raw) >= 4 && bytes.Equal(raw[:4], []byte{0x1a, 0x45, 0xdf, 0xa3}) &&
+			(declaredType == "" || declaredType == "application/octet-stream" || declaredType == "video/webm") {
+			contentType = "video/webm"
+		}
+	}
+	if contentType == "" {
+		return nil, partnersvc.ErrInvalidProductVideo
+	}
+	return &partnersvc.ProductVideoUpload{ContentType: contentType, Data: raw}, nil
 }
 
 func readJPEGOrientation(raw []byte) int {

@@ -64,6 +64,8 @@ type PartnerProductNewData struct {
 	EditID         int  // set when the form edits an existing product
 	CanRemoveImage bool // current primary image is a stored upload
 	RemoveImage    bool // redisplay the explicit remove checkbox after a rejected save
+	CanRemoveVideo bool // current product video is stored
+	RemoveVideo    bool // redisplay the explicit remove checkbox after a rejected save
 }
 
 func PartnerRoot(a *app.App) http.HandlerFunc {
@@ -253,9 +255,9 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		imageUpload, imageErr := parseProductImageUpload(w, r)
-		if errors.Is(imageErr, errProductImageBusy) {
-			data.Error = productImageBusyMessage
+		imageUpload, videoUpload, mediaErr := parseProductMediaUpload(w, r)
+		if errors.Is(mediaErr, errProductMediaBusy) {
+			data.Error = productMediaBusyMessage
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusServiceUnavailable, data)
 			return
 		}
@@ -267,11 +269,12 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			CategoryID:  r.FormValue("category_id"),
 			PartnerID:   r.FormValue("partner_id"),
 			Image:       imageUpload,
+			Video:       videoUpload,
 		}
 		data.Form = input
 		data.DefaultName = strings.TrimSpace(input.Name)
-		if imageErr != nil {
-			data.Error = invalidProductImageMessage
+		if mediaErr != nil {
+			data.Error = productMediaUploadMessage(mediaErr)
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
 			return
 		}
@@ -295,6 +298,10 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			return
 		case errors.Is(err, partnersvc.ErrInvalidProductImage):
 			data.Error = invalidProductImageMessage
+			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
+			return
+		case errors.Is(err, partnersvc.ErrInvalidProductVideo):
+			data.Error = invalidProductVideoMessage
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
 			return
 		case errors.Is(err, partnersvc.ErrUnableToCreateProductSlug):
@@ -345,8 +352,10 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		data.EditID = id
 		imageURL := ui.ProductImageURL(current.ImageURL, current.Name, current.Name, "")
 		data.CanRemoveImage = strings.HasPrefix(current.ImageURL, "/media/product-images/")
+		data.CanRemoveVideo = current.VideoURL != ""
 		data.Form = partnersvc.CreateProductInput{Name: current.Name, Description: current.Description,
-			Price: current.Price, Stock: current.Stock, CategoryID: current.CategoryID, ImageURL: imageURL}
+			Price: current.Price, Stock: current.Stock, CategoryID: current.CategoryID, ImageURL: imageURL,
+			VideoURL: current.VideoURL}
 		data.DefaultName = current.Name
 
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -358,9 +367,9 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		imageUpload, imageErr := parseProductImageUpload(w, r)
-		if errors.Is(imageErr, errProductImageBusy) {
-			data.Error = productImageBusyMessage
+		imageUpload, videoUpload, mediaErr := parseProductMediaUpload(w, r)
+		if errors.Is(mediaErr, errProductMediaBusy) {
+			data.Error = productMediaBusyMessage
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusServiceUnavailable, data)
 			return
 		}
@@ -372,14 +381,19 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			CategoryID:  r.FormValue("category_id"),
 			ImageURL:    imageURL,
 			Image:       imageUpload,
+			VideoURL:    current.VideoURL,
+			Video:       videoUpload,
 			RemoveImage: r.FormValue("remove_image") == "1",
+			RemoveVideo: r.FormValue("remove_video") == "1",
 		}
 		data.Form = partnersvc.CreateProductInput{Name: input.Name, Description: input.Description,
-			Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID, ImageURL: imageURL}
+			Price: input.Price, Stock: input.Stock, CategoryID: input.CategoryID, ImageURL: imageURL,
+			VideoURL: current.VideoURL, RemoveVideo: input.RemoveVideo}
 		data.DefaultName = strings.TrimSpace(input.Name)
 		data.RemoveImage = input.RemoveImage
-		if imageErr != nil {
-			data.Error = invalidProductImageMessage
+		data.RemoveVideo = input.RemoveVideo
+		if mediaErr != nil {
+			data.Error = productMediaUploadMessage(mediaErr)
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
 			return
 		}
@@ -401,6 +415,8 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			data.Error = "Stock must be a non-negative integer"
 		case errors.Is(err, partnersvc.ErrInvalidProductImage):
 			data.Error = invalidProductImageMessage
+		case errors.Is(err, partnersvc.ErrInvalidProductVideo):
+			data.Error = invalidProductVideoMessage
 		default:
 			log.Printf("partner update product: %v", err)
 			data.Error = "Unable to update product"

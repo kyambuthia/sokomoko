@@ -17,6 +17,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/lifecycle"
+	"github.com/kyambuthia/sokomoko/internal/routes"
 )
 
 type httpServer struct {
@@ -110,7 +111,7 @@ func buildMiddlewares(cfg config.Config, application *app.App, metrics *app.HTTP
 		app.RequestLogger(),
 		app.Recoverer(),
 		app.SecurityHeadersWithProxy(cfg.TrustProxyHeaders),
-		app.BodyLimit(app.MaxRequestBodyBytes),
+		app.BodyLimitWith(app.MaxRequestBodyBytes, routes.ProductMediaRequestLimit),
 	)
 
 	if cfg.PostRateLimitMax > 0 {

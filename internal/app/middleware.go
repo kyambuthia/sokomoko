@@ -169,16 +169,28 @@ func SecurityHeadersWithProxy(trustProxy bool) Middleware {
 	}
 }
 
-// MaxRequestBodyBytes is the shared 1 MiB ceiling applied to inbound HTTP
-// request bodies.
+// MaxRequestBodyBytes is the default 1 MiB ceiling for inbound request bodies.
+// Product media uploads use a route-scoped limit instead.
 const MaxRequestBodyBytes = 1 << 20
 
 func BodyLimit(maxBytes int64) Middleware {
+	return BodyLimitWith(maxBytes, nil)
+}
+
+// BodyLimitWith applies maxBytes by default and uses a positive per-request
+// override when limitFor returns one.
+func BodyLimitWith(maxBytes int64, limitFor func(*http.Request) int64) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+				limit := maxBytes
+				if limitFor != nil {
+					if override := limitFor(r); override > 0 {
+						limit = override
+					}
+				}
+				r.Body = http.MaxBytesReader(w, r.Body, limit)
 			}
 			next.ServeHTTP(w, r)
 		})
