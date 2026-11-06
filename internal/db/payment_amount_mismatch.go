@@ -38,13 +38,13 @@ func (s *Store) RecordPaymentAmountMismatch(ctx context.Context, attemptID int, 
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		var paymentID int
-		var paymentCurrency, provider string
+		var paymentStatus, paymentCurrency, provider, paymentReference string
 		var paymentAmount int64
 		if err := tx.QueryRowContext(ctx, `
-			SELECT p.id,p.currency,p.provider,p.amount_cents
+			SELECT p.id,p.status,p.currency,p.provider,p.amount_cents,COALESCE(p.external_reference,'')
 			FROM payments p JOIN payment_attempts a ON a.payment_id=p.id
 			WHERE a.id=$1 FOR UPDATE OF p`, attemptID,
-		).Scan(&paymentID, &paymentCurrency, &provider, &paymentAmount); err != nil {
+		).Scan(&paymentID, &paymentStatus, &paymentCurrency, &provider, &paymentAmount, &paymentReference); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentNotFound
 			}
@@ -77,6 +77,7 @@ func (s *Store) RecordPaymentAmountMismatch(ctx context.Context, attemptID int, 
 		if expected <= 0 {
 			return ErrPaymentAmountMatch
 		}
+		affectsPayment := paymentStatus == PaymentStatusCaptured && paymentReference == requestReference
 
 		reason := "amount_mismatch"
 		exceptionAmount, exceptionCurrency := reported, currency
@@ -108,10 +109,18 @@ func (s *Store) RecordPaymentAmountMismatch(ctx context.Context, attemptID int, 
 		}
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO payment_exceptions
-			    (payment_id,attempt_id,reason,provider,currency,amount_cents,request_reference,receipt)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-			ON CONFLICT (attempt_id) DO NOTHING`,
-			paymentID, attemptID, reason, provider, exceptionCurrency, int64(exceptionAmount), requestReference, strings.TrimSpace(receipt),
+			    (payment_id,attempt_id,reason,provider,currency,amount_cents,request_reference,receipt,affects_payment)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			ON CONFLICT (attempt_id) DO UPDATE SET
+			    reason = EXCLUDED.reason,
+			    currency = EXCLUDED.currency,
+			    amount_cents = EXCLUDED.amount_cents,
+			    request_reference = EXCLUDED.request_reference,
+			    receipt = COALESCE(NULLIF(EXCLUDED.receipt, ''), payment_exceptions.receipt),
+			    affects_payment = EXCLUDED.affects_payment
+			WHERE payment_exceptions.reason IN ('late_capture', 'duplicate_charge')
+			  AND payment_exceptions.status <> 'refunded'`,
+			paymentID, attemptID, reason, provider, exceptionCurrency, int64(exceptionAmount), requestReference, strings.TrimSpace(receipt), affectsPayment,
 		)
 		if err != nil {
 			return fmt.Errorf("record M-Pesa amount exception: %w", err)

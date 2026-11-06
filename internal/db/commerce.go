@@ -19,6 +19,7 @@ var (
 	ErrCurrencyLocked          = errors.New("currency cannot change after orders exist")
 	ErrPaymentAmountMatch      = errors.New("payment amount or currency does not match")
 	ErrAttemptInProgress       = errors.New("a payment attempt is already in progress")
+	ErrPaymentReviewRequired   = errors.New("payment amount discrepancy is under review")
 	ErrCheckoutCurrencyChanged = errors.New("checkout currency changed")
 )
 
@@ -299,12 +300,20 @@ type OnlinePayment struct {
 	CreatedAt         time.Time
 	AttemptID         int
 	AttemptStatus     string
+	ReviewRequired    bool
 }
 
 const onlinePaymentSelect = `
 SELECT p.id, p.order_id, p.user_id, u.email, p.method, p.provider, p.status, p.currency, p.amount_cents,
        COALESCE(a.request_reference, ''), COALESCE(a.callback_token_hash, ''), o.status, p.created_at,
-       COALESCE(a.id, 0), COALESCE(a.status, '')
+       COALESCE(a.id, 0), COALESCE(a.status, ''),
+       EXISTS (
+           SELECT 1 FROM payment_exceptions e
+           WHERE e.payment_id = p.id
+             AND e.reason IN ('amount_mismatch', 'amount_unverified')
+             AND e.status <> 'refunded'
+             AND (p.status <> 'captured' OR e.affects_payment)
+       )
 FROM payments p
 JOIN users u ON u.id = p.user_id
 JOIN orders o ON o.id = p.order_id`
@@ -316,7 +325,7 @@ func scanOnlinePayment(row interface{ Scan(...any) error }) (*OnlinePayment, err
 	var p OnlinePayment
 	var amount int64
 	err := row.Scan(&p.ID, &p.OrderID, &p.UserID, &p.UserEmail, &p.Method, &p.Provider, &p.Status, &p.Currency, &amount,
-		&p.ExternalReference, &p.CallbackTokenHash, &p.OrderStatus, &p.CreatedAt, &p.AttemptID, &p.AttemptStatus)
+		&p.ExternalReference, &p.CallbackTokenHash, &p.OrderStatus, &p.CreatedAt, &p.AttemptID, &p.AttemptStatus, &p.ReviewRequired)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrPaymentNotFound
 	}
@@ -379,6 +388,19 @@ func (s *Store) StartPaymentAttempt(ctx context.Context, paymentID int, referenc
 		}
 		if status != PaymentStatusPending || orderStatus == OrderStatusCancelled {
 			return ErrPaymentNotFound
+		}
+		var reviewRequired bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM payment_exceptions
+				WHERE payment_id = $1
+				  AND reason IN ('amount_mismatch', 'amount_unverified')
+				  AND status <> 'refunded'
+			)`, paymentID).Scan(&reviewRequired); err != nil {
+			return err
+		}
+		if reviewRequired {
+			return ErrPaymentReviewRequired
 		}
 		var active int
 		err := tx.QueryRowContext(ctx, `SELECT id FROM payment_attempts WHERE payment_id = $1 AND status = 'pending'`, paymentID).Scan(&active)

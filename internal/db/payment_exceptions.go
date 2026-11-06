@@ -159,22 +159,42 @@ func (s *Store) setPaymentExceptionStatus(ctx context.Context, actorID, id int, 
 			}
 		}
 		var paymentID int
+		if status == "refunded" {
+			if err := tx.QueryRowContext(ctx, "SELECT payment_id FROM payment_exceptions WHERE id = $1", id).Scan(&paymentID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return ErrPaymentExceptionNotFound
+				}
+				return err
+			}
+			// CapturePayment locks the payment before creating its exception.
+			// Keep refund completion on the same payment-before-exception order.
+			var lockedPaymentID int
+			if err := tx.QueryRowContext(ctx, "SELECT id FROM payments WHERE id = $1 FOR UPDATE", paymentID).Scan(&lockedPaymentID); err != nil {
+				return err
+			}
+		}
+		var exceptionPaymentID int
 		var reason, current string
-		var providerRequestInProgress bool
+		var providerRequestInProgress, affectsPayment bool
 		if err := tx.QueryRowContext(ctx,
 			`SELECT payment_id, reason, status,
        status IN ('requested', 'review') AND provider = 'paystack'
-           AND updated_at > clock_timestamp() - ($2::double precision * interval '1 microsecond')
+           AND updated_at > clock_timestamp() - ($2::double precision * interval '1 microsecond'),
+       affects_payment
 FROM payment_exceptions
 WHERE id = $1
 FOR UPDATE`,
 			id, paymentRefundResolveGrace.Microseconds()).
-			Scan(&paymentID, &reason, &current, &providerRequestInProgress); err != nil {
+			Scan(&exceptionPaymentID, &reason, &current, &providerRequestInProgress, &affectsPayment); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentExceptionNotFound
 			}
 			return err
 		}
+		if status == "refunded" && paymentID != exceptionPaymentID {
+			return ErrPaymentExceptionNotFound
+		}
+		paymentID = exceptionPaymentID
 		if current == "refunded" {
 			return nil
 		}
@@ -187,7 +207,7 @@ FOR UPDATE`,
 			 WHERE id = $1`, id, status, refundReference, truncateText(lastError, 500)); err != nil {
 			return err
 		}
-		if status == "refunded" && reason == "late_capture" {
+		if status == "refunded" && (reason == "late_capture" || affectsPayment) {
 			_, err := tx.ExecContext(ctx,
 				"UPDATE payments SET status = 'refunded' WHERE id = $1 AND status = 'captured'", paymentID)
 			return err
@@ -206,14 +226,30 @@ func (s *Store) RecordMpesaRefundForActor(ctx context.Context, actorID, id int, 
 			return err
 		}
 		var paymentID int
-		var reason, status, provider string
-		if err := tx.QueryRowContext(ctx,
-			"SELECT payment_id, reason, status, provider FROM payment_exceptions WHERE id = $1 FOR UPDATE", id).
-			Scan(&paymentID, &reason, &status, &provider); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT payment_id FROM payment_exceptions WHERE id = $1", id).Scan(&paymentID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrPaymentExceptionNotFound
 			}
 			return err
+		}
+		// Match the payment-before-exception lock order used by capture.
+		var lockedPaymentID int
+		if err := tx.QueryRowContext(ctx, "SELECT id FROM payments WHERE id = $1 FOR UPDATE", paymentID).Scan(&lockedPaymentID); err != nil {
+			return err
+		}
+		var exceptionPaymentID int
+		var reason, status, provider string
+		var affectsPayment bool
+		if err := tx.QueryRowContext(ctx,
+			"SELECT payment_id, reason, status, provider, affects_payment FROM payment_exceptions WHERE id = $1 FOR UPDATE", id).
+			Scan(&exceptionPaymentID, &reason, &status, &provider, &affectsPayment); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrPaymentExceptionNotFound
+			}
+			return err
+		}
+		if paymentID != exceptionPaymentID {
+			return ErrPaymentExceptionNotFound
 		}
 		if status == "refunded" {
 			return nil
@@ -227,7 +263,7 @@ func (s *Store) RecordMpesaRefundForActor(ctx context.Context, actorID, id int, 
 			 WHERE id = $1`, id, receipt); err != nil {
 			return err
 		}
-		if reason == "late_capture" {
+		if reason == "late_capture" || affectsPayment {
 			_, err := tx.ExecContext(ctx,
 				"UPDATE payments SET status = 'refunded' WHERE id = $1 AND status = 'captured'", paymentID)
 			return err
