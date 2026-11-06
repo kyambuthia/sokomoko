@@ -70,7 +70,12 @@
           <span class="strong">#{{ .ID }}</span>
           <span class="strong">{{ money .TotalAmount }}</span>
         </div>
-        {{ if .AwaitingPayment }}
+        {{ if .PaymentReviewRequired }}
+        <div class="row-between">
+          <span class="badge badge-solid">payment under review</span>
+          <a class="btn btn-sm" href="/payments/order/{{ .ID }}">Check status</a>
+        </div>
+        {{ else if .AwaitingPayment }}
         <div class="row-between">
           <span class="badge badge-solid">awaiting payment</span>
           <a class="btn btn-sm" href="/payments/order/{{ .ID }}">Pay now</a>
@@ -80,6 +85,7 @@
           <p class="small">{{ .Status }} · {{ .DeliveryStatus }}</p>
         </ui-order-progress>
         {{ end }}
+        {{ if and (eq .PaymentStatus "refunded") (ne .Status "cancelled") }}<p class="small muted" role="status">Payment refunded after review. Contact the store if you need help with this order.</p>{{ end }}
         {{ if and .DeliveryNotice (or (ne .PartnerStatus "new") (eq .Status "cancelled")) }}<p class="small muted" data-order-notice>{{ .DeliveryNotice }}</p>{{ end }}
         {{ if .Cancellable }}
         <ui-confirm title="Cancel order #{{ .ID }}?" message="The items go back on sale. This cannot be undone." confirm-label="Cancel order" cancel-label="Keep order">

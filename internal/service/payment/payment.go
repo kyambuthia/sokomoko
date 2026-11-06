@@ -46,6 +46,7 @@ var (
 	ErrLastMethod                  = errors.New("at least one payment method must stay enabled")
 	ErrInvalidPricing              = errors.New("invalid pricing")
 	ErrNotPayable                  = errors.New("this order cannot be paid online")
+	ErrPaymentReviewRequired       = errors.New("payment amount discrepancy is under review")
 	ErrNoPublicURL                 = errors.New("PUBLIC_BASE_URL is required for online payments")
 	ErrProviderVerificationPending = errors.New("payment provider verification is pending")
 )
@@ -334,6 +335,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 	if err != nil {
 		return StartOutcome{}, err
 	}
+	if payment.ReviewRequired {
+		return StartOutcome{}, ErrPaymentReviewRequired
+	}
 	if payment.Status != db.PaymentStatusPending || payment.OrderStatus == db.OrderStatusCancelled || !s.IsOnline(payment.Method) {
 		return StartOutcome{}, ErrNotPayable
 	}
@@ -375,6 +379,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 		initial["phone"] = req.Phone
 	}
 	attemptID, err := s.store.StartPaymentAttempt(ctx, payment.ID, reference, hashToken(token), initial)
+	if errors.Is(err, db.ErrPaymentReviewRequired) {
+		return StartOutcome{}, ErrPaymentReviewRequired
+	}
 	if errors.Is(err, db.ErrAttemptInProgress) {
 		current, lookupErr := s.store.GetOrderPayment(ctx, req.UserID, req.OrderID)
 		if lookupErr != nil {
@@ -468,7 +475,7 @@ type StatusView struct {
 	OrderID    int
 	Method     string
 	MethodName string
-	Status     string // "pending", "paid", "failed", "cancelled", "offline"
+	Status     string // "pending", "paid", "failed", "review", "refunded", "cancelled", "offline"
 	Message    string
 	Amount     money.Cents
 	Charged    money.Cents // what the provider requests, when rounded
@@ -515,6 +522,14 @@ func (s *Service) Status(ctx context.Context, userID, orderID int) (StatusView, 
 	case payment.OrderStatus == db.OrderStatusCancelled && payment.Status == db.PaymentStatusCaptured:
 		view.Status = "cancelled"
 		view.Message = "Payment arrived after this order was cancelled. Contact the store for a refund."
+		return view, nil
+	case payment.ReviewRequired:
+		view.Status = "review"
+		view.Message = "M-Pesa reported an amount discrepancy. The transaction is under review; please wait for the store before retrying."
+		return view, nil
+	case payment.Status == db.PaymentStatusRefunded:
+		view.Status = "refunded"
+		view.Message = "This payment was refunded after review. Contact the store if you still need this order."
 		return view, nil
 	case payment.Status == db.PaymentStatusCaptured:
 		view.Status = "paid"

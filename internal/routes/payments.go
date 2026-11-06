@@ -54,6 +54,10 @@ func PaymentPage(a *app.App) http.HandlerFunc {
 				return
 			case err != nil:
 				log.Printf("retry payment for order %d: %v", orderID, err)
+				if errors.Is(err, paymentsvc.ErrPaymentReviewRequired) {
+					redirectWithFlash(w, r, r.URL.Path, "danger", "An M-Pesa amount discrepancy is under review. Please wait for the store to resolve it before retrying.")
+					return
+				}
 				if errors.Is(err, paymentsvc.ErrNoPublicURL) {
 					redirectWithFlash(w, r, r.URL.Path, "danger", "Online payments are not available right now.")
 					return

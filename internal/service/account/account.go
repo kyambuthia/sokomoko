@@ -19,24 +19,25 @@ type OrderItem struct {
 }
 
 type Order struct {
-	ID              int
-	Currency        string
-	Status          string
-	PartnerStatus   string
-	DeliveryStatus  string
-	DeliveryNotice  string
-	DeliveryAddress string
-	Subtotal        money.Cents
-	ShippingFee     money.Cents
-	TaxAmount       money.Cents
-	TotalAmount     money.Cents
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	PaymentMethod   string
-	PaymentStatus   string
-	AwaitingPayment bool // online payment still outstanding
-	Cancellable     bool // the customer may still cancel it
-	Items           []OrderItem
+	ID                    int
+	Currency              string
+	Status                string
+	PartnerStatus         string
+	DeliveryStatus        string
+	DeliveryNotice        string
+	DeliveryAddress       string
+	Subtotal              money.Cents
+	ShippingFee           money.Cents
+	TaxAmount             money.Cents
+	TotalAmount           money.Cents
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	PaymentMethod         string
+	PaymentStatus         string
+	PaymentReviewRequired bool
+	AwaitingPayment       bool // online payment still outstanding
+	Cancellable           bool // the customer may still cancel it
+	Items                 []OrderItem
 }
 
 var (
@@ -102,22 +103,23 @@ func mapOrder(order db.Order) Order {
 		})
 	}
 	return Order{
-		ID:              order.ID,
-		Currency:        order.Currency,
-		Status:          order.Status,
-		PartnerStatus:   order.PartnerStatus,
-		DeliveryStatus:  order.DeliveryStatus,
-		DeliveryNotice:  order.DeliveryNotice,
-		DeliveryAddress: order.DeliveryAddress,
-		Subtotal:        order.Subtotal,
-		ShippingFee:     order.ShippingFee,
-		TaxAmount:       order.TaxAmount,
-		TotalAmount:     order.TotalAmount,
-		CreatedAt:       order.CreatedAt,
-		UpdatedAt:       order.UpdatedAt,
-		PaymentMethod:   order.PaymentMethod,
-		PaymentStatus:   order.PaymentStatus,
-		AwaitingPayment: order.AwaitingPayment(),
+		ID:                    order.ID,
+		Currency:              order.Currency,
+		Status:                order.Status,
+		PartnerStatus:         order.PartnerStatus,
+		DeliveryStatus:        order.DeliveryStatus,
+		DeliveryNotice:        order.DeliveryNotice,
+		DeliveryAddress:       order.DeliveryAddress,
+		Subtotal:              order.Subtotal,
+		ShippingFee:           order.ShippingFee,
+		TaxAmount:             order.TaxAmount,
+		TotalAmount:           order.TotalAmount,
+		CreatedAt:             order.CreatedAt,
+		UpdatedAt:             order.UpdatedAt,
+		PaymentMethod:         order.PaymentMethod,
+		PaymentStatus:         order.PaymentStatus,
+		PaymentReviewRequired: order.PaymentReviewRequired,
+		AwaitingPayment:       order.AwaitingPayment(),
 		Cancellable: order.Status == db.OrderStatusPending && order.PartnerStatus == "new" &&
 			order.PaymentStatus != db.PaymentStatusCaptured && order.PaymentStatus != db.PaymentStatusRefunded,
 		Items: items,

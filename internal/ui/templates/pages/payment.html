@@ -21,6 +21,12 @@
   {{ if eq $p.Status "cancelled" }}
   {{ template "notice" dict "Kind" "danger" "Text" $p.Message }}
   <a class="btn btn-block" href="/">Shop</a>
+  {{ else if eq $p.Status "review" }}
+  {{ template "notice" dict "Kind" "danger" "Text" $p.Message }}
+  <a class="btn btn-secondary btn-block" href="/account#order-{{ $p.OrderID }}">View order</a>
+  {{ else if eq $p.Status "refunded" }}
+  {{ template "notice" dict "Kind" "danger" "Text" $p.Message }}
+  <a class="btn btn-secondary btn-block" href="/account#order-{{ $p.OrderID }}">View order</a>
   {{ else }}
     {{ if eq $p.Status "failed" }}
     {{ template "notice" dict "Kind" "danger" "Text" $p.Message }}

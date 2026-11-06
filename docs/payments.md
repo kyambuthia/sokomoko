@@ -75,13 +75,17 @@ and opens a row in `payment_exceptions`, and the cancelled order stays out of
 the fulfilment queue. The admin dashboard shows how many exceptions need a
 decision.
 
-M-Pesa's status query confirms success but does not return the amount. The
-callback amount is checked against the requested charge before capture. A
-mismatch or missing amount is recorded for operator review, and that attempt is
-blocked from later status checks silently capturing it. A mismatched positive
-amount is queued at the reported amount; a missing amount is queued at the
-requested amount and labeled unverified so an operator can check the M-Pesa
-portal before taking action.
+M-Pesa's status query confirms success but does not return the amount. When a
+callback arrives before capture, its amount is checked against the requested
+charge. A mismatch or missing amount is recorded for operator review, and that
+attempt is blocked from later status checks silently capturing it. While the
+exception is unresolved, the customer cannot retry that payment. If a status
+poll captured the same attempt before its discrepant callback arrived, the order
+is shown as under review and held out of fulfillment. After reversal, the
+payment is shown as refunded and the order stays out of fulfillment. A
+mismatched positive amount is queued at the reported amount; a missing amount
+is queued at the requested amount and labeled unverified so an operator can
+check the M-Pesa portal before taking action.
 
 On `/payments`, the exceptions table offers:
 
@@ -94,7 +98,8 @@ On `/payments`, the exceptions table offers:
 A refund request is claimed in the database before Paystack is called. If the
 call fails or times out, the row goes to `review` and is never sent again
 automatically, so a customer cannot be refunded twice. When a late capture is
-refunded, the payment itself becomes `refunded`; a refunded duplicate charge
-leaves the original captured payment alone.
+refunded, or an amount mismatch affecting the captured attempt is refunded, the
+payment itself becomes `refunded`; a refunded duplicate charge or mismatch on a
+different attempt leaves the original captured payment alone.
 
 Every refund action is written to the audit log.
