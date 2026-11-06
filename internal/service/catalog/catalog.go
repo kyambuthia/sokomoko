@@ -33,6 +33,7 @@ type Product struct {
 	PartnerName   string
 	ImageURL      string
 	ImageAlt      string
+	VideoURL      string
 }
 
 // InStock reports whether at least one unit can be bought.
@@ -160,6 +161,14 @@ func (s *Service) ProductImage(ctx context.Context, id int) (*db.ProductImage, e
 	return s.store.GetPublicProductImageByID(ctx, id)
 }
 
+// ProductVideo returns the uploaded video for an active public product.
+func (s *Service) ProductVideo(ctx context.Context, productID int) (*db.ProductVideo, error) {
+	if productID <= 0 {
+		return nil, db.ErrProductNotFound
+	}
+	return s.store.GetPublicProductVideoByProductID(ctx, productID)
+}
+
 func (s *Service) ProductBySlug(ctx context.Context, slug string) (*Product, error) {
 	cleanSlug := strings.TrimSpace(slug)
 	if cleanSlug == "" || strings.Contains(cleanSlug, "/") || len(cleanSlug) > 200 {
@@ -218,5 +227,6 @@ func mapProduct(product db.Product) Product {
 		PartnerName:   product.PartnerName,
 		ImageURL:      ui.ProductImageURL(product.PrimaryImage(), product.Slug, product.Name, product.Category),
 		ImageAlt:      alt,
+		VideoURL:      product.VideoURL,
 	}
 }

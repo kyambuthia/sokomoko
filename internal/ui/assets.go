@@ -3,6 +3,7 @@ package ui
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,6 +12,13 @@ import (
 )
 
 var embeddedAssetVersions sync.Map
+
+var productSplatAssets = map[string]string{
+	// leather-handbag.ply in asset-gen is a vase, so it is intentionally mapped
+	// only to a vase product.
+	"ceramic-vase":     "models/products/ceramic-vase.sog",
+	"leather-backpack": "models/products/leather-backpack.sog",
+}
 
 // AssetURL returns a cache-busted static URL for CSS/JS/images without third-party deps.
 func AssetURL(path string) string {
@@ -28,6 +36,20 @@ func AssetURL(path string) string {
 	}
 
 	return "/static/" + clean
+}
+
+// ProductSplatURL returns the bundled Gaussian-splat URL for products with a
+// matching, reviewed model asset. Splat files use an explicit allowlist rather
+// than deriving a path from arbitrary product input.
+func ProductSplatURL(productSlug string) string {
+	asset, ok := productSplatAssets[strings.TrimSpace(productSlug)]
+	if !ok {
+		return ""
+	}
+	if _, err := fs.Stat(StaticFS, "static/"+asset); err != nil {
+		return ""
+	}
+	return AssetURL(asset)
 }
 
 func normalizeAssetPath(path string) string {

@@ -22,6 +22,8 @@ const (
 	searchPageSize   = 24
 )
 
+var productVideoReadSemaphore = make(chan struct{}, 4)
+
 type IndexPageData struct {
 	Title       string
 	HasProducts bool
@@ -33,6 +35,7 @@ type IndexPageData struct {
 type ProductPageData struct {
 	Title       string
 	Product     *catalogsvc.Product
+	SplatURL    string
 	Breadcrumbs []Breadcrumb
 	Viewer      Viewer
 	CSRFToken   string
@@ -112,6 +115,44 @@ func ProductImage(a *app.App) http.HandlerFunc {
 	}
 }
 
+// ProductVideo serves an uploaded video only while its product and partner are public.
+func ProductVideo(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			methodNotAllowed(w, http.MethodGet, http.MethodHead)
+			return
+		}
+		productID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || productID <= 0 {
+			NotFound(w, r)
+			return
+		}
+		select {
+		case productVideoReadSemaphore <- struct{}{}:
+			defer func() { <-productVideoReadSemaphore }()
+		default:
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "Video is busy. Try again shortly.", http.StatusServiceUnavailable)
+			return
+		}
+		video, err := a.Catalog.ProductVideo(r.Context(), productID)
+		if errors.Is(err, db.ErrProductNotFound) {
+			NotFound(w, r)
+			return
+		}
+		if err != nil {
+			log.Printf("product video %d: %v", productID, err)
+			serverError(w, r)
+			return
+		}
+		sum := sha256.Sum256(video.Data)
+		w.Header().Set("Content-Type", video.ContentType)
+		w.Header().Set("Cache-Control", "public, max-age=60, must-revalidate")
+		w.Header().Set("ETag", `"`+hex.EncodeToString(sum[:])+`"`)
+		http.ServeContent(w, r, fmt.Sprintf("product-video-%d", productID), video.CreatedAt, bytes.NewReader(video.Data))
+	}
+}
+
 // ProductDetail serves /products/{slug}.
 func ProductDetail(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +184,7 @@ func ProductDetail(a *app.App) http.HandlerFunc {
 		a.Render(w, a.Templates.Product, ProductPageData{
 			Title:       product.Name,
 			Product:     product,
+			SplatURL:    ui.ProductSplatURL(product.Slug),
 			Breadcrumbs: crumbs,
 			Viewer:      viewerFromRequest(r),
 			CSRFToken:   a.Auth.CSRFToken(r),

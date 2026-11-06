@@ -36,6 +36,7 @@ type CatalogService interface {
 	Page(ctx context.Context, page, limit int) ([]catalogsvc.Product, int, error)
 	ProductBySlug(ctx context.Context, slug string) (*catalogsvc.Product, error)
 	ProductImage(ctx context.Context, id int) (*db.ProductImage, error)
+	ProductVideo(ctx context.Context, productID int) (*db.ProductVideo, error)
 	Search(ctx context.Context, query string) ([]catalogsvc.Product, error)
 	SearchInCategory(ctx context.Context, query, category string) ([]catalogsvc.Product, error)
 	SearchPage(ctx context.Context, query, category string, page, limit int) ([]catalogsvc.Product, int, error)
