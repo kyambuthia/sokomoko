@@ -6,9 +6,27 @@
 <div class="stack">
   <div><a class="btn btn-plain btn-sm back" href="/">{{ icon "arrow-left" }}Shop</a></div>
   <div class="detail">
+    {{ if or .SplatURL .Product.VideoURL }}
+    <ui-splat-viewer class="detail__media" data-model-url="{{ .SplatURL }}" data-video-url="{{ .Product.VideoURL }}" data-poster-url="{{ .Product.ImageURL }}" data-viewer-url='{{ asset "splat-viewer.html" }}'>
+      <img src="{{ .Product.ImageURL }}" alt="{{ .Product.ImageAlt }}" width="720" height="720">
+      {{ if .SplatURL }}
+      <iframe class="detail__splat" title="{{ .Product.Name }} 3D view" allow="fullscreen" loading="lazy" hidden></iframe>
+      {{ end }}
+      {{ if .Product.VideoURL }}
+      <video class="detail__video" src="{{ .Product.VideoURL }}" poster="{{ .Product.ImageURL }}" controls playsinline preload="none" width="720" height="720" hidden></video>
+      {{ end }}
+      {{ if or .SplatURL .Product.VideoURL }}
+      <div class="detail__media-controls">
+        {{ if .SplatURL }}<button class="btn btn-icon detail__media-toggle" type="button" aria-label="Show 3D view" aria-pressed="false">{{ icon "box" }}</button>{{ end }}
+        {{ if .Product.VideoURL }}<button class="btn btn-icon detail__video-toggle" type="button" aria-label="Play product video" aria-pressed="false">{{ icon "camera" }}</button>{{ end }}
+      </div>
+      {{ end }}
+    </ui-splat-viewer>
+    {{ else }}
     <div class="detail__media">
       <img src="{{ .Product.ImageURL }}" alt="{{ .Product.ImageAlt }}" width="720" height="720">
     </div>
+    {{ end }}
     <div class="stack">
       <div class="stack-sm">
         {{ if .Product.Category }}<p class="muted small">{{ .Product.Category }}</p>{{ end }}

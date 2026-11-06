@@ -60,6 +60,25 @@
       <input class="input" type="file" id="image" name="image" accept="image/jpeg,image/png">
       <p class="muted">Optional. Up to 900 KB before optimization. A new upload replaces the previous uploaded image and becomes primary; bundled gallery images stay.</p>
     </div>
+    {{ if .Form.VideoURL }}
+    <div class="field">
+      <span class="label">Current product video</span>
+      <video src="{{ .Form.VideoURL }}" controls playsinline preload="metadata" width="240"></video>
+    </div>
+    {{ end }}
+    {{ if .CanRemoveVideo }}
+    <div class="field">
+      <label class="choice">
+        <input type="checkbox" id="remove_video" name="remove_video" value="1" {{ if .RemoveVideo }}checked{{ end }}>
+        <span class="choice__body"><span>Remove uploaded video</span><span class="tiny muted">Leave this unchecked to keep the current video. A new file replaces it.</span></span>
+      </label>
+    </div>
+    {{ end }}
+    <div class="field">
+      <label class="label" for="video">Product video (MP4 or WebM)</label>
+      <input class="input" type="file" id="video" name="video" accept="video/mp4,video/webm,.mp4,.webm">
+      <p class="muted">Optional. Up to 10 MB. A new upload replaces the current video.</p>
+    </div>
     <div class="field">
       <label class="label" for="description">Description</label>
       <textarea class="textarea" id="description" name="description" rows="4" maxlength="5000">{{ .Form.Description }}</textarea>
