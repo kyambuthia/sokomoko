@@ -48,6 +48,7 @@ data are not stored. See [services](services-and-local-discovery.md).
 | | `products` | Partner, category, name, slug, description, `price_cents`, currency, generated `search_vector` |
 | | `product_images` | URL, alt text, position |
 | | `product_image_blobs` | Normalized JPEG/PNG bytes (up to 256 KiB), keyed to an uploaded product image |
+| | `product_video_blobs` | One MP4/WebM video (up to 10 MiB) per product |
 | Services | `service_listings` | Seller-owned service offers with public listing snapshots |
 | | `service_weekly_hours` | Optional local opening interval for each weekday |
 | | `service_resources` | Named capacity-one resources belonging to a listing |

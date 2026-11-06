@@ -78,6 +78,11 @@ PostgreSQL. JPEG uploads apply EXIF orientation before re-encoding; remote or
 empty URLs use a bundled image. The public media handler only serves images
 for active products from active partners.
 
+Partners can attach one MP4 or WebM product video up to 10 MiB. The product page
+keeps the image as its default view and exposes the video through the existing
+media frame controls. Video bytes are stored in PostgreSQL and served with
+range support only for active products from active partners.
+
 ## Static assets
 
 `/static/` is served by `routes.Static`. When the server runs from the

@@ -22,17 +22,14 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Catalog and vendor management
 
-- **Limited product image management.** The partner workspace accepts one
-  optional JPEG or PNG upload up to 900 KB, normalized to at most 256 KB and
-  stored in PostgreSQL. A new upload becomes primary and replaces the prior
-  uploaded image. Leaving the file input empty keeps the current image.
-  Checking "Remove uploaded image" deletes only blob-backed uploads; bundled
-  gallery entries stay. Images cannot be reordered.
-  Products without a usable image show a bundled fallback. Product managers can
-  delete products from the workspace; deleted products disappear from the
-  storefront and active carts, affected open checkouts are cancelled with stock
-  holds released, and image bytes are removed. Past orders retain product
-  records.
+- **Limited product media management.** The partner workspace accepts one
+  optional JPEG or PNG image (up to 900 KB before normalization to 256 KB) and
+  one MP4 or WebM video (up to 10 MiB), stored in PostgreSQL. New uploads
+  replace the previous uploaded file of that type; leaving a file input empty
+  keeps the current upload. Sellers can remove uploaded media. Images cannot
+  be reordered and videos are served as uploaded, without transcoding. Products
+  without an image show a bundled fallback. Deleting a product removes its
+  image and video bytes; past orders retain product records.
 - **A product's partner cannot be changed after creation.**
 
 ## Services and local discovery

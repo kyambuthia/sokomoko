@@ -25,6 +25,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/` | GET | public | `Root` | Home page and catalog |
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
+| `/media/product-videos/<id>` | GET, HEAD | public | `ProductVideo` | Uploaded MP4/WebM video with byte-range support; 404 if the product or partner is inactive |
 | `/search` | GET | public | `Search` | `q`, `category`, `page`; 24 products per page |
 | `/services` | GET, HEAD | public | `Services` | Literal `q`, `category`, `area`, `delivery_mode`, `partner_id`, `has_hours`, `page`; 24 per page |
 | `/services/<slug>` | GET, HEAD | public | `ServiceDetail` | Published listings of active shops; customer accounts see a request form when weekly hours are published |
@@ -128,9 +129,10 @@ address as a draft and re-renders the form with `422`.
 | `/setup` | GET, POST | admin, staff, partner (POST needs admin or staff) | `PartnerSetup` (store settings; read-only for partners) |
 | `/dashboard` | GET | admin, staff, partner | `PartnerDashboard` |
 | `/products` | GET, HEAD | admin, staff, partner | `PartnerProducts` (50 per page, `?page=`) |
-| `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` (optional JPEG or PNG image upload) |
-| `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` (optional new primary image or removal of an uploaded image) |
+| `/products/new` | GET, POST | admin, staff, partner | `PartnerProductNew` (optional JPEG/PNG image and MP4/WebM video upload) |
+| `/products/<id>/edit` | GET, POST | admin, staff, partner (own products only; others get 404) | `PartnerProductEdit` (optional image/video replacement or removal of uploaded media) |
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
+| `/media/product-videos/<id>` | GET, HEAD | public | `ProductVideo` | Uploaded MP4/WebM video with byte-range support; 404 if the product or partner is inactive |
 | `/products/<id>/delete` | POST | admin, staff, partner (own products only; others get 404) | `PartnerProductDelete` (CSRF protected; removes the product from carts and cancels affected open checkouts) |
 | `/password` | GET, POST | admin, staff, partner | `auth.PasswordChange` |
 | `/orders` | GET, POST | admin, staff, partner | `PartnerOrders` (20 per page, `status` filter; updates keep the current page) |
