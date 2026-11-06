@@ -21,6 +21,8 @@ var (
 	ErrInvalidQuantity                 = errors.New("invalid quantity")
 	ErrProductNotFound                 = errors.New("product not found")
 	ErrInvalidProductImage             = errors.New("invalid product image")
+	ErrInvalidProductVideo             = errors.New("invalid product video")
+	ErrInvalidProductMedia             = errors.New("invalid product media")
 	ErrCheckoutNotFound                = errors.New("checkout not found")
 	ErrCheckoutExpired                 = errors.New("checkout expired")
 	ErrInsufficientStock               = errors.New("insufficient stock")

@@ -234,7 +234,7 @@ func lockProductMutationActorTx(ctx context.Context, tx *sql.Tx, actorID int, ac
 }
 
 // CreateProduct inserts a product, its opening stock in the default warehouse,
-// and any images in one transaction.
+// and any uploaded media in one transaction.
 func (s *Store) CreateProduct(ctx context.Context, product Product) (int64, error) {
 	return s.createProduct(ctx, product, 0, "")
 }
@@ -255,6 +255,9 @@ func (s *Store) createProduct(ctx context.Context, product Product, actorID int,
 	}
 	if product.StockQuantity < 0 {
 		return 0, ErrInvalidQuantity
+	}
+	if err := validateProductVideo(product.Video); err != nil {
+		return 0, err
 	}
 	currency := strings.ToUpper(strings.TrimSpace(product.Currency))
 
@@ -320,6 +323,11 @@ func (s *Store) createProduct(ctx context.Context, product Product, actorID int,
 				return err
 			}
 		}
+		if product.Video != nil {
+			if err := saveProductVideoTx(ctx, tx, int(id), product.Video); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -335,6 +343,33 @@ func hasUploadedProductImage(images []ProductImage) bool {
 		}
 	}
 	return false
+}
+
+func validateProductVideo(video *ProductVideo) error {
+	if video == nil {
+		return nil
+	}
+	if len(video.Data) == 0 || len(video.Data) > MaxProductVideoBytes ||
+		(video.ContentType != "video/mp4" && video.ContentType != "video/webm") {
+		return ErrInvalidProductVideo
+	}
+	return nil
+}
+
+func saveProductVideoTx(ctx context.Context, q querier, productID int, video *ProductVideo) error {
+	if err := validateProductVideo(video); err != nil {
+		return err
+	}
+	_, err := q.ExecContext(ctx,
+		`INSERT INTO product_video_blobs (product_id, content_type, data)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (product_id) DO UPDATE SET
+		     content_type = EXCLUDED.content_type,
+		     data = EXCLUDED.data,
+		     created_at = now()`,
+		productID, video.ContentType, video.Data,
+	)
+	return err
 }
 
 // deleteUploadedProductImagesTx removes images that have stored bytes.
@@ -406,6 +441,29 @@ func (s *Store) GetPublicProductImageByID(ctx context.Context, id int) (*Product
 	return image, nil
 }
 
+// GetPublicProductVideoByProductID returns a video only while its product and
+// partner are public.
+func (s *Store) GetPublicProductVideoByProductID(ctx context.Context, productID int) (*ProductVideo, error) {
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	video := &ProductVideo{}
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT v.product_id, v.content_type, v.data, v.created_at
+		 FROM product_video_blobs v
+		 JOIN products p ON p.id = v.product_id
+		 WHERE v.product_id = $1 AND p.deleted_at IS NULL AND `+activePartnerSQL,
+		productID,
+	).Scan(&video.ProductID, &video.ContentType, &video.Data, &video.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrProductNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return video, nil
+}
+
 func (s *Store) GetProductByID(ctx context.Context, id int) (*Product, error) {
 	return s.getProduct(ctx, "p.id = $1", id)
 }
@@ -445,6 +503,15 @@ func (s *Store) getProduct(ctx context.Context, predicate string, arg any) (*Pro
 		return nil, err
 	}
 	product.Images = images[product.ID]
+	var hasVideo bool
+	if err := tx.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM product_video_blobs WHERE product_id = $1)", product.ID,
+	).Scan(&hasVideo); err != nil {
+		return nil, err
+	}
+	if hasVideo {
+		product.VideoURL = fmt.Sprintf("/media/product-videos/%d", product.ID)
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, wrapDBError(err)
 	}
@@ -475,6 +542,9 @@ func (s *Store) updateProduct(ctx context.Context, product Product, actorID int,
 
 	if product.StockQuantity < 0 {
 		return ErrInvalidQuantity
+	}
+	if err := validateProductVideo(product.Video); err != nil {
+		return err
 	}
 
 	return s.withTx(ctx, func(tx *sql.Tx) error {
@@ -547,6 +617,18 @@ func (s *Store) updateProduct(ctx context.Context, product Product, actorID int,
 			}
 		} else if product.RemoveUploadedImages {
 			if err := deleteUploadedProductImagesTx(ctx, tx, product.ID); err != nil {
+				return err
+			}
+		}
+
+		if product.Video != nil {
+			if err := saveProductVideoTx(ctx, tx, product.ID, product.Video); err != nil {
+				return err
+			}
+		} else if product.RemoveUploadedVideo {
+			if _, err := tx.ExecContext(ctx,
+				"DELETE FROM product_video_blobs WHERE product_id = $1", product.ID,
+			); err != nil {
 				return err
 			}
 		}
@@ -659,7 +741,10 @@ func (s *Store) deleteProduct(ctx context.Context, id, actorID int, actorRole st
 				return err
 			}
 		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM product_images WHERE product_id = $1`, id)
+		if _, err := tx.ExecContext(ctx, `DELETE FROM product_images WHERE product_id = $1`, id); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM product_video_blobs WHERE product_id = $1`, id)
 		return err
 	})
 }

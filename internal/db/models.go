@@ -64,6 +64,8 @@ type Product struct {
 	PartnerID     sql.NullInt64
 	PartnerName   string
 	Images        []ProductImage
+	VideoURL      string
+	Video         *ProductVideo
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 
@@ -71,6 +73,8 @@ type Product struct {
 	// the same transaction. URL-only images stay. This is not a stored column.
 	// A new image that carries bytes takes precedence and replaces uploads.
 	RemoveUploadedImages bool
+	// RemoveUploadedVideo asks UpdateProduct to delete the stored product video.
+	RemoveUploadedVideo bool
 }
 
 // PrimaryImage returns the raw URL of the first image, or "" when none exist.
@@ -83,6 +87,8 @@ func (p Product) PrimaryImage() string {
 
 const MaxProductImageBytes = 256 * 1024
 
+const MaxProductVideoBytes = 10 * 1024 * 1024
+
 type ProductImage struct {
 	ID           int
 	ProductID    int
@@ -92,6 +98,13 @@ type ProductImage struct {
 	ContentType  string
 	Data         []byte
 	CreatedAt    time.Time
+}
+
+type ProductVideo struct {
+	ProductID   int
+	ContentType string
+	Data        []byte
+	CreatedAt   time.Time
 }
 
 type Warehouse struct {
