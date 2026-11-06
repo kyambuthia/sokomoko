@@ -198,25 +198,26 @@ const (
 // Order is the shared order projection used by customer, partner, and admin
 // views.
 type Order struct {
-	ID              int
-	UserID          int
-	CustomerName    string
-	Status          string
-	PartnerStatus   string
-	DeliveryStatus  string
-	InventoryState  string
-	DeliveryAddress string
-	DeliveryNotice  string
-	Currency        string
-	Subtotal        money.Cents
-	ShippingFee     money.Cents
-	TaxAmount       money.Cents
-	TotalAmount     money.Cents
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	PaymentMethod   string // newest payment's method
-	PaymentStatus   string // newest payment's status
-	Items           []OrderItem
+	ID                    int
+	UserID                int
+	CustomerName          string
+	Status                string
+	PartnerStatus         string
+	DeliveryStatus        string
+	InventoryState        string
+	DeliveryAddress       string
+	DeliveryNotice        string
+	Currency              string
+	Subtotal              money.Cents
+	ShippingFee           money.Cents
+	TaxAmount             money.Cents
+	TotalAmount           money.Cents
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	PaymentMethod         string // newest payment's method
+	PaymentStatus         string // newest payment's status
+	PaymentReviewRequired bool   // an M-Pesa amount exception still needs resolution
+	Items                 []OrderItem
 }
 
 // CourierDelivery is the dispatch and rider-facing projection for one order.

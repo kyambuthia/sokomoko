@@ -211,18 +211,38 @@ const orderSelect = `
 SELECT o.id, o.user_id, u.username, o.status, o.partner_status, o.delivery_status, o.inventory_state,
        o.delivery_address, o.delivery_notice, o.currency,
        o.subtotal_cents, o.shipping_cents, o.tax_cents, o.total_cents, o.created_at, o.updated_at,
-       COALESCE(pay.method, ''), COALESCE(pay.status, '')
+       COALESCE(pay.method, ''), COALESCE(pay.status, ''), COALESCE(pay.review_required, FALSE)
 FROM orders o
 JOIN users u ON u.id = o.user_id
 LEFT JOIN LATERAL (
-    SELECT p.method, p.status FROM payments p WHERE p.order_id = o.id ORDER BY p.id DESC LIMIT 1
+    SELECT p.method, p.status,
+           EXISTS (
+               SELECT 1 FROM payment_exceptions e
+               WHERE e.payment_id = p.id
+                 AND e.reason IN ('amount_mismatch', 'amount_unverified')
+                 AND e.status <> 'refunded'
+                 AND (p.status <> 'captured' OR e.affects_payment)
+           ) AS review_required
+    FROM payments p WHERE p.order_id = o.id ORDER BY p.id DESC LIMIT 1
 ) pay ON true`
 
-// paymentSettledSQL matches orders a partner may fulfil: cash on delivery,
-// or online payments that have been captured.
+// paymentSettledSQL matches orders a partner may fulfil: cash on delivery, or
+// captured online payments without an unresolved amount mismatch.
 const paymentSettledSQL = `NOT EXISTS (
     SELECT 1 FROM payments pp
-    WHERE pp.order_id = o.id AND pp.method <> 'cash_on_delivery' AND pp.status <> 'captured')`
+    WHERE pp.order_id = o.id AND pp.method <> 'cash_on_delivery'
+      AND (pp.status <> 'captured' OR EXISTS (
+          SELECT 1 FROM payment_exceptions e
+          WHERE e.payment_id = pp.id AND e.affects_payment AND e.status <> 'refunded'
+      )))`
+
+func orderPaymentSettledTx(ctx context.Context, tx *sql.Tx, orderID int) (bool, error) {
+	var settled bool
+	err := tx.QueryRowContext(ctx,
+		"SELECT "+paymentSettledSQL+" FROM orders o WHERE o.id = $1", orderID,
+	).Scan(&settled)
+	return settled, err
+}
 
 func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 	order := &Order{}
@@ -230,7 +250,7 @@ func scanOrder(row interface{ Scan(...any) error }) (*Order, error) {
 		&order.ID, &order.UserID, &order.CustomerName, &order.Status, &order.PartnerStatus,
 		&order.DeliveryStatus, &order.InventoryState, &order.DeliveryAddress, &order.DeliveryNotice,
 		&order.Currency, &order.Subtotal, &order.ShippingFee, &order.TaxAmount, &order.TotalAmount,
-		&order.CreatedAt, &order.UpdatedAt, &order.PaymentMethod, &order.PaymentStatus,
+		&order.CreatedAt, &order.UpdatedAt, &order.PaymentMethod, &order.PaymentStatus, &order.PaymentReviewRequired,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -690,6 +710,13 @@ func (s *Store) updateOrderFulfillment(ctx context.Context, actorID int, actorRo
 		current, err := lockOrderTx(ctx, tx, orderID)
 		if err != nil {
 			return err
+		}
+		paymentSettled, err := orderPaymentSettledTx(ctx, tx, orderID)
+		if err != nil {
+			return err
+		}
+		if !paymentSettled {
+			return ErrInvalidPartnerTransition
 		}
 		if isPartner {
 			owned, err := partnerOwnsOrderTx(ctx, tx, partnerID, orderID)

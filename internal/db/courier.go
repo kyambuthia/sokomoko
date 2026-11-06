@@ -22,8 +22,8 @@ func (s *Store) ListCourierUsers(ctx context.Context) ([]CourierUser, error) {
 	defer cancel()
 	rows, err := s.DB.QueryContext(ctx,
 		`SELECT u.id, u.username,
-         count(cd.id) FILTER (WHERE cd.status IN ('assigned','picked_up','out_for_delivery') AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered'),
-         count(cd.id) FILTER (WHERE cd.status = 'delivery_failed' AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered')
+         count(cd.id) FILTER (WHERE cd.status IN ('assigned','picked_up','out_for_delivery') AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered' AND `+paymentSettledSQL+`),
+         count(cd.id) FILTER (WHERE cd.status = 'delivery_failed' AND o.status NOT IN ('cancelled','delivered') AND o.delivery_status <> 'delivered' AND `+paymentSettledSQL+`)
          FROM users u
          LEFT JOIN courier_deliveries cd ON cd.courier_user_id=u.id
            AND cd.status IN ('assigned','picked_up','out_for_delivery','delivery_failed')
@@ -83,9 +83,15 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 	if dispatch {
 		where = `o.status = 'shipped' AND o.delivery_status <> 'delivered'`
 		where += ` AND (cd.status IS NULL OR cd.status <> 'delivered')`
+		where += " AND " + paymentSettledSQL
 	} else {
 		args = append(args, courierUserID)
 		where = `cd.courier_user_id = $1 AND o.status <> 'cancelled'`
+		if view == "active" {
+			where += " AND " + paymentSettledSQL
+		} else if view == "all" {
+			where += " AND (" + paymentSettledSQL + " OR " + courierCompletedSQL + ")"
+		}
 	}
 
 	direction := "ASC"
@@ -173,6 +179,13 @@ func (s *Store) AssignCourierToOrder(ctx context.Context, orderID, courierUserID
 		currentOrder, err := lockOrderTx(ctx, tx, orderID)
 		if err != nil {
 			return err
+		}
+		paymentSettled, err := orderPaymentSettledTx(ctx, tx, orderID)
+		if err != nil {
+			return err
+		}
+		if !paymentSettled {
+			return ErrDeliveryNotReady
 		}
 		if currentOrder.Status != OrderStatusShipped || currentOrder.DeliveryStatus == "delivered" {
 			return ErrDeliveryNotReady
@@ -289,6 +302,13 @@ func (s *Store) UpdateCourierDelivery(ctx context.Context, deliveryID, courierUs
 		currentOrder, err := lockOrderTx(ctx, tx, orderID)
 		if err != nil {
 			return err
+		}
+		paymentSettled, err := orderPaymentSettledTx(ctx, tx, orderID)
+		if err != nil {
+			return err
+		}
+		if !paymentSettled {
+			return ErrInvalidCourierTransition
 		}
 		var activeCourierID int
 		err = tx.QueryRowContext(ctx,
