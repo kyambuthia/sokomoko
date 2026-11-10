@@ -544,6 +544,20 @@ func TestIntegration_UncertainRefundIsResolvedByHand(t *testing.T) {
 		t.Fatalf("after failed refund status=%s calls=%d err=%v", status, testProviders.refundCount, err)
 	}
 
+	// The failed provider call leaves the outcome unknown, so an operator may
+	// only resolve it by hand once the in-flight grace period has passed. The
+	// grace period reads updated_at, which the trigger keeps current, so the
+	// row is moved back in time without the trigger.
+	for _, stmt := range []string{
+		"ALTER TABLE payment_exceptions DISABLE TRIGGER payment_exceptions_set_updated_at",
+		"UPDATE payment_exceptions SET updated_at = now() - interval '2 minutes' WHERE id = 1",
+		"ALTER TABLE payment_exceptions ENABLE TRIGGER payment_exceptions_set_updated_at",
+	} {
+		if _, err := testStore.DB.Exec(stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+
 	// Closing by hand needs the provider's reference.
 	resp, _ = makeRequest(http.MethodPost, "/payments", url.Values{"action": {"refund_resolve"}, "exception_id": {"1"}}, []*http.Cookie{admin}, "admin.localhost")
 	if err := testStore.DB.QueryRow("SELECT status FROM payment_exceptions WHERE id = 1").Scan(&status); err != nil || resp.StatusCode == http.StatusFound || status != "review" {

@@ -53,7 +53,7 @@ func TestIntegration_PartnerEditsOwnProductOnly(t *testing.T) {
 
 	// Invalid input is re-shown with the error.
 	resp, body = makeRequest(http.MethodPost, editPath, url.Values{"name": {"Renamed"}, "price": {"abc"}, "stock_quantity": {"5"}}, []*http.Cookie{cookie}, "partner.localhost")
-	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(body, "Price must be an amount") || !strings.Contains(body, `value="Renamed"`) {
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(body, "Price must be valid for the store currency") || !strings.Contains(body, `value="Renamed"`) {
 		t.Fatalf("invalid edit status=%d", resp.StatusCode)
 	}
 
