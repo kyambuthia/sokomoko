@@ -1,10 +1,10 @@
 {{ define "title" }}{{ if .Query }}{{ .Query }} · {{ end }}Search · sokomoko{{ end }}
-{{ define "header-chips" }}{{ template "category-chips" . }}{{ end }}
 {{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "search" "Page" . }}{{ end }}
 
 {{ define "main-area" }}
 <div class="stack">
-  <div class="mobile-only">{{ template "search-form" . }}</div>
+  {{ template "search-form" . }}
+  {{ template "category-chips" . }}
   {{ if or .Query .Category }}
   <div class="page-head">
     <h1>{{ if .Query }}“{{ .Query }}”{{ else }}{{ .Category }}{{ end }}</h1>

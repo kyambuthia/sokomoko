@@ -52,6 +52,7 @@
   --tap: 44px;          /* minimum touch target */
   --bar: 56px;          /* top bar height */
   --tabbar: 64px;       /* mobile tab bar height */
+  --rail: 4.75rem;      /* desktop icon rail; the label floats on hover */
   --max: 72rem;
   --ease: 160ms ease;
 }
@@ -254,9 +255,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   letter-spacing: -0.04em;
   text-decoration: none;
 }
-/* Drawn mark and wordmark. In the full lockup (footer) both show, sharing the
-   32-unit viewBox height so their ink stays optically equal. In the top bar
-   they take turns: at once the mark's s repeats the wordmark's opening s. */
+/* Drawn mark and wordmark. They share a 32-unit viewBox height so their ink
+   stays optically equal, and the mark's s repeats the wordmark's opening s.
+   The top bar and the rail show one at a time. The footer shows the wordmark. */
 .brand__mark { width: 28px; height: 28px; flex: none; }
 .brand__wordmark { width: auto; height: 28px; flex: none; }
 .brand--bar .brand__mark { width: 26px; height: 26px; }
@@ -328,7 +329,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   inset: auto 0 0 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   padding-bottom: env(safe-area-inset-bottom);
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: saturate(1.4) blur(16px);
@@ -349,11 +350,132 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tabbar a[aria-current="page"] { color: var(--fg); font-weight: 700; }
 .tabbar .icon { width: 24px; height: 24px; }
 .tabbar .count { top: 8px; right: calc(50% - 24px); }
-.has-tabbar { padding-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom)); }
+.has-tabbar {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom));
+}
+.has-tabbar > .main { flex: 1 0 auto; }
 
 @media (min-width: 48rem) {
   .tabbar { display: none; }
-  .has-tabbar { padding-bottom: 0; }
+  .has-tabbar { padding-bottom: 0; padding-left: var(--rail); }
+  .bar--storefront { display: none; }
+}
+
+/* Desktop rail (storefront). Phones keep the bottom tab bar. */
+.rail { display: none; }
+@media (min-width: 48rem) {
+  .rail {
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    width: var(--rail);
+    padding: var(--s4) var(--s2);
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+}
+.rail__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  color: var(--fg);
+  text-decoration: none;
+}
+.rail__brand .brand__wordmark { display: none; height: 22px; width: auto; }
+.rail__brand .brand__mark { width: 28px; height: 28px; }
+.rail__links { display: grid; align-content: start; gap: var(--s1); margin-top: var(--s4); }
+.rail__links > * { min-width: 0; }
+.rail__links a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  min-height: var(--tap);
+  border-radius: var(--r-md);
+  color: var(--fg);
+  text-decoration: none;
+}
+.rail__links a:hover { background: var(--fill); text-decoration: none; }
+.rail__links a[aria-current="page"] { font-weight: 700; background: var(--fill); }
+.rail__links .icon { width: 24px; height: 24px; flex: none; }
+/* The name stays in the link. It draws beside the icon and does not widen the rail. */
+.rail__label {
+  position: absolute;
+  left: calc(100% + var(--s2) + 8px);
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  color: var(--fg);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+}
+@media (hover: hover) {
+  .rail__links a:hover .rail__label {
+    opacity: 1;
+    transition-delay: 150ms;
+  }
+}
+.rail__links a:focus-visible .rail__label {
+  opacity: 1;
+  transition-delay: 0s;
+}
+.rail__foot { margin-top: auto; display: flex; justify-content: center; }
+.rail .count { top: 6px; right: auto; left: calc(50% + 4px); }
+
+/* Shop profile ----------------------------------------------------------- */
+
+.store-profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s3) var(--s4);
+  align-items: center;
+}
+.store-profile__avatar {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--fill);
+  border: 1px solid var(--line);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.store-profile__id h1 { line-height: 1.1; }
+.store-profile__actions { grid-column: 1 / -1; }
+.store-profile__stats {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--s5);
+  margin: 0;
+}
+.store-profile__stats div { display: grid; }
+.store-profile__stats dd { font-weight: 700; }
+.store-profile__stats dt { color: var(--fg-2); font-size: var(--t-sm); }
+.store-list { list-style: none; margin: 0; padding: 0; }
+@media (min-width: 40rem) {
+  .store-profile { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .store-profile__actions { grid-column: auto; justify-self: end; }
+  .store-profile__stats { grid-column: 2 / -1; }
 }
 
 /* Workspace shell -------------------------------------------------------- */
@@ -826,7 +948,7 @@ dialog .row-between { margin-top: var(--s5); justify-content: flex-end; }
     -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid var(--line);
   }
-  .has-buybar { padding-bottom: 76px; }
+  .has-buybar { padding-bottom: calc(76px + var(--tabbar) + env(safe-area-inset-bottom)); }
 }
 @media (min-width: 48rem) {
   .detail { grid-template-columns: 1fr 1fr; gap: var(--s6); align-items: start; }
@@ -850,20 +972,15 @@ dialog .row-between { margin-top: var(--s5); justify-content: flex-end; }
 .footer {
   padding-block: var(--s5);
   border-top: 1px solid var(--line);
-  font-size: var(--t-xs);
+  font-size: var(--t-sm);
   color: var(--fg-2);
 }
 .footer a { text-decoration: none; }
-.footer a:hover { text-decoration: underline; }
-.footer__inner { display: flex; flex-direction: column; gap: var(--s5); }
-.footer__top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s6); }
-.footer__brand .brand__wordmark { height: 32px; }
-.footer__nav { display: flex; flex-wrap: wrap; gap: var(--s7); }
-.footer__col { display: flex; flex-direction: column; gap: var(--s2); min-width: 7rem; }
-.footer__col .section-title { margin: 0; }
-.footer__col a { color: var(--fg-2); }
-.footer__col a:hover { color: var(--fg); }
-.footer__note { margin: 0; padding-top: var(--s4); border-top: 1px solid var(--line); }
+.footer a:hover { color: var(--fg); }
+.footer__inner { display: flex; align-items: center; }
+.footer__brand { color: var(--fg); }
+.footer__brand:hover { text-decoration: none; }
+.footer__brand .brand__wordmark { height: 22px; }
 
 /* Messaging -------------------------------------------------------------- */
 

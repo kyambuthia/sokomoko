@@ -24,7 +24,7 @@ export class UIThemeToggle extends HTMLElement {
     } catch {
       // The choice still applies to this page.
     }
-    this.render();
+    document.querySelectorAll("ui-theme-toggle").forEach((el) => el.render());
   }
 
   render() {

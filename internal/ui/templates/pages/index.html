@@ -1,12 +1,16 @@
 {{ define "title" }}sokomoko{{ end }}
-{{ define "header-chips" }}{{ template "category-chips" . }}{{ end }}
 {{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "shop" "Page" . }}{{ end }}
 
 {{ define "main-area" }}
 <div class="stack">
+  <div class="desktop-only">{{ template "search-form" . }}</div>
+  {{ template "category-chips" . }}
   <div class="page-head">
     <h1>Shop</h1>
-    {{ if .HasProducts }}<span class="muted small">{{ len .Products }} items</span>{{ end }}
+    <div class="row">
+      {{ if .HasProducts }}<span class="muted small">{{ len .Products }} items</span>{{ end }}
+      <a class="btn btn-secondary btn-sm mobile-only" href="/services">Services</a>
+    </div>
   </div>
   {{ if .HasProducts }}
   {{ template "product-grid" dict "Products" .Products "CSRFToken" .CSRFToken }}

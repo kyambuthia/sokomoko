@@ -1,12 +1,29 @@
-{{/* dict: Tab (shop, search, cart, messages, account) and Page. */}}
+{{/* dict: Tab (shop, search, services, cart, messages, account) and Page. */}}
+{{ define "rail" }}
+<nav class="rail" aria-label="Primary">
+  <a class="rail__brand" href="/" aria-label="sokomoko">{{ template "brand" . }}</a>
+  <div class="rail__links">
+    <a href="/" {{ if eq .Tab "shop" }}aria-current="page"{{ end }}>{{ icon "home" }}<span class="rail__label">Shop</span></a>
+    <a href="/search" {{ if eq .Tab "search" }}aria-current="page"{{ end }}>{{ icon "search" }}<span class="rail__label">Search</span></a>
+    <a href="/services" {{ if eq .Tab "services" }}aria-current="page"{{ end }}>{{ icon "tools" }}<span class="rail__label">Services</span></a>
+    <ui-cart-badge {{ if signedIn .Page }}signed-in{{ end }}>
+      <a href="/cart" class="has-count" {{ if eq .Tab "cart" }}aria-current="page"{{ end }}>{{ icon "cart" }}<span class="rail__label">Cart</span><span class="count" hidden></span></a>
+    </ui-cart-badge>
+    <a href="/messages" {{ if eq .Tab "messages" }}aria-current="page"{{ end }}>{{ icon "users" }}<span class="rail__label">Messages</span></a>
+    <a href="/account" {{ if eq .Tab "account" }}aria-current="page"{{ end }}>{{ icon "user" }}<span class="rail__label">Account</span></a>
+  </div>
+  <div class="rail__foot">{{ template "theme-toggle" }}</div>
+</nav>
+{{ end }}
+
 {{ define "tabbar" }}
+{{ template "rail" . }}
 <nav class="tabbar" aria-label="Primary">
   <a href="/" {{ if eq .Tab "shop" }}aria-current="page"{{ end }}>{{ icon "home" }}Shop</a>
   <a href="/search" {{ if eq .Tab "search" }}aria-current="page"{{ end }}>{{ icon "search" }}Search</a>
   <ui-cart-badge {{ if signedIn .Page }}signed-in{{ end }}>
     <a href="/cart" class="has-count" {{ if eq .Tab "cart" }}aria-current="page"{{ end }}>{{ icon "cart" }}Cart<span class="count" hidden></span></a>
   </ui-cart-badge>
-  <a href="/messages" {{ if eq .Tab "messages" }}aria-current="page"{{ end }}>{{ icon "users" }}Messages</a>
   <a href="/account" {{ if eq .Tab "account" }}aria-current="page"{{ end }}>{{ icon "user" }}Account</a>
 </nav>
 {{ end }}

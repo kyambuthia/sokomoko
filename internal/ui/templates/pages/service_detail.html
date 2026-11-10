@@ -11,7 +11,7 @@
   {{ with .Listing }}
   <span class="badge">{{ .Category }}</span>
   <h1>{{ .Title }}</h1>
-  <p class="muted">Offered by {{ .PartnerName }} · {{ .PublicArea }}</p>
+  <p class="muted">Offered by {{ if .PartnerSlug }}<a href="/stores/{{ .PartnerSlug }}">{{ .PartnerName }}</a>{{ else }}{{ .PartnerName }}{{ end }} · {{ .PublicArea }}</p>
   <div class="card stack">
     <p class="detail__desc">{{ .Description }}</p>
     <dl><dt>Duration</dt><dd>{{ .DurationMinutes }} minutes</dd>
@@ -20,7 +20,7 @@
       <dt>Weekly hours</dt><dd><p class="tiny muted">Local time · {{ .Timezone }}</p>{{ if $.Schedule }}<ul>{{ range $.Schedule }}<li>{{ .Name }}: {{ .OpensAt }}–{{ .ClosesAt }}</li>{{ end }}</ul>{{ else }}Hours not published{{ end }}</dd>
     </dl>
   </div>
-  {{ if not $.Preview }}<a href="/services?partner_id={{ .PartnerID }}">More services from {{ .PartnerName }}</a>
+  {{ if not $.Preview }}{{ if .PartnerSlug }}<a href="/stores/{{ .PartnerSlug }}">Visit {{ .PartnerName }}</a>{{ else }}<a href="/services?partner_id={{ .PartnerID }}">More services from {{ .PartnerName }}</a>{{ end }}
   <a class="btn" href="/messages/new?service_id={{ .ID }}">Message service provider</a>
   {{ if demoMode }}
     <p class="notice notice-info">Demo service only. Appointment requests are disabled; no real appointments, sales or payments are accepted.</p>
