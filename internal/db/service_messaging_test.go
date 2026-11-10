@@ -130,6 +130,14 @@ func TestServiceConversationMigrationPreservesExistingThreads(t *testing.T) {
 			chatMust(t, err)
 		}
 	}
+	// Upgrade the remaining schema so the service listing written below uses
+	// the current columns. Only migration 11 decides the conversation identity.
+	for _, m := range migrations {
+		if m.Version > 11 {
+			_, err = s.DB.ExecContext(t.Context(), m.SQL)
+			chatMust(t, err)
+		}
+	}
 	general, err := s.ChatContacts(t.Context(), buyer, ChatTarget{Handle: chatHandle(t, s, owner)})
 	chatMust(t, err)
 	products, err := s.ChatContacts(t.Context(), buyer, ChatTarget{ProductID: product})

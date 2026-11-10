@@ -264,7 +264,8 @@ func TestFulfillmentTransitionsMoveInventory(t *testing.T) {
 		t.Fatalf("seller completion err = %v", err)
 	}
 	courierID := mustCreateUser(t, s, RoleCourier)
-	if err := s.AssignCourierToOrder(t.Context(), shipped, courierID, userID); err != nil {
+	dispatcher := mustCreateUser(t, s, RoleAdmin)
+	if err := s.AssignCourierToOrder(t.Context(), shipped, courierID, dispatcher); err != nil {
 		t.Fatalf("assign courier: %v", err)
 	}
 	deliveries, err := s.ListCourierDeliveries(t.Context(), courierID)
