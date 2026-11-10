@@ -320,3 +320,30 @@ func TestChatPaginationAndLimits(t *testing.T) {
 	}
 	chatWantError(t, s.AllowChatLookup(t.Context(), a), ErrChatLimited)
 }
+
+func TestChatShopProfileTarget(t *testing.T) {
+	s := newTestStore(t)
+	buyer := mustCreateUser(t, s, RoleUser)
+	partner, member, product := chatShop(t, s)
+	contacts, err := s.ChatContacts(t.Context(), buyer, ChatTarget{PartnerID: partner})
+	chatMust(t, err)
+	if len(contacts) != 1 || contacts[0].Name == "" || contacts[0].Context != "Shop conversation" || contacts[0].Target.PartnerID != partner {
+		t.Fatalf("contacts=%+v", contacts)
+	}
+	id, err := s.StartChat(t.Context(), buyer, ChatTarget{PartnerID: partner}, "hello shop", chatNonce(1))
+	chatMust(t, err)
+	productThread, err := s.StartChat(t.Context(), buyer, ChatTarget{ProductID: product}, "about this", chatNonce(2))
+	chatMust(t, err)
+	if id == productThread {
+		t.Fatal("shop thread collapsed into the product thread")
+	}
+	view, err := s.ChatThread(t.Context(), member, id, 0, 0)
+	chatMust(t, err)
+	if view.Conversation.Context != "Shop conversation" || !view.Conversation.CanSend || !view.Conversation.Shared {
+		t.Fatalf("shop view=%+v", view.Conversation)
+	}
+	_, err = s.ChatContacts(t.Context(), member, ChatTarget{PartnerID: partner})
+	chatWantError(t, err, ErrChatNotFound)
+	_, err = s.StartChat(t.Context(), buyer, ChatTarget{PartnerID: partner + 99999}, "missing", chatNonce(3))
+	chatWantError(t, err, ErrChatNotFound)
+}

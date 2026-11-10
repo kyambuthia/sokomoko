@@ -139,7 +139,7 @@ func messageCompose(a *app.App, workspace string) http.HandlerFunc {
 		}
 		p.Target = t
 		status := http.StatusOK
-		if t.Handle != "" || t.ServiceID > 0 || t.ProductID > 0 || t.OrderID > 0 || t.DeliveryOrderID > 0 {
+		if t.Handle != "" || t.ServiceID > 0 || t.ProductID > 0 || t.OrderID > 0 || t.DeliveryOrderID > 0 || t.PartnerID > 0 {
 			p.Contacts, err = a.Messaging.Contacts(r.Context(), messagingActor(r), t)
 			if err != nil {
 				status, p.Error = messageError(err)

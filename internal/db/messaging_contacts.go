@@ -171,6 +171,15 @@ func resolveChatTarget(ctx context.Context, tx *sql.Tx, actorID int, t ChatTarge
           AND (($4='user' AND o.user_id=$3) OR ($4='partner' AND EXISTS
              (SELECT 1 FROM partner_users pu WHERE pu.user_id=$3 AND pu.partner_id=p.id)))`,
 			t.OrderID, t.PartnerID, actorID, role).Scan(&c.CustomerID, &c.CustomerName, &c.PartnerName)
+	case t.PartnerID > 0 && t.OrderID == 0:
+		if role != RoleUser {
+			return c, ErrChatNotFound
+		}
+		c.Kind, c.CustomerID, c.CustomerName, c.PartnerID = "seller", actorID, username, t.PartnerID
+		err = tx.QueryRowContext(ctx, `SELECT p.name FROM partners p
+          WHERE p.id=$1 AND p.status='active'
+          AND EXISTS (SELECT 1 FROM partner_users pu JOIN users u ON u.id=pu.user_id
+             WHERE pu.partner_id=p.id AND u.role='partner' AND u.deleted_at IS NULL)`, t.PartnerID).Scan(&c.PartnerName)
 	case t.DeliveryOrderID > 0:
 		c.Kind, c.OrderID = "delivery", t.DeliveryOrderID
 		if _, err := tx.ExecContext(ctx, `SELECT id FROM orders WHERE id=$1 FOR SHARE`, t.DeliveryOrderID); err != nil {
