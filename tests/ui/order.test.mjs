@@ -41,15 +41,22 @@ function setup(t, status = "processing") {
 const shipped = { status: "shipped", partner_status: "dispatched", delivery_status: "shipped" };
 const delivered = { status: "delivered", partner_status: "accepted", delivery_status: "processing" };
 
-for (const status of ["delivered", "cancelled"]) {
-  test(`${status} order is terminal even with stale fulfillment fields`, (t) => {
-    const { progress, requests } = setup(t, status);
-    assert.equal(progress.terminal(), true);
-    assert.equal(progress.children[0].getAttribute("aria-label"), `Order ${status}`);
-    t.mock.timers.tick(90000);
-    assert.equal(requests.length, 0);
-  });
-}
+test("delivered order is terminal even with stale fulfillment fields", (t) => {
+  const { progress, requests } = setup(t, "delivered");
+  assert.equal(progress.terminal(), true);
+  assert.equal(progress.children[0].getAttribute("aria-label"), "Order delivered");
+  t.mock.timers.tick(90000);
+  assert.equal(requests.length, 0);
+});
+
+test("cancelled order is terminal even with stale fulfillment fields", (t) => {
+  const { progress, requests } = setup(t, "cancelled");
+  assert.equal(progress.terminal(), true);
+  assert.equal(progress.children[0].getAttribute("aria-hidden"), "true");
+  assert.equal(progress.children[1].textContent, "Order cancelled");
+  t.mock.timers.tick(90000);
+  assert.equal(requests.length, 0);
+});
 
 test("slow order polls cannot overlap and polling stops on delivery", async (t) => {
   const { progress, requests } = setup(t);

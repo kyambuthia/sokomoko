@@ -23,7 +23,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 tar -C "$root/deploy" -czf "$tmp/deploy.tgz" \
-  Caddyfile compose.production.yml compose.ec2-demo.yml postgres-init-app-role.sh
+  Caddyfile compose.production.yml compose.ec2-demo.yml postgres-init-app-role.sh sokomoko-demo-deploy
 files_b64=$(base64 -w0 "$tmp/deploy.tgz")
 
 # One remote command: refresh the Compose files, pin the digest, restart.
@@ -33,6 +33,7 @@ set -euo pipefail
 install -d -m 0700 /opt/sokomoko /opt/sokomoko/deploy
 printf '%s' '${files_b64}' | base64 -d | tar -xz -C /opt/sokomoko/deploy
 chmod 0755 /opt/sokomoko/deploy/postgres-init-app-role.sh
+install -m 0755 /opt/sokomoko/deploy/sokomoko-demo-deploy /usr/local/bin/sokomoko-demo-deploy
 IMAGE='${image}' python3 - <<'PY'
 import os
 from pathlib import Path

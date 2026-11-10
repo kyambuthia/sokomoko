@@ -114,6 +114,9 @@ jobs:
   docker:
     name: Docker image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -126,6 +129,19 @@ jobs:
 
       - name: Validate production Compose configuration
         run: docker compose --env-file deploy/production.env.example -f deploy/compose.production.yml config --quiet
+
+      - name: Save the smoke-tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/trunk'
+        run: docker save sokomoko:ci | gzip -1 > /tmp/sokomoko-image.tar.gz
+
+      - name: Upload the smoke-tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/trunk'
+        uses: actions/upload-artifact@v7
+        with:
+          name: sokomoko-image
+          path: /tmp/sokomoko-image.tar.gz
+          retention-days: 1
+          if-no-files-found: error
 
   chat-crypto:
     name: Browser encryption source and assets

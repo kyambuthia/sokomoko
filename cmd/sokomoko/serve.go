@@ -103,6 +103,7 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 			TrustProxyHeaders:        cfg.TrustProxyHeaders,
 		},
 	})
+	application.Version = version
 	server, allowedHosts := buildServer(cfg, application)
 	if resetEmailSender != nil && !cfg.PasswordResetDisabled {
 		if worker, ok := application.Auth.(interface {

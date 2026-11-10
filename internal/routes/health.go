@@ -24,6 +24,9 @@ func Ready(a *app.App) http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if a.Version != "" {
+			w.Header().Set("X-Sokomoko-Version", a.Version)
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		if err := a.Readiness.PingContext(ctx); err != nil {

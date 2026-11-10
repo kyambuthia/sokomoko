@@ -166,13 +166,18 @@ container. `seed` and `serve --seed` are refused in production.
 
 ## Continuous delivery
 
-A push to `trunk` runs CI. When that run succeeds, the Deploy demo workflow
-checks out the same commit, builds the image, and pushes it to
-`139023234259.dkr.ecr.eu-west-1.amazonaws.com/asiliano` tagged with the commit.
-`deploy/rollout-demo.sh` then copies the current Compose files to the demo
-host, sets `SOKOMOKO_IMAGE` to that digest in `/opt/sokomoko/deploy/.env.production`,
-and restarts `sokomoko-demo.service`. The unit pulls the digest, migrates, and
-starts the app. Pull requests and the weekly CI schedule do not deploy.
+A push to `trunk` runs CI. The Docker job smoke-tests the image and uploads
+that image. When CI succeeds, the Deploy demo workflow pushes the same image
+to `139023234259.dkr.ecr.eu-west-1.amazonaws.com/asiliano`, tagged with the
+commit. `deploy/rollout-demo.sh` copies the current Compose files and
+`deploy/sokomoko-demo-deploy` to the demo host, sets `SOKOMOKO_IMAGE` to that
+digest, and restarts `sokomoko-demo.service`. The unit pulls the digest,
+migrates, and starts the app. It does not seed. Pull requests, the weekly CI
+schedule, and a manual re-run of CI do not deploy.
+
+The public check requires `https://asiliano.online/readyz` to return `ready`
+and `X-Sokomoko-Version` equal to the commit. That header is the build
+identifier baked into the binary.
 
 The workflow assumes `arn:aws:iam::139023234259:role/sokomoko-github-deploy`
 through GitHub OIDC, and only from `trunk`. Create or update that role once

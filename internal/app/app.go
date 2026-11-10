@@ -230,6 +230,8 @@ type App struct {
 	Production            bool
 	PasswordResetDisabled bool
 	DemoMode              bool
+	// Version is the build identifier, usually the git commit. Empty in tests.
+	Version string
 }
 
 func New(deps Dependencies) *App {

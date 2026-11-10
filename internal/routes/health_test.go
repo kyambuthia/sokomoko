@@ -73,7 +73,7 @@ func TestReady_AllowsGetAndHead(t *testing.T) {
 			t.Parallel()
 
 			readiness := &stubReadiness{}
-			handler := Ready(&app.App{Readiness: readiness})
+			handler := Ready(&app.App{Readiness: readiness, Version: "0123456789abcdef"})
 			req := httptest.NewRequest(tc.method, "/readyz", nil)
 			rec := httptest.NewRecorder()
 
@@ -87,6 +87,9 @@ func TestReady_AllowsGetAndHead(t *testing.T) {
 			}
 			if got := rec.Body.String(); got != tc.wantBody {
 				t.Fatalf("body = %q, want %q", got, tc.wantBody)
+			}
+			if got := rec.Header().Get("X-Sokomoko-Version"); got != "0123456789abcdef" {
+				t.Fatalf("version = %q, want the build identifier", got)
 			}
 		})
 	}

@@ -1,8 +1,9 @@
 name: Deploy demo
 
-# CI builds and tests every push. This workflow rolls trunk onto the demo
-# only after that run succeeds. Pull requests and the weekly schedule do not
-# deploy. A queued run skips itself when a newer commit is already on trunk.
+# CI builds, smoke-tests, and saves an image on a trunk push. This workflow
+# pushes that same image and rolls the demo onto its digest. A manual re-run
+# of CI does not deploy. A queued run skips itself when a newer commit is
+# already on trunk.
 
 on:
   workflow_run:
@@ -25,15 +26,16 @@ env:
 
 jobs:
   deploy:
-    name: Build and roll out
+    name: Push and roll out
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'trunk' &&
-      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
+      actions: read
     steps:
       - name: Check out the tested commit
         uses: actions/checkout@v7
@@ -52,6 +54,15 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Download the smoke-tested image
+        if: steps.gate.outputs.skip != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: sokomoko-image
+          path: /tmp
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Configure AWS credentials
         if: steps.gate.outputs.skip != 'true'
         uses: aws-actions/configure-aws-credentials@v6.3.0
@@ -65,13 +76,14 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push the image
+      - name: Push the smoke-tested image
         if: steps.gate.outputs.skip != 'true'
         id: image
         run: |
           set -euo pipefail
+          docker load -i /tmp/sokomoko-image.tar.gz
           tag="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}:${{ github.event.workflow_run.head_sha }}"
-          docker build --build-arg VERSION="${{ github.event.workflow_run.head_sha }}" -t "$tag" .
+          docker tag sokomoko:ci "$tag"
           docker push "$tag"
           digest=$(aws ecr describe-images \
             --repository-name "$ECR_REPOSITORY" \
@@ -84,16 +96,23 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         run: bash deploy/rollout-demo.sh "${{ steps.image.outputs.reference }}"
 
-      - name: Check the public demo
+      - name: Check the public demo is this commit
         if: steps.gate.outputs.skip != 'true'
+        env:
+          EXPECTED: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           for _ in $(seq 1 36); do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' https://asiliano.online/readyz || true)
-            if [ "$code" = "200" ]; then
+            rm -f /tmp/ready-body
+            headers=$(curl -fsS -D - -o /tmp/ready-body https://asiliano.online/readyz || true)
+            code=$(printf '%s\n' "$headers" | awk 'BEGIN {c=""} /^HTTP/ {c=$2} END {print c}')
+            version=$(printf '%s\n' "$headers" | awk 'tolower($1)=="x-sokomoko-version:" {print $2}' | tr -d '\r')
+            body=$(cat /tmp/ready-body 2>/dev/null || true)
+            if [ "$code" = "200" ] && [ "$body" = "ready" ] && [ "$version" = "$EXPECTED" ]; then
               exit 0
             fi
             sleep 5
           done
-          printf 'asiliano.online/readyz did not return 200\n' >&2
+          printf 'demo is not serving %s\n' "$EXPECTED" >&2
+          printf '%s\n' "$headers" >&2
           exit 1

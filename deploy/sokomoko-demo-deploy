@@ -1,0 +1,30 @@
+#!/bin/bash
+# Pull the pinned digest, migrate, and start the demo. Seeding is not repeated
+# here; the demo database already has its sample accounts.
+set -euo pipefail
+cd /opt/sokomoko
+compose=(docker compose --env-file deploy/.env.production -f deploy/compose.production.yml -f deploy/compose.ec2-demo.yml)
+aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin 139023234259.dkr.ecr.eu-west-1.amazonaws.com
+"${compose[@]}" pull app
+docker logout 139023234259.dkr.ecr.eu-west-1.amazonaws.com >/dev/null
+"${compose[@]}" config --quiet
+"${compose[@]}" --profile release run --rm migrate
+"${compose[@]}" exec -T db psql --username sokomoko_migrate --dbname sokomoko --set=ON_ERROR_STOP=1 --command 'GRANT USAGE ON SCHEMA public TO sokomoko_app; GRANT SELECT ON public.schema_migrations TO sokomoko_app; REVOKE INSERT, UPDATE, DELETE ON public.schema_migrations FROM sokomoko_app;'
+"${compose[@]}" up -d --remove-orphans --wait app proxy
+
+expected=$(awk -F= '/^SOKOMOKO_IMAGE=/{print substr($0, index($0, "=") + 1); exit}' deploy/.env.production)
+for _ in $(seq 1 30); do
+  cid=$("${compose[@]}" ps -q app || true)
+  if [[ -n "${cid}" ]]; then
+    image_id=$(docker inspect --format '{{.Image}}' "${cid}")
+    if docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "${image_id}" | grep -Fxq "${expected}"; then
+      "${compose[@]}" ps
+      printf 'running %s\n' "${expected}"
+      exit 0
+    fi
+  fi
+  sleep 2
+done
+printf 'app is not running %s\n' "${expected}" >&2
+"${compose[@]}" ps >&2 || true
+exit 1
