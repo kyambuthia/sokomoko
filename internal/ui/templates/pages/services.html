@@ -52,7 +52,7 @@
         </div>
         <div class="stack-sm">
           <h2 class="service-card__title"><a href="/services/{{ .Slug }}">{{ .Title }}</a></h2>
-          <p class="small muted">{{ .PartnerName }}</p>
+          <p class="small muted">{{ if .PartnerSlug }}<a href="/stores/{{ .PartnerSlug }}">{{ .PartnerName }}</a>{{ else }}{{ .PartnerName }}{{ end }}</p>
         </div>
         <ul class="service-facts small">
           <li>{{ icon "map-pin" }}<span>{{ .PublicArea }}</span></li>

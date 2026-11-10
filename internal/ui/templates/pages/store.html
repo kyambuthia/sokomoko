@@ -1,0 +1,52 @@
+{{ define "title" }}{{ .Name }} · sokomoko{{ end }}
+{{ define "tabbar-area" }}{{ template "tabbar" dict "Tab" "shop" "Page" . }}{{ end }}
+
+{{ define "main-area" }}
+<div class="stack">
+  <header class="store-profile">
+    <div class="store-profile__avatar" aria-hidden="true">{{ .Initials }}</div>
+    <div class="store-profile__id">
+      <h1>{{ .Name }}</h1>
+      <p class="small muted">@{{ .Slug }}</p>
+    </div>
+    {{ if .CanMessage }}
+    <div class="store-profile__actions">
+      <a class="btn" href="/messages/new?partner_id={{ .PartnerID }}">Send message</a>
+    </div>
+    {{ end }}
+    <dl class="store-profile__stats">
+      <div><dd>{{ .ProductTotal }}</dd><dt>{{ if eq .ProductTotal 1 }}Product{{ else }}Products{{ end }}</dt></div>
+      <div><dd>{{ .ServiceTotal }}</dd><dt>{{ if eq .ServiceTotal 1 }}Service{{ else }}Services{{ end }}</dt></div>
+    </dl>
+  </header>
+
+  <section class="stack" aria-labelledby="store-products">
+    <h2 id="store-products">Products</h2>
+    {{ if .Products }}
+    {{ template "product-grid" dict "Products" .Products "CSRFToken" .CSRFToken }}
+    {{ else }}
+    <p class="muted">No products listed yet.</p>
+    {{ end }}
+  </section>
+
+  <section class="stack" aria-labelledby="store-services">
+    <div class="page-head">
+      <h2 id="store-services">Services</h2>
+      {{ if gt .ServiceTotal (len .Services) }}<a class="btn btn-secondary btn-sm" href="/services?partner_id={{ .PartnerID }}">All services</a>{{ end }}
+    </div>
+    {{ if .Services }}
+    <ul class="store-list stack">
+      {{ range .Services }}
+      <li class="card stack-sm">
+        <div class="page-head"><h3><a href="/services/{{ .Slug }}">{{ .Title }}</a></h3><span class="badge">{{ .Category }}</span></div>
+        <p class="small muted">{{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote{{ end }}</p>
+        <p>{{ .DurationMinutes }} minutes · {{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</p>
+      </li>
+      {{ end }}
+    </ul>
+    {{ else }}
+    <p class="muted">No services listed yet.</p>
+    {{ end }}
+  </section>
+</div>
+{{ end }}

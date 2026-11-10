@@ -1,28 +1,7 @@
 {{ define "storefront-footer" }}
-<footer class="footer desktop-only">
+<footer class="footer">
   <div class="container footer__inner">
-    <div class="footer__top">
-      <a class="brand footer__brand" href="/" aria-label="sokomoko">{{ template "brand-wordmark" . }}</a>
-      <nav class="footer__nav" aria-label="Footer">
-        <div class="footer__col">
-          <p class="section-title">Shop</p>
-          <a href="/">Shop</a>
-          <a href="/search">Search</a>
-          <a href="/services">Services</a>
-          <a href="/cart">Cart</a>
-        </div>
-        <div class="footer__col">
-          <p class="section-title">Account</p>
-          {{ if signedIn . }}
-          <a href="/account">Account</a>
-          {{ else }}
-          <a href="/login">Sign in</a>
-          <a href="/signup">Sign up</a>
-          {{ end }}
-        </div>
-      </nav>
-    </div>
-    <p class="footer__note">Prices in {{ currency }}.</p>
+    <a class="brand footer__brand" href="/" aria-label="sokomoko">{{ template "brand-wordmark" . }}</a>
   </div>
 </footer>
 {{ end }}

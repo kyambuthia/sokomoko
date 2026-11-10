@@ -16,7 +16,7 @@
         <div class="row"><span class="service-card__icon" aria-hidden="true">{{ icon (serviceIcon .Category) }}</span><span class="badge">{{ .Category }}</span></div>
         <div class="stack-sm">
           <h1>{{ .Title }}</h1>
-          <p class="muted">Offered by {{ if $.Preview }}<span class="strong">{{ .PartnerName }}</span>{{ else }}<a href="/services?partner_id={{ .PartnerID }}" class="strong">{{ .PartnerName }}</a>{{ end }} · {{ .PublicArea }}</p>
+          <p class="muted">Offered by {{ if $.Preview }}<span class="strong">{{ .PartnerName }}</span>{{ else if .PartnerSlug }}<a href="/stores/{{ .PartnerSlug }}" class="strong">{{ .PartnerName }}</a>{{ else }}<a href="/services?partner_id={{ .PartnerID }}" class="strong">{{ .PartnerName }}</a>{{ end }} · {{ .PublicArea }}</p>
         </div>
         {{ if not $.Preview }}
         <div class="service-quick">
@@ -114,6 +114,7 @@
         {{ end }}
         <a class="btn btn-block {{ if and (not demoMode) $.Schedule }}btn-secondary{{ end }}" href="/messages/new?service_id={{ .ID }}">{{ icon "message" }}Message service provider</a>
         <a class="small" href="/services?partner_id={{ .PartnerID }}">More services from {{ .PartnerName }}</a>
+        {{ if .PartnerSlug }}<a class="small" href="/stores/{{ .PartnerSlug }}">Visit {{ .PartnerName }}</a>{{ end }}
       </div>
     </aside>
     {{ end }}

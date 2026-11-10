@@ -78,7 +78,11 @@ func normalizeTarget(t db.ChatTarget) (db.ChatTarget, error) {
 	if t.DeliveryOrderID > 0 {
 		count++
 	}
-	if count != 1 || (t.PartnerID > 0 && t.OrderID == 0) {
+	// PartnerID qualifies an order thread. On its own it addresses the shop.
+	if t.PartnerID > 0 && t.OrderID == 0 {
+		count++
+	}
+	if count != 1 {
 		return t, db.ErrChatInvalid
 	}
 	return t, nil

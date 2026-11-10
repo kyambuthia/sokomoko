@@ -46,7 +46,7 @@
 <div class="empty">
   {{ icon "message" }}
   <p class="strong">No conversations yet</p>
-  <p class="small">{{ if eq .Role "courier" }}Open an assigned delivery to message its buyer.{{ else }}Contact a seller from a product or service, open an order to reach its seller or courier, or start a request with an exact handle.{{ end }}</p>
+  <p class="small">{{ if eq .Role "courier" }}Open an assigned delivery to message its buyer.{{ else }}Open a shop profile to message the business, contact a seller from a product or service, open an order to reach its seller or courier, or start a request with an exact handle.{{ end }}</p>
   {{ if ne .Role "courier" }}<a class="btn btn-secondary" href="/messages/new">{{ icon "plus" }}New message</a>{{ end }}
 </div>
 {{ end }}
@@ -111,7 +111,7 @@
       </form>{{ end }}
     </section>
     {{ end }}
-  {{ else if and (or .Target.OrderID .Target.ProductID .Target.ServiceID .Target.DeliveryOrderID) (not .Error) }}
+  {{ else if and (or .Target.OrderID .Target.ProductID .Target.ServiceID .Target.DeliveryOrderID .Target.PartnerID) (not .Error) }}
     <p class="muted">No contacts are available for this order yet. Assigned couriers appear when dispatch begins.</p>
   {{ end }}
 

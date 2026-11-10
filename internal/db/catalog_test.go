@@ -38,8 +38,8 @@ func TestCreateProduct_InitializesInventory(t *testing.T) {
 	if product.ID != int(id) || product.Price != 4999 || product.StockQuantity != 7 {
 		t.Fatalf("product = %+v", product)
 	}
-	if product.Category != "Audio" || product.PartnerName != "Acme" {
-		t.Fatalf("joins: category=%q partner=%q", product.Category, product.PartnerName)
+	if product.Category != "Audio" || product.PartnerName != "Acme" || product.PartnerSlug != "acme" {
+		t.Fatalf("joins: category=%q partner=%q slug=%q", product.Category, product.PartnerName, product.PartnerSlug)
 	}
 	if len(product.Images) != 2 || product.PrimaryImage() != "/static/a.png" {
 		t.Fatalf("images = %+v", product.Images)

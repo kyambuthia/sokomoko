@@ -188,7 +188,7 @@ const activePartnerSQL = "NOT EXISTS (SELECT 1 FROM partners sp WHERE sp.id = p.
 const productSelect = `
 SELECT p.id, p.name, p.slug, p.description, p.price_cents, p.currency,
        stock.available_quantity,
-       COALESCE(c.name, ''), p.category_id, p.partner_id, COALESCE(pt.name, ''),
+       COALESCE(c.name, ''), p.category_id, p.partner_id, COALESCE(pt.name, ''), COALESCE(pt.slug, ''),
        p.created_at, p.updated_at
 FROM products p
 LEFT JOIN categories c ON c.id = p.category_id AND c.deleted_at IS NULL
@@ -213,6 +213,7 @@ func scanProduct(row interface{ Scan(...any) error }) (*Product, error) {
 		&product.CategoryID,
 		&product.PartnerID,
 		&product.PartnerName,
+		&product.PartnerSlug,
 		&product.CreatedAt,
 		&product.UpdatedAt,
 	)

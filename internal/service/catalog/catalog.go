@@ -4,6 +4,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -31,6 +32,7 @@ type Product struct {
 	StockQuantity int
 	Category      string
 	PartnerName   string
+	PartnerSlug   string
 	ImageURL      string
 	ImageAlt      string
 	VideoURL      string
@@ -46,11 +48,15 @@ type Category struct {
 
 // Filter narrows catalog listings.
 type Filter struct {
-	Query    string
-	Category string
-	Limit    int
-	Offset   int
+	Query     string
+	Category  string
+	PartnerID int
+	Limit     int
+	Offset    int
 }
+
+// partnerSlugPattern matches the partners.slug check, which allows dashes and underscores.
+var partnerSlugPattern = regexp.MustCompile(`^[a-z0-9]+([_-][a-z0-9]+)*$`)
 
 type Service struct {
 	store store
@@ -98,6 +104,7 @@ func (s *Service) Browse(ctx context.Context, filter Filter) ([]Product, error) 
 	products, err := s.store.ListProducts(ctx, db.ProductFilter{
 		Query:      query,
 		Category:   category,
+		PartnerID:  filter.PartnerID,
 		Limit:      filter.Limit,
 		Offset:     filter.Offset,
 		PublicOnly: true,
@@ -106,6 +113,41 @@ func (s *Service) Browse(ctx context.Context, filter Filter) ([]Product, error) 
 		return nil, err
 	}
 	return mapProducts(products), nil
+}
+
+// ProductCount counts public products matching filter.
+func (s *Service) ProductCount(ctx context.Context, filter Filter) (int, error) {
+	query := normalizeQuery(filter.Query)
+	category := strings.TrimSpace(filter.Category)
+	if strings.EqualFold(category, AllCategories) || strings.EqualFold(category, "all") {
+		category = ""
+	}
+	if filter.PartnerID < 0 {
+		return 0, nil
+	}
+	return s.store.CountFilteredProducts(ctx, db.ProductFilter{
+		Query:      query,
+		Category:   category,
+		PartnerID:  filter.PartnerID,
+		PublicOnly: true,
+	})
+}
+
+// ActiveStore returns an active shop by its public slug. A missing, inactive,
+// or malformed slug returns nil without an error.
+func (s *Service) ActiveStore(ctx context.Context, slug string) (*db.Partner, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" || len(slug) > 80 || !partnerSlugPattern.MatchString(slug) {
+		return nil, nil
+	}
+	partner, err := s.store.GetPartnerBySlug(ctx, slug)
+	if err != nil || partner == nil || partner.Status != "active" {
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+	return partner, nil
 }
 
 // Search returns products matching query; a blank query matches nothing.
@@ -225,6 +267,7 @@ func mapProduct(product db.Product) Product {
 		StockQuantity: product.StockQuantity,
 		Category:      product.Category,
 		PartnerName:   product.PartnerName,
+		PartnerSlug:   product.PartnerSlug,
 		ImageURL:      ui.ProductImageURL(product.PrimaryImage(), product.Slug, product.Name, product.Category),
 		ImageAlt:      alt,
 		VideoURL:      product.VideoURL,
