@@ -21,6 +21,18 @@ export class UIEncryptedChat extends HTMLElement {
   this.querySelector("[data-enroll]").addEventListener("click",()=>this.task(()=>this.enroll()),options);
   this.querySelector("[data-trust-roster]")?.addEventListener("click",()=>this.task(()=>this.trust()),options);
   this.querySelector("[data-encrypted-compose]")?.addEventListener("submit",e=>{e.preventDefault();this.task(()=>this.send());},options);
+  const encInput=this.querySelector("#encrypted-body");
+  if(encInput){
+   const resize=()=>{encInput.style.height="auto";encInput.style.height=Math.min(encInput.scrollHeight,180)+"px";};
+   encInput.addEventListener("input",resize,options);
+   encInput.addEventListener("keydown",e=>{
+    if(e.key==="Enter"&&!e.shiftKey){
+     e.preventDefault();
+     const form=this.querySelector("[data-encrypted-compose]");
+     if(form)form.requestSubmit?form.requestSubmit():form.submit();
+    }
+   },options);
+  }
   for(const form of this.querySelectorAll("[data-open-conversation]"))form.addEventListener("submit",e=>{e.preventDefault();this.task(()=>this.openConversation(form));},options);
   document.addEventListener("visibilitychange",()=>{clearTimeout(this.timer);if(!document.hidden)this.task(()=>this.refresh(),true);},options);
   this.task(()=>this.refresh());
@@ -215,5 +227,7 @@ export class UIEncryptedChat extends HTMLElement {
     form.addEventListener("submit",e=>{e.preventDefault();this.task(async()=>{await this.store.locked(async(data,save)=>this.enqueue(data,save,"report",{conversation_id:this.conversation,event_id:m.id,reason:select.value,disclosed_text:m.body}));this.status.textContent="Selected message disclosed to moderators.";details.open=false;});},{signal:this.events.signal});details.append(form);li.append(details);
    }list.append(li);
   }
+  const last=this.querySelector("[data-encrypted-history]")?.lastElementChild;
+  if(last)last.scrollIntoView({behavior:"smooth",block:"end"});
  }
 }

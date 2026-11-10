@@ -15,12 +15,28 @@ export class UIMessages extends HTMLElement {
     this.events = new AbortController();
     const options = { signal: this.events.signal };
     this.form?.addEventListener("submit", (event) => this.send(event), options);
+    const textarea = this.form?.querySelector("textarea");
+    if (textarea) {
+      const resize = () => {
+        textarea.style.height = "auto";
+        textarea.style.height = Math.min(textarea.scrollHeight, 180) + "px";
+      };
+      textarea.addEventListener("input", resize, options);
+      textarea.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit();
+        }
+      }, options);
+      resize();
+    }
     document.addEventListener("visibilitychange", () => {
       clearTimeout(this.timer);
       if (!document.hidden) { this.poll(); this.markRead(); }
     }, options);
     window.addEventListener("scroll", () => this.markRead(), { ...options, passive: true });
     this.markRead();
+    this.scrollToBottom();
     this.schedule();
   }
 
@@ -55,7 +71,10 @@ export class UIMessages extends HTMLElement {
         c.incoming_request ? "A new message request. Accept to continue the conversation." : c.state === "pending" ? "Waiting for the recipient to accept." : "";
       const actions = this.querySelector("[data-request-actions]");
       if (actions && !c.incoming_request) actions.hidden = true;
-      if (added) this.status.textContent = `${added} new message${added === 1 ? "" : "s"}.`;
+      if (added) {
+        this.status.textContent = `${added} new message${added === 1 ? "" : "s"}.`;
+        this.scrollToBottom();
+      }
       this.delay = data.more ? 250 : 5000;
       this.markRead();
     } catch (error) {
@@ -92,6 +111,7 @@ export class UIMessages extends HTMLElement {
       const data = await api(`/messages/${this.conversationID}/send`, { method: "POST", body: { body: body.value, nonce: nonce.value } });
       if (!this.active) return;
       body.value = "";
+      body.style.height = "auto";
       nonce.value = data.nonce;
       this.status.textContent = "Message sent.";
       await this.poll();
@@ -104,6 +124,12 @@ export class UIMessages extends HTMLElement {
       busy(button, false);
       if (this.active && !this.form.hidden) body.focus();
     }
+  }
+
+  scrollToBottom() {
+    if (!this.list) return;
+    const last = this.list.lastElementChild;
+    if (last) last.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 
   async markRead() {

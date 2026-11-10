@@ -1,29 +1,72 @@
 {{ define "title" }}Local services · sokomoko{{ end }}
 {{ define "main-area" }}
-<div class="stack">
-  <div class="page-head"><h1>Local services</h1><a class="btn btn-secondary btn-sm" href="/">Shop products</a></div>
-  <p class="muted">Find haircuts, beauty, wellness and help around your neighbourhood. Browse offerings by local businesses.</p>
+<div class="stack services-page">
+  <div class="page-head">
+    <h1>Local services</h1>
+    <a class="btn btn-secondary btn-sm" href="/">{{ icon "cart" }}Shop products</a>
+  </div>
   {{ if demoMode }}<p class="notice">Demo directory: these services are sample listings. No appointments, sales or payments are accepted.</p>{{ end }}
-  {{ if .Filter.PartnerID }}<p class="notice">Showing services from one business. <a href="/services">Browse all businesses</a></p>{{ end }}
-  <form action="/services" method="GET" class="form" role="search" aria-label="Find services">
+  {{ if .Filter.PartnerID }}<p class="notice">{{ icon "store" }}<span>Showing services from one business. <a href="/services">Browse all businesses</a></span></p>{{ end }}
+
+  <form action="/services" method="GET" class="service-search" role="search" aria-label="Find services">
     {{ if .Filter.PartnerID }}<input type="hidden" name="partner_id" value="{{ .Filter.PartnerID }}">{{ end }}
-    <div class="form-row">
-      <div class="field"><label class="label" for="service-query">Service or business</label><input class="input" id="service-query" type="search" name="q" value="{{ .Filter.Query }}" maxlength="120" placeholder="Haircut, salon, home repair…"></div>
-      <div class="field"><label class="label" for="service-area">Neighbourhood or town</label><input class="input" id="service-area" name="area" value="{{ .Filter.Area }}" maxlength="120" placeholder="e.g. Westlands"></div>
-      <div class="field"><label class="label" for="service-category">Category</label><select class="select" id="service-category" name="category"><option value="">All categories</option>{{ range .Categories }}<option value="{{ . }}"{{ if eq . $.Filter.Category }} selected{{ end }}>{{ . }}</option>{{ end }}</select></div>
-      <div class="field"><label class="label" for="service-mode">Where it happens</label><select class="select" id="service-mode" name="delivery_mode"><option value="">Any location type</option><option value="premises"{{ if eq .Filter.DeliveryMode "premises" }} selected{{ end }}>At the business</option><option value="mobile"{{ if eq .Filter.DeliveryMode "mobile" }} selected{{ end }}>Provider travels to you</option><option value="remote"{{ if eq .Filter.DeliveryMode "remote" }} selected{{ end }}>Remote</option></select></div>
-      <div class="field"><label class="row" for="service-hours"><input id="service-hours" type="checkbox" name="has_hours" value="true"{{ if .Filter.HasHours }} checked{{ end }}>Only show services with published hours</label></div>
+    {{ if .Filter.Category }}<input type="hidden" name="category" value="{{ .Filter.Category }}">{{ end }}
+    <div class="service-search__fields">
+      <label class="search">
+        <span class="sr-only">Service or business</span>
+        {{ icon "search" }}
+        <input class="input" id="service-query" type="search" name="q" value="{{ .Filter.Query }}" maxlength="120" placeholder="Haircut, salon, home repair…">
+      </label>
+      <label class="search">
+        <span class="sr-only">Neighbourhood or town</span>
+        {{ icon "map-pin" }}
+        <input class="input" id="service-area" name="area" value="{{ .Filter.Area }}" maxlength="120" placeholder="Neighbourhood or town">
+      </label>
+      <button class="btn" type="submit">Find services</button>
     </div>
-    <div class="row"><button class="btn" type="submit">Find services</button><a href="/services" class="btn btn-secondary">Clear filters</a></div>
+    <details class="service-filters"{{ if or .Filter.DeliveryMode .Filter.HasHours }} open{{ end }}>
+      <summary class="btn btn-plain btn-sm">{{ icon "settings" }}More filters{{ if or .Filter.DeliveryMode .Filter.HasHours }} · on{{ end }}</summary>
+      <div class="form-row">
+        <div class="field"><label class="label" for="service-mode">Where it happens</label><select class="select" id="service-mode" name="delivery_mode"><option value="">Any location type</option><option value="premises"{{ if eq .Filter.DeliveryMode "premises" }} selected{{ end }}>At the business</option><option value="mobile"{{ if eq .Filter.DeliveryMode "mobile" }} selected{{ end }}>Provider travels to you</option><option value="remote"{{ if eq .Filter.DeliveryMode "remote" }} selected{{ end }}>Remote</option></select></div>
+        <label class="choice" for="service-hours"><input id="service-hours" type="checkbox" name="has_hours" value="true"{{ if .Filter.HasHours }} checked{{ end }}><span>Only services with published hours</span></label>
+      </div>
+      <div class="row"><button class="btn btn-secondary btn-sm" type="submit">Apply filters</button><a href="/services" class="btn btn-plain btn-sm">Clear all</a></div>
+    </details>
   </form>
-  {{ range .Listings }}
-  <article class="card stack">
-    <div class="page-head"><h2><a href="/services/{{ .Slug }}">{{ .Title }}</a></h2><span class="badge">{{ .Category }}</span></div>
-    <p class="muted">{{ .PartnerName }} · {{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote{{ end }}</p>
-    <p>{{ .DurationMinutes }} minutes · {{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</p>
-    {{ if gt .OpenDays 0 }}<p class="tiny muted">Hours published on {{ .OpenDays }} {{ if eq .OpenDays 1 }}day{{ else }}days{{ end }} · {{ .Timezone }}</p>{{ end }}
-    <a href="/services/{{ .Slug }}">View service</a>
-  </article>
+
+  {{ if .CategoryLinks }}
+  <nav class="chips" aria-label="Service categories">
+    {{ range .CategoryLinks }}<a class="chip" href="{{ .Href }}"{{ if .Current }} aria-current="page"{{ end }}>{{ icon (serviceIcon .Name) }}{{ .Name }}</a>{{ end }}
+  </nav>
+  {{ end }}
+
+  {{ if .Listings }}
+  <p class="small muted" role="status">{{ .Total }} {{ if eq .Total 1 }}service{{ else }}services{{ end }}{{ if .Filter.Area }} near {{ .Filter.Area }}{{ end }}{{ if or .Filter.Query .Filter.Category .Filter.Area .Filter.DeliveryMode .Filter.HasHours }} · <a href="/services{{ if .Filter.PartnerID }}?partner_id={{ .Filter.PartnerID }}{{ end }}">Clear filters</a>{{ end }}</p>
+  <ul class="service-grid">
+    {{ range .Listings }}
+    <li>
+      <article class="service-card">
+        <div class="service-card__head">
+          <span class="service-card__icon" aria-hidden="true">{{ icon (serviceIcon .Category) }}</span>
+          <span class="badge">{{ .Category }}</span>
+        </div>
+        <div class="stack-sm">
+          <h2 class="service-card__title"><a href="/services/{{ .Slug }}">{{ .Title }}</a></h2>
+          <p class="small muted">{{ .PartnerName }}</p>
+        </div>
+        <ul class="service-facts small">
+          <li>{{ icon "map-pin" }}<span>{{ .PublicArea }}</span></li>
+          <li>{{ icon (serviceModeIcon .DeliveryMode) }}<span>{{ serviceMode .DeliveryMode }}</span></li>
+          <li>{{ icon "clock" }}<span>{{ .DurationMinutes }} minutes</span></li>
+        </ul>
+        <div class="service-card__foot">
+          <span class="service-card__price">{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</span>
+          {{ if gt .OpenDays 0 }}<span class="badge badge-solid" title="Hours published on {{ .OpenDays }} {{ if eq .OpenDays 1 }}day{{ else }}days{{ end }} · {{ .Timezone }}">{{ icon "calendar" }}bookable</span>{{ else }}<span class="badge badge-muted">enquire</span>{{ end }}
+        </div>
+      </article>
+    </li>
+    {{ end }}
+  </ul>
   {{ else }}
   {{ template "empty" dict "Icon" "search" "Text" "No services match these filters. Try another area or category." "Href" "/services" "Action" "Browse all services" }}
   {{ end }}

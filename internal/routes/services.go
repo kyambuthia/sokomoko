@@ -24,10 +24,22 @@ type serviceWeekday struct {
 	ClosesAt string
 }
 
+// serviceCategoryLink is one quick-filter chip on the public directory. Href
+// keeps the visitor's other filters and resets pagination.
+type serviceCategoryLink struct {
+	Name    string
+	Href    string
+	Current bool
+}
+
 type servicePage struct {
 	ConflictListing               *db.ServiceListing
 	State                         string
 	Preview                       bool
+	Total                         int
+	CategoryLinks                 []serviceCategoryLink
+	Week                          []serviceWeekday
+	Today                         int
 	FieldErrors                   map[string]string
 	ValidationFields              []directorysvc.FieldError
 	Duration                      string
@@ -136,6 +148,10 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 			return
 		}
 		data.Pager = newPager(r, page, 24, total)
+		data.Total = total
+		if !own {
+			data.CategoryLinks = serviceCategoryLinks(r.URL.Query(), data.Filter.Category)
+		}
 		if own {
 			a.Render(w, a.Templates.PartnerServices, data)
 		} else {
@@ -156,6 +172,7 @@ func ServiceDetail(a *app.App) http.HandlerFunc {
 		}
 		data := servicePage{
 			Title: listing.Title, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours),
+			Week: serviceWeekdayForms(listing.WeeklyHours), Today: serviceLocalWeekday(listing.Timezone),
 			Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Flash: popFlash(w, r),
 			LocalDate: serviceLocalDate(listing.Timezone),
 		}
@@ -176,6 +193,43 @@ func serviceLocalDate(timezone string) string {
 		loc = time.UTC
 	}
 	return time.Now().In(loc).Format("2006-01-02")
+}
+
+// serviceLocalWeekday is today's weekday (Sunday=0) in the listing's
+// timezone, so the weekly hours table can mark the current day.
+func serviceLocalWeekday(timezone string) int {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	return int(time.Now().In(loc).Weekday())
+}
+
+// serviceCategoryLinks builds the directory's category chips: "All" first,
+// then each category. Every link keeps the other active filters and drops
+// the page number, because the result set changes.
+func serviceCategoryLinks(query url.Values, current string) []serviceCategoryLink {
+	link := func(category string) string {
+		q := url.Values{}
+		for key, values := range query {
+			if key != "page" && key != "category" {
+				q[key] = values
+			}
+		}
+		if category != "" {
+			q.Set("category", category)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			return "/services?" + encoded
+		}
+		return "/services"
+	}
+	links := make([]serviceCategoryLink, 0, len(serviceCategories)+1)
+	links = append(links, serviceCategoryLink{Name: "all", Href: link(""), Current: current == ""})
+	for _, category := range serviceCategories {
+		links = append(links, serviceCategoryLink{Name: category, Href: link(category), Current: category == current})
+	}
+	return links
 }
 
 func newBookingIdempotencyKey() (string, error) {

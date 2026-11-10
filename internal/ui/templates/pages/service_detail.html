@@ -1,60 +1,123 @@
 {{ define "layout" }}{{ if .Preview }}{{ template "partner-layout" . }}{{ else }}{{ template "storefront-layout" . }}{{ end }}{{ end }}
 {{ define "title" }}{{ if .Preview }}Preview: {{ end }}{{ .Title }} · services · sokomoko{{ end }}
+{{ define "service-price" }}{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}{{ end }}
 {{ define "main-area" }}
-<div class="stack narrow">
+<div class="stack">
   {{ if .Preview }}
-  <a href="/services">← Your services</a>
-  <p class="notice">Private preview of the saved listing · {{ .Listing.State }}. This preview does not publish the service.</p>
-  <a class="btn btn-secondary" href="/services/{{ .Listing.ID }}/edit">Edit service</a>
-  {{ else }}<a href="/services">← All services</a>{{ end }}
+  <div><a class="btn btn-plain btn-sm back" href="/services">{{ icon "arrow-left" }}Your services</a></div>
+  <p class="notice">{{ icon "eye" }}<span>Private preview of the saved listing · {{ .Listing.State }}. This preview does not publish the service.</span></p>
+  <div><a class="btn btn-secondary btn-sm" href="/services/{{ .Listing.ID }}/edit">{{ icon "pencil" }}Edit service</a></div>
+  {{ else }}<div><a class="btn btn-plain btn-sm back" href="/services">{{ icon "arrow-left" }}All services</a></div>{{ end }}
   {{ if .Flash.Message }}{{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}{{ end }}
   {{ with .Listing }}
-  <span class="badge">{{ .Category }}</span>
-  <h1>{{ .Title }}</h1>
-  <p class="muted">Offered by {{ .PartnerName }} · {{ .PublicArea }}</p>
-  <div class="card stack">
-    <p class="detail__desc">{{ .Description }}</p>
-    <dl><dt>Duration</dt><dd>{{ .DurationMinutes }} minutes</dd>
-      <dt>Price</dt><dd>{{ if eq .PriceMode "quote" }}Ask for a quote{{ else }}{{ if eq .PriceMode "from" }}From {{ end }}{{ moneyInCurrency .PriceCents .Currency }}{{ end }}</dd>
-      <dt>Location</dt><dd>{{ .PublicArea }} · {{ if eq .DeliveryMode "premises" }}At the business{{ else if eq .DeliveryMode "mobile" }}Provider travels to you{{ else }}Remote service{{ end }}</dd>
-      <dt>Weekly hours</dt><dd><p class="tiny muted">Local time · {{ .Timezone }}</p>{{ if $.Schedule }}<ul>{{ range $.Schedule }}<li>{{ .Name }}: {{ .OpensAt }}–{{ .ClosesAt }}</li>{{ end }}</ul>{{ else }}Hours not published{{ end }}</dd>
-    </dl>
-  </div>
-  {{ if not $.Preview }}<a href="/services?partner_id={{ .PartnerID }}">More services from {{ .PartnerName }}</a>
-  <a class="btn" href="/messages/new?service_id={{ .ID }}">Message service provider</a>
-  {{ if demoMode }}
-    <p class="notice notice-info">Demo service only. Appointment requests are disabled; no real appointments, sales or payments are accepted.</p>
-  {{ else if $.Schedule }}
-    {{ if eq $.Viewer.Role "user" }}
-    <section class="card stack" aria-labelledby="booking-request-title">
-      <h2 id="booking-request-title">Request an appointment</h2>
-      <p class="muted">Choose a start time in {{ .Timezone }}. The provider must confirm your request; no payment is collected now.</p>
-      <form method="post" action="/services/{{ .Slug }}/bookings" class="stack">
-        <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
-        <input type="hidden" name="listing_version" value="{{ .Version }}">
-        <input type="hidden" name="idempotency_key" value="{{ $.BookingKey }}">
-        <ui-booking-availability data-service-slug="{{ .Slug }}">
-          <label for="service-booking-date">Appointment date</label>
-          <input id="service-booking-date" type="date" class="input" min="{{ $.LocalDate }}" value="{{ $.LocalDate }}" data-availability-date>
-          <label for="service-booking-slot" data-availability-label hidden>Suggested start times</label>
-          <select id="service-booking-slot" class="input" data-availability-slots disabled hidden>
-            <option value="">Choose a date to load suggestions</option>
-          </select>
-          <p class="tiny muted" data-availability-status role="status" aria-live="polite">Suggestions use {{ .Timezone }} local time. Availability is checked again when you submit.</p>
-          <label for="service-start-local">Or enter a start time in {{ .Timezone }}</label>
-          <input id="service-start-local" class="input" name="starts_at_local" type="datetime-local" required data-manual-start>
-        </ui-booking-availability>
-        <button type="submit">Send appointment request</button>
-      </form>
-    </section>
-    {{ else if not $.Viewer.SignedIn }}
-    <p class="notice notice-info"><a href="/login?next=/services/{{ .Slug }}">Sign in as a customer to request an appointment.</a></p>
+  <div class="service-detail{{ if $.Preview }} service-detail--preview{{ end }}">
+    <div class="stack-lg">
+      <header class="stack">
+        <div class="row"><span class="service-card__icon" aria-hidden="true">{{ icon (serviceIcon .Category) }}</span><span class="badge">{{ .Category }}</span></div>
+        <div class="stack-sm">
+          <h1>{{ .Title }}</h1>
+          <p class="muted">Offered by {{ if $.Preview }}<span class="strong">{{ .PartnerName }}</span>{{ else }}<a href="/services?partner_id={{ .PartnerID }}" class="strong">{{ .PartnerName }}</a>{{ end }} · {{ .PublicArea }}</p>
+        </div>
+        {{ if not $.Preview }}
+        <div class="service-quick">
+          <p class="detail__price">{{ template "service-price" . }}</p>
+          <div class="row">
+            {{ if and (not demoMode) $.Schedule }}<a class="btn" href="#booking">{{ icon "calendar" }}Book</a>{{ end }}
+            <a class="btn {{ if and (not demoMode) $.Schedule }}btn-secondary{{ end }}" href="/messages/new?service_id={{ .ID }}">{{ icon "message" }}Message</a>
+          </div>
+        </div>
+        {{ end }}
+      </header>
+
+      <ul class="service-facts service-facts--grid">
+        <li>{{ icon "clock" }}<span><span class="tiny muted">Duration</span>{{ .DurationMinutes }} minutes</span></li>
+        <li>{{ icon "wallet" }}<span><span class="tiny muted">Price</span>{{ template "service-price" . }}</span></li>
+        <li>{{ icon "map-pin" }}<span><span class="tiny muted">Area</span>{{ .PublicArea }}</span></li>
+        <li>{{ icon (serviceModeIcon .DeliveryMode) }}<span><span class="tiny muted">Location</span>{{ if eq .DeliveryMode "remote" }}Remote service{{ else }}{{ serviceMode .DeliveryMode }}{{ end }}</span></li>
+      </ul>
+
+      {{ if .Description }}
+      <section class="section" aria-labelledby="service-about">
+        <h2 class="section-title" id="service-about">About</h2>
+        <p class="detail__desc">{{ .Description }}</p>
+      </section>
+      {{ end }}
+
+      <section class="section" aria-labelledby="service-hours">
+        <div class="row-between"><h2 class="section-title" id="service-hours">Weekly hours</h2><span class="tiny muted">Local time · {{ .Timezone }}</span></div>
+        {{ if $.Schedule }}
+        <ul class="list service-hours">
+          {{ range $.Week }}
+          <li class="list-item{{ if not .OpensAt }} service-hours__closed{{ end }}"{{ if eq .Number $.Today }} aria-current="date"{{ end }}>
+            <span>{{ .Name }}{{ if eq .Number $.Today }} <span class="badge badge-solid">today</span>{{ end }}</span>
+            <span class="nowrap">{{ if .OpensAt }}{{ .OpensAt }}–{{ .ClosesAt }}{{ else }}Closed{{ end }}</span>
+          </li>
+          {{ end }}
+        </ul>
+        {{ else }}
+        <p class="small muted">Hours not published. Message the provider to arrange a time.</p>
+        {{ end }}
+      </section>
+
+      <p class="tiny muted">Listing a service does not verify professional qualifications. Do not submit health information through this directory.</p>
+    </div>
+
+    {{ if not $.Preview }}
+    <aside class="service-aside" aria-label="Book or contact">
+      <div class="card stack" id="booking">
+        <div class="stack-sm service-aside__price">
+          <p class="detail__price">{{ template "service-price" . }}</p>
+          <p class="small muted">{{ .DurationMinutes }} minutes · {{ serviceMode .DeliveryMode }}</p>
+        </div>
+        {{ if demoMode }}
+          <p class="notice notice-info">Demo service only. Appointment requests are disabled; no real appointments, sales or payments are accepted.</p>
+        {{ else if $.Schedule }}
+          {{ if eq $.Viewer.Role "user" }}
+          <section class="stack" aria-labelledby="booking-request-title">
+            <div class="stack-sm">
+              <h2 id="booking-request-title">Request an appointment</h2>
+              <p class="small muted">Times are in {{ .Timezone }}. The provider confirms your request; no payment is collected now.</p>
+            </div>
+            <form method="post" action="/services/{{ .Slug }}/bookings" class="stack" data-submit-once>
+              <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+              <input type="hidden" name="listing_version" value="{{ .Version }}">
+              <input type="hidden" name="idempotency_key" value="{{ $.BookingKey }}">
+              <ui-booking-availability data-service-slug="{{ .Slug }}">
+                <div class="field">
+                  <label class="label" for="service-booking-date">Date</label>
+                  <input id="service-booking-date" type="date" class="input" min="{{ $.LocalDate }}" value="{{ $.LocalDate }}" data-availability-date>
+                </div>
+                <div class="field">
+                  <span class="label" id="service-booking-slots-label" data-availability-label hidden>Suggested start times</span>
+                  <div class="slot-chips" role="group" aria-labelledby="service-booking-slots-label" data-availability-chips hidden></div>
+                  <label class="sr-only" for="service-booking-slot">Suggested start times</label>
+                  <select id="service-booking-slot" class="select" data-availability-slots disabled hidden>
+                    <option value="">Choose a date to load suggestions</option>
+                  </select>
+                  <p class="hint" data-availability-status role="status" aria-live="polite">Suggestions use {{ .Timezone }} local time. Availability is checked again when you submit.</p>
+                </div>
+                <div class="field">
+                  <label class="label" for="service-start-local">Start time</label>
+                  <input id="service-start-local" class="input" name="starts_at_local" type="datetime-local" required data-manual-start>
+                  <p class="hint">Pick a suggestion above or enter any time in {{ .Timezone }}.</p>
+                </div>
+              </ui-booking-availability>
+              <button class="btn btn-block" type="submit">{{ icon "calendar" }}Send appointment request</button>
+            </form>
+          </section>
+          {{ else if not $.Viewer.SignedIn }}
+          <a class="btn btn-block" href="/login?next=/services/{{ .Slug }}">Sign in to book</a>
+          <p class="hint">Sign in as a customer to request an appointment.</p>
+          {{ end }}
+        {{ else }}
+          <p class="small muted">Appointment requests are unavailable because this provider has not published weekly hours.</p>
+        {{ end }}
+        <a class="btn btn-block {{ if and (not demoMode) $.Schedule }}btn-secondary{{ end }}" href="/messages/new?service_id={{ .ID }}">{{ icon "message" }}Message service provider</a>
+        <a class="small" href="/services?partner_id={{ .PartnerID }}">More services from {{ .PartnerName }}</a>
+      </div>
+    </aside>
     {{ end }}
-  {{ else }}
-    <p class="notice notice-info">Appointment requests are unavailable because this provider has not published weekly hours.</p>
+  </div>
   {{ end }}
-  {{ end }}
-  {{ end }}
-  <p class="tiny muted">Listing a service does not verify professional qualifications. Do not submit health information through this directory.</p>
 </div>
 {{ end }}
