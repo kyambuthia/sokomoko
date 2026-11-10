@@ -46,12 +46,17 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sokomoko_app;
 REVOKE INSERT, UPDATE, DELETE ON schema_migrations FROM sokomoko_app;
 SQL
 
+# Production requires a key for the password-reset outbox. The container is
+# thrown away, so a fresh throwaway key is generated for this run.
+secrets_key="$(head -c 32 /dev/urandom | base64)"
+
 docker run -d --name "$app_container" --network "$scope" --read-only \
   --cap-drop ALL --security-opt no-new-privileges:true \
   -e ENV=production -e DATABASE_URL="$runtime_url" \
   -e ALLOWED_HOSTS=shop.example.com,admin.example.com,partner.example.com \
   -e PASSWORD_RESET_BASE_URL=https://shop.example.com \
   -e SMTP_HOST=smtp.example.com -e SMTP_FROM=support@example.com \
+  -e SECRETS_KEY="$secrets_key" \
   "$image" serve >/dev/null
 
 app_ready=false
