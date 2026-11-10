@@ -11,6 +11,10 @@ export class UISplatViewer extends HTMLElement {
     this.onVideoToggle = () => this.toggleVideo();
     this.splatButton?.addEventListener("click", this.onToggle);
     this.videoButton?.addEventListener("click", this.onVideoToggle);
+    // The viewer paints its own scene background, so a theme change has to
+    // reload the frame rather than restyle it.
+    this.themeObserver = new MutationObserver(() => this.reloadForTheme());
+    this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   }
 
   disconnectedCallback() {
@@ -18,8 +22,27 @@ export class UISplatViewer extends HTMLElement {
     this.videoButton?.removeEventListener("click", this.onVideoToggle);
     this.frame?.removeAttribute("src");
     this.stopVideo();
+    this.themeObserver?.disconnect();
+    this.themeObserver = null;
     this.onToggle = null;
     this.onVideoToggle = null;
+  }
+
+  theme() {
+    const explicit = document.documentElement.dataset.theme;
+    if (explicit === "light" || explicit === "dark") return explicit;
+    return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  reloadForTheme() {
+    if (this.activeView !== "splat") return;
+    const source = this.frame?.getAttribute("src");
+    if (!source) return;
+    const url = new URL(source, window.location.origin);
+    const theme = this.theme();
+    if (url.searchParams.get("theme") === theme) return;
+    url.searchParams.set("theme", theme);
+    this.frame.src = url.pathname + url.search;
   }
 
   toggleSplat() {
@@ -33,6 +56,7 @@ export class UISplatViewer extends HTMLElement {
     viewerURL.searchParams.set("content", this.dataset.modelUrl);
     viewerURL.searchParams.set("poster", this.dataset.posterUrl);
     viewerURL.searchParams.set("noui", "");
+    viewerURL.searchParams.set("theme", this.theme());
     this.frame.src = viewerURL.pathname + viewerURL.search;
     this.frame.hidden = false;
     this.image.hidden = true;
