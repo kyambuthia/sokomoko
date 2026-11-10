@@ -164,6 +164,25 @@ First deployment only: open `/setup` on the admin host with the setup token,
 create the administrator, then remove `ADMIN_SETUP_TOKEN` and recreate the app
 container. `seed` and `serve --seed` are refused in production.
 
+## Continuous delivery
+
+A push to `trunk` runs CI. When that run succeeds, the Deploy demo workflow
+checks out the same commit, builds the image, and pushes it to
+`139023234259.dkr.ecr.eu-west-1.amazonaws.com/asiliano` tagged with the commit.
+`deploy/rollout-demo.sh` then copies the current Compose files to the demo
+host, sets `SOKOMOKO_IMAGE` to that digest in `/opt/sokomoko/deploy/.env.production`,
+and restarts `sokomoko-demo.service`. The unit pulls the digest, migrates, and
+starts the app. Pull requests and the weekly CI schedule do not deploy.
+
+The workflow assumes `arn:aws:iam::139023234259:role/sokomoko-github-deploy`
+through GitHub OIDC, and only from `trunk`. Create or update that role once
+from an IAM administrator:
+
+```bash
+aws login --profile root-account
+AWS_PROFILE=root-account bash deploy/github-oidc-role.sh
+```
+
 ## Health and shutdown
 
 - `/healthz`: process is up. `/readyz`: database reachable and not draining.

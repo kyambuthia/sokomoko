@@ -1,0 +1,99 @@
+name: Deploy demo
+
+# CI builds and tests every push. This workflow rolls trunk onto the demo
+# only after that run succeeds. Pull requests and the weekly schedule do not
+# deploy. A queued run skips itself when a newer commit is already on trunk.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [trunk]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  AWS_REGION: eu-west-1
+  ECR_REPOSITORY: asiliano
+  DEPLOY_INSTANCE_ID: i-0bec90e7573e98d76
+
+jobs:
+  deploy:
+    name: Build and roll out
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'trunk' &&
+      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Skip when trunk has moved on
+        id: gate
+        run: |
+          git fetch origin trunk
+          if [ "$(git rev-parse origin/trunk)" != "${{ github.event.workflow_run.head_sha }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "trunk has a newer commit; leaving the demo for that rollout."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.gate.outputs.skip != 'true'
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::139023234259:role/sokomoko-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: sokomoko-demo-${{ github.event.workflow_run.run_id }}
+
+      - name: Log in to Amazon ECR
+        if: steps.gate.outputs.skip != 'true'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the image
+        if: steps.gate.outputs.skip != 'true'
+        id: image
+        run: |
+          set -euo pipefail
+          tag="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}:${{ github.event.workflow_run.head_sha }}"
+          docker build --build-arg VERSION="${{ github.event.workflow_run.head_sha }}" -t "$tag" .
+          docker push "$tag"
+          digest=$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids "imageTag=${{ github.event.workflow_run.head_sha }}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+          echo "reference=${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}@${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Roll the demo onto the new digest
+        if: steps.gate.outputs.skip != 'true'
+        run: bash deploy/rollout-demo.sh "${{ steps.image.outputs.reference }}"
+
+      - name: Check the public demo
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 36); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' https://asiliano.online/readyz || true)
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          printf 'asiliano.online/readyz did not return 200\n' >&2
+          exit 1
