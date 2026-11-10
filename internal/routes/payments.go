@@ -178,7 +178,10 @@ func PaymentWebhook(a *app.App) http.HandlerFunc {
 		provider := r.PathValue("provider")
 		err := a.Payment.HandleWebhook(r.Context(), provider, r, body)
 		switch {
-		case err == nil, errors.Is(err, payments.ErrUnsupported), errors.Is(err, db.ErrPaymentNotFound):
+		case err == nil, errors.Is(err, payments.ErrUnsupported), errors.Is(err, db.ErrPaymentNotFound),
+			errors.Is(err, paymentsvc.ErrProviderVerificationPending):
+			// A provider that is still verifying is not a failure: the status
+			// page re-verifies a pending payment, so the event is acknowledged.
 			w.WriteHeader(http.StatusOK)
 		case errors.Is(err, payments.ErrBadSignature):
 			http.Error(w, "Invalid signature", http.StatusUnauthorized)
@@ -202,7 +205,9 @@ func PaymentCallback(a *app.App) http.HandlerFunc {
 		provider, token := r.PathValue("provider"), r.PathValue("token")
 		err := a.Payment.HandleCallback(r.Context(), provider, token, r, body)
 		switch {
-		case err == nil:
+		case err == nil, errors.Is(err, paymentsvc.ErrProviderVerificationPending):
+			// Daraja expects an acknowledgement. A pending verification leaves
+			// the payment pending, and the status page verifies it again.
 		case errors.Is(err, db.ErrPaymentNotFound), errors.Is(err, paymentsvc.ErrUnknownProvider), errors.Is(err, payments.ErrNotConfigured):
 			NotFound(w, r)
 			return
