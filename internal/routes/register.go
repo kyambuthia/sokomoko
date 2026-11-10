@@ -42,6 +42,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/search", public(Search(a)))
 	mux.Handle("/services", public(Services(a, false)))
 	mux.Handle("/services/{slug}", public(ServiceDetail(a)))
+	mux.Handle("/stores/{slug}", public(StoreProfile(a)))
 	mux.Handle("/services/{slug}/bookings", withRole(a, db.RoleUser, ServiceBookingRequest(a)))
 	mux.HandleFunc("/api/categories", CategoriesAPI(a))
 

@@ -12,6 +12,7 @@ type Templates struct {
 	PartnerBookings      *template.Template
 	Index                *template.Template
 	Search               *template.Template
+	Store                *template.Template
 	Product              *template.Template
 	Cart                 *template.Template
 	Checkout             *template.Template
@@ -65,6 +66,11 @@ func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
 	}
 
 	searchTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/search.html")
+	if err != nil {
+		return nil, err
+	}
+
+	storeTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/store.html")
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +219,7 @@ func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
 		PartnerBookings:      partnerBookingsTmpl,
 		Index:                indexTmpl,
 		Search:               searchTmpl,
+		Store:                storeTmpl,
 		Product:              productTmpl,
 		Cart:                 cartTmpl,
 		Checkout:             checkoutTmpl,
