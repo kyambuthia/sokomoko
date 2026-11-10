@@ -63,6 +63,7 @@ type Product struct {
 	CategoryID    sql.NullInt64
 	PartnerID     sql.NullInt64
 	PartnerName   string
+	PartnerSlug   string
 	Images        []ProductImage
 	VideoURL      string
 	Video         *ProductVideo

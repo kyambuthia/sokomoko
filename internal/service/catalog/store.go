@@ -13,6 +13,8 @@ type store interface {
 	GetPublicProductVideoByProductID(ctx context.Context, productID int) (*db.ProductVideo, error)
 	ListProducts(context.Context, db.ProductFilter) ([]db.Product, error)
 	ListProductsPage(context.Context, db.ProductFilter) ([]db.Product, int, error)
+	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
+	GetPartnerBySlug(context.Context, string) (*db.Partner, error)
 }
 
 var _ store = (*db.Store)(nil)
