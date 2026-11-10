@@ -77,3 +77,10 @@ chat-crypto-check: ## Rebuild separately and verify checked-in encryption assets
 
 chat-crypto-audit: ## Audit all locked Rust dependencies (requires cargo-audit 0.22.2)
 	bash scripts/audit-chat-crypto.sh
+
+.PHONY: splat-assets splat-assets-check
+splat-assets: ## Rebuild the bundled product splats and the minified viewer
+	bash scripts/build-splat-assets.sh
+
+splat-assets-check: ## Rebuild separately and verify checked-in splat assets match
+	bash scripts/check-splat-assets.sh
