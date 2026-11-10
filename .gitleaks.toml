@@ -16,3 +16,15 @@ condition = "AND"
 paths = ['''(^|/)web/crypto/Cargo\.lock$''']
 regexTarget = "match"
 regexes = ['''^libcrux-secrets",\s*"libcrux-sha3"$''']
+
+# The generic rule mistakes minified engine identifiers for keys. The bundled
+# viewer is minified, so these names end up next to each other with enough
+# entropy to look like a value. Keep the exception restricted to these two
+# identifiers in the viewer.
+[[allowlists]]
+description = "Minified PlayCanvas identifiers in the bundled viewer"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)internal/ui/static/splat-viewer\.html$''', '''(^|/)web/splat-viewer/splat-viewer\.source\.html$''']
+regexTarget = "match"
+regexes = ['''_sortKey(Shadow|Forward)''']
