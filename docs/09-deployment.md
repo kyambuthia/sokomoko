@@ -52,17 +52,17 @@ The image is pinned by `SOKOMOKO_IMAGE`, which should be a verified digest.
 `deploy/Caddyfile` serves the configured hostnames, obtains certificates,
 adds HSTS, and overwrites `X-Forwarded-For` and
 `X-Forwarded-Proto`. That is why the app runs with `TRUST_PROXY_HEADERS=true`;
-it is safe only while Caddy is the sole way in. On the EC2 demo, the instance
-security group allows TCP 80 and 443 only from Cloudflare's published IPv4
-ranges. This keeps direct requests from reaching Caddy with forged proxy
-headers or bypassing Cloudflare edge controls. Port 80 remains available through
-Cloudflare for HTTP-01 certificate validation.
+it is safe only while Caddy is the sole way in. Front Caddy with a CDN and
+allow TCP 80 and 443 only from that CDN's published IP ranges. This keeps
+direct requests from reaching Caddy with forged proxy headers or bypassing
+the edge controls. Port 80 remains available through the CDN for HTTP-01
+certificate validation.
 
-Cloudflare publishes the current ranges at
-<https://api.cloudflare.com/client/v4/ips>. If the ranges change, add the new
-CIDRs to both ports before removing retired CIDRs, then verify all proxied
-hostnames still return `/readyz` successfully. Keep the DNS records orange-cloud
-proxied; the demo EC2 instance has no IPv6 address.
+The CDN publishes its current ranges through its own API. If the ranges change,
+add the new CIDRs to both ports before removing retired CIDRs, then verify
+every proxied hostname still returns `/readyz` successfully. Keep the DNS
+records proxied, and confirm the host has no IPv6 address before relying on
+IPv4-only routing.
 
 Copy `deploy/production.env.example` to `.env.production`, fill in real values,
 and restrict its permissions. Generate `RATE_LIMIT_HMAC_KEY` with `openssl rand -hex 32`
@@ -75,10 +75,10 @@ not expose the JSON API.
 
 ### Single-instance demo
 
-`deploy/compose.ec2-demo.yml` adds a local PostgreSQL 17 container for a
-single-instance demo. The database has no published port and stores its data
-in a Docker volume on the host's encrypted EBS disk. This is a low-cost demo
-layout, not a replacement for managed PostgreSQL backups and recovery.
+A single-instance demo can add a local PostgreSQL 17 container to the Compose
+stack. The database has no published port and stores its data in a Docker
+volume on the host's encrypted disk. This is a low-cost demo layout, not a
+replacement for managed PostgreSQL backups and recovery.
 
 For a demo without email, set `PASSWORD_RESET_DISABLED=true` and leave the
 SMTP variables empty. Production startup then allows SMTP to be omitted,
@@ -166,27 +166,18 @@ container. `seed` and `serve --seed` are refused in production.
 
 ## Continuous delivery
 
-A push to `trunk` runs CI. The Docker job smoke-tests the image and uploads
-that image. When CI succeeds, the Deploy demo workflow pushes the same image
-to `139023234259.dkr.ecr.eu-west-1.amazonaws.com/asiliano`, tagged with the
-commit. `deploy/rollout-demo.sh` copies the current Compose files and
-`deploy/sokomoko-demo-deploy` to the demo host, sets `SOKOMOKO_IMAGE` to that
-digest, and restarts `sokomoko-demo.service`. The unit pulls the digest,
-migrates, and starts the app. It does not seed. Pull requests, the weekly CI
-schedule, and a manual re-run of CI do not deploy.
+A push to `trunk` runs CI. The Docker job builds the image, smoke-tests it as
+a production image, and uploads that exact image as a build artifact.
 
-The public check requires `https://asiliano.online/readyz` to return `ready`
-and `X-Sokomoko-Version` equal to the commit. That header is the build
-identifier baked into the binary.
+Nothing in this repository deploys anything. The application holds no cloud
+credentials and cannot reach a running environment; deployment is owned
+outside it, which promotes the smoke-tested artifact onto its own
+infrastructure. This repository stays the single source of truth for the
+image, the migrations, and the release notes.
 
-The workflow assumes `arn:aws:iam::139023234259:role/sokomoko-github-deploy`
-through GitHub OIDC, and only from `trunk`. Create or update that role once
-from an IAM administrator:
-
-```bash
-aws login --profile root-account
-AWS_PROFILE=root-account bash deploy/github-oidc-role.sh
-```
+The build identifier is baked into the binary and reported in the
+`X-Sokomoko-Version` response header, so a running deployment can be checked
+against the commit it was built from.
 
 ## Health and shutdown
 
