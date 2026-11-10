@@ -163,15 +163,25 @@ func lockChatPartnerTx(ctx context.Context, tx *sql.Tx, actorID int, c chatRecor
 	if c.PartnerID <= 0 {
 		return nil
 	}
-	var partnerID int
+	// Lock the partner row whatever its status. A suspension that commits
+	// after this read must not slip between the status check and the send.
+	var status string
 	err := tx.QueryRowContext(ctx,
-		`SELECT id FROM partners WHERE id=$1 AND status='active' FOR SHARE`, c.PartnerID,
-	).Scan(&partnerID)
+		`SELECT status FROM partners WHERE id=$1 FOR SHARE`, c.PartnerID,
+	).Scan(&status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrChatNotFound
 	}
 	if err != nil {
 		return err
+	}
+	if status != "active" {
+		// A suspended shop loses its staff access outright, while the customer
+		// keeps the conversation in a closed state.
+		if actorID != c.CustomerID {
+			return ErrChatNotFound
+		}
+		return ErrChatClosed
 	}
 	if actorID != c.CustomerID {
 		var memberID int
