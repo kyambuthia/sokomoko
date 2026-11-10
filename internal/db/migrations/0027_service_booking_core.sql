@@ -1,4 +1,7 @@
-CREATE EXTENSION IF NOT EXISTS btree_gist;
+-- Install btree_gist in the shared schema. The test harness drops its
+-- per-test schema, and a dropped extension takes its operator classes
+-- with it while another session is still creating an index.
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
 
 CREATE TABLE service_resources (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
