@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -19,14 +18,7 @@ func (h *Handler) serviceAvailability(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	reader, ok := h.app.Bookings.(interface {
-		Availability(context.Context, string, string) (bookingsvc.Availability, error)
-	})
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "availability_unavailable", "Service availability is unavailable")
-		return
-	}
-	availability, err := reader.Availability(r.Context(), r.PathValue("slug"), r.URL.Query().Get("date"))
+	availability, err := h.app.Bookings.Availability(r.Context(), r.PathValue("slug"), r.URL.Query().Get("date"))
 	switch {
 	case errors.Is(err, bookingsvc.ErrInvalid):
 		writeError(w, http.StatusBadRequest, "invalid_date", "A valid service slug and date in YYYY-MM-DD format are required")

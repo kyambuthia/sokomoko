@@ -54,6 +54,7 @@ type DirectoryService interface {
 }
 
 type BookingService interface {
+	Availability(context.Context, string, string) (bookingsvc.Availability, error)
 	Request(context.Context, *bookingsvc.Actor, string, string, int, string) (*bookingsvc.ServiceBooking, error)
 	ForCustomer(context.Context, *bookingsvc.Actor, int, int) ([]bookingsvc.ServiceBooking, int, error)
 	ForPartner(context.Context, *bookingsvc.Actor, int, int) ([]bookingsvc.ServiceBooking, int, error)
