@@ -243,8 +243,11 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 	return user
 }
 
+// User aliases the persisted user record exposed through request context helpers.
+type User = db.User
+
 // WithUser returns a copy of ctx carrying the authenticated user.
-func WithUser(ctx context.Context, user *db.User) context.Context {
+func WithUser(ctx context.Context, user *User) context.Context {
 	return context.WithValue(ctx, userContextKey, user)
 }
 

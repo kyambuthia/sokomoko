@@ -134,13 +134,7 @@ type StockMovement struct {
 	CreatedAt     time.Time
 }
 
-type Session struct {
-	ID        string
-	UserID    int
-	CSRFToken string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-}
+type Session = domain.Session
 
 type PasswordResetToken struct {
 	ID        int
@@ -151,25 +145,10 @@ type PasswordResetToken struct {
 	CreatedAt time.Time
 }
 
-type StoreSettings struct {
-	StoreName     string
-	StoreSlug     string
-	Description   string
-	ContactEmail  string
-	InitializedAt time.Time
-	UpdatedAt     time.Time
-}
-
-type CartItem struct {
-	ProductID       int
-	ProductName     string
-	ProductSlug     string
-	ProductImageURL string
-	UnitPrice       money.Cents
-	Quantity        int
-	StockQuantity   int
-	LineTotal       money.Cents
-}
+type (
+	StoreSettings = domain.StoreSettings
+	CartItem      = domain.CartItem
+)
 
 type OrderItem struct {
 	ProductID   int
@@ -181,11 +160,11 @@ type OrderItem struct {
 }
 
 const (
-	OrderStatusPending    = "pending"
-	OrderStatusProcessing = "processing"
-	OrderStatusShipped    = "shipped"
-	OrderStatusDelivered  = "delivered"
-	OrderStatusCancelled  = "cancelled"
+	OrderStatusPending    = domain.OrderStatusPending
+	OrderStatusProcessing = domain.OrderStatusProcessing
+	OrderStatusShipped    = domain.OrderStatusShipped
+	OrderStatusDelivered  = domain.OrderStatusDelivered
+	OrderStatusCancelled  = domain.OrderStatusCancelled
 )
 
 // Order is the shared order projection used by customer, partner, and admin

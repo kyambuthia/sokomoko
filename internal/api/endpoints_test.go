@@ -10,7 +10,6 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
@@ -21,7 +20,7 @@ import (
 
 type stubAuthService struct {
 	app.AuthService
-	user *db.User
+	user *auth.User
 }
 
 func (s *stubAuthService) APIAuthMiddleware(next http.Handler) http.Handler {
@@ -214,14 +213,14 @@ func TestRoleGuardAndLogisticsEndpoints(t *testing.T) {
 			t.Fatalf("unauth status = %d; want 401", rec.Code)
 		}
 
-		wrongRole := &Handler{app: app.New(app.Dependencies{Auth: &stubAuthService{user: &db.User{ID: 1, Role: domain.RoleUser}}})}
+		wrongRole := &Handler{app: app.New(app.Dependencies{Auth: &stubAuthService{user: &auth.User{ID: 1, Role: domain.RoleUser}}})}
 		rec = httptest.NewRecorder()
 		wrongRole.role([]string{domain.RoleCourier}, okHandler).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("wrong role status = %d; want 403", rec.Code)
 		}
 
-		allowed := &Handler{app: app.New(app.Dependencies{Auth: &stubAuthService{user: &db.User{ID: 2, Role: domain.RoleCourier}}})}
+		allowed := &Handler{app: app.New(app.Dependencies{Auth: &stubAuthService{user: &auth.User{ID: 2, Role: domain.RoleCourier}}})}
 		rec = httptest.NewRecorder()
 		allowed.role([]string{domain.RoleCourier}, okHandler).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 		if rec.Code != http.StatusOK {
@@ -243,7 +242,7 @@ func TestRoleGuardAndLogisticsEndpoints(t *testing.T) {
 
 		badRec := httptest.NewRecorder()
 		badReq := httptest.NewRequest(http.MethodGet, apiPrefix+"/courier/deliveries?view=bad", nil)
-		badReq = badReq.WithContext(auth.WithUser(badReq.Context(), &db.User{ID: 2, Role: domain.RoleCourier}))
+		badReq = badReq.WithContext(auth.WithUser(badReq.Context(), &auth.User{ID: 2, Role: domain.RoleCourier}))
 		h.courierDeliveries(badRec, badReq)
 		if badRec.Code != http.StatusBadRequest {
 			t.Fatalf("bad view status = %d; want 400", badRec.Code)
@@ -251,7 +250,7 @@ func TestRoleGuardAndLogisticsEndpoints(t *testing.T) {
 
 		okRec := httptest.NewRecorder()
 		okReq := httptest.NewRequest(http.MethodGet, apiPrefix+"/courier/deliveries", nil)
-		okReq = okReq.WithContext(auth.WithUser(okReq.Context(), &db.User{ID: 2, Role: domain.RoleCourier}))
+		okReq = okReq.WithContext(auth.WithUser(okReq.Context(), &auth.User{ID: 2, Role: domain.RoleCourier}))
 		h.courierDeliveries(okRec, okReq)
 		if okRec.Code != http.StatusOK {
 			t.Fatalf("ok status = %d; want 200", okRec.Code)
@@ -271,7 +270,7 @@ func TestAccountAndCheckoutValidation(t *testing.T) {
 
 		badRec := httptest.NewRecorder()
 		badReq := httptest.NewRequest(http.MethodGet, apiPrefix+"/account/orders/0", nil)
-		badReq = badReq.WithContext(auth.WithUser(badReq.Context(), &db.User{ID: 7, Role: domain.RoleUser}))
+		badReq = badReq.WithContext(auth.WithUser(badReq.Context(), &auth.User{ID: 7, Role: domain.RoleUser}))
 		h.accountOrder(badRec, badReq)
 		if badRec.Code != http.StatusBadRequest {
 			t.Fatalf("invalid order id status = %d; want 400", badRec.Code)
@@ -279,7 +278,7 @@ func TestAccountAndCheckoutValidation(t *testing.T) {
 
 		missRec := httptest.NewRecorder()
 		missReq := httptest.NewRequest(http.MethodGet, apiPrefix+"/account/orders/42", nil)
-		missReq = missReq.WithContext(auth.WithUser(missReq.Context(), &db.User{ID: 7, Role: domain.RoleUser}))
+		missReq = missReq.WithContext(auth.WithUser(missReq.Context(), &auth.User{ID: 7, Role: domain.RoleUser}))
 		h.accountOrder(missRec, missReq)
 		if missRec.Code != http.StatusNotFound {
 			t.Fatalf("missing order status = %d; want 404", missRec.Code)
@@ -310,7 +309,7 @@ func TestAccountAndCheckoutValidation(t *testing.T) {
 		h := &Handler{app: app.New(app.Dependencies{})}
 		getRec := httptest.NewRecorder()
 		getReq := httptest.NewRequest(http.MethodGet, apiPrefix+"/checkout", nil)
-		getReq = getReq.WithContext(auth.WithUser(getReq.Context(), &db.User{ID: 7, Role: domain.RoleUser}))
+		getReq = getReq.WithContext(auth.WithUser(getReq.Context(), &auth.User{ID: 7, Role: domain.RoleUser}))
 		h.checkout(getRec, getReq)
 		if getRec.Code != http.StatusBadRequest {
 			t.Fatalf("missing token status = %d; want 400", getRec.Code)
@@ -321,7 +320,7 @@ func TestAccountAndCheckoutValidation(t *testing.T) {
 
 		delRec := httptest.NewRecorder()
 		delReq := httptest.NewRequest(http.MethodDelete, apiPrefix+"/checkout", nil)
-		delReq = delReq.WithContext(auth.WithUser(delReq.Context(), &db.User{ID: 7, Role: domain.RoleUser}))
+		delReq = delReq.WithContext(auth.WithUser(delReq.Context(), &auth.User{ID: 7, Role: domain.RoleUser}))
 		h.checkout(delRec, delReq)
 		if delRec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("DELETE status = %d; want 405", delRec.Code)

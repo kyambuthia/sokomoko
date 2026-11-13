@@ -8,7 +8,6 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
@@ -16,7 +15,7 @@ import (
 
 type stubRoutesAuth struct {
 	app.AuthService
-	user *db.User
+	user *auth.User
 }
 
 func (s *stubRoutesAuth) AuthMiddleware(next http.Handler) http.Handler {
@@ -52,14 +51,14 @@ func TestRouteRoleGuards(t *testing.T) {
 	})
 
 	t.Run("withRole enforces required role", func(t *testing.T) {
-		denied := withRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &db.User{ID: 1, Role: domain.RoleUser}}}), domain.RolePartner, okNext)
+		denied := withRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &auth.User{ID: 1, Role: domain.RoleUser}}}), domain.RolePartner, okNext)
 		rec := httptest.NewRecorder()
 		denied.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/services", nil))
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("status = %d; want 403", rec.Code)
 		}
 
-		allowed := withRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &db.User{ID: 2, Role: domain.RolePartner}}}), domain.RolePartner, okNext)
+		allowed := withRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &auth.User{ID: 2, Role: domain.RolePartner}}}), domain.RolePartner, okNext)
 		rec = httptest.NewRecorder()
 		allowed.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/services", nil))
 		if rec.Code != http.StatusOK {
@@ -69,14 +68,14 @@ func TestRouteRoleGuards(t *testing.T) {
 
 	t.Run("withAnyRole enforces any allowed role", func(t *testing.T) {
 		roles := []string{domain.RoleAdmin, domain.RoleStaff}
-		denied := withAnyRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &db.User{ID: 1, Role: domain.RoleCourier}}}), roles, okNext)
+		denied := withAnyRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &auth.User{ID: 1, Role: domain.RoleCourier}}}), roles, okNext)
 		rec := httptest.NewRecorder()
 		denied.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("status = %d; want 403", rec.Code)
 		}
 
-		allowed := withAnyRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &db.User{ID: 3, Role: domain.RoleStaff}}}), roles, okNext)
+		allowed := withAnyRole(app.New(app.Dependencies{Auth: &stubRoutesAuth{user: &auth.User{ID: 3, Role: domain.RoleStaff}}}), roles, okNext)
 		rec = httptest.NewRecorder()
 		allowed.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 		if rec.Code != http.StatusOK {
@@ -107,7 +106,7 @@ func TestCourierDeliveriesAndPaymentStatusGuards(t *testing.T) {
 
 		badRec := httptest.NewRecorder()
 		badReq := httptest.NewRequest(http.MethodGet, "/deliveries?view=bad", nil)
-		badReq = badReq.WithContext(auth.WithUser(badReq.Context(), &db.User{ID: 4, Role: domain.RoleCourier}))
+		badReq = badReq.WithContext(auth.WithUser(badReq.Context(), &auth.User{ID: 4, Role: domain.RoleCourier}))
 		handler.ServeHTTP(badRec, badReq)
 		if badRec.Code != http.StatusBadRequest {
 			t.Fatalf("invalid view status = %d; want 400", badRec.Code)
@@ -127,7 +126,7 @@ func TestCourierDeliveriesAndPaymentStatusGuards(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/orders/42/payment", nil)
 		req.SetPathValue("id", "42")
-		req = req.WithContext(auth.WithUser(req.Context(), &db.User{ID: 5, Role: domain.RoleUser}))
+		req = req.WithContext(auth.WithUser(req.Context(), &auth.User{ID: 5, Role: domain.RoleUser}))
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status = %d; want 404", rec.Code)

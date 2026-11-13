@@ -14,6 +14,34 @@ var (
 	ErrCurrencyLocked           = errors.New("currency cannot change after orders exist")
 )
 
+const (
+	OrderStatusPending    = "pending"
+	OrderStatusProcessing = "processing"
+	OrderStatusShipped    = "shipped"
+	OrderStatusDelivered  = "delivered"
+	OrderStatusCancelled  = "cancelled"
+)
+
+type StoreSettings struct {
+	StoreName     string
+	StoreSlug     string
+	Description   string
+	ContactEmail  string
+	InitializedAt time.Time
+	UpdatedAt     time.Time
+}
+
+type CartItem struct {
+	ProductID       int
+	ProductName     string
+	ProductSlug     string
+	ProductImageURL string
+	UnitPrice       money.Cents
+	Quantity        int
+	StockQuantity   int
+	LineTotal       money.Cents
+}
+
 // PaymentException is one confirmed charge that needs an operator refund.
 type PaymentException struct {
 	ID               int
