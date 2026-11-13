@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
 )
 
@@ -132,7 +131,7 @@ func (h *Handler) courierDeliveryUpdate(w http.ResponseWriter, r *http.Request) 
 	writeData(w, http.StatusOK, map[string]string{"message": "Delivery status updated"})
 }
 
-func mapCourierDelivery(delivery db.CourierDelivery) courierDeliveryDTO {
+func mapCourierDelivery(delivery logisticsvc.CourierDelivery) courierDeliveryDTO {
 	items := make([]courierItemDTO, 0, len(delivery.Items))
 	for _, item := range delivery.Items {
 		items = append(items, courierItemDTO{ProductName: item.ProductName, Quantity: item.Quantity})
@@ -158,7 +157,7 @@ func logisticsActor(r *http.Request) *logisticsvc.Actor {
 
 func writeLogisticsError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, db.ErrInvalidCourierView):
+	case errors.Is(err, logisticsvc.ErrInvalidCourierView):
 		writeError(w, http.StatusBadRequest, "invalid_delivery_view", "Choose all, active or completed deliveries")
 	case errors.Is(err, logisticsvc.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", "You do not have access to this delivery")

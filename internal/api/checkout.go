@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kyambuthia/sokomoko/internal/db"
 	checkoutsvc "github.com/kyambuthia/sokomoko/internal/service/checkout"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
@@ -197,9 +196,9 @@ func writeCheckoutError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "cart_empty", "Cart is empty or the checkout has expired")
 	case errors.Is(err, checkoutsvc.ErrInvalidCurrencyPrecision):
 		writeError(w, http.StatusConflict, "currency_precision_required", "Store pricing must use whole units before checkout")
-	case errors.Is(err, checkoutsvc.ErrInsufficientStock), errors.Is(err, db.ErrInsufficientStock):
+	case errors.Is(err, checkoutsvc.ErrInsufficientStock), errors.Is(err, checkoutsvc.ErrInsufficientStock):
 		writeError(w, http.StatusConflict, "insufficient_stock", "One or more items are unavailable")
-	case errors.Is(err, db.ErrCheckoutNotFound):
+	case errors.Is(err, checkoutsvc.ErrCheckoutNotFound):
 		writeError(w, http.StatusNotFound, "checkout_not_found", "Checkout not found")
 	default:
 		writeError(w, http.StatusInternalServerError, "checkout_failed", "Unable to process checkout")

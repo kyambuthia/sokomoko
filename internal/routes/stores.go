@@ -7,9 +7,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
+	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 )
 
 const (
@@ -25,7 +25,7 @@ type StorePageData struct {
 	Initials     string
 	CanMessage   bool
 	Products     []catalogsvc.Product
-	Services     []db.ServiceListing
+	Services     []directorysvc.ServiceListing
 	ProductTotal int
 	ServiceTotal int
 	Viewer       Viewer
@@ -61,7 +61,7 @@ func StoreProfile(a *app.App) http.HandlerFunc {
 			serverError(w, r)
 			return
 		}
-		services, serviceTotal, err := a.Directory.Browse(r.Context(), db.ServiceFilter{PartnerID: partner.ID, Limit: storeServiceLimit}, 1)
+		services, serviceTotal, err := a.Directory.Browse(r.Context(), directorysvc.ServiceFilter{PartnerID: partner.ID, Limit: storeServiceLimit}, 1)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "store services failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 			serverError(w, r)

@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/payments"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
@@ -49,7 +48,7 @@ func PaymentPage(a *app.App) http.HandlerFunc {
 			case err == nil && outcome.RedirectURL != "":
 				http.Redirect(w, r, outcome.RedirectURL, http.StatusSeeOther)
 				return
-			case errors.Is(err, db.ErrPaymentNotFound):
+			case errors.Is(err, paymentsvc.ErrPaymentNotFound):
 				NotFound(w, r)
 				return
 			case err != nil:
@@ -79,7 +78,7 @@ func PaymentPage(a *app.App) http.HandlerFunc {
 		}
 
 		view, err := a.Payment.Status(r.Context(), userID, orderID)
-		if errors.Is(err, db.ErrPaymentNotFound) {
+		if errors.Is(err, paymentsvc.ErrPaymentNotFound) {
 			NotFound(w, r)
 			return
 		}
@@ -130,7 +129,7 @@ func PaymentReturn(a *app.App) http.HandlerFunc {
 			reference = strings.TrimSpace(r.URL.Query().Get("trxref"))
 		}
 		orderID, err := a.Payment.HandleReturn(r.Context(), userID, reference)
-		if errors.Is(err, db.ErrPaymentNotFound) {
+		if errors.Is(err, paymentsvc.ErrPaymentNotFound) {
 			NotFound(w, r)
 			return
 		}
@@ -178,7 +177,7 @@ func PaymentWebhook(a *app.App) http.HandlerFunc {
 		provider := r.PathValue("provider")
 		err := a.Payment.HandleWebhook(r.Context(), provider, r, body)
 		switch {
-		case err == nil, errors.Is(err, payments.ErrUnsupported), errors.Is(err, db.ErrPaymentNotFound),
+		case err == nil, errors.Is(err, payments.ErrUnsupported), errors.Is(err, paymentsvc.ErrPaymentNotFound),
 			errors.Is(err, paymentsvc.ErrProviderVerificationPending):
 			// A provider that is still verifying is not a failure: the status
 			// page re-verifies a pending payment, so the event is acknowledged.
@@ -208,7 +207,7 @@ func PaymentCallback(a *app.App) http.HandlerFunc {
 		case err == nil, errors.Is(err, paymentsvc.ErrProviderVerificationPending):
 			// Daraja expects an acknowledgement. A pending verification leaves
 			// the payment pending, and the status page verifies it again.
-		case errors.Is(err, db.ErrPaymentNotFound), errors.Is(err, paymentsvc.ErrUnknownProvider), errors.Is(err, payments.ErrNotConfigured):
+		case errors.Is(err, paymentsvc.ErrPaymentNotFound), errors.Is(err, paymentsvc.ErrUnknownProvider), errors.Is(err, payments.ErrNotConfigured):
 			NotFound(w, r)
 			return
 		default:

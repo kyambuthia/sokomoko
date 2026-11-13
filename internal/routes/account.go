@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
@@ -30,7 +29,7 @@ type AccountPageData struct {
 }
 
 type AccountBookingView struct {
-	Booking           db.ServiceBooking
+	Booking           bookingsvc.ServiceBooking
 	StatusLabel       string
 	StatusDescription string
 	LocalStart        string
@@ -47,7 +46,7 @@ type AccountServiceBookingsPage struct {
 	CSRFToken string
 }
 
-func accountBookingView(booking db.ServiceBooking) AccountBookingView {
+func accountBookingView(booking bookingsvc.ServiceBooking) AccountBookingView {
 	loc, err := time.LoadLocation(booking.Timezone)
 	if err != nil {
 		loc = time.UTC

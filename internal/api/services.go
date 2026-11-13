@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 )
 
@@ -41,7 +40,7 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, total, err := h.app.Directory.Browse(r.Context(), db.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), HasHours: hasHours, Limit: limit}, page)
+	items, total, err := h.app.Directory.Browse(r.Context(), directorysvc.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), HasHours: hasHours, Limit: limit}, page)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -89,7 +88,7 @@ func (h *Handler) ownServices(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ownService(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePositiveID(r.PathValue("id"))
 	if !ok {
-		writeServiceError(w, db.ErrServiceNotFound)
+		writeServiceError(w, directorysvc.ErrServiceNotFound)
 		return
 	}
 	switch r.Method {
@@ -116,12 +115,12 @@ func (h *Handler) ownService(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet, http.MethodPatch)
 	}
 }
-func writeServicePage(w http.ResponseWriter, items []db.ServiceListing, total, page, limit int) {
+func writeServicePage(w http.ResponseWriter, items []directorysvc.ServiceListing, total, page, limit int) {
 	writeData(w, http.StatusOK, struct {
-		Items []db.ServiceListing `json:"items"`
-		Total int                 `json:"total"`
-		Page  int                 `json:"page"`
-		Limit int                 `json:"limit"`
+		Items []directorysvc.ServiceListing `json:"items"`
+		Total int                           `json:"total"`
+		Page  int                           `json:"page"`
+		Limit int                           `json:"limit"`
 	}{items, total, page, limit})
 }
 func writeServiceError(w http.ResponseWriter, err error) {
@@ -139,9 +138,9 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, "forbidden", "A seller account is required")
 	case errors.Is(err, directorysvc.ErrInvalid):
 		writeError(w, http.StatusBadRequest, "invalid_service", "Check service fields, pricing, duration, category, public area and version")
-	case errors.Is(err, db.ErrServiceNotFound):
+	case errors.Is(err, directorysvc.ErrServiceNotFound):
 		writeError(w, http.StatusNotFound, "service_not_found", "Service listing not found")
-	case errors.Is(err, db.ErrServiceConflict):
+	case errors.Is(err, directorysvc.ErrServiceConflict):
 		writeError(w, http.StatusConflict, "service_changed", "This listing changed. Reload and review the latest version before saving")
 	default:
 		writeError(w, http.StatusInternalServerError, "internal_error", "Unable to process service listing")

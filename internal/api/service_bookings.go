@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
+	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 )
 
 func (h *Handler) serviceAvailability(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +31,7 @@ func (h *Handler) serviceAvailability(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, bookingsvc.ErrInvalid):
 		writeError(w, http.StatusBadRequest, "invalid_date", "A valid service slug and date in YYYY-MM-DD format are required")
 		return
-	case errors.Is(err, db.ErrServiceNotFound):
+	case errors.Is(err, directorysvc.ErrServiceNotFound):
 		writeError(w, http.StatusNotFound, "service_not_found", "Service listing not found")
 		return
 	case err != nil:
@@ -232,7 +232,7 @@ func writeServiceBookingError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, bookingsvc.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", "This account cannot manage that appointment")
-	case errors.Is(err, bookingsvc.ErrNotFound), errors.Is(err, db.ErrServiceNotFound):
+	case errors.Is(err, bookingsvc.ErrNotFound), errors.Is(err, directorysvc.ErrServiceNotFound):
 		writeError(w, http.StatusNotFound, "booking_not_found", "Appointment or service not found")
 	case errors.Is(err, bookingsvc.ErrInvalid):
 		writeError(w, http.StatusBadRequest, "invalid_booking", "Check the appointment details and action")

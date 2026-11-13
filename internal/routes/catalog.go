@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	"github.com/kyambuthia/sokomoko/internal/ui"
 )
@@ -98,7 +97,7 @@ func ProductImage(a *app.App) http.HandlerFunc {
 			return
 		}
 		asset, err := a.Catalog.ProductImage(r.Context(), id)
-		if errors.Is(err, db.ErrProductNotFound) {
+		if errors.Is(err, catalogsvc.ErrProductNotFound) {
 			NotFound(w, r)
 			return
 		}
@@ -136,7 +135,7 @@ func ProductVideo(a *app.App) http.HandlerFunc {
 			return
 		}
 		video, err := a.Catalog.ProductVideo(r.Context(), productID)
-		if errors.Is(err, db.ErrProductNotFound) {
+		if errors.Is(err, catalogsvc.ErrProductNotFound) {
 			NotFound(w, r)
 			return
 		}

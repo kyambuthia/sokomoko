@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
+	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
 )
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +144,7 @@ func (h *Handler) accountOrderPayment(w http.ResponseWriter, r *http.Request, ui
 		return
 	}
 	view, err := h.app.Payment.Status(r.Context(), uid, id)
-	if errors.Is(err, db.ErrPaymentNotFound) {
+	if errors.Is(err, paymentsvc.ErrPaymentNotFound) {
 		writeError(w, http.StatusNotFound, "order_not_found", "Order not found")
 		return
 	}

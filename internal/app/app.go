@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
@@ -36,28 +35,28 @@ type CatalogService interface {
 	Categories(ctx context.Context) ([]catalogsvc.Category, error)
 	Page(ctx context.Context, page, limit int) ([]catalogsvc.Product, int, error)
 	ProductBySlug(ctx context.Context, slug string) (*catalogsvc.Product, error)
-	ProductImage(ctx context.Context, id int) (*db.ProductImage, error)
-	ProductVideo(ctx context.Context, productID int) (*db.ProductVideo, error)
+	ProductImage(ctx context.Context, id int) (*catalogsvc.ProductImage, error)
+	ProductVideo(ctx context.Context, productID int) (*catalogsvc.ProductVideo, error)
 	Search(ctx context.Context, query string) ([]catalogsvc.Product, error)
 	SearchInCategory(ctx context.Context, query, category string) ([]catalogsvc.Product, error)
 	SearchPage(ctx context.Context, query, category string, page, limit int) ([]catalogsvc.Product, int, error)
 	ProductCount(ctx context.Context, filter catalogsvc.Filter) (int, error)
-	ActiveStore(ctx context.Context, slug string) (*db.Partner, error)
+	ActiveStore(ctx context.Context, slug string) (*catalogsvc.Partner, error)
 }
 
 type DirectoryService interface {
-	Browse(context.Context, db.ServiceFilter, int) ([]db.ServiceListing, int, error)
-	Public(context.Context, string) (*db.ServiceListing, error)
-	Own(context.Context, *directorysvc.Actor, int, int) ([]db.ServiceListing, int, error)
-	OwnByState(context.Context, *directorysvc.Actor, string, int, int) ([]db.ServiceListing, int, error)
-	Edit(context.Context, *directorysvc.Actor, int) (*db.ServiceListing, error)
-	Save(context.Context, *directorysvc.Actor, int, directorysvc.Input) (*db.ServiceListing, error)
+	Browse(context.Context, directorysvc.ServiceFilter, int) ([]directorysvc.ServiceListing, int, error)
+	Public(context.Context, string) (*directorysvc.ServiceListing, error)
+	Own(context.Context, *directorysvc.Actor, int, int) ([]directorysvc.ServiceListing, int, error)
+	OwnByState(context.Context, *directorysvc.Actor, string, int, int) ([]directorysvc.ServiceListing, int, error)
+	Edit(context.Context, *directorysvc.Actor, int) (*directorysvc.ServiceListing, error)
+	Save(context.Context, *directorysvc.Actor, int, directorysvc.Input) (*directorysvc.ServiceListing, error)
 }
 
 type BookingService interface {
-	Request(context.Context, *bookingsvc.Actor, string, string, int, string) (*db.ServiceBooking, error)
-	ForCustomer(context.Context, *bookingsvc.Actor, int, int) ([]db.ServiceBooking, int, error)
-	ForPartner(context.Context, *bookingsvc.Actor, int, int) ([]db.ServiceBooking, int, error)
+	Request(context.Context, *bookingsvc.Actor, string, string, int, string) (*bookingsvc.ServiceBooking, error)
+	ForCustomer(context.Context, *bookingsvc.Actor, int, int) ([]bookingsvc.ServiceBooking, int, error)
+	ForPartner(context.Context, *bookingsvc.Actor, int, int) ([]bookingsvc.ServiceBooking, int, error)
 	Cancel(context.Context, *bookingsvc.Actor, int, int64) error
 	Respond(context.Context, *bookingsvc.Actor, int, int64, string) error
 }
@@ -94,10 +93,10 @@ type PaymentService interface {
 	HandleWebhook(ctx context.Context, providerID string, r *http.Request, body []byte) error
 	HandleCallback(ctx context.Context, providerID, token string, r *http.Request, body []byte) error
 	Providers(ctx context.Context) ([]paymentsvc.ProviderView, error)
-	PaymentExceptions(ctx context.Context) ([]db.PaymentException, error)
-	RequestRefund(context.Context, *paymentsvc.Actor, int, string) (*db.PaymentException, error)
-	RefreshRefund(context.Context, *paymentsvc.Actor, int) (*db.PaymentException, error)
-	ResolveRefund(context.Context, *paymentsvc.Actor, int, string) (*db.PaymentException, error)
+	PaymentExceptions(ctx context.Context) ([]paymentsvc.PaymentException, error)
+	RequestRefund(context.Context, *paymentsvc.Actor, int, string) (*paymentsvc.PaymentException, error)
+	RefreshRefund(context.Context, *paymentsvc.Actor, int) (*paymentsvc.PaymentException, error)
+	ResolveRefund(context.Context, *paymentsvc.Actor, int, string) (*paymentsvc.PaymentException, error)
 	ExceptionsNeedingAttention(context.Context) (int, error)
 	SaveProvider(ctx context.Context, actor *paymentsvc.Actor, id string, input paymentsvc.ProviderInput) error
 	Pricing(ctx context.Context) (paymentsvc.Pricing, error)
@@ -150,20 +149,20 @@ type PartnerService interface {
 type LogisticsService interface {
 	DispatchBoard(context.Context, *logisticsvc.Actor) (logisticsvc.DispatchBoard, error)
 	Assign(context.Context, *logisticsvc.Actor, string, string) error
-	Jobs(context.Context, *logisticsvc.Actor) ([]db.CourierDelivery, error)
-	JobsByView(context.Context, *logisticsvc.Actor, string) ([]db.CourierDelivery, error)
+	Jobs(context.Context, *logisticsvc.Actor) ([]logisticsvc.CourierDelivery, error)
+	JobsByView(context.Context, *logisticsvc.Actor, string) ([]logisticsvc.CourierDelivery, error)
 	Update(context.Context, *logisticsvc.Actor, string, string, string) error
 }
 
 type MessagingService interface {
-	Encrypted(context.Context, *messagingSvc.Actor, db.EncryptedRequest) (db.EncryptedResponse, error)
-	Contacts(context.Context, *messagingSvc.Actor, db.ChatTarget) ([]db.ChatContact, error)
-	Inbox(context.Context, *messagingSvc.Actor, int) (db.ChatInbox, error)
-	Thread(context.Context, *messagingSvc.Actor, int, int, int) (db.ChatThread, error)
-	Start(context.Context, *messagingSvc.Actor, db.ChatTarget, string, string) (int, error)
+	Encrypted(context.Context, *messagingSvc.Actor, messagingSvc.EncryptedRequest) (messagingSvc.EncryptedResponse, error)
+	Contacts(context.Context, *messagingSvc.Actor, messagingSvc.ChatTarget) ([]messagingSvc.ChatContact, error)
+	Inbox(context.Context, *messagingSvc.Actor, int) (messagingSvc.ChatInbox, error)
+	Thread(context.Context, *messagingSvc.Actor, int, int, int) (messagingSvc.ChatThread, error)
+	Start(context.Context, *messagingSvc.Actor, messagingSvc.ChatTarget, string, string) (int, error)
 	Send(context.Context, *messagingSvc.Actor, int, string, string) (int, error)
 	Action(context.Context, *messagingSvc.Actor, int, string, int, string) error
-	Reports(context.Context, *messagingSvc.Actor) ([]db.ChatReport, error)
+	Reports(context.Context, *messagingSvc.Actor) ([]messagingSvc.ChatReport, error)
 	ResolveReport(context.Context, *messagingSvc.Actor, int) error
 }
 

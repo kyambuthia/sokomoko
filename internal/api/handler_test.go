@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 )
@@ -43,10 +42,10 @@ func (m *mockCatalogService) ProductBySlug(ctx context.Context, slug string) (*c
 	}
 	return nil, nil
 }
-func (m *mockCatalogService) ProductImage(context.Context, int) (*db.ProductImage, error) {
+func (m *mockCatalogService) ProductImage(context.Context, int) (*catalogsvc.ProductImage, error) {
 	return nil, nil
 }
-func (m *mockCatalogService) ProductVideo(context.Context, int) (*db.ProductVideo, error) {
+func (m *mockCatalogService) ProductVideo(context.Context, int) (*catalogsvc.ProductVideo, error) {
 	return nil, nil
 }
 func (m *mockCatalogService) Search(context.Context, string) ([]catalogsvc.Product, error) {
@@ -64,7 +63,7 @@ func (m *mockCatalogService) SearchPage(ctx context.Context, query, category str
 func (m *mockCatalogService) ProductCount(context.Context, catalogsvc.Filter) (int, error) {
 	return 0, nil
 }
-func (m *mockCatalogService) ActiveStore(context.Context, string) (*db.Partner, error) {
+func (m *mockCatalogService) ActiveStore(context.Context, string) (*catalogsvc.Partner, error) {
 	return nil, nil
 }
 

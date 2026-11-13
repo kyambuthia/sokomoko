@@ -8,7 +8,6 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	messagingSvc "github.com/kyambuthia/sokomoko/internal/service/messaging"
 )
@@ -17,10 +16,10 @@ type MessagesPageData struct {
 	Title, Role, Username, Workspace, Mode, CSRFToken, Error, Body, Nonce string
 	Viewer                                                                Viewer
 	Flash                                                                 Flash
-	Inbox                                                                 db.ChatInbox
-	Contacts                                                              []db.ChatContact
-	Target                                                                db.ChatTarget
-	Thread                                                                db.ChatThread
+	Inbox                                                                 messagingSvc.ChatInbox
+	Contacts                                                              []messagingSvc.ChatContact
+	Target                                                                messagingSvc.ChatTarget
+	Thread                                                                messagingSvc.ChatThread
 	LastMessageID                                                         int
 	OlderPage                                                             bool
 	Encrypted                                                             bool
@@ -60,12 +59,12 @@ func messageInt(raw string) (int, error) {
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 {
-		return 0, db.ErrChatInvalid
+		return 0, messagingSvc.ErrChatInvalid
 	}
 	return n, nil
 }
-func messageTarget(v url.Values) (db.ChatTarget, error) {
-	t := db.ChatTarget{Handle: v.Get("handle")}
+func messageTarget(v url.Values) (messagingSvc.ChatTarget, error) {
+	t := messagingSvc.ChatTarget{Handle: v.Get("handle")}
 	for key, dest := range map[string]*int{"product_id": &t.ProductID, "service_id": &t.ServiceID, "order_id": &t.OrderID, "partner_id": &t.PartnerID, "delivery_order_id": &t.DeliveryOrderID} {
 		n, err := messageInt(v.Get(key))
 		if err != nil {
@@ -78,19 +77,19 @@ func messageTarget(v url.Values) (db.ChatTarget, error) {
 
 func messageError(err error) (int, string) {
 	switch {
-	case errors.Is(err, db.ErrChatEncryptionRequired):
+	case errors.Is(err, messagingSvc.ErrChatEncryptionRequired):
 		return http.StatusConflict, "Open encrypted messages to send. Plaintext messaging is disabled."
-	case errors.Is(err, db.ErrChatNotFound):
+	case errors.Is(err, messagingSvc.ErrChatNotFound):
 		return http.StatusNotFound, "This conversation or contact is unavailable. Use the exact handle, or contact a courier from your delivery."
-	case errors.Is(err, db.ErrChatInvalid):
+	case errors.Is(err, messagingSvc.ErrChatInvalid):
 		return http.StatusBadRequest, "Check the contact and enter a message of 1–4,000 characters."
-	case errors.Is(err, db.ErrChatClosed):
+	case errors.Is(err, messagingSvc.ErrChatClosed):
 		return http.StatusConflict, "This conversation is waiting for acceptance or is closed."
-	case errors.Is(err, db.ErrChatBlocked):
+	case errors.Is(err, messagingSvc.ErrChatBlocked):
 		return http.StatusForbidden, "Messaging is unavailable for this contact."
-	case errors.Is(err, db.ErrChatLimited):
+	case errors.Is(err, messagingSvc.ErrChatLimited):
 		return http.StatusTooManyRequests, "You've reached a messaging limit. Please try again later."
-	case errors.Is(err, db.ErrChatConflict):
+	case errors.Is(err, messagingSvc.ErrChatConflict):
 		return http.StatusConflict, "That message was already submitted. Refresh the conversation before sending another."
 	default:
 		return http.StatusInternalServerError, "Messages are temporarily unavailable. Please try again."
@@ -162,7 +161,7 @@ func messageStart(a *app.App, workspace string) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			messageFailure(w, r, db.ErrChatInvalid)
+			messageFailure(w, r, messagingSvc.ErrChatInvalid)
 			return
 		}
 		t, err := messageTarget(r.PostForm)
@@ -243,7 +242,7 @@ func messageSend(a *app.App, workspace string) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			messageFailure(w, r, db.ErrChatInvalid)
+			messageFailure(w, r, messagingSvc.ErrChatInvalid)
 			return
 		}
 		id, err := messageInt(r.PathValue("id"))
@@ -276,7 +275,7 @@ func messageAction(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			messageFailure(w, r, db.ErrChatInvalid)
+			messageFailure(w, r, messagingSvc.ErrChatInvalid)
 			return
 		}
 		id, err := messageInt(r.PathValue("id"))
@@ -306,7 +305,7 @@ func messageAction(a *app.App) http.HandlerFunc {
 
 type MessageReportsPageData struct {
 	Title, Role, CSRFToken string
-	Reports                []db.ChatReport
+	Reports                []messagingSvc.ChatReport
 	Flash                  Flash
 }
 

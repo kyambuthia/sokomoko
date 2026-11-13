@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
@@ -65,7 +64,7 @@ type AdminPageData struct {
 
 	Pricing           paymentsvc.Pricing
 	Providers         []paymentsvc.ProviderView
-	PaymentExceptions []db.PaymentException
+	PaymentExceptions []paymentsvc.PaymentException
 	Currencies        []money.Currency
 	SecretsConfigured bool
 	PublicBase        string

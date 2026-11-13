@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 	paymentsvc "github.com/kyambuthia/sokomoko/internal/service/payment"
@@ -233,7 +232,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 						message = "Refund request recorded"
 					}
 				} else {
-					err = db.ErrPaymentExceptionNotFound
+					err = paymentsvc.ErrPaymentExceptionNotFound
 				}
 			case "pricing":
 				var saved paymentsvc.Pricing
@@ -270,7 +269,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 			case errors.Is(err, paymentsvc.ErrForbidden):
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
-			case errors.Is(err, db.ErrCurrencyLocked):
+			case errors.Is(err, paymentsvc.ErrCurrencyLocked):
 				page.FormError = "The currency cannot change after orders exist, because existing prices are stored in the current currency."
 			case errors.Is(err, paymentsvc.ErrSecretsKeyMissing):
 				page.FormError = "Set SECRETS_KEY on the server to store payment credentials."
@@ -278,7 +277,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 				page.FormError = "Keep at least one payment method enabled, or customers cannot check out."
 			case errors.Is(err, paymentsvc.ErrRefundReferenceRequired):
 				page.FormError = "Enter the M-Pesa reversal receipt after completing the refund in M-Pesa."
-			case errors.Is(err, db.ErrPaymentExceptionNotFound):
+			case errors.Is(err, paymentsvc.ErrPaymentExceptionNotFound):
 				page.FormError = "That payment exception no longer exists."
 			case errors.Is(err, paymentsvc.ErrRefundNotReady), errors.Is(err, paymentsvc.ErrRefundUnsupported),
 				errors.Is(err, paymentsvc.ErrRefundNotResolvable), errors.Is(err, paymentsvc.ErrRefundRequestInProgress):

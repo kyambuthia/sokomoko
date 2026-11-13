@@ -12,7 +12,6 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
@@ -34,7 +33,7 @@ type serviceCategoryLink struct {
 }
 
 type servicePage struct {
-	ConflictListing               *db.ServiceListing
+	ConflictListing               *directorysvc.ServiceListing
 	State                         string
 	Preview                       bool
 	Total                         int
@@ -49,9 +48,9 @@ type servicePage struct {
 	LocalDate                     string
 	Flash                         Flash
 	Viewer                        Viewer
-	Listings                      []db.ServiceListing
-	Listing                       *db.ServiceListing
-	Filter                        db.ServiceFilter
+	Listings                      []directorysvc.ServiceListing
+	Listing                       *directorysvc.ServiceListing
+	Filter                        directorysvc.ServiceFilter
 	Pager                         Pager
 	Form                          directorysvc.Input
 	EditID                        int
@@ -64,8 +63,8 @@ type servicePage struct {
 var serviceCategories = []string{"hair", "beauty", "dental", "wellness", "home", "other"}
 var serviceWeekdayNames = [...]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
 
-func serviceWeekdayForms(hours []db.ServiceWeeklyHour) []serviceWeekday {
-	byDay := make(map[int]db.ServiceWeeklyHour, len(hours))
+func serviceWeekdayForms(hours []directorysvc.ServiceWeeklyHour) []serviceWeekday {
+	byDay := make(map[int]directorysvc.ServiceWeeklyHour, len(hours))
 	for _, hour := range hours {
 		if hour.Weekday >= 0 && hour.Weekday < len(serviceWeekdayNames) {
 			byDay[hour.Weekday] = hour
@@ -79,7 +78,7 @@ func serviceWeekdayForms(hours []db.ServiceWeeklyHour) []serviceWeekday {
 	return days
 }
 
-func serviceSchedule(hours []db.ServiceWeeklyHour) []serviceWeekday {
+func serviceSchedule(hours []directorysvc.ServiceWeeklyHour) []serviceWeekday {
 	days := serviceWeekdayForms(hours)
 	schedule := make([]serviceWeekday, 0, len(hours))
 	for _, day := range days {
@@ -99,7 +98,7 @@ func directoryActor(r *http.Request) *directorysvc.Actor {
 }
 func servicePageError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, db.ErrServiceNotFound):
+	case errors.Is(err, directorysvc.ErrServiceNotFound):
 		NotFound(w, r)
 	case errors.Is(err, directorysvc.ErrForbidden):
 		http.Error(w, "Seller account required", http.StatusForbidden)
@@ -117,7 +116,7 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 		}
 		page := pageParamBounded(r, 1000)
 		data := servicePage{Title: "Services", Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Categories: serviceCategories}
-		data.Filter = db.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: 24}
+		data.Filter = directorysvc.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: 24}
 		var total int
 		var err error
 		if own {
@@ -284,7 +283,7 @@ func ServiceBookingRequest(a *app.App) http.HandlerFunc {
 				message = "This service changed. Reload its page before requesting an appointment."
 			case errors.Is(err, bookingsvc.ErrTimeConflict):
 				message = "That time has already been requested. Choose another time."
-			case errors.Is(err, bookingsvc.ErrUnavailable), errors.Is(err, db.ErrServiceNotFound):
+			case errors.Is(err, bookingsvc.ErrUnavailable), errors.Is(err, directorysvc.ErrServiceNotFound):
 				message = "That service is not available at the selected time."
 			case errors.Is(err, bookingsvc.ErrIdempotencyConflict):
 				message = "This request has already been used. Reload the service page and try again."
@@ -368,14 +367,14 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 			duration = 0
 		}
 		version, versionErr := strconv.Atoi(r.PostForm.Get("version"))
-		data.Form = directorysvc.Input{Title: r.PostForm.Get("title"), Description: r.PostForm.Get("description"), Category: r.PostForm.Get("category"), DurationMinutes: duration, PriceMode: r.PostForm.Get("price_mode"), Price: r.PostForm.Get("price"), Currency: r.PostForm.Get("currency"), PublicArea: r.PostForm.Get("public_area"), DeliveryMode: r.PostForm.Get("delivery_mode"), State: r.PostForm.Get("state"), Version: version, Timezone: r.PostForm.Get("timezone"), WeeklyHours: []db.ServiceWeeklyHour{}}
+		data.Form = directorysvc.Input{Title: r.PostForm.Get("title"), Description: r.PostForm.Get("description"), Category: r.PostForm.Get("category"), DurationMinutes: duration, PriceMode: r.PostForm.Get("price_mode"), Price: r.PostForm.Get("price"), Currency: r.PostForm.Get("currency"), PublicArea: r.PostForm.Get("public_area"), DeliveryMode: r.PostForm.Get("delivery_mode"), State: r.PostForm.Get("state"), Version: version, Timezone: r.PostForm.Get("timezone"), WeeklyHours: []directorysvc.ServiceWeeklyHour{}}
 		for weekday := range serviceWeekdayNames {
 			opensAt := strings.TrimSpace(r.PostForm.Get("opens_at_" + strconv.Itoa(weekday)))
 			closesAt := strings.TrimSpace(r.PostForm.Get("closes_at_" + strconv.Itoa(weekday)))
 			if opensAt == "" && closesAt == "" {
 				continue
 			}
-			data.Form.WeeklyHours = append(data.Form.WeeklyHours, db.ServiceWeeklyHour{Weekday: weekday, OpensAt: opensAt, ClosesAt: closesAt})
+			data.Form.WeeklyHours = append(data.Form.WeeklyHours, directorysvc.ServiceWeeklyHour{Weekday: weekday, OpensAt: opensAt, ClosesAt: closesAt})
 		}
 		data.Weekdays = serviceWeekdayForms(data.Form.WeeklyHours)
 		if versionErr != nil {
@@ -406,7 +405,7 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 				data.FieldErrors[field.Field] = field.Message
 			}
 		}
-		if errors.Is(err, db.ErrServiceConflict) {
+		if errors.Is(err, directorysvc.ErrServiceConflict) {
 			status = http.StatusConflict
 			data.ConflictListing, err = a.Directory.Edit(r.Context(), actor, id)
 			if err != nil {

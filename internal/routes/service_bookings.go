@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 )
 
 const serviceBookingsPageSize = 20
 
 type serviceBookingCard struct {
-	Booking           db.ServiceBooking
+	Booking           bookingsvc.ServiceBooking
 	StatusLabel       string
 	StatusDescription string
 	LocalStart        string
@@ -36,7 +35,7 @@ type serviceBookingsPage struct {
 	Pager     Pager
 }
 
-func serviceBookingCardFor(booking db.ServiceBooking) serviceBookingCard {
+func serviceBookingCardFor(booking bookingsvc.ServiceBooking) serviceBookingCard {
 	loc, err := time.LoadLocation(booking.Timezone)
 	if err != nil {
 		loc = time.UTC

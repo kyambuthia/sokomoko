@@ -7,7 +7,6 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	logisticsvc "github.com/kyambuthia/sokomoko/internal/service/logistics"
 )
@@ -19,7 +18,7 @@ type CourierDashboardData struct {
 	CSRFToken  string
 	Message    string
 	Error      string
-	Deliveries []db.CourierDelivery
+	Deliveries []logisticsvc.CourierDelivery
 }
 
 func RegisterCourier(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
@@ -58,7 +57,7 @@ func CourierDeliveries(a *app.App) http.HandlerFunc {
 			view = "all"
 		}
 		jobs, err := a.Logistics.JobsByView(r.Context(), logisticsActorFromContext(r), view)
-		if errors.Is(err, db.ErrInvalidCourierView) {
+		if errors.Is(err, logisticsvc.ErrInvalidCourierView) {
 			http.Error(w, "Invalid delivery view", http.StatusBadRequest)
 			return
 		}
