@@ -79,19 +79,17 @@ reachable.
 - [x] Public browsing by service, category and locality; branded seller forms and JSON API.
 - [x] Development sample listings that preserve seller edits on repeated seeds.
 - [x] Service-context encrypted enquiries.
-- [ ] Verify transactional appointment reservations, resource availability, conflict prevention and cancellation lifecycle. The request-to-book flow, timezone and opening-hour checks, default capacity-one resources, conflict prevention, customer cancellation, partner status transitions and request expiry are implemented; targeted workflow tests remain before marking this complete.
+- [x] Verify transactional appointment reservations, resource availability, conflict prevention and cancellation lifecycle. The request-to-book flow, timezone and opening-hour checks, default capacity-one resources, conflict prevention, customer cancellation, partner status transitions and request expiry are implemented; verified in `internal/db/service_bookings_test.go`.
 - [ ] Privacy-conscious geocoding and local map discovery.
 
 ## Later
 
-- [ ] Verify product deletion. The workspace flow is implemented; add targeted
-  coverage for ownership, cart and checkout cleanup, and concurrent add/delete
-  behavior before marking it complete.
+- [x] Verify product deletion. The workspace flow is implemented and verified for ownership, cart and checkout cleanup, and concurrent add/delete behavior in `internal/db/product_delete_test.go`.
 - [x] Verify product image upload. The workspace flow is implemented; add
   coverage for format, size, pixel bounds, EXIF orientation, replacement and
   removal, and active-product image serving before marking it complete.
-- [ ] Finish shared rate limiting verification. POST IP limits and
+- [x] Finish shared rate limiting verification. POST IP limits and
   authentication abuse backoff now use PostgreSQL across replicas, with a
-  bounded process-local fallback on database errors. Add database-backed tests
-  and run the full suite before marking this item done.
-- [ ] Durable encrypted password-reset email outbox is implemented with transactional enqueue, replica-safe leases and retry; targeted database workflow verification remains.
+  bounded process-local fallback on database errors. Verified with database-backed
+  tests in `internal/db/rate_limit_test.go` and full `make test-isolated` pass.
+- [x] Durable encrypted password-reset email outbox is implemented with transactional enqueue, replica-safe leases and retry; verified in `internal/db/password_reset_outbox_test.go`.
