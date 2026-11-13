@@ -66,6 +66,7 @@ type AccountService interface {
 	OrderForUser(context.Context, int, int) (*accountsvc.Order, error)
 	OrdersForUserPage(context.Context, int, int, int) ([]accountsvc.Order, int, error)
 	CancelOrder(ctx context.Context, userID, orderID int) error
+	UpdateProfile(ctx context.Context, userID int, username, email string) (*accountsvc.Profile, error)
 }
 
 type CommerceService interface {

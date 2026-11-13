@@ -57,6 +57,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/cart/remove", customer(CartRemove(a)))
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
+	mux.Handle("/account/profile", customer(AccountProfileUpdate(a)))
 	mux.Handle("/account/service-bookings", withRole(a, domain.RoleUser, AccountServiceBookings(a)))
 	mux.Handle("/account/orders/{id}/cancel", customer(AccountOrderCancel(a)))
 	mux.Handle("/account/bookings/{id}/cancel", withRole(a, domain.RoleUser, AccountBookingCancel(a)))

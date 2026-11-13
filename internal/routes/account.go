@@ -19,13 +19,15 @@ import (
 const accountOrdersPerPage = 20
 
 type AccountPageData struct {
-	Title     string
-	Flash     Flash
-	Orders    []accountsvc.Order
-	Bookings  []AccountBookingView
-	Pager     Pager
-	Viewer    Viewer
-	CSRFToken string
+	Title           string
+	Flash           Flash
+	Orders          []accountsvc.Order
+	Bookings        []AccountBookingView
+	Pager           Pager
+	Viewer          Viewer
+	ProfileUsername string
+	ProfileEmail    string
+	CSRFToken       string
 }
 
 type AccountBookingView struct {
@@ -110,14 +112,21 @@ func Account(a *app.App) http.HandlerFunc {
 		if redirectPastLastPage(w, r, page, accountOrdersPerPage, total) {
 			return
 		}
+		var profileUsername, profileEmail string
+		if user := requestUserFromContext(r); user != nil {
+			profileUsername = user.Username
+			profileEmail = user.Email
+		}
 		a.Render(w, a.Templates.Account, AccountPageData{
-			Title:     "Your Account",
-			Flash:     popFlash(w, r),
-			Orders:    orders,
-			Bookings:  bookingViews,
-			Pager:     newPager(r, page, accountOrdersPerPage, total),
-			Viewer:    viewerFromRequest(r),
-			CSRFToken: a.Auth.CSRFToken(r),
+			Title:           "Your Account",
+			Flash:           popFlash(w, r),
+			Orders:          orders,
+			Bookings:        bookingViews,
+			Pager:           newPager(r, page, accountOrdersPerPage, total),
+			Viewer:          viewerFromRequest(r),
+			ProfileUsername: profileUsername,
+			ProfileEmail:    profileEmail,
+			CSRFToken:       a.Auth.CSRFToken(r),
 		})
 	}
 }
@@ -227,6 +236,40 @@ func AccountBookingCancel(a *app.App) http.HandlerFunc {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 		default:
 			slog.ErrorContext(r.Context(), "cancel service booking", "error", err)
+			serverError(w, r)
+		}
+	}
+}
+
+// AccountProfileUpdate updates the signed-in user's username and email.
+func AccountProfileUpdate(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		userID, ok := requestUserID(r)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			redirectWithFlash(w, r, "/account", "danger", "Invalid form submission.")
+			return
+		}
+		_, err := a.Account.UpdateProfile(r.Context(), userID, r.PostForm.Get("username"), r.PostForm.Get("email"))
+		var validation *accountsvc.ValidationError
+		switch {
+		case err == nil:
+			redirectWithFlash(w, r, "/account", "success", "Profile updated.")
+		case errors.As(err, &validation):
+			redirectWithFlash(w, r, "/account", "danger", validation.Message)
+		case errors.Is(err, accountsvc.ErrProfileConflict):
+			redirectWithFlash(w, r, "/account", "danger", "That username or email is already in use.")
+		case errors.Is(err, accountsvc.ErrUserNotFound):
+			http.NotFound(w, r)
+		default:
+			slog.ErrorContext(r.Context(), "update account profile", "error", err)
 			serverError(w, r)
 		}
 	}

@@ -52,9 +52,8 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 
 ## Identity
 
-- No email verification and no multi-factor authentication. Profile details
-  (username, email) cannot be changed while signed in; `UpdateUser` has no
-  callers outside tests.
+- No email verification and no multi-factor authentication. Signed-in users
+  can update their username and email from `/account` and `PATCH /api/v1/me`.
 
 ## Operations
 

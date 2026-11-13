@@ -14,6 +14,8 @@ type mockAccountStore struct {
 	getOrderForUserFn       func(ctx context.Context, userID, orderID int) (*db.Order, error)
 	listOrdersByUserPageFn  func(ctx context.Context, userID, limit, offset int) ([]db.Order, int, error)
 	cancelOrderByCustomerFn func(ctx context.Context, userID, orderID int) error
+	getUserByIDFn           func(ctx context.Context, id int) (*db.User, error)
+	updateUserFn            func(ctx context.Context, user db.User) error
 }
 
 func (m *mockAccountStore) GetOrderForUser(ctx context.Context, userID, orderID int) (*db.Order, error) {
@@ -35,6 +37,76 @@ func (m *mockAccountStore) CancelOrderByCustomer(ctx context.Context, userID, or
 		return m.cancelOrderByCustomerFn(ctx, userID, orderID)
 	}
 	return nil
+}
+
+func (m *mockAccountStore) GetUserByID(ctx context.Context, id int) (*db.User, error) {
+	if m.getUserByIDFn != nil {
+		return m.getUserByIDFn(ctx, id)
+	}
+	return nil, nil
+}
+
+func (m *mockAccountStore) UpdateUser(ctx context.Context, user db.User) error {
+	if m.updateUserFn != nil {
+		return m.updateUserFn(ctx, user)
+	}
+	return nil
+}
+
+func TestUpdateProfile(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("updates trimmed username and lowercase email while preserving role and password", func(t *testing.T) {
+		var saved db.User
+		svc := New(&mockAccountStore{
+			getUserByIDFn: func(ctx context.Context, id int) (*db.User, error) {
+				return &db.User{ID: id, Username: "old_name", Email: "old@example.com", PasswordHash: "hash123", Role: "user"}, nil
+			},
+			updateUserFn: func(ctx context.Context, user db.User) error {
+				saved = user
+				return nil
+			},
+		})
+		profile, err := svc.UpdateProfile(ctx, 7, " new_name ", " NEW@Example.com ")
+		if err != nil {
+			t.Fatalf("UpdateProfile: %v", err)
+		}
+		if profile.Username != "new_name" || profile.Email != "new@example.com" || profile.Role != "user" {
+			t.Fatalf("unexpected profile: %+v", profile)
+		}
+		if saved.PasswordHash != "hash123" || saved.Role != "user" {
+			t.Fatalf("expected password hash and role preserved, got %+v", saved)
+		}
+	})
+
+	t.Run("rejects invalid username or email before hitting store", func(t *testing.T) {
+		svc := New(&mockAccountStore{
+			getUserByIDFn: func(ctx context.Context, id int) (*db.User, error) {
+				t.Fatal("store should not be called on invalid input")
+				return nil, nil
+			},
+		})
+		if _, err := svc.UpdateProfile(ctx, 7, "x", "ok@example.com"); !errors.Is(err, ErrInvalidProfile) {
+			t.Fatalf("expected ErrInvalidProfile for short username, got %v", err)
+		}
+		if _, err := svc.UpdateProfile(ctx, 7, "valid_name", "not-an-email"); !errors.Is(err, ErrInvalidProfile) {
+			t.Fatalf("expected ErrInvalidProfile for bad email, got %v", err)
+		}
+	})
+
+	t.Run("maps unique constraint error to ErrProfileConflict", func(t *testing.T) {
+		svc := New(&mockAccountStore{
+			getUserByIDFn: func(ctx context.Context, id int) (*db.User, error) {
+				return &db.User{ID: id, Username: "old_name", Email: "old@example.com", Role: "user"}, nil
+			},
+			updateUserFn: func(ctx context.Context, user db.User) error {
+				return db.ErrUniqueConstraint
+			},
+		})
+		if _, err := svc.UpdateProfile(ctx, 7, "taken_name", "old@example.com"); !errors.Is(err, ErrProfileConflict) {
+			t.Fatalf("expected ErrProfileConflict, got %v", err)
+		}
+	})
 }
 
 func TestCancelOrder(t *testing.T) {

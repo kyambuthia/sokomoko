@@ -10,6 +10,7 @@ type requestUser struct {
 	ID       int
 	Role     string
 	Username string
+	Email    string
 }
 
 func requestUserFromContext(r *http.Request) *requestUser {
@@ -17,7 +18,7 @@ func requestUserFromContext(r *http.Request) *requestUser {
 	if user == nil {
 		return nil
 	}
-	return &requestUser{ID: user.ID, Role: user.Role, Username: user.Username}
+	return &requestUser{ID: user.ID, Role: user.Role, Username: user.Username, Email: user.Email}
 }
 
 func requestUserID(r *http.Request) (int, bool) {

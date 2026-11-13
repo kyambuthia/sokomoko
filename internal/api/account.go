@@ -12,21 +12,51 @@ import (
 )
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
-		return
-	}
 	user := auth.GetUserFromContext(r.Context())
 	if user == nil {
 		writeError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	writeData(w, http.StatusOK, struct {
-		ID       int    `json:"id"`
+	if r.Method == http.MethodGet {
+		writeData(w, http.StatusOK, struct {
+			ID       int    `json:"id"`
+			Username string `json:"username"`
+			Email    string `json:"email"`
+			Role     string `json:"role"`
+		}{ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role})
+		return
+	}
+	if r.Method != http.MethodPatch {
+		methodNotAllowed(w, http.MethodGet, http.MethodPatch)
+		return
+	}
+	var input struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
-		Role     string `json:"role"`
-	}{ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role})
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "Invalid request body")
+		return
+	}
+	profile, err := h.app.Account.UpdateProfile(r.Context(), user.ID, input.Username, input.Email)
+	var validation *accountsvc.ValidationError
+	switch {
+	case err == nil:
+		writeData(w, http.StatusOK, struct {
+			ID       int    `json:"id"`
+			Username string `json:"username"`
+			Email    string `json:"email"`
+			Role     string `json:"role"`
+		}{ID: profile.ID, Username: profile.Username, Email: profile.Email, Role: profile.Role})
+	case errors.As(err, &validation):
+		writeError(w, http.StatusBadRequest, "invalid_profile", validation.Message)
+	case errors.Is(err, accountsvc.ErrProfileConflict):
+		writeError(w, http.StatusConflict, "profile_conflict", "That username or email is already in use")
+	case errors.Is(err, accountsvc.ErrUserNotFound):
+		writeError(w, http.StatusNotFound, "user_not_found", "User not found")
+	default:
+		writeError(w, http.StatusInternalServerError, "profile_update_failed", "Unable to update profile")
+	}
 }
 
 func (h *Handler) accountOrders(w http.ResponseWriter, r *http.Request) {

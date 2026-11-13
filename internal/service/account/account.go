@@ -4,6 +4,9 @@ package account
 import (
 	"context"
 	"errors"
+	"net/mail"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -43,7 +46,68 @@ type Order struct {
 var (
 	ErrOrderNotFound       = errors.New("order not found")
 	ErrOrderNotCancellable = errors.New("order can no longer be cancelled")
+	ErrUserNotFound        = errors.New("user not found")
+	ErrInvalidProfile      = errors.New("invalid profile")
+	ErrProfileConflict     = errors.New("username or email already in use")
+	usernamePattern        = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,31}$`)
 )
+
+// ValidationError carries a user-facing profile validation message.
+type ValidationError struct {
+	Message string
+}
+
+func (e *ValidationError) Error() string { return e.Message }
+func (e *ValidationError) Unwrap() error { return ErrInvalidProfile }
+
+type Profile struct {
+	ID       int
+	Username string
+	Email    string
+	Role     string
+}
+
+// UpdateProfile validates and persists a signed-in user's username and email.
+func (s *Service) UpdateProfile(ctx context.Context, userID int, username, email string) (*Profile, error) {
+	if userID <= 0 {
+		return nil, ErrUserNotFound
+	}
+	cleanUsername := strings.TrimSpace(username)
+	cleanEmail := strings.ToLower(strings.TrimSpace(email))
+	if !usernamePattern.MatchString(cleanUsername) {
+		return nil, &ValidationError{Message: "Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"}
+	}
+	if !isValidEmail(cleanEmail) {
+		return nil, &ValidationError{Message: "Enter a valid email address"}
+	}
+	user, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+	user.Username = cleanUsername
+	user.Email = cleanEmail
+	if err := s.store.UpdateUser(ctx, *user); err != nil {
+		if errors.Is(err, db.ErrUniqueConstraint) {
+			return nil, ErrProfileConflict
+		}
+		return nil, err
+	}
+	return &Profile{ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role}, nil
+}
+
+func isValidEmail(email string) bool {
+	if email == "" || len(email) > 254 {
+		return false
+	}
+	parsed, err := mail.ParseAddress(email)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(parsed.Address), email)
+}
 
 // CancelOrder cancels one of the user's orders before the vendor accepts it
 // and before any payment is captured.

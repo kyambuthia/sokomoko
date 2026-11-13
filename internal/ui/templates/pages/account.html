@@ -19,6 +19,24 @@
   </div>
   {{ template "notice" dict "Kind" .Flash.Kind "Text" .Flash.Message }}
 
+  <section class="section" aria-labelledby="profile-title">
+    <h2 class="section-title" id="profile-title">Profile</h2>
+    <form action="/account/profile" method="POST" class="form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="account-username">Username</label>
+          <input class="input" id="account-username" name="username" type="text" value="{{ .ProfileUsername }}" required minlength="3" maxlength="32">
+        </div>
+        <div class="field">
+          <label class="label" for="account-email">Email</label>
+          <input class="input" id="account-email" name="email" type="email" value="{{ .ProfileEmail }}" required maxlength="254">
+        </div>
+      </div>
+      <div class="row"><button type="submit" class="btn btn-secondary btn-sm">Save profile</button></div>
+    </form>
+  </section>
+
   <section class="section" aria-labelledby="appointments-title">
     <div class="row-between">
       <h2 class="section-title" id="appointments-title">Appointments</h2>
