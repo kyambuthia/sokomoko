@@ -40,7 +40,33 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, total, err := h.app.Directory.Browse(r.Context(), directorysvc.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), HasHours: hasHours, Limit: limit}, page)
+	var lat, lng *float64
+	if raw := r.URL.Query().Get("lat"); raw != "" {
+		v, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			writeServiceError(w, directorysvc.ErrInvalid)
+			return
+		}
+		lat = &v
+	}
+	if raw := r.URL.Query().Get("lng"); raw != "" {
+		v, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			writeServiceError(w, directorysvc.ErrInvalid)
+			return
+		}
+		lng = &v
+	}
+	var radiusKM float64
+	if raw := r.URL.Query().Get("radius_km"); raw != "" {
+		var err error
+		radiusKM, err = strconv.ParseFloat(raw, 64)
+		if err != nil {
+			writeServiceError(w, directorysvc.ErrInvalid)
+			return
+		}
+	}
+	items, total, err := h.app.Directory.Browse(r.Context(), directorysvc.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), HasHours: hasHours, Lat: lat, Lng: lng, RadiusKM: radiusKM, Limit: limit}, page)
 	if err != nil {
 		writeServiceError(w, err)
 		return

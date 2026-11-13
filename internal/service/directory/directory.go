@@ -40,6 +40,8 @@ type Input struct {
 	State           string                 `json:"state"`
 	Version         int                    `json:"version"`
 	Timezone        string                 `json:"timezone"`
+	PublicLat       *float64               `json:"public_lat,omitempty"`
+	PublicLng       *float64               `json:"public_lng,omitempty"`
 	WeeklyHours     []db.ServiceWeeklyHour `json:"weekly_hours"`
 }
 type store interface {
@@ -49,9 +51,12 @@ type store interface {
 	OwnServicesByState(context.Context, int, string, int, int) ([]db.ServiceListing, int, error)
 	SaveService(context.Context, int, db.ServiceListing) (*db.ServiceListing, error)
 }
-type Service struct{ store store }
+type Service struct {
+	store    store
+	geocoder Geocoder
+}
 
-func New(s store) *Service     { return &Service{store: s} }
+func New(s store) *Service     { return &Service{store: s, geocoder: LocalityGeocoder{}} }
 func validActor(a *Actor) bool { return a != nil && a.ID > 0 && a.Role == domain.RolePartner }
 func text(s string, min, max int, multiline bool) bool {
 	if !utf8.ValidString(s) || utf8.RuneCountInString(s) < min || utf8.RuneCountInString(s) > max {
@@ -80,6 +85,14 @@ func (s *Service) Browse(ctx context.Context, f db.ServiceFilter, page int) ([]d
 	f.DeliveryMode = strings.TrimSpace(f.DeliveryMode)
 	if f.PartnerID < 0 || f.PartnerID > 2147483647 || (f.DeliveryMode != "" && !oneOf(f.DeliveryMode, "premises", "mobile", "remote")) || !pageBounds(page, f.Limit) || !text(f.Query, 0, 120, false) || !text(f.Area, 0, 120, false) || (f.Category != "" && !oneOf(f.Category, "hair", "beauty", "dental", "wellness", "home", "other")) {
 		return nil, 0, ErrInvalid
+	}
+	if f.Lat == nil && f.Lng == nil && f.RadiusKM > 0 && f.Area != "" && s.geocoder != nil {
+		if lat, lng, ok, err := s.geocoder.GeocodeLocality(ctx, f.Area); err == nil && ok {
+			f.Lat, f.Lng = &lat, &lng
+		}
+	}
+	if err := ValidateSearchRadius(f.Lat, f.Lng, f.RadiusKM); err != nil {
+		return nil, 0, err
 	}
 	f.Offset = (page - 1) * f.Limit
 	return s.store.BrowseServices(ctx, f)
@@ -160,7 +173,16 @@ func (s *Service) Save(ctx context.Context, a *Actor, id int, in Input) (*db.Ser
 	if validationErr := validateInput(id, in, price, err); validationErr != nil {
 		return nil, validationErr
 	}
-	v := db.ServiceListing{ID: id, Title: in.Title, Description: in.Description, Category: in.Category, DurationMinutes: in.DurationMinutes, PriceMode: in.PriceMode, PriceCents: price, Currency: in.Currency, PublicArea: in.PublicArea, DeliveryMode: in.DeliveryMode, State: in.State, Version: in.Version, Timezone: in.Timezone, WeeklyHours: in.WeeklyHours}
+	pubLat, pubLng, coordErr := ValidatePublicCoordinates(in.DeliveryMode, in.PublicLat, in.PublicLng)
+	if coordErr != nil {
+		return nil, coordErr
+	}
+	if pubLat == nil && pubLng == nil && in.DeliveryMode == "premises" && s.geocoder != nil {
+		if lat, lng, ok, err := s.geocoder.GeocodeLocality(ctx, in.PublicArea); err == nil && ok {
+			pubLat, pubLng = &lat, &lng
+		}
+	}
+	v := db.ServiceListing{ID: id, Title: in.Title, Description: in.Description, Category: in.Category, DurationMinutes: in.DurationMinutes, PriceMode: in.PriceMode, PriceCents: price, Currency: in.Currency, PublicArea: in.PublicArea, DeliveryMode: in.DeliveryMode, State: in.State, Version: in.Version, Timezone: in.Timezone, PublicLat: pubLat, PublicLng: pubLng, WeeklyHours: in.WeeklyHours}
 	if id == 0 {
 		var suffix [8]byte
 		if _, err := rand.Read(suffix[:]); err != nil {

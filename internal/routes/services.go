@@ -131,6 +131,29 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 					return
 				}
 			}
+			if raw := r.URL.Query().Get("lat"); raw != "" {
+				v, parseErr := strconv.ParseFloat(raw, 64)
+				if parseErr != nil {
+					servicePageError(w, r, directorysvc.ErrInvalid)
+					return
+				}
+				data.Filter.Lat = &v
+			}
+			if raw := r.URL.Query().Get("lng"); raw != "" {
+				v, parseErr := strconv.ParseFloat(raw, 64)
+				if parseErr != nil {
+					servicePageError(w, r, directorysvc.ErrInvalid)
+					return
+				}
+				data.Filter.Lng = &v
+			}
+			if raw := r.URL.Query().Get("radius_km"); raw != "" {
+				data.Filter.RadiusKM, err = strconv.ParseFloat(raw, 64)
+				if err != nil {
+					servicePageError(w, r, directorysvc.ErrInvalid)
+					return
+				}
+			}
 			if raw := r.URL.Query().Get("partner_id"); raw != "" {
 				data.Filter.PartnerID, err = strconv.Atoi(raw)
 				if err != nil || data.Filter.PartnerID <= 0 {

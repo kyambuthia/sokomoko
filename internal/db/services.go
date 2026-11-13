@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/kyambuthia/sokomoko/internal/domain"
 )
@@ -20,13 +21,19 @@ type (
 	ServiceFilter     = domain.ServiceFilter
 )
 
-const serviceColumns = `s.id,s.partner_id,p.name,p.slug,s.slug,s.title,s.description,s.category,s.duration_minutes,s.price_mode,s.price_cents,s.currency,s.public_area,s.delivery_mode,s.state,s.version,s.created_at,s.updated_at,s.timezone,(SELECT count(*)::integer FROM service_weekly_hours h WHERE h.service_listing_id=s.id)`
+const serviceColumns = `s.id,s.partner_id,p.name,p.slug,s.slug,s.title,s.description,s.category,s.duration_minutes,s.price_mode,s.price_cents,s.currency,s.public_area,s.delivery_mode,s.state,s.version,s.created_at,s.updated_at,s.timezone,(SELECT count(*)::integer FROM service_weekly_hours h WHERE h.service_listing_id=s.id),s.public_lat,s.public_lng`
 
 func scanService(row interface{ Scan(...any) error }) (*ServiceListing, error) {
 	v := &ServiceListing{}
-	err := row.Scan(&v.ID, &v.PartnerID, &v.PartnerName, &v.PartnerSlug, &v.Slug, &v.Title, &v.Description, &v.Category, &v.DurationMinutes, &v.PriceMode, &v.PriceCents, &v.Currency, &v.PublicArea, &v.DeliveryMode, &v.State, &v.Version, &v.CreatedAt, &v.UpdatedAt, &v.Timezone, &v.OpenDays)
+	var publicLat, publicLng sql.NullFloat64
+	err := row.Scan(&v.ID, &v.PartnerID, &v.PartnerName, &v.PartnerSlug, &v.Slug, &v.Title, &v.Description, &v.Category, &v.DurationMinutes, &v.PriceMode, &v.PriceCents, &v.Currency, &v.PublicArea, &v.DeliveryMode, &v.State, &v.Version, &v.CreatedAt, &v.UpdatedAt, &v.Timezone, &v.OpenDays, &publicLat, &publicLng)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrServiceNotFound
+	}
+	if err == nil && v.DeliveryMode == "premises" && publicLat.Valid && publicLng.Valid {
+		lat, lng := publicLat.Float64, publicLng.Float64
+		v.PublicLat = &lat
+		v.PublicLng = &lng
 	}
 	return v, err
 }
@@ -60,8 +67,24 @@ func (s *Store) BrowseServices(ctx context.Context, f ServiceFilter) ([]ServiceL
 	if f.PartnerID < 0 || f.PartnerID > 2147483647 || f.Limit < 1 || f.Limit > 50 || f.Offset < 0 || f.Offset > 50000 {
 		return nil, 0, ErrServiceNotFound
 	}
-	const predicate = `s.state='published' AND p.status='active' AND ($1='' OR strpos(lower(s.title||' '||s.description||' '||p.name),lower($1))>0) AND ($2='' OR s.category=$2) AND ($3='' OR strpos(lower(s.public_area),lower($3))>0) AND ($4='' OR s.delivery_mode=$4) AND ($5=0 OR s.partner_id=$5) AND (NOT $6 OR EXISTS(SELECT 1 FROM service_weekly_hours h WHERE h.service_listing_id=s.id))`
+	predicate := `s.state='published' AND p.status='active' AND ($1='' OR strpos(lower(s.title||' '||s.description||' '||p.name),lower($1))>0) AND ($2='' OR s.category=$2) AND ($3='' OR strpos(lower(s.public_area),lower($3))>0) AND ($4='' OR s.delivery_mode=$4) AND ($5=0 OR s.partner_id=$5) AND (NOT $6 OR EXISTS(SELECT 1 FROM service_weekly_hours h WHERE h.service_listing_id=s.id))`
 	args := []any{f.Query, f.Category, f.Area, f.DeliveryMode, f.PartnerID, f.HasHours}
+	orderBy := ` ORDER BY lower(s.title),s.id`
+	hasRadius := f.Lat != nil && f.Lng != nil && f.RadiusKM > 0
+	if hasRadius {
+		lat := *f.Lat
+		lng := *f.Lng
+		latDelta := f.RadiusKM / 111.0
+		cosLat := math.Max(math.Cos(lat*math.Pi/180.0), 0.1)
+		lngDelta := f.RadiusKM / (111.0 * cosLat)
+		const haversineExpr = `(6371.0 * acos(LEAST(1.0, GREATEST(-1.0, cos(radians($7)) * cos(radians(s.public_lat)) * cos(radians(s.public_lng) - radians($8)) + sin(radians($7)) * sin(radians(s.public_lat))))))`
+		predicate += fmt.Sprintf(
+			` AND s.delivery_mode='premises' AND s.public_lat BETWEEN $9 AND $10 AND s.public_lng BETWEEN $11 AND $12 AND %s <= $13`,
+			haversineExpr,
+		)
+		args = append(args, lat, lng, lat-latDelta, lat+latDelta, lng-lngDelta, lng+lngDelta, f.RadiusKM)
+		orderBy = fmt.Sprintf(` ORDER BY %s ASC, lower(s.title), s.id`, haversineExpr)
+	}
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, 0, err
@@ -72,7 +95,9 @@ func (s *Store) BrowseServices(ctx context.Context, f ServiceFilter) ([]ServiceL
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT `+serviceColumns+` FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE `+predicate+` ORDER BY lower(s.title),s.id LIMIT $7 OFFSET $8`, append(args, f.Limit, f.Offset)...)
+	limitPos := len(args) + 1
+	offsetPos := len(args) + 2
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf(`SELECT %s FROM service_listings s JOIN partners p ON p.id=s.partner_id WHERE %s%s LIMIT $%d OFFSET $%d`, serviceColumns, predicate, orderBy, limitPos, offsetPos), append(args, f.Limit, f.Offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -82,6 +107,10 @@ func (s *Store) BrowseServices(ctx context.Context, f ServiceFilter) ([]ServiceL
 		if err != nil {
 			rows.Close()
 			return nil, 0, err
+		}
+		if hasRadius && v.PublicLat != nil && v.PublicLng != nil {
+			d := haversineKM(*f.Lat, *f.Lng, *v.PublicLat, *v.PublicLng)
+			v.DistanceKM = &d
 		}
 		items = append(items, *v)
 	}
@@ -205,6 +234,11 @@ func (s *Store) SaveService(ctx context.Context, userID int, v ServiceListing) (
 		if err != nil {
 			return err
 		}
+		var saveLat, saveLng sql.NullFloat64
+		if v.DeliveryMode == "premises" && v.PublicLat != nil && v.PublicLng != nil {
+			saveLat = sql.NullFloat64{Float64: *v.PublicLat, Valid: true}
+			saveLng = sql.NullFloat64{Float64: *v.PublicLng, Valid: true}
+		}
 		action := "service.create"
 		if id > 0 {
 			var version int
@@ -217,9 +251,9 @@ func (s *Store) SaveService(ctx context.Context, userID int, v ServiceListing) (
 				return ErrServiceConflict
 			}
 			action = "service.update"
-			_, err = tx.ExecContext(ctx, `UPDATE service_listings SET title=$1,description=$2,category=$3,duration_minutes=$4,price_mode=$5,price_cents=$6,currency=$7,public_area=$8,delivery_mode=$9,state=$10,timezone=$11,version=version+1 WHERE id=$12 AND partner_id=$13`, v.Title, v.Description, v.Category, v.DurationMinutes, v.PriceMode, v.PriceCents, v.Currency, v.PublicArea, v.DeliveryMode, v.State, v.Timezone, id, partnerID)
+			_, err = tx.ExecContext(ctx, `UPDATE service_listings SET title=$1,description=$2,category=$3,duration_minutes=$4,price_mode=$5,price_cents=$6,currency=$7,public_area=$8,delivery_mode=$9,state=$10,timezone=$11,public_lat=$12,public_lng=$13,version=version+1 WHERE id=$14 AND partner_id=$15`, v.Title, v.Description, v.Category, v.DurationMinutes, v.PriceMode, v.PriceCents, v.Currency, v.PublicArea, v.DeliveryMode, v.State, v.Timezone, saveLat, saveLng, id, partnerID)
 		} else {
-			err = tx.QueryRowContext(ctx, `INSERT INTO service_listings(partner_id,slug,title,description,category,duration_minutes,price_mode,price_cents,currency,public_area,delivery_mode,state,timezone) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`, partnerID, v.Slug, v.Title, v.Description, v.Category, v.DurationMinutes, v.PriceMode, v.PriceCents, v.Currency, v.PublicArea, v.DeliveryMode, v.State, v.Timezone).Scan(&id)
+			err = tx.QueryRowContext(ctx, `INSERT INTO service_listings(partner_id,slug,title,description,category,duration_minutes,price_mode,price_cents,currency,public_area,delivery_mode,state,timezone,public_lat,public_lng) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`, partnerID, v.Slug, v.Title, v.Description, v.Category, v.DurationMinutes, v.PriceMode, v.PriceCents, v.Currency, v.PublicArea, v.DeliveryMode, v.State, v.Timezone, saveLat, saveLng).Scan(&id)
 		}
 		if err != nil {
 			return wrapDBError(err)
@@ -244,4 +278,14 @@ func (s *Store) SaveService(ctx context.Context, userID int, v ServiceListing) (
 		return err
 	})
 	return saved, err
+}
+
+func haversineKM(lat1, lng1, lat2, lng2 float64) float64 {
+	const earthRadiusKM = 6371.0
+	dLat := (lat2 - lat1) * math.Pi / 180.0
+	dLng := (lng2 - lng1) * math.Pi / 180.0
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*math.Pi/180.0)*math.Cos(lat2*math.Pi/180.0)*
+			math.Sin(dLng/2)*math.Sin(dLng/2)
+	return 2 * earthRadiusKM * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }

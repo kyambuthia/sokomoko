@@ -33,6 +33,9 @@ type ServiceListing struct {
 	UpdatedAt       time.Time           `json:"updated_at"`
 	Timezone        string              `json:"timezone"`
 	OpenDays        int                 `json:"open_days"`
+	PublicLat       *float64            `json:"public_lat,omitempty"`
+	PublicLng       *float64            `json:"public_lng,omitempty"`
+	DistanceKM      *float64            `json:"distance_km,omitempty"`
 	WeeklyHours     []ServiceWeeklyHour `json:"weekly_hours,omitempty"`
 }
 
@@ -47,6 +50,8 @@ type ServiceFilter struct {
 	Query, Category, Area, DeliveryMode string
 	PartnerID, Limit, Offset            int
 	HasHours                            bool
+	Lat, Lng                            *float64
+	RadiusKM                            float64
 }
 
 type ServiceBooking struct {

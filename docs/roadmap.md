@@ -80,7 +80,7 @@ reachable.
 - [x] Development sample listings that preserve seller edits on repeated seeds.
 - [x] Service-context encrypted enquiries.
 - [x] Verify transactional appointment reservations, resource availability, conflict prevention and cancellation lifecycle. The request-to-book flow, timezone and opening-hour checks, default capacity-one resources, conflict prevention, customer cancellation, partner status transitions and request expiry are implemented; verified in `internal/db/service_bookings_test.go`.
-- [ ] Privacy-conscious geocoding and local map discovery.
+- [x] Privacy-conscious geocoding and local map discovery (backend locality geocoder, premises-only DB coordinate constraint in migration 0036, bounding-box + Haversine radius discovery, and `lat`/`lng`/`radius_km` filtering on `/services` and `/api/v1/services`; interactive map tiles remain optional/configurable).
 
 ## Later
 
