@@ -243,6 +243,11 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 	return user
 }
 
+// WithUser returns a copy of ctx carrying the authenticated user.
+func WithUser(ctx context.Context, user *db.User) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
+}
+
 // GetUserFromContext retrieves the user from the request context
 func GetUserFromContext(ctx context.Context) *db.User {
 	user, ok := ctx.Value(userContextKey).(*db.User)
