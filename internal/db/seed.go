@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -20,7 +20,7 @@ import (
 func (s *Store) SeedAdmin(ctx context.Context) {
 	hasAdmin, err := s.HasAdminUser(ctx)
 	if err != nil {
-		log.Printf("seed: check for admin user: %v", err)
+		slog.ErrorContext(ctx, "seed: check for admin user failed", "error", err)
 		return
 	}
 	if hasAdmin {
@@ -29,16 +29,16 @@ func (s *Store) SeedAdmin(ctx context.Context) {
 
 	password := os.Getenv("ADMIN_PASSWORD")
 	if strings.TrimSpace(password) == "" {
-		log.Printf("seed: ADMIN_PASSWORD not set; skipping admin bootstrap user")
+		slog.InfoContext(ctx, "seed: ADMIN_PASSWORD not set; skipping admin bootstrap user")
 		return
 	}
 	if len(password) < 10 || len(password) > 72 {
-		log.Printf("seed: ADMIN_PASSWORD must be 10-72 bytes; skipping admin bootstrap user")
+		slog.WarnContext(ctx, "seed: ADMIN_PASSWORD must be 10-72 bytes; skipping admin bootstrap user")
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("seed: hash admin password: %v", err)
+		slog.ErrorContext(ctx, "seed: hash admin password failed", "error", err)
 		return
 	}
 
@@ -52,10 +52,10 @@ func (s *Store) SeedAdmin(ctx context.Context) {
 	}
 
 	if _, err := s.CreateUser(ctx, User{Username: username, Email: email, PasswordHash: string(hash), Role: RoleAdmin}); err != nil {
-		log.Printf("seed: create admin user: %v", err)
+		slog.ErrorContext(ctx, "seed: create admin user failed", "error", err)
 		return
 	}
-	log.Printf("seed: admin bootstrap user created: %s", username)
+	slog.InfoContext(ctx, "seed: admin bootstrap user created", "username", username)
 }
 
 // SeedDemoAccounts creates explicitly configured customer and partner logins.
@@ -85,7 +85,7 @@ func (s *Store) seedDemoAccount(ctx context.Context, username, email, password, 
 		return err
 	}
 	if existing != nil {
-		log.Printf("seed: demo account already exists: %s", username)
+		slog.InfoContext(ctx, "seed: demo account already exists", "username", username)
 		return nil
 	}
 	existing, err = s.GetUserByEmail(ctx, email)
@@ -117,7 +117,7 @@ func (s *Store) seedDemoAccount(ctx context.Context, username, email, password, 
 			return err
 		}
 	}
-	log.Printf("seed: demo account created username=%s role=%s", username, role)
+	slog.InfoContext(ctx, "seed: demo account created", "username", username, "role", role)
 	return nil
 }
 
@@ -139,7 +139,7 @@ var demoPartners = []seedPartner{
 func (s *Store) SeedPartners(ctx context.Context) {
 	for _, p := range demoPartners {
 		if _, err := s.UpsertPartner(ctx, Partner{Name: p.Name, Slug: p.Slug, ContactEmail: p.Email}); err != nil {
-			log.Printf("seed: partner %s: %v", p.Slug, err)
+			slog.ErrorContext(ctx, "seed: partner failed", "partner", p.Slug, "error", err)
 		}
 	}
 }
@@ -197,7 +197,7 @@ var demoCatalog = []seedProduct{
 func (s *Store) SeedInitialCatalog(ctx context.Context) {
 	for _, item := range demoCatalog {
 		if err := s.seedProduct(ctx, item); err != nil {
-			log.Printf("seed: product %s: %v", item.Slug, err)
+			slog.ErrorContext(ctx, "seed: product failed", "slug", item.Slug, "error", err)
 		}
 	}
 }
@@ -248,7 +248,7 @@ func (s *Store) seedProduct(ctx context.Context, item seedProduct) error {
 		return nil
 	}
 	if err == nil {
-		log.Printf("seed: product created: %s", item.Name)
+		slog.InfoContext(ctx, "seed: product created", "name", item.Name)
 	}
 	return err
 }

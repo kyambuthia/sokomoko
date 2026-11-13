@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -165,7 +165,7 @@ func (s *Service) findUserByIdentifier(ctx context.Context, identifier string) (
 func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode int, data any) {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "root_template", data); err != nil {
-		log.Printf("Template execution error: %v", err)
+		slog.Error("template execution error", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -173,6 +173,6 @@ func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode
 		w.WriteHeader(statusCode)
 	}
 	if _, err := w.Write(buf.Bytes()); err != nil {
-		log.Printf("Response write error: %v", err)
+		slog.Error("response write error", "error", err)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -40,7 +40,7 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		// Retrieve session to get the CSRF token
 		sess, err := s.store.GetSession(r.Context(), cookie.Value)
 		if err != nil {
-			log.Printf("CSRF check: session lookup failed: %v", err)
+			slog.WarnContext(r.Context(), "CSRF check: session lookup failed", "error", err)
 			if isAPIRequest(r) {
 				writeAPIJSONError(w, http.StatusServiceUnavailable, "service_unavailable", "Service unavailable")
 				return
@@ -76,7 +76,7 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		// Validate token using constant-time comparison
 		expectedToken := strings.TrimSpace(sess.CSRFToken)
 		if expectedToken == "" || providedToken == "" {
-			log.Printf("CSRF check: missing token (expected: %t, provided: %t)", expectedToken != "", providedToken != "")
+			slog.WarnContext(r.Context(), "CSRF check: missing token", "expected", expectedToken != "", "provided", providedToken != "")
 			if isAPIRequest(r) {
 				writeAPIJSONError(w, http.StatusForbidden, "csrf_token_missing", "CSRF token missing")
 				return
@@ -86,7 +86,7 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 		}
 
 		if subtle.ConstantTimeCompare([]byte(providedToken), []byte(expectedToken)) != 1 {
-			log.Printf("CSRF check: token mismatch")
+			slog.WarnContext(r.Context(), "CSRF check: token mismatch")
 			if isAPIRequest(r) {
 				writeAPIJSONError(w, http.StatusForbidden, "csrf_token_invalid", "CSRF token invalid")
 				return

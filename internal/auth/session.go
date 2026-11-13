@@ -2,7 +2,7 @@ package auth
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -117,7 +117,7 @@ func (s *Service) revokeRequestSessions(ctx context.Context, r *http.Request, op
 		}
 		seen[cookie.Value] = struct{}{}
 		if err := s.store.DeleteSession(ctx, cookie.Value); err != nil {
-			log.Printf("%s: %v", operation, err)
+			slog.WarnContext(ctx, "delete session failed", "operation", operation, "error", err)
 		}
 	}
 }
@@ -215,7 +215,7 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 	}); ok {
 		user, expiresAt, err := store.GetActiveUserForSession(r.Context(), cookie.Value)
 		if err != nil {
-			log.Printf("session lookup failed: %v", err)
+			slog.ErrorContext(r.Context(), "session lookup failed", "error", err)
 			return nil
 		}
 		if user == nil || !expiresAt.After(time.Now()) {
@@ -226,7 +226,7 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 
 	sess, err := s.store.GetSession(r.Context(), cookie.Value)
 	if err != nil {
-		log.Printf("session lookup failed: %v", err)
+		slog.ErrorContext(r.Context(), "session lookup failed", "error", err)
 		return nil
 	}
 	if sess == nil || !sess.ExpiresAt.After(time.Now()) {
@@ -234,7 +234,7 @@ func (s *Service) sessionUser(r *http.Request) *db.User {
 	}
 	user, err := s.store.GetUserByID(r.Context(), sess.UserID)
 	if err != nil {
-		log.Printf("session user lookup failed for user_id=%d: %v", sess.UserID, err)
+		slog.ErrorContext(r.Context(), "session user lookup failed", "user_id", sess.UserID, "error", err)
 		return nil
 	}
 	if user == nil {

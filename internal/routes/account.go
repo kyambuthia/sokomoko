@@ -3,7 +3,7 @@ package routes
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -92,7 +92,7 @@ func Account(a *app.App) http.HandlerFunc {
 		if user := requestUserFromContext(r); user != nil && user.Role == db.RoleUser && a.Bookings != nil {
 			bookings, _, bookingErr := a.Bookings.ForCustomer(r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, 1, 10)
 			if bookingErr != nil {
-				log.Printf("account service bookings: %v", bookingErr)
+				slog.ErrorContext(r.Context(), "account service bookings", "error", bookingErr)
 				serverError(w, r)
 				return
 			}
@@ -103,7 +103,7 @@ func Account(a *app.App) http.HandlerFunc {
 		}
 		orders, total, err := a.Account.OrdersForUserPage(r.Context(), userID, page, accountOrdersPerPage)
 		if err != nil {
-			log.Printf("account orders: %v", err)
+			slog.ErrorContext(r.Context(), "account orders", "error", err)
 			serverError(w, r)
 			return
 		}
@@ -139,7 +139,7 @@ func AccountServiceBookings(a *app.App) http.HandlerFunc {
 			r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, page, serviceBookingsPageSize,
 		)
 		if err != nil {
-			log.Printf("account service bookings: %v", err)
+			slog.ErrorContext(r.Context(), "account service bookings", "error", err)
 			serverError(w, r)
 			return
 		}
@@ -181,7 +181,7 @@ func AccountOrderCancel(a *app.App) http.HandlerFunc {
 		case errors.Is(err, accountsvc.ErrOrderNotCancellable):
 			redirectWithFlash(w, r, "/account", "danger", fmt.Sprintf("Order #%d is already being prepared or paid. Contact the store to cancel it.", orderID))
 		default:
-			log.Printf("cancel order: %v", err)
+			slog.ErrorContext(r.Context(), "cancel order", "error", err)
 			serverError(w, r)
 		}
 	}
@@ -226,7 +226,7 @@ func AccountBookingCancel(a *app.App) http.HandlerFunc {
 		case errors.Is(err, bookingsvc.ErrForbidden):
 			http.Error(w, "Forbidden", http.StatusForbidden)
 		default:
-			log.Printf("cancel service booking: %v", err)
+			slog.ErrorContext(r.Context(), "cancel service booking", "error", err)
 			serverError(w, r)
 		}
 	}

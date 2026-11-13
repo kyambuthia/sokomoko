@@ -2,7 +2,7 @@ package routes
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -65,7 +65,7 @@ func AdminCategories(a *app.App) http.HandlerFunc {
 			case errors.Is(err, adminsvc.ErrCategoryNotFound):
 				page.FormError = "That category no longer exists."
 			default:
-				log.Printf("admin categories: %v", err)
+				slog.ErrorContext(r.Context(), "admin categories", "error", err)
 				page.FormError = "Unable to save the category."
 			}
 			status = http.StatusBadRequest
@@ -165,7 +165,7 @@ func AdminPartners(a *app.App) http.HandlerFunc {
 			case errors.Is(err, adminsvc.ErrPartnerNotFound):
 				page.FormError = "Choose an existing partner."
 			default:
-				log.Printf("admin partners: %v", err)
+				slog.ErrorContext(r.Context(), "admin partners", "error", err)
 				page.FormError = "Unable to save the partner change."
 			}
 			status = http.StatusBadRequest
@@ -287,7 +287,7 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 				errors.Is(err, paymentsvc.ErrInvalidPricing), errors.Is(err, paymentsvc.ErrUnknownProvider):
 				page.FormError = sentence(err)
 			default:
-				log.Printf("admin payments: %v", err)
+				slog.ErrorContext(r.Context(), "admin payments", "error", err)
 				page.FormError = "Unable to save payment settings."
 			}
 			status = http.StatusBadRequest

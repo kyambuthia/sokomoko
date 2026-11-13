@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,7 +53,7 @@ func PaymentPage(a *app.App) http.HandlerFunc {
 				NotFound(w, r)
 				return
 			case err != nil:
-				log.Printf("retry payment for order %d: %v", orderID, err)
+				slog.ErrorContext(r.Context(), "retry payment failed", "order_id", orderID, "error", err)
 				if errors.Is(err, paymentsvc.ErrPaymentReviewRequired) {
 					redirectWithFlash(w, r, r.URL.Path, "danger", "An M-Pesa amount discrepancy is under review. Please wait for the store to resolve it before retrying.")
 					return
@@ -84,7 +84,7 @@ func PaymentPage(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("payment status for order %d: %v", orderID, err)
+			slog.ErrorContext(r.Context(), "payment status failed", "order_id", orderID, "error", err)
 			serverError(w, r)
 			return
 		}
@@ -135,7 +135,7 @@ func PaymentReturn(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("payment return lookup failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
+			slog.ErrorContext(r.Context(), "payment return lookup failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 			if orderID <= 0 {
 				app.RenderErrorPage(w, r, http.StatusServiceUnavailable, "Temporarily Unavailable",
 					"Payment status is temporarily unavailable. Please check your order again shortly.")
@@ -188,7 +188,7 @@ func PaymentWebhook(a *app.App) http.HandlerFunc {
 		case errors.Is(err, paymentsvc.ErrUnknownProvider), errors.Is(err, payments.ErrNotConfigured):
 			NotFound(w, r)
 		default:
-			log.Printf("payment webhook %s: %v", provider, err)
+			slog.ErrorContext(r.Context(), "payment webhook failed", "provider", provider, "error", err)
 			http.Error(w, "Temporarily unavailable", http.StatusServiceUnavailable)
 		}
 	}
@@ -212,7 +212,7 @@ func PaymentCallback(a *app.App) http.HandlerFunc {
 			NotFound(w, r)
 			return
 		default:
-			log.Printf("payment callback %s: %v", provider, err)
+			slog.ErrorContext(r.Context(), "payment callback failed", "provider", provider, "error", err)
 			http.Error(w, "Temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}

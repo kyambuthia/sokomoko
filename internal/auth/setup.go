@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -204,7 +204,7 @@ func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("admin bootstrap failed: %v", err)
+			slog.ErrorContext(r.Context(), "admin bootstrap failed", "error", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create admin account. Username or email may already exist.")
 			data.Error = message
 			renderWithStatus(w, tmpl, statusCode, data)

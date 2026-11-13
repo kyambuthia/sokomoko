@@ -2,7 +2,7 @@ package routes
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -89,7 +89,7 @@ func PartnerServiceBookings(a *app.App) http.HandlerFunc {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
-			log.Printf("partner service bookings: %v", err)
+			slog.ErrorContext(r.Context(), "partner service bookings", "error", err)
 			serverError(w, r)
 			return
 		}
@@ -166,7 +166,7 @@ func PartnerServiceBookingAction(a *app.App) http.HandlerFunc {
 		case errors.Is(err, bookingsvc.ErrInvalidState):
 			redirectWithFlash(w, r, "/service-bookings", "danger", "This appointment can no longer be updated with that action.")
 		default:
-			log.Printf("update service booking: %v", err)
+			slog.ErrorContext(r.Context(), "update service booking", "error", err)
 			serverError(w, r)
 		}
 	}

@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -49,7 +49,7 @@ func runHTTPServer(server *httpServer, store *db.Store) error {
 		workers.Wait()
 	})
 	if err == nil {
-		log.Println("[shutdown] server stopped gracefully")
+		slog.Info("[shutdown] server stopped gracefully")
 	}
 	return err
 }
@@ -136,27 +136,26 @@ func sortedHostList(hosts map[string]struct{}) string {
 }
 
 func printStartupSummary(cfg config.Config, server *httpServer, allowedHosts map[string]struct{}, seedOnServe bool) {
-	log.Printf("[startup] sokomoko %s booting", version)
-	log.Printf("[startup] env=%s port=%s schema_version=%d", cfg.Environment, cfg.Port, db.LatestSchemaVersion())
-	log.Printf("[startup] seed_on_startup=%t", seedOnServe)
+	slog.Info("[startup] sokomoko booting", "version", version, "env", cfg.Environment, "port", cfg.Port, "schema_version", db.LatestSchemaVersion(), "seed_on_startup", seedOnServe)
 	if cfg.SessionCookieDomain != "" {
-		log.Printf("[startup] session_cookie_domain=%s", cfg.SessionCookieDomain)
+		slog.Info("[startup] session cookie domain", "domain", cfg.SessionCookieDomain)
 	}
 	if cfg.PostRateLimitMax > 0 {
-		log.Printf("[startup] post_rate_limit=%d requests/%ds", cfg.PostRateLimitMax, cfg.PostRateLimitWindow)
+		slog.Info("[startup] post rate limit", "max", cfg.PostRateLimitMax, "window_seconds", cfg.PostRateLimitWindow)
 	}
 	if cfg.AuthAbuseMaxFailures > 0 {
-		log.Printf("[startup] auth_abuse_limit=enabled max_failures=%d backoff_base=%ds backoff_max=%ds", cfg.AuthAbuseMaxFailures, cfg.AuthAbuseBackoffBase, cfg.AuthAbuseBackoffMax)
+		slog.Info("[startup] auth abuse limit enabled", "max_failures", cfg.AuthAbuseMaxFailures, "backoff_base_seconds", cfg.AuthAbuseBackoffBase, "backoff_max_seconds", cfg.AuthAbuseBackoffMax)
 	}
-	log.Printf("[startup] bind=%s", server.Addr)
-	log.Printf("[startup] trusted_hosts=%s", sortedHostList(allowedHosts))
-	log.Printf("[startup] storefront=%s", localURL("localhost", cfg.Port))
-	log.Printf("[startup] admin=%s", localURL("admin.localhost", cfg.Port))
-	log.Printf("[startup] partner=%s", localURL("partner.localhost", cfg.Port))
-	log.Printf("[startup] courier=%s", localURL("courier.localhost", cfg.Port))
-	log.Printf("[startup] health=%s", localURL("localhost", cfg.Port)+"/healthz")
-	log.Printf("[startup] ready=%s", localURL("localhost", cfg.Port)+"/readyz")
-	log.Printf("[startup] press Ctrl+C to stop")
+	slog.Info("[startup] endpoints",
+		"bind", server.Addr,
+		"trusted_hosts", sortedHostList(allowedHosts),
+		"storefront", localURL("localhost", cfg.Port),
+		"admin", localURL("admin.localhost", cfg.Port),
+		"partner", localURL("partner.localhost", cfg.Port),
+		"courier", localURL("courier.localhost", cfg.Port),
+		"health", localURL("localhost", cfg.Port)+"/healthz",
+		"ready", localURL("localhost", cfg.Port)+"/readyz",
+	)
 }
 
 func localURL(host, port string) string {

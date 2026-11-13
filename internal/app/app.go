@@ -6,7 +6,7 @@ import (
 	"embed"
 	"encoding/json"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -294,14 +294,14 @@ func (a *App) Render(w http.ResponseWriter, tmpl *template.Template, data any) {
 func (a *App) RenderStatus(w http.ResponseWriter, tmpl *template.Template, status int, data any) {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "root_template", data); err != nil {
-		log.Printf("template execution error: %v", err)
+		slog.Error("template execution error", "error", err)
 		RenderErrorPage(w, nil, http.StatusInternalServerError, "Internal Server Error", "We could not render this page.")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if _, err := w.Write(buf.Bytes()); err != nil {
-		log.Printf("response write error: %v", err)
+		slog.Error("response write error", "error", err)
 	}
 }
 
@@ -313,6 +313,6 @@ func JSON(w http.ResponseWriter, status int, v any) {
 	}
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("json encode error: %v", err)
+		slog.Error("json encode error", "error", err)
 	}
 }

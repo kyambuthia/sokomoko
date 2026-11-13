@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -71,7 +71,7 @@ func Root(a *app.App) http.HandlerFunc {
 		}
 		products, err := a.Catalog.Browse(r.Context(), catalogsvc.Filter{Limit: homeProductLimit})
 		if err != nil {
-			log.Printf("home: list products: %v", err)
+			slog.ErrorContext(r.Context(), "home: list products", "error", err)
 			serverError(w, r)
 			return
 		}
@@ -103,7 +103,7 @@ func ProductImage(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("product image %d: %v", id, err)
+			slog.ErrorContext(r.Context(), "product image failed", "image_id", id, "error", err)
 			serverError(w, r)
 			return
 		}
@@ -141,7 +141,7 @@ func ProductVideo(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("product video %d: %v", productID, err)
+			slog.ErrorContext(r.Context(), "product video failed", "product_id", productID, "error", err)
 			serverError(w, r)
 			return
 		}
@@ -167,7 +167,7 @@ func ProductDetail(a *app.App) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			log.Printf("product lookup failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
+			slog.ErrorContext(r.Context(), "product lookup failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 			serverError(w, r)
 			return
 		}
@@ -217,7 +217,7 @@ func Search(a *app.App) http.HandlerFunc {
 		if query != "" || category != "" {
 			products, total, err := a.Catalog.SearchPage(r.Context(), query, category, page, searchPageSize)
 			if err != nil {
-				log.Printf("catalog search failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
+				slog.ErrorContext(r.Context(), "catalog search failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 				serverError(w, r)
 				return
 			}
@@ -248,7 +248,7 @@ func CategoriesAPI(a *app.App) http.HandlerFunc {
 		}
 		categories, err := a.Catalog.Categories(r.Context())
 		if err != nil {
-			log.Printf("api categories: %v", err)
+			slog.ErrorContext(r.Context(), "api categories", "error", err)
 			app.JSON(w, http.StatusInternalServerError, map[string]string{"error": "categories unavailable"})
 			return
 		}

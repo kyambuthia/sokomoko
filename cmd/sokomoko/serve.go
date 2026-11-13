@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -125,10 +125,10 @@ func secretsBox(cfg config.Config) (*secret.Box, error) {
 		return box, err
 	}
 	if cfg.IsProduction() {
-		log.Printf("[startup] SECRETS_KEY unset: payment provider credentials cannot be saved")
+		slog.Warn("[startup] SECRETS_KEY unset: payment provider credentials cannot be saved")
 		return nil, nil
 	}
-	log.Printf("[startup] SECRETS_KEY unset: using the development secrets key")
+	slog.Info("[startup] SECRETS_KEY unset: using the development secrets key")
 	return secret.Development(), nil
 }
 
@@ -155,7 +155,7 @@ func runMigrate(cfg config.Config) error {
 		return wrapCommandError(commandMigrate, "apply schema", err)
 	}
 
-	log.Printf("[startup] schema applied version=%d", db.LatestSchemaVersion())
+	slog.Info("[startup] schema applied", "version", db.LatestSchemaVersion())
 	return nil
 }
 
@@ -176,7 +176,7 @@ func runSeed(cfg config.Config) error {
 		return wrapCommandError(commandSeed, "prepare store", err)
 	}
 
-	log.Printf("[startup] seed completed")
+	slog.Info("[startup] seed completed")
 	return nil
 }
 
@@ -200,7 +200,7 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 	}
 
 	resetEmailSender = emailSender.SendPasswordResetEmail
-	log.Printf("[startup] password_reset_email=enabled host=%s port=%s from=%s", cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom)
+	slog.Info("[startup] password reset email enabled", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom)
 	return resetEmailSender, nil
 }
 
@@ -233,7 +233,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 			"docs.localhost":    {},
 		}
 	}
-	log.Printf("Trusted hosts: %s", sortedHostList(allowedHosts))
+	slog.Info("trusted hosts configured", "hosts", sortedHostList(allowedHosts))
 
 	handler := app.Chain(
 		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux, metrics.Handler(cfg.MetricsToken)),

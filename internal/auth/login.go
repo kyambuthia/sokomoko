@@ -3,7 +3,7 @@ package auth
 import (
 	"errors"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -125,7 +125,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 
 	user, err := s.findUserByIdentifier(r.Context(), username)
 	if err != nil {
-		log.Printf("login lookup failed: %v", err)
+		slog.ErrorContext(r.Context(), "login lookup failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -142,7 +142,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 	if user.Role == db.RolePartner {
 		partnerID, err := s.store.PartnerIDForUser(r.Context(), user.ID)
 		if err != nil {
-			log.Printf("partner lookup failed: %v", err)
+			slog.ErrorContext(r.Context(), "partner lookup failed", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -157,7 +157,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 			renderWithStatus(w, cfg.tmpl, http.StatusUnauthorized, withError(data, "Invalid credentials"))
 			return
 		}
-		log.Printf("create session failed: %v", err)
+		slog.ErrorContext(r.Context(), "create session failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

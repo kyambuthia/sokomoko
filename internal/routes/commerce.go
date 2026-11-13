@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,7 +98,7 @@ func CartPage(a *app.App) http.HandlerFunc {
 		userID, _ := requestUserID(r)
 		cart, err := a.Commerce.Cart(r.Context(), userID)
 		if err != nil {
-			log.Printf("cart page: %v", err)
+			slog.ErrorContext(r.Context(), "cart page", "error", err)
 			serverError(w, r)
 			return
 		}
@@ -146,7 +146,7 @@ func cartAction(a *app.App, mutate cartMutation, successMessage string, quantity
 		if err := mutate(r.Context(), userID, productID, quantity); err != nil {
 			status, message := cartErrorMessage(err)
 			if status == http.StatusInternalServerError {
-				log.Printf("cart mutation: %v", err)
+				slog.ErrorContext(r.Context(), "cart mutation", "error", err)
 			}
 			respondCartError(a, w, r, userID, status, message)
 			return
@@ -339,7 +339,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 			if err != nil {
 				message, known := checkoutErrorMessage(err)
 				if !known {
-					log.Printf("checkout prepare: %v", err)
+					slog.ErrorContext(r.Context(), "checkout prepare", "error", err)
 					serverError(w, r)
 					return
 				}
@@ -374,13 +374,13 @@ func Checkout(a *app.App) http.HandlerFunc {
 		if err != nil {
 			message, known := checkoutErrorMessage(err)
 			if !known {
-				log.Printf("checkout place order: %v", err)
+				slog.ErrorContext(r.Context(), "checkout place order", "error", err)
 				message = "We could not place your order. Please try again."
 			}
 			state, stateErr := a.Checkout.SaveDraft(r.Context(), userID, key, address, paymentMethod)
 			if stateErr != nil {
 				if _, known := checkoutErrorMessage(stateErr); !known {
-					log.Printf("checkout save draft: %v", stateErr)
+					slog.ErrorContext(r.Context(), "checkout save draft", "error", stateErr)
 					serverError(w, r)
 					return
 				}
@@ -406,7 +406,7 @@ func Checkout(a *app.App) http.HandlerFunc {
 			UserID: userID, OrderID: int(orderID), Phone: phone, BaseURL: a.PublicBase(r),
 		})
 		if err != nil {
-			log.Printf("start payment for order %d: %v", orderID, err)
+			slog.ErrorContext(r.Context(), "start payment failed", "order_id", orderID, "error", err)
 			if errors.Is(err, payments.ErrUnsupported) {
 				redirectWithFlash(w, r, fmt.Sprintf("/payments/order/%d", orderID), "danger", "This payment method cannot charge this order.")
 				return

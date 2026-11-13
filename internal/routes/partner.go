@@ -2,7 +2,7 @@ package routes
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -151,7 +151,7 @@ func PartnerSetup(a *app.App) http.HandlerFunc {
 			a.RenderStatus(w, a.Templates.PartnerSetup, http.StatusBadRequest, data)
 			return
 		case err != nil:
-			log.Printf("partner setup: %v", err)
+			slog.ErrorContext(r.Context(), "partner setup", "error", err)
 			data.Error = "Unable to save store setup. Ensure slug is unique."
 			data.Settings = settings
 			a.Render(w, a.Templates.PartnerSetup, data)
@@ -309,7 +309,7 @@ func PartnerProductNew(a *app.App) http.HandlerFunc {
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusBadRequest, data)
 			return
 		case err != nil:
-			log.Printf("partner create product: %v", err)
+			slog.ErrorContext(r.Context(), "partner create product", "error", err)
 			data.Error = "Unable to create product"
 			a.RenderStatus(w, a.Templates.PartnerProductNew, http.StatusInternalServerError, data)
 			return
@@ -341,7 +341,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		case err != nil:
-			log.Printf("partner load product: %v", err)
+			slog.ErrorContext(r.Context(), "partner load product", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -418,7 +418,7 @@ func PartnerProductEdit(a *app.App) http.HandlerFunc {
 		case errors.Is(err, partnersvc.ErrInvalidProductVideo):
 			data.Error = invalidProductVideoMessage
 		default:
-			log.Printf("partner update product: %v", err)
+			slog.ErrorContext(r.Context(), "partner update product", "error", err)
 			data.Error = "Unable to update product"
 			status = http.StatusInternalServerError
 		}
@@ -440,7 +440,7 @@ func PartnerProductDelete(a *app.App) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		case err != nil:
-			log.Printf("partner delete product: %v", err)
+			slog.ErrorContext(r.Context(), "partner delete product", "error", err)
 			http.Error(w, "Unable to delete product", http.StatusInternalServerError)
 			return
 		}

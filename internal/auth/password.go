@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"regexp"
@@ -181,7 +181,7 @@ func (s *Service) PasswordChange(tmpl *template.Template, action, backHref strin
 				renderWithStatus(w, tmpl, http.StatusConflict, data)
 				return
 			}
-			log.Printf("password change failed for user_id=%d: %v", user.ID, err)
+			slog.ErrorContext(r.Context(), "password change failed", "user_id", user.ID, "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}

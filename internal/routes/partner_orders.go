@@ -2,7 +2,7 @@ package routes
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -57,7 +57,7 @@ func PartnerOrders(a *app.App) http.HandlerFunc {
 				data.Error = "That status change is not allowed from the order's current state"
 				responseStatus = http.StatusBadRequest
 			case err != nil:
-				log.Printf("partner order update: %v", err)
+				slog.ErrorContext(r.Context(), "partner order update", "error", err)
 				data.Error = "Unable to update order"
 				responseStatus = http.StatusInternalServerError
 			default:

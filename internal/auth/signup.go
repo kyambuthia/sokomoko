@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -83,7 +83,7 @@ func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 
 		_, err := createUserWithPassword(r.Context(), s.store, username, email, password, "user")
 		if err != nil {
-			log.Printf("Error creating user: %v", err)
+			slog.ErrorContext(r.Context(), "create user failed", "error", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create user. Username or email might already exist.")
 			data.Error = message
 			renderWithStatus(w, tmpl, statusCode, data)
@@ -183,7 +183,7 @@ func (s *Service) CourierSignUp(tmpl *template.Template) http.HandlerFunc {
 		sum := sha256.Sum256([]byte(strings.ToLower(username)))
 		email := "courier+" + hex.EncodeToString(sum[:]) + "@courier.invalid"
 		if _, err := createUserWithPassword(r.Context(), s.store, username, email, password, db.RoleCourier); err != nil {
-			log.Printf("Error creating courier account: %v", err)
+			slog.ErrorContext(r.Context(), "create courier account failed", "error", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create courier account. Username may already exist.")
 			data.Error = message
 			renderWithStatus(w, tmpl, statusCode, data)

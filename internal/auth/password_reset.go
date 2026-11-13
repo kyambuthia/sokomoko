@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -90,7 +90,7 @@ func (s *Service) dispatchPasswordResetEmail(recipientEmail string, resetLink st
 			}
 		}
 		if err != nil {
-			log.Printf("password reset email send failed for user_id=%d: %v", userID, err)
+			slog.Error("password reset email send failed", "user_id", userID, "error", err)
 		}
 	}()
 }

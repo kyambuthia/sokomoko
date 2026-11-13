@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -140,7 +139,7 @@ func Recoverer() Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					log.Printf("panic recovered: %v", rec)
+					slog.ErrorContext(r.Context(), "panic recovered", "error", rec)
 					RenderErrorPage(w, r, http.StatusInternalServerError, "Internal Server Error", "Something went wrong while processing your request.")
 				}
 			}()

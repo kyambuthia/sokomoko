@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -40,7 +40,7 @@ func StoreProfile(a *app.App) http.HandlerFunc {
 		}
 		partner, err := a.Catalog.ActiveStore(r.Context(), r.PathValue("slug"))
 		if err != nil {
-			log.Printf("store lookup failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
+			slog.ErrorContext(r.Context(), "store lookup failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 			serverError(w, r)
 			return
 		}
@@ -50,19 +50,19 @@ func StoreProfile(a *app.App) http.HandlerFunc {
 		}
 		products, err := a.Catalog.Browse(r.Context(), catalogsvc.Filter{PartnerID: partner.ID, Limit: storeProductLimit})
 		if err != nil {
-			log.Printf("store products failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
+			slog.ErrorContext(r.Context(), "store products failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 			serverError(w, r)
 			return
 		}
 		productTotal, err := a.Catalog.ProductCount(r.Context(), catalogsvc.Filter{PartnerID: partner.ID})
 		if err != nil {
-			log.Printf("store product count failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
+			slog.ErrorContext(r.Context(), "store product count failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 			serverError(w, r)
 			return
 		}
 		services, serviceTotal, err := a.Directory.Browse(r.Context(), db.ServiceFilter{PartnerID: partner.ID, Limit: storeServiceLimit}, 1)
 		if err != nil {
-			log.Printf("store services failed request_id=%s: %v", app.RequestIDFromContext(r.Context()), err)
+			slog.ErrorContext(r.Context(), "store services failed", "request_id", app.RequestIDFromContext(r.Context()), "error", err)
 			serverError(w, r)
 			return
 		}
