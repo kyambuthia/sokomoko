@@ -8,6 +8,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 )
 
@@ -73,7 +74,7 @@ func StoreProfile(a *app.App) http.HandlerFunc {
 			Slug:         partner.Slug,
 			PartnerID:    partner.ID,
 			Initials:     storeInitials(partner.Name),
-			CanMessage:   !viewer.SignedIn || viewer.Role == db.RoleUser,
+			CanMessage:   !viewer.SignedIn || viewer.Role == domain.RoleUser,
 			Products:     products,
 			Services:     services,
 			ProductTotal: productTotal,

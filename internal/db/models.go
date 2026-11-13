@@ -4,15 +4,16 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 const (
-	RolePartner = "partner"
-	RoleUser    = "user"
-	RoleStaff   = "staff"
-	RoleAdmin   = "admin"
-	RoleCourier = "courier"
+	RolePartner = domain.RolePartner
+	RoleUser    = domain.RoleUser
+	RoleStaff   = domain.RoleStaff
+	RoleAdmin   = domain.RoleAdmin
+	RoleCourier = domain.RoleCourier
 )
 
 // User represents an account in the system. Passwords are bcrypt hashes; the

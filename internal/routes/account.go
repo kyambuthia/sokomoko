@@ -11,6 +11,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 )
@@ -89,7 +90,7 @@ func Account(a *app.App) http.HandlerFunc {
 		userID, _ := requestUserID(r)
 		page := pageParam(r)
 		var bookingViews []AccountBookingView
-		if user := requestUserFromContext(r); user != nil && user.Role == db.RoleUser && a.Bookings != nil {
+		if user := requestUserFromContext(r); user != nil && user.Role == domain.RoleUser && a.Bookings != nil {
 			bookings, _, bookingErr := a.Bookings.ForCustomer(r.Context(), &bookingsvc.Actor{ID: user.ID, Role: user.Role}, 1, 10)
 			if bookingErr != nil {
 				slog.ErrorContext(r.Context(), "account service bookings", "error", bookingErr)
@@ -130,7 +131,7 @@ func AccountServiceBookings(a *app.App) http.HandlerFunc {
 			return
 		}
 		user := requestUserFromContext(r)
-		if user == nil || user.Role != db.RoleUser {
+		if user == nil || user.Role != domain.RoleUser {
 			http.Error(w, "Customer sign-in required", http.StatusUnauthorized)
 			return
 		}

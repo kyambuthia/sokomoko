@@ -9,6 +9,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	messagingSvc "github.com/kyambuthia/sokomoko/internal/service/messaging"
 )
 
@@ -335,6 +336,6 @@ func messageReports(a *app.App) http.HandlerFunc {
 			messageFailure(w, r, err)
 			return
 		}
-		a.Render(w, a.Templates.MessageReports, MessageReportsPageData{Title: "Message reports", Role: db.RoleAdmin, CSRFToken: a.Auth.CSRFToken(r), Reports: reports, Flash: popFlash(w, r)})
+		a.Render(w, a.Templates.MessageReports, MessageReportsPageData{Title: "Message reports", Role: domain.RoleAdmin, CSRFToken: a.Auth.CSRFToken(r), Reports: reports, Flash: popFlash(w, r)})
 	}
 }

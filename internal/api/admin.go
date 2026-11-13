@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
 )
 
@@ -50,8 +50,8 @@ type salesReportDTO struct {
 }
 
 func (h *Handler) registerAdminRoutes(mux *http.ServeMux) {
-	adminStaff := []string{db.RoleAdmin, db.RoleStaff}
-	adminOnly := []string{db.RoleAdmin}
+	adminStaff := []string{domain.RoleAdmin, domain.RoleStaff}
+	adminOnly := []string{domain.RoleAdmin}
 
 	mux.Handle(apiPrefix+"/admin/{$}", h.role(adminStaff, http.HandlerFunc(h.adminMetrics)))
 	mux.Handle(apiPrefix+"/admin/metrics", h.role(adminStaff, http.HandlerFunc(h.adminMetrics)))
@@ -267,5 +267,5 @@ func writeAdminError(w http.ResponseWriter, err error) {
 
 func isAdmin(r *http.Request) bool {
 	user := auth.GetUserFromContext(r.Context())
-	return user != nil && user.Role == db.RoleAdmin
+	return user != nil && user.Role == domain.RoleAdmin
 }

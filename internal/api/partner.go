@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	partnersvc "github.com/kyambuthia/sokomoko/internal/service/partner"
 )
 
@@ -70,7 +70,7 @@ type partnerDashboardDTO struct {
 }
 
 func (h *Handler) registerPartnerRoutes(mux *http.ServeMux) {
-	partnerOps := []string{db.RoleAdmin, db.RoleStaff, db.RolePartner}
+	partnerOps := []string{domain.RoleAdmin, domain.RoleStaff, domain.RolePartner}
 
 	mux.Handle(apiPrefix+"/partner/{$}", h.role(partnerOps, http.HandlerFunc(h.partnerDashboard)))
 	mux.Handle(apiPrefix+"/partner/dashboard", h.role(partnerOps, http.HandlerFunc(h.partnerDashboard)))

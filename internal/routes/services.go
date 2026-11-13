@@ -13,6 +13,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 )
@@ -120,7 +121,7 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 		var total int
 		var err error
 		if own {
-			data.Role = db.RolePartner
+			data.Role = domain.RolePartner
 			data.State = r.URL.Query().Get("state")
 			data.Listings, total, err = a.Directory.OwnByState(r.Context(), directoryActor(r), data.State, page, 24)
 		} else {
@@ -176,7 +177,7 @@ func ServiceDetail(a *app.App) http.HandlerFunc {
 			Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Flash: popFlash(w, r),
 			LocalDate: serviceLocalDate(listing.Timezone),
 		}
-		if user := requestUserFromContext(r); user != nil && user.Role == db.RoleUser {
+		if user := requestUserFromContext(r); user != nil && user.Role == domain.RoleUser {
 			data.BookingKey, err = newBookingIdempotencyKey()
 			if err != nil {
 				http.Error(w, "Could not prepare appointment form", http.StatusInternalServerError)
@@ -266,7 +267,7 @@ func ServiceBookingRequest(a *app.App) http.HandlerFunc {
 			return
 		}
 		user := requestUserFromContext(r)
-		if user == nil || user.Role != db.RoleUser {
+		if user == nil || user.Role != domain.RoleUser {
 			http.Error(w, "Customer sign-in required", http.StatusForbidden)
 			return
 		}
@@ -321,7 +322,7 @@ func PartnerServicePreview(a *app.App) http.HandlerFunc {
 			servicePageError(w, r, err)
 			return
 		}
-		a.Render(w, a.Templates.ServiceDetail, servicePage{Preview: true, Title: listing.Title, Role: db.RolePartner, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours), Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
+		a.Render(w, a.Templates.ServiceDetail, servicePage{Preview: true, Title: listing.Title, Role: domain.RolePartner, Listing: listing, Schedule: serviceSchedule(listing.WeeklyHours), Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r)})
 	}
 }
 
@@ -340,7 +341,7 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 				return
 			}
 		}
-		data := servicePage{Title: "Services", Role: db.RolePartner, CSRFToken: a.Auth.CSRFToken(r), EditID: id, Categories: serviceCategories}
+		data := servicePage{Title: "Services", Role: domain.RolePartner, CSRFToken: a.Auth.CSRFToken(r), EditID: id, Categories: serviceCategories}
 		actor := directoryActor(r)
 		if r.Method == http.MethodGet {
 			data.Form = directorysvc.Input{Category: "hair", DurationMinutes: 30, PriceMode: "fixed", Price: "0.00", Currency: "KES", DeliveryMode: "premises", State: "draft", Timezone: "Africa/Nairobi"}

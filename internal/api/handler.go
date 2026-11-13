@@ -12,7 +12,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
-	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
@@ -41,13 +41,13 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix+"/catalog/services", h.serviceList)
 	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}", h.serviceDetail)
 	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}/availability", h.serviceAvailability)
-	mux.Handle(apiPrefix+"/services/{slug}/bookings", h.role([]string{db.RoleUser}, http.HandlerFunc(h.createServiceBooking)))
-	mux.Handle(apiPrefix+"/account/service-bookings", h.role([]string{db.RoleUser}, http.HandlerFunc(h.accountServiceBookings)))
-	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.role([]string{db.RoleUser}, http.HandlerFunc(h.cancelServiceBooking)))
-	mux.Handle(apiPrefix+"/partner/services", h.role([]string{db.RolePartner}, http.HandlerFunc(h.ownServices)))
-	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{db.RolePartner}, http.HandlerFunc(h.ownService)))
-	mux.Handle(apiPrefix+"/partner/service-bookings", h.role([]string{db.RolePartner}, http.HandlerFunc(h.partnerServiceBookings)))
-	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.role([]string{db.RolePartner}, http.HandlerFunc(h.partnerServiceBookingAction)))
+	mux.Handle(apiPrefix+"/services/{slug}/bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.createServiceBooking)))
+	mux.Handle(apiPrefix+"/account/service-bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.accountServiceBookings)))
+	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.cancelServiceBooking)))
+	mux.Handle(apiPrefix+"/partner/services", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownServices)))
+	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownService)))
+	mux.Handle(apiPrefix+"/partner/service-bookings", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookings)))
+	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookingAction)))
 
 	// Public catalog reads.
 	mux.HandleFunc(apiPrefix+"/catalog/products", h.catalogProducts)
@@ -79,10 +79,10 @@ func Register(a *app.App, mux *http.ServeMux) {
 	// used on storefront, admin, and partner hosts without duplicating routes.
 	h.registerAdminRoutes(mux)
 	h.registerPartnerRoutes(mux)
-	mux.Handle(apiPrefix+"/admin/deliveries", h.role([]string{db.RoleAdmin, db.RoleStaff}, http.HandlerFunc(h.adminCourierDeliveries)))
-	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.role([]string{db.RoleAdmin, db.RoleStaff}, http.HandlerFunc(h.adminCourierAssign)))
-	mux.Handle(apiPrefix+"/courier/deliveries", h.role([]string{db.RoleCourier}, http.HandlerFunc(h.courierDeliveries)))
-	mux.Handle(apiPrefix+"/courier/deliveries/", h.role([]string{db.RoleCourier}, http.HandlerFunc(h.courierDeliveryUpdate)))
+	mux.Handle(apiPrefix+"/admin/deliveries", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierDeliveries)))
+	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierAssign)))
+	mux.Handle(apiPrefix+"/courier/deliveries", h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveries)))
+	mux.Handle(apiPrefix+"/courier/deliveries/", h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveryUpdate)))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {

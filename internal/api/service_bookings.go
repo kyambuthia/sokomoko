@@ -10,6 +10,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
 )
 
@@ -65,7 +66,7 @@ func (h *Handler) createServiceBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	if user == nil || user.Role != db.RoleUser {
+	if user == nil || user.Role != domain.RoleUser {
 		writeError(w, http.StatusForbidden, "forbidden", "A customer account is required")
 		return
 	}
@@ -108,7 +109,7 @@ func (h *Handler) accountServiceBookings(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	if user == nil || user.Role != db.RoleUser {
+	if user == nil || user.Role != domain.RoleUser {
 		writeError(w, http.StatusForbidden, "forbidden", "A customer account is required")
 		return
 	}
@@ -135,7 +136,7 @@ func (h *Handler) partnerServiceBookings(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	if user == nil || user.Role != db.RolePartner {
+	if user == nil || user.Role != domain.RolePartner {
 		writeError(w, http.StatusForbidden, "forbidden", "A partner account is required")
 		return
 	}
@@ -162,7 +163,7 @@ func (h *Handler) partnerServiceBookingAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	if user == nil || user.Role != db.RolePartner {
+	if user == nil || user.Role != domain.RolePartner {
 		writeError(w, http.StatusForbidden, "forbidden", "A partner account is required")
 		return
 	}
@@ -204,7 +205,7 @@ func (h *Handler) cancelServiceBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := auth.GetUserFromContext(r.Context())
-	if user == nil || user.Role != db.RoleUser {
+	if user == nil || user.Role != domain.RoleUser {
 		writeError(w, http.StatusForbidden, "forbidden", "A customer account is required")
 		return
 	}
