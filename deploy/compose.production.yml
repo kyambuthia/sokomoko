@@ -36,7 +36,7 @@ services:
       DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-20}
       DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-10}
       DB_QUERY_TIMEOUT_SECONDS: ${DB_QUERY_TIMEOUT_SECONDS:-10}
-      ALLOWED_HOSTS: ${STOREFRONT_HOST:?Set the storefront hostname},${ADMIN_HOST:?Set the admin hostname},${PARTNER_HOST:?Set the operations hostname},${COURIER_HOST:?Set the courier hostname},${DOCS_HOST:?Set the documentation hostname},${LEGAL_HOST:-legal.${STOREFRONT_HOST}}
+      ALLOWED_HOSTS: ${STOREFRONT_HOST:?Set the storefront hostname},${ADMIN_HOST:?Set the admin hostname},${PARTNER_HOST:?Set the operations hostname},${COURIER_HOST:?Set the courier hostname},${DOCS_HOST:?Set the documentation hostname},${LEGAL_HOST:-legal.${STOREFRONT_HOST}},${API_HOST:-api.${STOREFRONT_HOST}}
       TRUST_PROXY_HEADERS: "true"
       SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
       ADMIN_SETUP_TOKEN: ${ADMIN_SETUP_TOKEN:-}
@@ -75,6 +75,7 @@ services:
       COURIER_HOST: ${COURIER_HOST}
       DOCS_HOST: ${DOCS_HOST}
       LEGAL_HOST: ${LEGAL_HOST:-legal.${STOREFRONT_HOST}}
+      API_HOST: ${API_HOST:-api.${STOREFRONT_HOST}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
