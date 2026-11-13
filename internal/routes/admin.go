@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -15,10 +14,8 @@ import (
 )
 
 const (
-	teamPageSize            = 50 // Number of accounts shown on each team page.
-	adminProductsPageSize   = 50 // Number of products shown on each admin catalog page.
-	adminOrdersPageSize     = 50 // Number of orders shown on each admin order page.
-	adminDeliveriesPageSize = 50 // Pending deliveries shown on each admin page.
+	adminProductsPageSize = 50 // Number of products shown on each admin catalog page.
+	adminOrdersPageSize   = 50 // Number of orders shown on each admin order page.
 )
 
 type AdminPageData struct {
@@ -248,193 +245,5 @@ func AdminReports(a *app.App) http.HandlerFunc {
 		}
 
 		renderAdminPage(a, w, r, http.StatusOK, adminReportsPage(metrics, adminRoleFromContext(r), report))
-	}
-}
-
-// AdminDeliveries handles delivery management.
-func AdminDeliveries(a *app.App) http.HandlerFunc {
-	svc := a.Admin
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodPost {
-			methodNotAllowed(w, http.MethodGet, http.MethodPost)
-			return
-		}
-
-		requestedPage := pageParam(r)
-		status := http.StatusOK
-		dispatchError := ""
-		if r.Method == http.MethodPost {
-			err := a.Logistics.Assign(r.Context(), logisticsActorFromContext(r), r.FormValue("order_id"), r.FormValue("courier_id"))
-			switch {
-			case err == nil:
-				redirectWithFlash(w, r, pageHref(r, requestedPage), "success", "Courier assignment saved")
-				return
-			case errors.Is(err, logisticsvc.ErrForbidden):
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			case errors.Is(err, logisticsvc.ErrInvalidOrderID), errors.Is(err, logisticsvc.ErrInvalidCourierID):
-				dispatchError = "Choose a valid order and courier."
-				status = http.StatusBadRequest
-			case errors.Is(err, logisticsvc.ErrCourierNotFound):
-				dispatchError = "That courier account is not active. Refresh and choose an active courier."
-				status = http.StatusBadRequest
-			case errors.Is(err, logisticsvc.ErrOrderNotReady):
-				dispatchError = "Only shipped orders awaiting delivery can be assigned."
-				status = http.StatusBadRequest
-			case errors.Is(err, logisticsvc.ErrDeliveryStarted):
-				dispatchError = "This delivery has already been picked up and cannot be reassigned."
-				status = http.StatusConflict
-			default:
-				http.Error(w, "Unable to assign courier", http.StatusInternalServerError)
-				return
-			}
-		}
-
-		metrics, err := loadAdminMetrics(r.Context(), svc)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		board, total, err := svc.DeliveriesPage(r.Context(), requestedPage, adminDeliveriesPageSize)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		displayPage := min(requestedPage, pageCount(adminDeliveriesPageSize, total))
-		if r.Method == http.MethodGet && redirectPastLastPage(w, r, requestedPage, adminDeliveriesPageSize, total) {
-			return
-		}
-		if r.Method == http.MethodPost && dispatchError != "" && total > 0 && displayPage != requestedPage {
-			board, total, err = svc.DeliveriesPage(r.Context(), displayPage, adminDeliveriesPageSize)
-			if err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-		}
-		dispatch, err := a.Logistics.DispatchBoard(r.Context(), logisticsActorFromContext(r))
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		page := adminDeliveriesPage(metrics, adminRoleFromContext(r), board)
-		page.DeliveriesPager = newPager(r, displayPage, adminDeliveriesPageSize, total)
-		page.Dispatch = dispatch
-		page.DispatchError = dispatchError
-		page.CourierHostURL = siblingURL(r, courierHostPrefix, "/login")
-		if flash := popFlash(w, r); flash.Message != "" {
-			if flash.Kind == "danger" {
-				page.DispatchError = flash.Message
-			} else {
-				page.Message = flash.Message
-			}
-		}
-		renderAdminPage(a, w, r, status, page)
-	}
-}
-
-// AdminTeam lists users and allows admin-only staff/user deactivation.
-func AdminTeam(a *app.App) http.HandlerFunc {
-	svc := a.Admin
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		metrics, err := loadAdminMetrics(r.Context(), svc)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		page := adminTeamPage(metrics, adminRoleFromContext(r), nil)
-
-		if r.Method == http.MethodPost {
-			reactivate := r.FormValue("action") == "reactivate"
-			var err error
-			if reactivate {
-				err = svc.ReactivateUser(r.Context(), adminActorFromContext(r), r.FormValue("user_id"))
-			} else {
-				err = svc.DeactivateUser(r.Context(), adminActorFromContext(r), r.FormValue("user_id"))
-			}
-			switch {
-			case errors.Is(err, adminsvc.ErrForbiddenUserAction):
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			case errors.Is(err, adminsvc.ErrInvalidUserID):
-				page.TeamError = "Invalid user ID"
-			case errors.Is(err, adminsvc.ErrUserNotFound):
-				page.TeamError = "User does not exist"
-			case errors.Is(err, adminsvc.ErrProtectedUser):
-				page.TeamError = "You cannot deactivate your own account or the last active admin"
-			case errors.Is(err, adminsvc.ErrCourierHasActiveDeliveries):
-				page.TeamError = "This courier has deliveries assigned or in transit. Reassign them before deactivating the account."
-			case err != nil && reactivate:
-				page.TeamError = "Unable to reactivate user"
-			case err != nil:
-				page.TeamError = "Unable to deactivate user"
-			case reactivate:
-				redirectWithFlash(w, r, "/team", "success", "User account reactivated")
-				return
-			default:
-				redirectWithFlash(w, r, "/team", "success", "User account deactivated")
-				return
-			}
-		} else if flash := popFlash(w, r); flash.Message != "" {
-			page.TeamMessage = flash.Message
-		}
-
-		query := strings.TrimSpace(r.URL.Query().Get("q"))
-		pageNum := pageParam(r)
-		teamMembers, total, err := svc.TeamMembers(r.Context(), query, pageNum, teamPageSize)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		displayPage := min(pageNum, pageCount(teamPageSize, total))
-		if r.Method == http.MethodGet && redirectPastLastPage(w, r, pageNum, teamPageSize, total) {
-			return
-		}
-		if r.Method == http.MethodPost && page.TeamError != "" && total > 0 && displayPage != pageNum {
-			teamMembers, total, err = svc.TeamMembers(r.Context(), query, displayPage, teamPageSize)
-			if err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-		}
-		page.TeamMembers = teamMembers
-		page.TeamQuery = query
-		page.TeamPager = newPager(r, displayPage, teamPageSize, total)
-		if page.Deactivated, err = svc.DeactivatedMembers(r.Context()); err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		renderAdminPage(a, w, r, http.StatusOK, page)
-	}
-}
-
-func AdminAudit(a *app.App) http.HandlerFunc {
-	svc := a.Admin
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		metrics, err := loadAdminMetrics(r.Context(), svc)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		logs, err := svc.AuditLogs(r.Context(), 100)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		renderAdminPage(a, w, r, http.StatusOK, adminAuditPage(metrics, adminRoleFromContext(r), logs))
 	}
 }
