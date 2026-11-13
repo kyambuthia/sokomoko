@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	adminsvc "github.com/kyambuthia/sokomoko/internal/service/admin"
@@ -168,22 +169,22 @@ type MessagingService interface {
 
 type AuthService interface {
 	APIAuthMiddleware(next http.Handler) http.Handler
-	AdminLogin(tmpl *template.Template) http.HandlerFunc
-	AdminSetup(tmpl *template.Template) http.HandlerFunc
+	AdminLogin(tmpl auth.TemplateRenderer) http.HandlerFunc
+	AdminSetup(tmpl auth.TemplateRenderer) http.HandlerFunc
 	AuthMiddleware(next http.Handler) http.Handler
 	CSRFMiddleware(next http.Handler) http.Handler
 	CSRFToken(r *http.Request) string
-	Login(tmpl *template.Template) http.HandlerFunc
+	Login(tmpl auth.TemplateRenderer) http.HandlerFunc
 	Logout() http.HandlerFunc
 	OptionalUser(next http.Handler) http.Handler
-	PasswordResetConfirm(tmpl *template.Template, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc
-	PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc
-	SignUp(tmpl *template.Template) http.HandlerFunc
-	StaffSignUp(tmpl *template.Template) http.HandlerFunc
-	CourierSignUp(tmpl *template.Template) http.HandlerFunc
-	CourierLogin(tmpl *template.Template) http.HandlerFunc
-	PasswordChange(tmpl *template.Template, action, backHref string) http.HandlerFunc
-	WorkspaceLogin(tmpl *template.Template) http.HandlerFunc
+	PasswordResetConfirm(tmpl auth.TemplateRenderer, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc
+	PasswordResetRequest(tmpl auth.TemplateRenderer, allowedRoles []string, title string, helper string) http.HandlerFunc
+	SignUp(tmpl auth.TemplateRenderer) http.HandlerFunc
+	StaffSignUp(tmpl auth.TemplateRenderer) http.HandlerFunc
+	CourierSignUp(tmpl auth.TemplateRenderer) http.HandlerFunc
+	CourierLogin(tmpl auth.TemplateRenderer) http.HandlerFunc
+	PasswordChange(tmpl auth.TemplateRenderer, action, backHref string) http.HandlerFunc
+	WorkspaceLogin(tmpl auth.TemplateRenderer) http.HandlerFunc
 }
 
 type Dependencies struct {

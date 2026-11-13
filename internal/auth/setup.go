@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net"
 	"net/http"
@@ -84,7 +83,7 @@ func recommendedStaffCount(productCount int) (int, string) {
 }
 
 // AdminSetup is the first-run bootstrap flow that creates the root admin and optional staff accounts.
-func (s *Service) AdminSetup(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) AdminSetup(tmpl TemplateRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hasAdmin, err := s.store.HasAdminUser(r.Context())
 		if err != nil {

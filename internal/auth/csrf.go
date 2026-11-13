@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -244,15 +243,6 @@ func (s *Service) CSRFTokenForSession(r *http.Request) string {
 	}
 
 	return sess.CSRFToken
-}
-
-// CSRFTokenInput returns a template.HTML safe hidden input field with the CSRF token
-func (s *Service) CSRFTokenInput(r *http.Request) template.HTML {
-	token := s.CSRFTokenForSession(r)
-	if token == "" {
-		return ""
-	}
-	return template.HTML(`<input type="hidden" name="csrf_token" value="` + template.HTMLEscapeString(token) + `">`)
 }
 
 // CSRFToken returns the CSRF token string for use in templates

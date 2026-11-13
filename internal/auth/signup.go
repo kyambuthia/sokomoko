@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -37,7 +36,7 @@ type CourierSignupPageData struct {
 }
 
 // SignUp handles normal user registration.
-func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) SignUp(tmpl TemplateRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := SignupPageData{
 			Title:     "Create Account",
@@ -95,7 +94,7 @@ func (s *Service) SignUp(tmpl *template.Template) http.HandlerFunc {
 }
 
 // StaffSignUp handles staff account creation by admin users.
-func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) StaffSignUp(tmpl TemplateRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := StaffSignupPageData{
 			Title:     "Staff Account Setup",
@@ -154,7 +153,7 @@ func (s *Service) StaffSignUp(tmpl *template.Template) http.HandlerFunc {
 
 // CourierSignUp creates a rider login for a signed-in admin. Couriers have no
 // email workflow, so the required database email is a non-deliverable alias.
-func (s *Service) CourierSignUp(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) CourierSignUp(tmpl TemplateRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := CourierSignupPageData{Title: "Add courier", CSRFToken: s.CSRFTokenForSession(r)}
 		if r.Method == http.MethodGet {

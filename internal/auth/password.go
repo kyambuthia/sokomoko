@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -115,7 +114,7 @@ type PasswordChangePageData struct {
 // PasswordChange lets a signed-in user replace their password after proving
 // they know the current one. Every session for the account is revoked and the
 // browser gets a fresh one. Mount it behind AuthMiddleware.
-func (s *Service) PasswordChange(tmpl *template.Template, action, backHref string) http.HandlerFunc {
+func (s *Service) PasswordChange(tmpl TemplateRenderer, action, backHref string) http.HandlerFunc {
 	const scope = "password-change"
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := GetUserFromContext(r.Context())

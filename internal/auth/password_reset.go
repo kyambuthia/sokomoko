@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"net/textproto"
@@ -104,7 +103,7 @@ func permanentMailError(err error) bool {
 	return errors.As(err, &reply) && reply.Code >= 500
 }
 
-func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []string, title string, helper string) http.HandlerFunc {
+func (s *Service) PasswordResetRequest(tmpl TemplateRenderer, allowedRoles []string, title string, helper string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := PasswordResetRequestData{
 			Title:     title,
@@ -179,7 +178,7 @@ func (s *Service) PasswordResetRequest(tmpl *template.Template, allowedRoles []s
 	}
 }
 
-func (s *Service) PasswordResetConfirm(tmpl *template.Template, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc {
+func (s *Service) PasswordResetConfirm(tmpl TemplateRenderer, allowedRoles []string, title string, helper string, loginPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := PasswordResetConfirmData{
 			Title:     title,

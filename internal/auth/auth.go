@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"html/template"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,6 +14,11 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/secret"
 )
+
+// TemplateRenderer renders a named template into a buffer, satisfied by *html/template.Template.
+type TemplateRenderer interface {
+	ExecuteTemplate(wr io.Writer, name string, data any) error
+}
 
 const (
 	sessionCookieName             = "session_token"
@@ -162,7 +167,7 @@ func (s *Service) findUserByIdentifier(ctx context.Context, identifier string) (
 	return s.store.GetUserByUsername(ctx, trimmed)
 }
 
-func renderWithStatus(w http.ResponseWriter, tmpl *template.Template, statusCode int, data any) {
+func renderWithStatus(w http.ResponseWriter, tmpl TemplateRenderer, statusCode int, data any) {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "root_template", data); err != nil {
 		slog.Error("template execution error", "error", err)

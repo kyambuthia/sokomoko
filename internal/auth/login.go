@@ -2,7 +2,6 @@ package auth
 
 import (
 	"errors"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -34,11 +33,11 @@ type loginConfig struct {
 	title        string
 	abuseScope   string
 	allowedRoles []string
-	tmpl         *template.Template
+	tmpl         TemplateRenderer
 }
 
 // Login handles customer authentication.
-func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) Login(tmpl TemplateRenderer) http.HandlerFunc {
 	cfg := loginConfig{title: "Login", abuseScope: "login:user", allowedRoles: []string{db.RoleUser}, tmpl: tmpl}
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.handleLogin(w, r, cfg, func(username string) any {
@@ -53,23 +52,23 @@ func (s *Service) Login(tmpl *template.Template) http.HandlerFunc {
 
 // AdminLogin handles admin and staff authentication on the admin host. When no
 // admin exists yet it redirects to the first-run /setup flow.
-func (s *Service) AdminLogin(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) AdminLogin(tmpl TemplateRenderer) http.HandlerFunc {
 	return s.workspaceLogin(tmpl, "/setup", "Admin Login", "login:admin", []string{db.RoleAdmin, db.RoleStaff})
 }
 
 // WorkspaceLogin serves the partner host. Before an admin exists it explains
 // that setup must be completed on the admin host instead of redirecting into a loop.
-func (s *Service) WorkspaceLogin(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) WorkspaceLogin(tmpl TemplateRenderer) http.HandlerFunc {
 	return s.workspaceLogin(tmpl, "", "Partner Login", "login:workspace", []string{db.RoleAdmin, db.RoleStaff, db.RolePartner})
 }
 
 // CourierLogin accepts courier accounts only, even when a platform account
 // shares the same browser session cookie domain.
-func (s *Service) CourierLogin(tmpl *template.Template) http.HandlerFunc {
+func (s *Service) CourierLogin(tmpl TemplateRenderer) http.HandlerFunc {
 	return s.workspaceLogin(tmpl, "", "Courier Login", "login:courier", []string{db.RoleCourier})
 }
 
-func (s *Service) workspaceLogin(tmpl *template.Template, setupPath, title, abuseScope string, allowedRoles []string) http.HandlerFunc {
+func (s *Service) workspaceLogin(tmpl TemplateRenderer, setupPath, title, abuseScope string, allowedRoles []string) http.HandlerFunc {
 	cfg := loginConfig{title: title, abuseScope: abuseScope, allowedRoles: allowedRoles, tmpl: tmpl}
 	return func(w http.ResponseWriter, r *http.Request) {
 		hasAdmin, err := s.store.HasAdminUser(r.Context())
