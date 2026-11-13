@@ -18,7 +18,7 @@ four web workspaces and a JSON API from a single PostgreSQL database:
 
 ## Stack
 
-- Go 1.26.10, standard library `net/http` and `html/template`
+- Go 1.26.11, standard library `net/http` and `html/template`
 - PostgreSQL 17 through `pgx` (`database/sql` driver)
 - `golang.org/x/crypto/bcrypt` for passwords
 - One CSS design system and ES-module web components, with no build step

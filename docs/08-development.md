@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.26.10 (from `go.mod`)
+- Go 1.26.11 (from `go.mod`)
 - PostgreSQL 17, either from `docker compose` or your own server
 - Node.js, only for `make lint`'s JavaScript syntax check
 - Docker, for the image build and smoke test
