@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,7 @@ type Handler struct {
 
 func Register(a *app.App, mux *http.ServeMux) {
 	h := &Handler{app: a}
+	mux.HandleFunc("/", h.notFound)
 	mux.HandleFunc(apiPrefix, h.notFound)
 	mux.HandleFunc(apiPrefix+"/", h.notFound)
 
@@ -339,4 +341,28 @@ func mapPartnerProduct(product partnersvc.Product) productDTO {
 
 func mapAdminProduct(product adminsvc.Product) productDTO {
 	return productDTO{Name: product.Name, Category: product.Category, Price: product.Price.Float64(), PriceMinor: int64(product.Price), Currency: product.Currency, StockQuantity: product.StockQuantity}
+}
+
+// CORSMiddleware grants cross-origin credentialed API access only to origins
+// whose host is explicitly listed in allowedHosts.
+func CORSMiddleware(allowedHosts map[string]struct{}, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin != "" {
+			if parsed, err := url.Parse(origin); err == nil && (parsed.Scheme == "https" || parsed.Scheme == "http") {
+				if _, ok := allowedHosts[app.CanonicalHost(parsed.Host)]; ok {
+					w.Header().Add("Vary", "Origin")
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token")
+					if r.Method == http.MethodOptions {
+						w.WriteHeader(http.StatusNoContent)
+						return
+					}
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

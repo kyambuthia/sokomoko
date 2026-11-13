@@ -231,6 +231,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 			"partner.localhost": {},
 			"courier.localhost": {},
 			"docs.localhost":    {},
+			"api.localhost":     {},
 		}
 	}
 	slog.Info("trusted hosts configured", "hosts", sortedHostList(allowedHosts))

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kyambuthia/sokomoko/internal/api"
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/config"
@@ -67,6 +68,14 @@ func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partne
 		}
 		if strings.HasPrefix(host, "docs.") {
 			docsMux.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(host, "api.") {
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
+				mainMux.ServeHTTP(w, r)
+				return
+			}
+			api.CORSMiddleware(allowedHosts, apiMux).ServeHTTP(w, r)
 			return
 		}
 		if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/") {
@@ -153,6 +162,7 @@ func printStartupSummary(cfg config.Config, server *httpServer, allowedHosts map
 		"admin", localURL("admin.localhost", cfg.Port),
 		"partner", localURL("partner.localhost", cfg.Port),
 		"courier", localURL("courier.localhost", cfg.Port),
+		"api", localURL("api.localhost", cfg.Port),
 		"health", localURL("localhost", cfg.Port)+"/healthz",
 		"ready", localURL("localhost", cfg.Port)+"/readyz",
 	)
