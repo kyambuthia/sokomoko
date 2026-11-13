@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/slug"
 )
 
@@ -42,7 +43,7 @@ func (s *Service) StoreSettings(ctx context.Context) (*StoreSettings, error) {
 // CanEditStoreSettings reports whether actor may change the marketplace-wide
 // store settings. Partner accounts manage only their own catalog and orders.
 func CanEditStoreSettings(actor *Actor) bool {
-	return actor != nil && actor.ID > 0 && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff)
+	return actor != nil && actor.ID > 0 && (actor.Role == domain.RoleAdmin || actor.Role == domain.RoleStaff)
 }
 
 func (s *Service) SaveStoreSettings(ctx context.Context, actor *Actor, input StoreSettingsInput) (StoreSettings, error) {

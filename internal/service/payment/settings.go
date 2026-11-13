@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	"github.com/kyambuthia/sokomoko/internal/payments"
 )
@@ -96,7 +97,7 @@ type ProviderInput struct {
 
 // SaveProvider stores a provider's setup after validating it.
 func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, input ProviderInput) error {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return ErrForbidden
 	}
 	provider, ok := s.registry.Get(id)
@@ -260,7 +261,7 @@ func parsePricingAmount(raw, currency, currentCurrency string, existing money.Ce
 // SavePricing validates and stores currency and pricing. Switching currency
 // is refused when an enabled online provider cannot charge it.
 func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingInput) (Pricing, error) {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return Pricing{}, ErrForbidden
 	}
 	currency, ok := money.LookupCurrency(input.Currency)

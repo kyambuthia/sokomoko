@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 func TestSaveStoreSettings_Validation(t *testing.T) {
@@ -63,7 +64,7 @@ func TestCourierCompletedOrdersUseCompletedFilterAndSummary(t *testing.T) {
 
 func TestWorkspaceRejectsUntrustedActorsBeforeStoreAccess(t *testing.T) {
 	svc := newWithStore(nil) // Any accidental store access panics rather than hiding a leak.
-	actors := []*Actor{nil, {ID: 1, Role: db.RoleUser}, {ID: 1, Role: db.RoleCourier}, {ID: 1, Role: "unknown"}, {ID: 0, Role: db.RoleAdmin}, {ID: -1, Role: db.RoleStaff}, {ID: 0, Role: db.RolePartner}}
+	actors := []*Actor{nil, {ID: 1, Role: domain.RoleUser}, {ID: 1, Role: domain.RoleCourier}, {ID: 1, Role: "unknown"}, {ID: 0, Role: domain.RoleAdmin}, {ID: -1, Role: domain.RoleStaff}, {ID: 0, Role: domain.RolePartner}}
 	for _, actor := range actors {
 		calls := []struct {
 			name string

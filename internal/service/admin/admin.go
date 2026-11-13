@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
@@ -307,7 +308,7 @@ func (s *Service) Reports(ctx context.Context) (SalesReport, error) {
 }
 
 func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrderInput) error {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return ErrForbiddenOrderUpdate
 	}
 	orderID, err := parsePositiveInt(input.OrderID)
@@ -350,7 +351,7 @@ func (s *Service) TeamMembers(ctx context.Context, query string, page, limit int
 		limit = 100
 	}
 	users, total, err := s.store.ListUsersByRoles(ctx, db.UserSearch{
-		Roles:  []string{db.RoleAdmin, db.RoleStaff, db.RolePartner, db.RoleCourier, db.RoleUser},
+		Roles:  []string{domain.RoleAdmin, domain.RoleStaff, domain.RolePartner, domain.RoleCourier, domain.RoleUser},
 		Query:  query,
 		Limit:  limit,
 		Offset: (page - 1) * limit,
@@ -366,7 +367,7 @@ func (s *Service) TeamMembers(ctx context.Context, query string, page, limit int
 }
 
 func (s *Service) DeactivateUser(ctx context.Context, actor *Actor, userIDRaw string) error {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return ErrForbiddenUserAction
 	}
 	userID, err := parsePositiveInt(userIDRaw)
@@ -415,7 +416,7 @@ func (s *Service) DeactivatedMembers(ctx context.Context) ([]TeamMember, error) 
 // ReactivateUser restores a deactivated account. The user signs in again with
 // their existing password.
 func (s *Service) ReactivateUser(ctx context.Context, actor *Actor, userIDRaw string) error {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return ErrForbiddenUserAction
 	}
 	userID, err := parsePositiveInt(userIDRaw)

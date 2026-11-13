@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/slug"
 )
 
@@ -37,7 +38,7 @@ type CategoryInput struct {
 
 // canManageCatalog reports whether actor may manage categories.
 func canManageCatalog(actor *Actor) bool {
-	return actor != nil && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff)
+	return actor != nil && (actor.Role == domain.RoleAdmin || actor.Role == domain.RoleStaff)
 }
 
 // Categories lists active categories with their active product counts.

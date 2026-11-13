@@ -11,6 +11,7 @@ import (
 	_ "time/tzdata"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/slug"
 )
 
@@ -200,7 +201,7 @@ func (s *Service) Availability(ctx context.Context, listingSlug, localDate strin
 }
 
 func validActor(actor *Actor) bool {
-	return actor != nil && actor.ID > 0 && actor.Role == db.RoleUser
+	return actor != nil && actor.ID > 0 && actor.Role == domain.RoleUser
 }
 
 // Request creates an idempotent request using the listing version the customer
@@ -270,7 +271,7 @@ func (s *Service) Request(ctx context.Context, actor *Actor, listingSlug, starts
 
 // ForCustomer returns a customer's own appointment requests.
 func (s *Service) ForCustomer(ctx context.Context, actor *Actor, page, limit int) ([]db.ServiceBooking, int, error) {
-	if actor == nil || actor.ID <= 0 || actor.Role != db.RoleUser {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RoleUser {
 		return nil, 0, ErrForbidden
 	}
 	if page < 1 || page > 1000 || limit < 1 || limit > 50 {
@@ -285,7 +286,7 @@ func (s *Service) ForCustomer(ctx context.Context, actor *Actor, page, limit int
 
 // ForPartner returns appointment requests for the partner's active shop membership.
 func (s *Service) ForPartner(ctx context.Context, actor *Actor, page, limit int) ([]db.ServiceBooking, int, error) {
-	if actor == nil || actor.ID <= 0 || actor.Role != db.RolePartner {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RolePartner {
 		return nil, 0, ErrForbidden
 	}
 	if page < 1 || page > 1000 || limit < 1 || limit > 50 {
@@ -300,7 +301,7 @@ func (s *Service) ForPartner(ctx context.Context, actor *Actor, page, limit int)
 
 // Cancel lets a customer withdraw their own future request or confirmed booking.
 func (s *Service) Cancel(ctx context.Context, actor *Actor, bookingID int, expectedVersion int64) error {
-	if actor == nil || actor.ID <= 0 || actor.Role != db.RoleUser {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RoleUser {
 		return ErrForbidden
 	}
 	if bookingID <= 0 || expectedVersion <= 0 {
@@ -311,7 +312,7 @@ func (s *Service) Cancel(ctx context.Context, actor *Actor, bookingID int, expec
 
 // Respond lets a partner confirm or reject a still-open request.
 func (s *Service) Respond(ctx context.Context, actor *Actor, bookingID int, expectedVersion int64, action string) error {
-	if actor == nil || actor.ID <= 0 || actor.Role != db.RolePartner {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RolePartner {
 		return ErrForbidden
 	}
 	if bookingID <= 0 || expectedVersion <= 0 {

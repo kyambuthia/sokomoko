@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 type LoginPageData struct {
@@ -38,7 +39,7 @@ type loginConfig struct {
 
 // Login handles customer authentication.
 func (s *Service) Login(tmpl TemplateRenderer) http.HandlerFunc {
-	cfg := loginConfig{title: "Login", abuseScope: "login:user", allowedRoles: []string{db.RoleUser}, tmpl: tmpl}
+	cfg := loginConfig{title: "Login", abuseScope: "login:user", allowedRoles: []string{domain.RoleUser}, tmpl: tmpl}
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.handleLogin(w, r, cfg, func(username string) any {
 			return LoginPageData{Title: cfg.title, Username: username, CSRFToken: s.CSRFTokenForSession(r), Next: safeNextPath(r.FormValue("next")), PasswordResetEnabled: !s.passwordResetDisabled}
@@ -53,19 +54,19 @@ func (s *Service) Login(tmpl TemplateRenderer) http.HandlerFunc {
 // AdminLogin handles admin and staff authentication on the admin host. When no
 // admin exists yet it redirects to the first-run /setup flow.
 func (s *Service) AdminLogin(tmpl TemplateRenderer) http.HandlerFunc {
-	return s.workspaceLogin(tmpl, "/setup", "Admin Login", "login:admin", []string{db.RoleAdmin, db.RoleStaff})
+	return s.workspaceLogin(tmpl, "/setup", "Admin Login", "login:admin", []string{domain.RoleAdmin, domain.RoleStaff})
 }
 
 // WorkspaceLogin serves the partner host. Before an admin exists it explains
 // that setup must be completed on the admin host instead of redirecting into a loop.
 func (s *Service) WorkspaceLogin(tmpl TemplateRenderer) http.HandlerFunc {
-	return s.workspaceLogin(tmpl, "", "Partner Login", "login:workspace", []string{db.RoleAdmin, db.RoleStaff, db.RolePartner})
+	return s.workspaceLogin(tmpl, "", "Partner Login", "login:workspace", []string{domain.RoleAdmin, domain.RoleStaff, domain.RolePartner})
 }
 
 // CourierLogin accepts courier accounts only, even when a platform account
 // shares the same browser session cookie domain.
 func (s *Service) CourierLogin(tmpl TemplateRenderer) http.HandlerFunc {
-	return s.workspaceLogin(tmpl, "", "Courier Login", "login:courier", []string{db.RoleCourier})
+	return s.workspaceLogin(tmpl, "", "Courier Login", "login:courier", []string{domain.RoleCourier})
 }
 
 func (s *Service) workspaceLogin(tmpl TemplateRenderer, setupPath, title, abuseScope string, allowedRoles []string) http.HandlerFunc {
@@ -138,7 +139,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 	}
 
 	s.clearAbuseFailures(cfg.abuseScope, username, false, r)
-	if user.Role == db.RolePartner {
+	if user.Role == domain.RolePartner {
 		partnerID, err := s.store.PartnerIDForUser(r.Context(), user.ID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "partner lookup failed", "error", err)

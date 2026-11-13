@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 func TestCSRFMiddleware_StaleSessionCookieIsTreatedAsAnonymous(t *testing.T) {
@@ -49,7 +50,7 @@ func TestCSRFMiddleware_StaleSessionCookieIsTreatedAsAnonymous(t *testing.T) {
 
 func TestCSRFMiddleware_ValidSessionRequiresToken(t *testing.T) {
 	clearAuthTables()
-	user := createTestUser("csrfuser", "csrf@example.com", "password123", db.RoleUser)
+	user := createTestUser("csrfuser", "csrf@example.com", "password123", domain.RoleUser)
 	_ = testStore.CreateSession(t.Context(), db.Session{ID: "live", UserID: user.ID, CSRFToken: "expected", ExpiresAt: time.Now().Add(time.Hour)})
 	svc := newTestService(Config{})
 	handler := svc.CSRFMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
@@ -146,7 +147,7 @@ func TestWorkspaceLogin_NoAdminDoesNotRedirectLoop(t *testing.T) {
 
 func TestLogin_RedirectsToSafeNextAndAcceptsEmail(t *testing.T) {
 	clearAuthTables()
-	createTestUser("shopper", "shopper@example.com", "password123", db.RoleUser)
+	createTestUser("shopper", "shopper@example.com", "password123", domain.RoleUser)
 	tmpl := template.Must(template.New("x").Parse(`{{define "root_template"}}{{.Error}}{{end}}`))
 
 	form := url.Values{"username": {"Shopper@Example.com"}, "password": {"password123"}, "next": {"/cart"}}
@@ -205,7 +206,7 @@ func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
 		t.Fatalf("first setup status=%d body=%q", rr.Code, rr.Body.String())
 	}
 	staff, _ := testStore.GetUserByUsername(t.Context(), "staff01")
-	if staff == nil || staff.Role != db.RoleStaff {
+	if staff == nil || staff.Role != domain.RoleStaff {
 		t.Fatalf("staff01 = %+v", staff)
 	}
 

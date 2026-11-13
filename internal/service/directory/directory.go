@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	"github.com/kyambuthia/sokomoko/internal/slug"
 )
@@ -51,7 +52,7 @@ type store interface {
 type Service struct{ store store }
 
 func New(s store) *Service     { return &Service{store: s} }
-func validActor(a *Actor) bool { return a != nil && a.ID > 0 && a.Role == db.RolePartner }
+func validActor(a *Actor) bool { return a != nil && a.ID > 0 && a.Role == domain.RolePartner }
 func text(s string, min, max int, multiline bool) bool {
 	if !utf8.ValidString(s) || utf8.RuneCountInString(s) < min || utf8.RuneCountInString(s) > max {
 		return false

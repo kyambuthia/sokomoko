@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 var (
@@ -105,14 +106,14 @@ func (s *Service) Assign(ctx context.Context, actor *Actor, orderIDRaw, courierI
 }
 
 func (s *Service) Jobs(ctx context.Context, actor *Actor) ([]db.CourierDelivery, error) {
-	if actor == nil || actor.ID <= 0 || actor.Role != db.RoleCourier {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RoleCourier {
 		return nil, ErrForbidden
 	}
 	return s.JobsByView(ctx, actor, "all")
 }
 
 func (s *Service) JobsByView(ctx context.Context, actor *Actor, view string) ([]db.CourierDelivery, error) {
-	if actor == nil || actor.ID <= 0 || actor.Role != db.RoleCourier {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RoleCourier {
 		return nil, ErrForbidden
 	}
 	if view == "" {
@@ -125,7 +126,7 @@ func (s *Service) JobsByView(ctx context.Context, actor *Actor, view string) ([]
 }
 
 func (s *Service) Update(ctx context.Context, actor *Actor, deliveryIDRaw, status, note string) error {
-	if actor == nil || actor.ID <= 0 || actor.Role != db.RoleCourier {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RoleCourier {
 		return ErrForbidden
 	}
 	deliveryID, ok := parsePositiveID(deliveryIDRaw)
@@ -157,7 +158,7 @@ func (s *Service) Update(ctx context.Context, actor *Actor, deliveryIDRaw, statu
 }
 
 func canDispatch(actor *Actor) bool {
-	return actor != nil && actor.ID > 0 && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff)
+	return actor != nil && actor.ID > 0 && (actor.Role == domain.RoleAdmin || actor.Role == domain.RoleStaff)
 }
 
 func parsePositiveID(raw string) (int, bool) {

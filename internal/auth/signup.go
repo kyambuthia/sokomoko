@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 type StaffSignupPageData struct {
@@ -181,7 +181,7 @@ func (s *Service) CourierSignUp(tmpl TemplateRenderer) http.HandlerFunc {
 
 		sum := sha256.Sum256([]byte(strings.ToLower(username)))
 		email := "courier+" + hex.EncodeToString(sum[:]) + "@courier.invalid"
-		if _, err := createUserWithPassword(r.Context(), s.store, username, email, password, db.RoleCourier); err != nil {
+		if _, err := createUserWithPassword(r.Context(), s.store, username, email, password, domain.RoleCourier); err != nil {
 			slog.ErrorContext(r.Context(), "create courier account failed", "error", err)
 			statusCode, message := mapAccountCreationError(err, "Failed to create courier account. Username may already exist.")
 			data.Error = message

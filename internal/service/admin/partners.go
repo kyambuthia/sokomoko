@@ -8,6 +8,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/slug"
 )
 
@@ -58,7 +59,7 @@ type PartnerAccountInput struct {
 // canManagePartners reports whether actor may onboard and suspend partners.
 // Vendor onboarding grants access to fulfillment data, so it is admin only.
 func canManagePartners(actor *Actor) bool {
-	return actor != nil && actor.Role == db.RoleAdmin
+	return actor != nil && actor.Role == domain.RoleAdmin
 }
 
 // Partners lists every partner and every active partner login.

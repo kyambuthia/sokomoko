@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 type Actor struct {
@@ -51,7 +52,7 @@ func Nonce() (string, error) {
 }
 
 func validActor(a *Actor) bool {
-	return a != nil && a.ID > 0 && (a.Role == db.RoleUser || a.Role == db.RolePartner || a.Role == db.RoleCourier)
+	return a != nil && a.ID > 0 && (a.Role == domain.RoleUser || a.Role == domain.RolePartner || a.Role == domain.RoleCourier)
 }
 
 func normalizeTarget(t db.ChatTarget) (db.ChatTarget, error) {
@@ -166,13 +167,13 @@ func (s *Service) Action(ctx context.Context, a *Actor, id int, action string, m
 	return s.store.ChatAction(ctx, a.ID, id, action, messageID, reason)
 }
 func (s *Service) Reports(ctx context.Context, a *Actor) ([]db.ChatReport, error) {
-	if a == nil || a.ID <= 0 || a.Role != db.RoleAdmin {
+	if a == nil || a.ID <= 0 || a.Role != domain.RoleAdmin {
 		return nil, db.ErrChatNotFound
 	}
 	return s.store.ChatReports(ctx, a.ID)
 }
 func (s *Service) ResolveReport(ctx context.Context, a *Actor, id int) error {
-	if a == nil || a.ID <= 0 || a.Role != db.RoleAdmin {
+	if a == nil || a.ID <= 0 || a.Role != domain.RoleAdmin {
 		return db.ErrChatNotFound
 	}
 	if id == 0 {

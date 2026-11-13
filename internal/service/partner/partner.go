@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 var (
@@ -59,9 +60,9 @@ func (s *Service) partnerIDForActor(ctx context.Context, actor *Actor) (int, err
 }
 
 func canUseWorkspace(actor *Actor) bool {
-	return actor != nil && actor.ID > 0 && (actor.Role == db.RoleAdmin || actor.Role == db.RoleStaff || actor.Role == db.RolePartner)
+	return actor != nil && actor.ID > 0 && (actor.Role == domain.RoleAdmin || actor.Role == domain.RoleStaff || actor.Role == domain.RolePartner)
 }
 
 func actorIsPartner(actor *Actor) bool {
-	return actor != nil && actor.Role == db.RolePartner && actor.ID > 0
+	return actor != nil && actor.Role == domain.RolePartner && actor.ID > 0
 }

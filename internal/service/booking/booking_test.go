@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 type mockBookingStore struct {
@@ -76,9 +77,9 @@ func TestRequestValidation(t *testing.T) {
 
 		actors := []*Actor{
 			nil,
-			{ID: 0, Role: db.RoleUser},
-			{ID: 1, Role: db.RolePartner},
-			{ID: 2, Role: db.RoleAdmin},
+			{ID: 0, Role: domain.RoleUser},
+			{ID: 1, Role: domain.RolePartner},
+			{ID: 2, Role: domain.RoleAdmin},
 		}
 		for _, a := range actors {
 			_, err := svc.Request(ctx, a, "haircut", "2026-12-01T10:00", 1, "valid-idempotency-key-12345")
@@ -95,7 +96,7 @@ func TestRequestValidation(t *testing.T) {
 				return nil, nil
 			},
 		})
-		actor := &Actor{ID: 1, Role: db.RoleUser}
+		actor := &Actor{ID: 1, Role: domain.RoleUser}
 
 		// Invalid slug
 		if _, err := svc.Request(ctx, actor, "invalid slug with spaces", "2026-12-01T10:00", 1, "valid-idempotency-key-12345"); !errors.Is(err, ErrInvalid) {
@@ -117,7 +118,7 @@ func TestRequestValidation(t *testing.T) {
 	})
 
 	t.Run("idempotency returns existing request", func(t *testing.T) {
-		actor := &Actor{ID: 10, Role: db.RoleUser}
+		actor := &Actor{ID: 10, Role: domain.RoleUser}
 		existingBooking := &db.ServiceBooking{
 			ID:               42,
 			CustomerID:       10,
@@ -140,7 +141,7 @@ func TestRequestValidation(t *testing.T) {
 	})
 
 	t.Run("listing changed returns ErrListingChanged", func(t *testing.T) {
-		actor := &Actor{ID: 10, Role: db.RoleUser}
+		actor := &Actor{ID: 10, Role: domain.RoleUser}
 		svc := New(&mockBookingStore{
 			serviceBookingByIdempotencyFn: func(ctx context.Context, customerID int, key string, hash []byte) (*db.ServiceBooking, error) {
 				return nil, nil
@@ -163,7 +164,7 @@ func TestRequestValidation(t *testing.T) {
 	})
 
 	t.Run("maps store error codes", func(t *testing.T) {
-		actor := &Actor{ID: 10, Role: db.RoleUser}
+		actor := &Actor{ID: 10, Role: domain.RoleUser}
 		futureTime := time.Now().Add(48 * time.Hour).UTC().Format("2006-01-02T15:04")
 
 		tests := []struct {
@@ -211,13 +212,13 @@ func TestForCustomerAndForPartner(t *testing.T) {
 	t.Run("ForCustomer role check and paging", func(t *testing.T) {
 		svc := New(&mockBookingStore{})
 
-		if _, _, err := svc.ForCustomer(ctx, &Actor{ID: 1, Role: db.RolePartner}, 1, 10); !errors.Is(err, ErrForbidden) {
+		if _, _, err := svc.ForCustomer(ctx, &Actor{ID: 1, Role: domain.RolePartner}, 1, 10); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("expected ErrForbidden for partner actor")
 		}
-		if _, _, err := svc.ForCustomer(ctx, &Actor{ID: 1, Role: db.RoleUser}, 0, 10); !errors.Is(err, ErrInvalid) {
+		if _, _, err := svc.ForCustomer(ctx, &Actor{ID: 1, Role: domain.RoleUser}, 0, 10); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("expected ErrInvalid for page < 1")
 		}
-		if _, _, err := svc.ForCustomer(ctx, &Actor{ID: 1, Role: db.RoleUser}, 1, 100); !errors.Is(err, ErrInvalid) {
+		if _, _, err := svc.ForCustomer(ctx, &Actor{ID: 1, Role: domain.RoleUser}, 1, 100); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("expected ErrInvalid for limit > 50")
 		}
 	})
@@ -225,13 +226,13 @@ func TestForCustomerAndForPartner(t *testing.T) {
 	t.Run("ForPartner role check and paging", func(t *testing.T) {
 		svc := New(&mockBookingStore{})
 
-		if _, _, err := svc.ForPartner(ctx, &Actor{ID: 1, Role: db.RoleUser}, 1, 10); !errors.Is(err, ErrForbidden) {
+		if _, _, err := svc.ForPartner(ctx, &Actor{ID: 1, Role: domain.RoleUser}, 1, 10); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("expected ErrForbidden for customer actor")
 		}
-		if _, _, err := svc.ForPartner(ctx, &Actor{ID: 1, Role: db.RolePartner}, 0, 10); !errors.Is(err, ErrInvalid) {
+		if _, _, err := svc.ForPartner(ctx, &Actor{ID: 1, Role: domain.RolePartner}, 0, 10); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("expected ErrInvalid for page < 1")
 		}
-		if _, _, err := svc.ForPartner(ctx, &Actor{ID: 1, Role: db.RolePartner}, 1, 100); !errors.Is(err, ErrInvalid) {
+		if _, _, err := svc.ForPartner(ctx, &Actor{ID: 1, Role: domain.RolePartner}, 1, 100); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("expected ErrInvalid for limit > 50")
 		}
 	})
@@ -251,15 +252,15 @@ func TestCancelAndRespondTransitions(t *testing.T) {
 		})
 
 		// Non-user
-		if err := svc.Cancel(ctx, &Actor{ID: 1, Role: db.RolePartner}, 10, 1); !errors.Is(err, ErrForbidden) {
+		if err := svc.Cancel(ctx, &Actor{ID: 1, Role: domain.RolePartner}, 10, 1); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("expected ErrForbidden")
 		}
 		// Invalid params
-		if err := svc.Cancel(ctx, &Actor{ID: 1, Role: db.RoleUser}, 0, 1); !errors.Is(err, ErrInvalid) {
+		if err := svc.Cancel(ctx, &Actor{ID: 1, Role: domain.RoleUser}, 0, 1); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("expected ErrInvalid")
 		}
 		// Version conflict mapped
-		if err := svc.Cancel(ctx, &Actor{ID: 1, Role: db.RoleUser}, 10, 1); !errors.Is(err, ErrVersionConflict) {
+		if err := svc.Cancel(ctx, &Actor{ID: 1, Role: domain.RoleUser}, 10, 1); !errors.Is(err, ErrVersionConflict) {
 			t.Fatalf("expected ErrVersionConflict, got %v", err)
 		}
 	})
@@ -272,10 +273,10 @@ func TestCancelAndRespondTransitions(t *testing.T) {
 				return nil
 			},
 		})
-		actor := &Actor{ID: 5, Role: db.RolePartner}
+		actor := &Actor{ID: 5, Role: domain.RolePartner}
 
 		// Non-partner
-		if err := svc.Respond(ctx, &Actor{ID: 5, Role: db.RoleUser}, 10, 1, "confirm"); !errors.Is(err, ErrForbidden) {
+		if err := svc.Respond(ctx, &Actor{ID: 5, Role: domain.RoleUser}, 10, 1, "confirm"); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("expected ErrForbidden")
 		}
 

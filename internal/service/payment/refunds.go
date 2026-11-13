@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/payments"
 )
 
@@ -27,7 +28,7 @@ func (s *Service) PaymentExceptions(ctx context.Context) ([]db.PaymentException,
 // reversal already completed in the operator's M-Pesa account. A claimed
 // request is never sent again after an uncertain provider response.
 func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manualReference string) (*db.PaymentException, error) {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return nil, ErrForbidden
 	}
 	e, err := s.store.GetPaymentException(ctx, id)
@@ -104,7 +105,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 // dashboard after an uncertain or failed automatic refund. Open exceptions go
 // through RequestRefund so a Paystack refund is never skipped by mistake.
 func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, reference string) (*db.PaymentException, error) {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return nil, ErrForbidden
 	}
 	reference = strings.TrimSpace(reference)
@@ -153,7 +154,7 @@ func truncate(value string, n int) string {
 }
 
 func (s *Service) RefreshRefund(ctx context.Context, actor *Actor, id int) (*db.PaymentException, error) {
-	if actor == nil || actor.Role != db.RoleAdmin {
+	if actor == nil || actor.Role != domain.RoleAdmin {
 		return nil, ErrForbidden
 	}
 	e, err := s.store.GetPaymentException(ctx, id)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/db/dbtest"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/payments"
 	"github.com/kyambuthia/sokomoko/internal/secret"
 )
@@ -23,14 +24,14 @@ func newTestService(t *testing.T) (*Service, *db.Store) {
 		t.Fatal(err)
 	}
 	if _, err := store.CreateUser(t.Context(), db.User{
-		Username: "payment-admin", Email: "payment-admin@example.com", PasswordHash: "hash", Role: db.RoleAdmin,
+		Username: "payment-admin", Email: "payment-admin@example.com", PasswordHash: "hash", Role: domain.RoleAdmin,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	return New(store, payments.NewRegistry(payments.Options{}), secret.Development()), store
 }
 
-var admin = &Actor{ID: 1, Role: db.RoleAdmin}
+var admin = &Actor{ID: 1, Role: domain.RoleAdmin}
 
 func mpesaInput(enabled bool) ProviderInput {
 	return ProviderInput{Enabled: enabled, Mode: "test", Values: map[string]string{
@@ -56,7 +57,7 @@ func TestBuildRecordUsesEnabledMethods(t *testing.T) {
 func TestSaveProviderValidatesAndSealsSecrets(t *testing.T) {
 	svc, store := newTestService(t)
 
-	if err := svc.SaveProvider(t.Context(), &Actor{ID: 2, Role: db.RoleStaff}, "mpesa", mpesaInput(true)); !errors.Is(err, ErrForbidden) {
+	if err := svc.SaveProvider(t.Context(), &Actor{ID: 2, Role: domain.RoleStaff}, "mpesa", mpesaInput(true)); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("staff save = %v", err)
 	}
 	if err := svc.SaveProvider(t.Context(), admin, "mpesa", mpesaInput(true)); !errors.Is(err, ErrCurrencyMismatch) {

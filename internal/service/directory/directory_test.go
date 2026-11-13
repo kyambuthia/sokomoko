@@ -3,6 +3,7 @@ package directory
 import (
 	"errors"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"strings"
 	"testing"
 )
@@ -12,7 +13,7 @@ func validInput() Input {
 }
 func TestDirectoryRejectsUnauthorizedActorsBeforeStore(t *testing.T) {
 	s := New(nil)
-	for _, a := range []*Actor{nil, {ID: 1, Role: db.RoleUser}, {ID: 1, Role: db.RoleAdmin}, {ID: 1, Role: db.RoleCourier}, {ID: 0, Role: db.RolePartner}} {
+	for _, a := range []*Actor{nil, {ID: 1, Role: domain.RoleUser}, {ID: 1, Role: domain.RoleAdmin}, {ID: 1, Role: domain.RoleCourier}, {ID: 0, Role: domain.RolePartner}} {
 		if _, err := s.Save(t.Context(), a, 0, validInput()); !errors.Is(err, ErrForbidden) {
 			t.Fatal(err)
 		}
@@ -29,7 +30,7 @@ func TestDirectoryRejectsUnauthorizedActorsBeforeStore(t *testing.T) {
 }
 func TestDirectoryRejectsInvalidListingBeforeStore(t *testing.T) {
 	s := New(nil)
-	a := &Actor{ID: 1, Role: db.RolePartner}
+	a := &Actor{ID: 1, Role: domain.RolePartner}
 	cases := []func(*Input){func(i *Input) { i.Title = "x" }, func(i *Input) { i.Title = "bad\x00title" }, func(i *Input) { i.Description = strings.Repeat("a", 3001) }, func(i *Input) { i.Description = "bad\xffdescription" }, func(i *Input) { i.Description = "bad\rdescription" }, func(i *Input) { i.DurationMinutes = 0 }, func(i *Input) { i.Price = "-1" }, func(i *Input) { i.Price = "1.001" }, func(i *Input) { i.PriceMode = "quote" }, func(i *Input) { i.Currency = "FAKE" }, func(i *Input) { i.Category = "unknown" }, func(i *Input) { i.State = "approved" }, func(i *Input) { i.PublicArea = "x" }, func(i *Input) { i.DeliveryMode = "unknown" }, func(i *Input) { i.Version = 1 }}
 	for n, mutate := range cases {
 		i := validInput()
@@ -58,7 +59,7 @@ func TestDirectoryReturnsAllFieldErrorsWithoutTouchingStore(t *testing.T) {
 	in.Price = "not a price"
 	in.Currency = "EUR"
 	in.PublicArea = ""
-	_, err := New(nil).Save(t.Context(), &Actor{ID: 1, Role: db.RolePartner}, 0, in)
+	_, err := New(nil).Save(t.Context(), &Actor{ID: 1, Role: domain.RolePartner}, 0, in)
 	var validation *ValidationError
 	if !errors.Is(err, ErrInvalid) || !errors.As(err, &validation) {
 		t.Fatalf("unexpected error: %v", err)
@@ -76,7 +77,7 @@ func TestDirectoryReturnsAllFieldErrorsWithoutTouchingStore(t *testing.T) {
 
 func TestOwnServicesRejectsInvalidStateBeforeStore(t *testing.T) {
 	for _, state := range []string{"unknown", "DRAFT", "draft ", "published' OR true--"} {
-		if _, _, err := New(nil).OwnByState(t.Context(), &Actor{ID: 1, Role: db.RolePartner}, state, 1, 24); !errors.Is(err, ErrInvalid) {
+		if _, _, err := New(nil).OwnByState(t.Context(), &Actor{ID: 1, Role: domain.RolePartner}, state, 1, 24); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("state=%q error=%v", state, err)
 		}
 	}
