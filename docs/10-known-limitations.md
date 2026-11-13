@@ -41,8 +41,10 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
   appointments; partners can respond and record start, completion or no-show.
   Customers cannot select a resource, and service deposits or payments are not
   collected.
-- Locality search matches seller-entered neighbourhood/town text. There is no
-  geocoding, map display, distance search or live location tracking.
+- Locality search supports seller-entered neighbourhood/town text, built-in
+  locality centroid geocoding, radius filtering (`radius_km`), and optional
+  opt-in coordinates for distance sorting/display. There is no visual map
+  display or live background location tracking.
 - Professional qualifications are not verified. The directory does not collect
   clinical details, and a dental category is not an endorsement.
 - Service enquiries use the existing encrypted shop messaging flow. Listing

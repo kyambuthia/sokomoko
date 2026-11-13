@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	"html/template"
 	"reflect"
@@ -30,6 +31,8 @@ func templateFuncs(demoMode bool) template.FuncMap {
 		"dict":                dict,
 		"json":                toJSON,
 		"rfc3339":             rfc3339,
+		"formatCoord":         formatCoord,
+		"formatDistance":      formatDistance,
 		"demoMode":            func() bool { return demoMode },
 	}
 }
@@ -109,4 +112,18 @@ func rfc3339(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+func formatCoord(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%.6f", *v)
+}
+
+func formatDistance(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%.1f km", *v)
 }

@@ -8,6 +8,7 @@ import { UIOrderForm, UIOrderProgress, UIPaymentStatus } from "./ui/order.js";
 import { UIPassword } from "./ui/password.js";
 import { UIQuantity } from "./ui/quantity.js";
 import { UISearch } from "./ui/search.js";
+import { UIServiceLocation } from "./ui/service-location.js";
 import { UISplatViewer } from "./ui/splat-viewer.js";
 import { UIThemeToggle } from "./ui/theme-toggle.js";
 import { UIEncryptedChat } from "./ui/encrypted-chat.js";
@@ -33,6 +34,7 @@ const components = {
   "ui-quantity": UIQuantity,
   "ui-relative-time": UIRelativeTime,
   "ui-search": UISearch,
+  "ui-service-location": UIServiceLocation,
   "ui-splat-viewer": UISplatViewer,
   "ui-table-filter": UITableFilter,
   "ui-theme-toggle": UIThemeToggle,

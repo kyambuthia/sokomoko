@@ -8,9 +8,12 @@
   {{ if demoMode }}<p class="notice">Demo directory: these services are sample listings. No appointments, sales or payments are accepted.</p>{{ end }}
   {{ if .Filter.PartnerID }}<p class="notice">{{ icon "store" }}<span>Showing services from one business. <a href="/services">Browse all businesses</a></span></p>{{ end }}
 
+  <ui-service-location>
   <form action="/services" method="GET" class="service-search" role="search" aria-label="Find services">
     {{ if .Filter.PartnerID }}<input type="hidden" name="partner_id" value="{{ .Filter.PartnerID }}">{{ end }}
     {{ if .Filter.Category }}<input type="hidden" name="category" value="{{ .Filter.Category }}">{{ end }}
+    <input type="hidden" data-service-lat{{ if .Filter.Lat }} name="lat" value="{{ formatCoord .Filter.Lat }}"{{ end }}>
+    <input type="hidden" data-service-lng{{ if .Filter.Lng }} name="lng" value="{{ formatCoord .Filter.Lng }}"{{ end }}>
     <div class="service-search__fields">
       <label class="search">
         <span class="sr-only">Service or business</span>
@@ -24,15 +27,17 @@
       </label>
       <button class="btn" type="submit">Find services</button>
     </div>
-    <details class="service-filters"{{ if or .Filter.DeliveryMode .Filter.HasHours }} open{{ end }}>
-      <summary class="btn btn-plain btn-sm">{{ icon "settings" }}More filters{{ if or .Filter.DeliveryMode .Filter.HasHours }} · on{{ end }}</summary>
+    <details class="service-filters"{{ if or .Filter.DeliveryMode .Filter.HasHours .Filter.RadiusKM (and .Filter.Lat .Filter.Lng) }} open{{ end }}>
+      <summary class="btn btn-plain btn-sm">{{ icon "settings" }}More filters{{ if or .Filter.DeliveryMode .Filter.HasHours .Filter.RadiusKM (and .Filter.Lat .Filter.Lng) }} · on{{ end }}</summary>
       <div class="form-row">
+        <div class="field"><label class="label" for="service-radius">Distance radius</label><select class="select" id="service-radius" name="radius_km"><option value="">Any distance</option><option value="5"{{ if eq .Filter.RadiusKM 5.0 }} selected{{ end }}>Within 5 km</option><option value="10"{{ if eq .Filter.RadiusKM 10.0 }} selected{{ end }}>Within 10 km</option><option value="25"{{ if eq .Filter.RadiusKM 25.0 }} selected{{ end }}>Within 25 km</option></select></div>
         <div class="field"><label class="label" for="service-mode">Where it happens</label><select class="select" id="service-mode" name="delivery_mode"><option value="">Any location type</option><option value="premises"{{ if eq .Filter.DeliveryMode "premises" }} selected{{ end }}>At the business</option><option value="mobile"{{ if eq .Filter.DeliveryMode "mobile" }} selected{{ end }}>Provider travels to you</option><option value="remote"{{ if eq .Filter.DeliveryMode "remote" }} selected{{ end }}>Remote</option></select></div>
         <label class="choice" for="service-hours"><input id="service-hours" type="checkbox" name="has_hours" value="true"{{ if .Filter.HasHours }} checked{{ end }}><span>Only services with published hours</span></label>
       </div>
-      <div class="row"><button class="btn btn-secondary btn-sm" type="submit">Apply filters</button><a href="/services" class="btn btn-plain btn-sm">Clear all</a></div>
+      <div class="row"><button class="btn btn-secondary btn-sm" type="submit">Apply filters</button><button class="btn btn-plain btn-sm" type="button" data-use-location hidden>{{ icon "map-pin" }}Use my location</button><a href="/services" class="btn btn-plain btn-sm">Clear all</a><span class="small muted" data-location-status role="status"></span></div>
     </details>
   </form>
+  </ui-service-location>
 
   {{ if .CategoryLinks }}
   <nav class="chips" aria-label="Service categories">
@@ -41,7 +46,7 @@
   {{ end }}
 
   {{ if .Listings }}
-  <p class="small muted" role="status">{{ .Total }} {{ if eq .Total 1 }}service{{ else }}services{{ end }}{{ if .Filter.Area }} near {{ .Filter.Area }}{{ end }}{{ if or .Filter.Query .Filter.Category .Filter.Area .Filter.DeliveryMode .Filter.HasHours }} · <a href="/services{{ if .Filter.PartnerID }}?partner_id={{ .Filter.PartnerID }}{{ end }}">Clear filters</a>{{ end }}</p>
+  <p class="small muted" role="status">{{ .Total }} {{ if eq .Total 1 }}service{{ else }}services{{ end }}{{ if .Filter.Area }} near {{ .Filter.Area }}{{ else if and .Filter.Lat .Filter.Lng }} near your location{{ end }}{{ if .Filter.RadiusKM }} within {{ printf "%.0f" .Filter.RadiusKM }} km{{ end }}{{ if or .Filter.Query .Filter.Category .Filter.Area .Filter.DeliveryMode .Filter.HasHours .Filter.RadiusKM (and .Filter.Lat .Filter.Lng) }} · <a href="/services{{ if .Filter.PartnerID }}?partner_id={{ .Filter.PartnerID }}{{ end }}">Clear filters</a>{{ end }}</p>
   <ul class="service-grid">
     {{ range .Listings }}
     <li>
@@ -55,7 +60,7 @@
           <p class="small muted">{{ if .PartnerSlug }}<a href="/stores/{{ .PartnerSlug }}">{{ .PartnerName }}</a>{{ else }}{{ .PartnerName }}{{ end }}</p>
         </div>
         <ul class="service-facts small">
-          <li>{{ icon "map-pin" }}<span>{{ .PublicArea }}</span></li>
+          <li>{{ icon "map-pin" }}<span>{{ .PublicArea }}{{ if .DistanceKM }} · {{ formatDistance .DistanceKM }} away{{ end }}</span></li>
           <li>{{ icon (serviceModeIcon .DeliveryMode) }}<span>{{ serviceMode .DeliveryMode }}</span></li>
           <li>{{ icon "clock" }}<span>{{ .DurationMinutes }} minutes</span></li>
         </ul>

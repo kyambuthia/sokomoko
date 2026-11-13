@@ -43,6 +43,7 @@ type servicePage struct {
 	FieldErrors                   map[string]string
 	ValidationFields              []directorysvc.FieldError
 	Duration                      string
+	PublicLat, PublicLng          string
 	Title, Role, CSRFToken, Error string
 	BookingKey                    string
 	LocalDate                     string
@@ -373,7 +374,9 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 					servicePageError(w, r, err)
 					return
 				}
-				data.Form = directorysvc.Input{Title: v.Title, Description: v.Description, Category: v.Category, DurationMinutes: v.DurationMinutes, PriceMode: v.PriceMode, Price: v.PriceCents.String(), Currency: v.Currency, PublicArea: v.PublicArea, DeliveryMode: v.DeliveryMode, State: v.State, Version: v.Version, Timezone: v.Timezone, WeeklyHours: v.WeeklyHours}
+				data.Form = directorysvc.Input{Title: v.Title, Description: v.Description, Category: v.Category, DurationMinutes: v.DurationMinutes, PriceMode: v.PriceMode, Price: v.PriceCents.String(), Currency: v.Currency, PublicArea: v.PublicArea, DeliveryMode: v.DeliveryMode, State: v.State, Version: v.Version, Timezone: v.Timezone, PublicLat: v.PublicLat, PublicLng: v.PublicLng, WeeklyHours: v.WeeklyHours}
+				data.PublicLat = formatOptionalCoord(v.PublicLat)
+				data.PublicLng = formatOptionalCoord(v.PublicLng)
 			}
 			data.Duration = strconv.Itoa(data.Form.DurationMinutes)
 			data.Weekdays = serviceWeekdayForms(data.Form.WeeklyHours)
@@ -385,12 +388,24 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 			return
 		}
 		data.Duration = r.PostForm.Get("duration_minutes")
+		data.PublicLat = strings.TrimSpace(r.PostForm.Get("public_lat"))
+		data.PublicLng = strings.TrimSpace(r.PostForm.Get("public_lng"))
 		duration, durationErr := strconv.Atoi(data.Duration)
 		if durationErr != nil {
 			duration = 0
 		}
 		version, versionErr := strconv.Atoi(r.PostForm.Get("version"))
-		data.Form = directorysvc.Input{Title: r.PostForm.Get("title"), Description: r.PostForm.Get("description"), Category: r.PostForm.Get("category"), DurationMinutes: duration, PriceMode: r.PostForm.Get("price_mode"), Price: r.PostForm.Get("price"), Currency: r.PostForm.Get("currency"), PublicArea: r.PostForm.Get("public_area"), DeliveryMode: r.PostForm.Get("delivery_mode"), State: r.PostForm.Get("state"), Version: version, Timezone: r.PostForm.Get("timezone"), WeeklyHours: []directorysvc.ServiceWeeklyHour{}}
+		pubLat, latOK := parseOptionalCoord(data.PublicLat)
+		pubLng, lngOK := parseOptionalCoord(data.PublicLng)
+		if !latOK {
+			bad := 999.0
+			pubLat = &bad
+		}
+		if !lngOK {
+			bad := 999.0
+			pubLng = &bad
+		}
+		data.Form = directorysvc.Input{Title: r.PostForm.Get("title"), Description: r.PostForm.Get("description"), Category: r.PostForm.Get("category"), DurationMinutes: duration, PriceMode: r.PostForm.Get("price_mode"), Price: r.PostForm.Get("price"), Currency: r.PostForm.Get("currency"), PublicArea: r.PostForm.Get("public_area"), DeliveryMode: r.PostForm.Get("delivery_mode"), State: r.PostForm.Get("state"), Version: version, Timezone: r.PostForm.Get("timezone"), PublicLat: pubLat, PublicLng: pubLng, WeeklyHours: []directorysvc.ServiceWeeklyHour{}}
 		for weekday := range serviceWeekdayNames {
 			opensAt := strings.TrimSpace(r.PostForm.Get("opens_at_" + strconv.Itoa(weekday)))
 			closesAt := strings.TrimSpace(r.PostForm.Get("closes_at_" + strconv.Itoa(weekday)))
@@ -427,6 +442,10 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 			for _, field := range validation.Fields {
 				data.FieldErrors[field.Field] = field.Message
 			}
+		} else if errors.Is(err, directorysvc.ErrInvalid) && (data.PublicLat != "" || data.PublicLng != "") {
+			msg := "Provide both latitude (-90 to 90) and longitude (-180 to 180), or leave both blank."
+			data.ValidationFields = []directorysvc.FieldError{{Field: "public_lat", Message: msg}, {Field: "public_lng", Message: msg}}
+			data.FieldErrors = map[string]string{"public_lat": msg, "public_lng": msg}
 		}
 		if errors.Is(err, directorysvc.ErrServiceConflict) {
 			status = http.StatusConflict
@@ -443,4 +462,22 @@ func PartnerServiceEdit(a *app.App) http.HandlerFunc {
 		}
 		a.RenderStatus(w, a.Templates.PartnerServiceEdit, status, data)
 	}
+}
+
+func formatOptionalCoord(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*v, 'f', 6, 64)
+}
+
+func parseOptionalCoord(raw string) (*float64, bool) {
+	if raw == "" {
+		return nil, true
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v != v || v < -180 || v > 180 {
+		return nil, false
+	}
+	return &v, true
 }
