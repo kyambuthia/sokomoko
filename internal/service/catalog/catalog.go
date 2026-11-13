@@ -62,7 +62,7 @@ type Service struct {
 	store store
 }
 
-func New(store *db.Store) *Service {
+func New(store store) *Service {
 	return &Service{store: store}
 }
 
