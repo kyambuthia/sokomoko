@@ -60,189 +60,56 @@ func ParseTemplatesWithDemo(demoMode bool) (*Templates, error) {
 		return nil, err
 	}
 
-	indexTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/index.html")
-	if err != nil {
-		return nil, err
+	var tmpls Templates
+	pages := []struct {
+		target **template.Template
+		path   string
+	}{
+		{&tmpls.Services, "templates/pages/services.html"},
+		{&tmpls.ServiceDetail, "templates/pages/service_detail.html"},
+		{&tmpls.PartnerServices, "templates/pages/partner_services.html"},
+		{&tmpls.PartnerServiceEdit, "templates/pages/partner_service_edit.html"},
+		{&tmpls.PartnerBookings, "templates/pages/partner_bookings.html"},
+		{&tmpls.Index, "templates/pages/index.html"},
+		{&tmpls.Search, "templates/pages/search.html"},
+		{&tmpls.Store, "templates/pages/store.html"},
+		{&tmpls.Product, "templates/pages/product.html"},
+		{&tmpls.Cart, "templates/pages/cart.html"},
+		{&tmpls.Checkout, "templates/pages/checkout.html"},
+		{&tmpls.Payment, "templates/pages/payment.html"},
+		{&tmpls.Account, "templates/pages/account.html"},
+		{&tmpls.AccountBookings, "templates/pages/account_service_bookings.html"},
+		{&tmpls.Messages, "templates/pages/messages.html"},
+		{&tmpls.MessageReports, "templates/pages/message_reports.html"},
+		{&tmpls.Admin, "templates/pages/admin.html"},
+		{&tmpls.AdminLogin, "templates/pages/admin_login.html"},
+		{&tmpls.AdminSetup, "templates/pages/admin_setup.html"},
+		{&tmpls.StaffSignup, "templates/pages/staff_signup.html"},
+		{&tmpls.PartnerSetup, "templates/pages/partner_setup.html"},
+		{&tmpls.PartnerDashboard, "templates/pages/partner_dashboard.html"},
+		{&tmpls.PartnerProducts, "templates/pages/partner_products.html"},
+		{&tmpls.PartnerProductNew, "templates/pages/partner_product_new.html"},
+		{&tmpls.PartnerOrders, "templates/pages/partner_orders.html"},
+		{&tmpls.CourierSignup, "templates/pages/courier_signup.html"},
+		{&tmpls.CourierDashboard, "templates/pages/courier_dashboard.html"},
+		{&tmpls.Login, "templates/pages/login.html"},
+		{&tmpls.Signup, "templates/pages/signup.html"},
+		{&tmpls.PasswordResetRequest, "templates/pages/password_reset_request.html"},
+		{&tmpls.PasswordResetConfirm, "templates/pages/password_reset_confirm.html"},
+		{&tmpls.PasswordChange, "templates/pages/password_change.html"},
 	}
 
-	searchTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/search.html")
-	if err != nil {
-		return nil, err
+	for _, page := range pages {
+		cloned, err := base.Clone()
+		if err != nil {
+			return nil, err
+		}
+		parsed, err := cloned.ParseFS(TmplData, page.path)
+		if err != nil {
+			return nil, err
+		}
+		*page.target = parsed
 	}
 
-	storeTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/store.html")
-	if err != nil {
-		return nil, err
-	}
-
-	productTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/product.html")
-	if err != nil {
-		return nil, err
-	}
-
-	cartTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/cart.html")
-	if err != nil {
-		return nil, err
-	}
-
-	checkoutTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/checkout.html")
-	if err != nil {
-		return nil, err
-	}
-	paymentTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/payment.html")
-	if err != nil {
-		return nil, err
-	}
-
-	accountTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/account.html")
-	if err != nil {
-		return nil, err
-	}
-	accountBookingsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/account_service_bookings.html")
-	if err != nil {
-		return nil, err
-	}
-	messagesTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/messages.html")
-	if err != nil {
-		return nil, err
-	}
-	messageReportsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/message_reports.html")
-	if err != nil {
-		return nil, err
-	}
-
-	adminTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/admin.html")
-	if err != nil {
-		return nil, err
-	}
-
-	adminLoginTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/admin_login.html")
-	if err != nil {
-		return nil, err
-	}
-
-	adminSetupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/admin_setup.html")
-	if err != nil {
-		return nil, err
-	}
-
-	staffSignupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/staff_signup.html")
-	if err != nil {
-		return nil, err
-	}
-
-	partnerSetupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_setup.html")
-	if err != nil {
-		return nil, err
-	}
-
-	partnerDashboardTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_dashboard.html")
-	if err != nil {
-		return nil, err
-	}
-
-	partnerProductsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_products.html")
-	if err != nil {
-		return nil, err
-	}
-
-	partnerProductNewTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_product_new.html")
-	if err != nil {
-		return nil, err
-	}
-
-	partnerOrdersTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_orders.html")
-	if err != nil {
-		return nil, err
-	}
-
-	courierSignupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/courier_signup.html")
-	if err != nil {
-		return nil, err
-	}
-
-	courierDashboardTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/courier_dashboard.html")
-	if err != nil {
-		return nil, err
-	}
-
-	loginTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/login.html")
-	if err != nil {
-		return nil, err
-	}
-
-	signupTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/signup.html")
-	if err != nil {
-		return nil, err
-	}
-
-	passwordResetRequestTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/password_reset_request.html")
-	if err != nil {
-		return nil, err
-	}
-
-	passwordResetConfirmTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/password_reset_confirm.html")
-	if err != nil {
-		return nil, err
-	}
-
-	passwordChangeTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/password_change.html")
-	if err != nil {
-		return nil, err
-	}
-
-	servicesTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/services.html")
-	if err != nil {
-		return nil, err
-	}
-	serviceDetailTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/service_detail.html")
-	if err != nil {
-		return nil, err
-	}
-	partnerServicesTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_services.html")
-	if err != nil {
-		return nil, err
-	}
-	partnerServiceEditTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_service_edit.html")
-	if err != nil {
-		return nil, err
-	}
-	partnerBookingsTmpl, err := template.Must(base.Clone()).ParseFS(TmplData, "templates/pages/partner_bookings.html")
-	if err != nil {
-		return nil, err
-	}
-	return &Templates{
-		Services:             servicesTmpl,
-		ServiceDetail:        serviceDetailTmpl,
-		PartnerServices:      partnerServicesTmpl,
-		PartnerServiceEdit:   partnerServiceEditTmpl,
-		PartnerBookings:      partnerBookingsTmpl,
-		Index:                indexTmpl,
-		Search:               searchTmpl,
-		Store:                storeTmpl,
-		Product:              productTmpl,
-		Cart:                 cartTmpl,
-		Checkout:             checkoutTmpl,
-		Payment:              paymentTmpl,
-		Account:              accountTmpl,
-		AccountBookings:      accountBookingsTmpl,
-		Messages:             messagesTmpl,
-		MessageReports:       messageReportsTmpl,
-		Admin:                adminTmpl,
-		AdminLogin:           adminLoginTmpl,
-		AdminSetup:           adminSetupTmpl,
-		StaffSignup:          staffSignupTmpl,
-		PartnerSetup:         partnerSetupTmpl,
-		PartnerDashboard:     partnerDashboardTmpl,
-		PartnerProducts:      partnerProductsTmpl,
-		PartnerProductNew:    partnerProductNewTmpl,
-		PartnerOrders:        partnerOrdersTmpl,
-		CourierSignup:        courierSignupTmpl,
-		CourierDashboard:     courierDashboardTmpl,
-		Login:                loginTmpl,
-		Signup:               signupTmpl,
-		PasswordResetRequest: passwordResetRequestTmpl,
-		PasswordResetConfirm: passwordResetConfirmTmpl,
-		PasswordChange:       passwordChangeTmpl,
-	}, nil
+	return &tmpls, nil
 }
