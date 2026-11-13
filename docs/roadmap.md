@@ -87,7 +87,7 @@ reachable.
 - [ ] Verify product deletion. The workspace flow is implemented; add targeted
   coverage for ownership, cart and checkout cleanup, and concurrent add/delete
   behavior before marking it complete.
-- [ ] Verify product image upload. The workspace flow is implemented; add
+- [x] Verify product image upload. The workspace flow is implemented; add
   coverage for format, size, pixel bounds, EXIF orientation, replacement and
   removal, and active-product image serving before marking it complete.
 - [ ] Finish shared rate limiting verification. POST IP limits and
