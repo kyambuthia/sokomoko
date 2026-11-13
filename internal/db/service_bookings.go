@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
@@ -20,28 +21,7 @@ var (
 	ErrServiceBookingInvalidRequest      = errors.New("invalid service booking request")
 )
 
-type ServiceBooking struct {
-	ID               int64       `json:"id"`
-	ServiceListingID int         `json:"service_listing_id"`
-	ResourceID       int64       `json:"resource_id"`
-	CustomerID       int         `json:"customer_id"`
-	ServiceTitle     string      `json:"service_title"`
-	ServiceArea      string      `json:"service_area"`
-	DeliveryMode     string      `json:"delivery_mode"`
-	DurationMinutes  int         `json:"duration_minutes"`
-	PriceMode        string      `json:"price_mode"`
-	PriceCents       money.Cents `json:"price_cents"`
-	Currency         string      `json:"currency"`
-	Timezone         string      `json:"timezone"`
-	StartsAt         time.Time   `json:"starts_at"`
-	EndsAt           time.Time   `json:"ends_at"`
-	Status           string      `json:"status"`
-	ResponseDeadline time.Time   `json:"response_deadline"`
-	Version          int64       `json:"version"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	RequestHash      []byte      `json:"-"`
-}
+type ServiceBooking = domain.ServiceBooking
 
 const serviceBookingColumns = `id,service_listing_id,resource_id,customer_id,service_title,service_area,
 	delivery_mode,duration_minutes,price_mode,price_cents,currency,timezone,starts_at,ends_at,status,

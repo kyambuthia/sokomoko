@@ -5,52 +5,20 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/kyambuthia/sokomoko/internal/money"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 var (
-	ErrServiceNotFound = errors.New("service listing not found")
-	ErrServiceConflict = errors.New("service listing changed; reload before editing")
+	ErrServiceNotFound = domain.ErrServiceNotFound
+	ErrServiceConflict = domain.ErrServiceConflict
 )
 
-type ServiceListing struct {
-	ID              int                 `json:"id"`
-	PartnerID       int                 `json:"partner_id"`
-	PartnerName     string              `json:"partner_name"`
-	PartnerSlug     string              `json:"partner_slug"`
-	Slug            string              `json:"slug"`
-	Title           string              `json:"title"`
-	Description     string              `json:"description"`
-	Category        string              `json:"category"`
-	DurationMinutes int                 `json:"duration_minutes"`
-	PriceMode       string              `json:"price_mode"`
-	PriceCents      money.Cents         `json:"price_cents"`
-	Currency        string              `json:"currency"`
-	PublicArea      string              `json:"public_area"`
-	DeliveryMode    string              `json:"delivery_mode"`
-	State           string              `json:"state"`
-	Version         int                 `json:"version"`
-	CreatedAt       time.Time           `json:"created_at"`
-	UpdatedAt       time.Time           `json:"updated_at"`
-	Timezone        string              `json:"timezone"`
-	OpenDays        int                 `json:"open_days"`
-	WeeklyHours     []ServiceWeeklyHour `json:"weekly_hours,omitempty"`
-}
-
-// ServiceWeeklyHour uses Sunday=0 through Saturday=6 and local 24-hour times.
-type ServiceWeeklyHour struct {
-	Weekday  int    `json:"weekday"`
-	OpensAt  string `json:"opens_at"`
-	ClosesAt string `json:"closes_at"`
-}
-
-type ServiceFilter struct {
-	Query, Category, Area, DeliveryMode string
-	PartnerID, Limit, Offset            int
-	HasHours                            bool
-}
+type (
+	ServiceListing    = domain.ServiceListing
+	ServiceWeeklyHour = domain.ServiceWeeklyHour
+	ServiceFilter     = domain.ServiceFilter
+)
 
 const serviceColumns = `s.id,s.partner_id,p.name,p.slug,s.slug,s.title,s.description,s.category,s.duration_minutes,s.price_mode,s.price_cents,s.currency,s.public_area,s.delivery_mode,s.state,s.version,s.created_at,s.updated_at,s.timezone,(SELECT count(*)::integer FROM service_weekly_hours h WHERE h.service_listing_id=s.id)`
 

@@ -1,26 +1,26 @@
 package messaging
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import "github.com/kyambuthia/sokomoko/internal/domain"
 
 type (
-	ChatInbox         = db.ChatInbox
-	ChatContact       = db.ChatContact
-	ChatTarget        = db.ChatTarget
-	ChatThread        = db.ChatThread
-	ChatReport        = db.ChatReport
-	EncryptedRequest  = db.EncryptedRequest
-	EncryptedResponse = db.EncryptedResponse
+	ChatInbox         = domain.ChatInbox
+	ChatContact       = domain.ChatContact
+	ChatTarget        = domain.ChatTarget
+	ChatThread        = domain.ChatThread
+	ChatReport        = domain.ChatReport
+	EncryptedRequest  = domain.EncryptedRequest
+	EncryptedResponse = domain.EncryptedResponse
 )
 
 var (
-	ErrChatInvalid            = db.ErrChatInvalid
-	ErrChatEventOrder         = db.ErrChatEventOrder
-	ErrChatDeviceApproval     = db.ErrChatDeviceApproval
-	ErrChatRosterChanged      = db.ErrChatRosterChanged
-	ErrChatEncryptionRequired = db.ErrChatEncryptionRequired
-	ErrChatNotFound           = db.ErrChatNotFound
-	ErrChatClosed             = db.ErrChatClosed
-	ErrChatBlocked            = db.ErrChatBlocked
-	ErrChatLimited            = db.ErrChatLimited
-	ErrChatConflict           = db.ErrChatConflict
+	ErrChatInvalid            = domain.ErrChatInvalid
+	ErrChatEventOrder         = domain.ErrChatEventOrder
+	ErrChatDeviceApproval     = domain.ErrChatDeviceApproval
+	ErrChatRosterChanged      = domain.ErrChatRosterChanged
+	ErrChatEncryptionRequired = domain.ErrChatEncryptionRequired
+	ErrChatNotFound           = domain.ErrChatNotFound
+	ErrChatClosed             = domain.ErrChatClosed
+	ErrChatBlocked            = domain.ErrChatBlocked
+	ErrChatLimited            = domain.ErrChatLimited
+	ErrChatConflict           = domain.ErrChatConflict
 )

@@ -1,7 +1,7 @@
 package logistics
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import "github.com/kyambuthia/sokomoko/internal/domain"
 
-type CourierDelivery = db.CourierDelivery
+type CourierDelivery = domain.CourierDelivery
 
-var ErrInvalidCourierView = db.ErrInvalidCourierView
+var ErrInvalidCourierView = domain.ErrInvalidCourierView

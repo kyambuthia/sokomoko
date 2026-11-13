@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
@@ -13,25 +14,10 @@ import (
 // allowing a manual resolution to race an uncertain provider request.
 const paymentRefundResolveGrace = time.Minute
 
-var ErrPaymentExceptionNotFound = errors.New("payment exception not found")
+var ErrPaymentExceptionNotFound = domain.ErrPaymentExceptionNotFound
 
 // PaymentException is one confirmed charge that needs an operator refund.
-type PaymentException struct {
-	ID               int
-	PaymentID        int
-	AttemptID        int
-	OrderID          int
-	Reason           string
-	Status           string
-	Provider         string
-	Currency         string
-	Amount           money.Cents
-	RequestReference string
-	Receipt          string
-	RefundReference  string
-	LastError        string
-	CreatedAt        time.Time
-}
+type PaymentException = domain.PaymentException
 
 const paymentExceptionSelect = `SELECT e.id, e.payment_id, e.attempt_id, p.order_id,
     e.reason, e.status, e.provider, e.currency, e.amount_cents,

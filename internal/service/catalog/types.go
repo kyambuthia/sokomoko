@@ -1,11 +1,11 @@
 package catalog
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import "github.com/kyambuthia/sokomoko/internal/domain"
 
 type (
-	ProductImage = db.ProductImage
-	ProductVideo = db.ProductVideo
-	Partner      = db.Partner
+	ProductImage = domain.ProductImage
+	ProductVideo = domain.ProductVideo
+	Partner      = domain.Partner
 )
 
-var ErrProductNotFound = db.ErrProductNotFound
+var ErrProductNotFound = domain.ErrProductNotFound

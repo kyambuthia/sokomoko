@@ -9,12 +9,13 @@ import (
 	"slices"
 	"time"
 
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 var (
-	ErrPaymentNotFound         = errors.New("payment not found")
-	ErrCurrencyLocked          = errors.New("currency cannot change after orders exist")
+	ErrPaymentNotFound         = domain.ErrPaymentNotFound
+	ErrCurrencyLocked          = domain.ErrCurrencyLocked
 	ErrPaymentAmountMatch      = errors.New("payment amount or currency does not match")
 	ErrAttemptInProgress       = errors.New("a payment attempt is already in progress")
 	ErrPaymentReviewRequired   = errors.New("payment amount discrepancy is under review")

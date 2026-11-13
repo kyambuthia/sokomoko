@@ -1,5 +1,5 @@
 package booking
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import "github.com/kyambuthia/sokomoko/internal/domain"
 
-type ServiceBooking = db.ServiceBooking
+type ServiceBooking = domain.ServiceBooking

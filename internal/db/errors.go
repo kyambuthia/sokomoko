@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 var (
@@ -19,11 +20,11 @@ var (
 	ErrCartEmpty                       = errors.New("cart is empty")
 	ErrCartItemNotFound                = errors.New("cart item not found")
 	ErrInvalidQuantity                 = errors.New("invalid quantity")
-	ErrProductNotFound                 = errors.New("product not found")
+	ErrProductNotFound                 = domain.ErrProductNotFound
 	ErrInvalidProductImage             = errors.New("invalid product image")
 	ErrInvalidProductVideo             = errors.New("invalid product video")
 	ErrInvalidProductMedia             = errors.New("invalid product media")
-	ErrCheckoutNotFound                = errors.New("checkout not found")
+	ErrCheckoutNotFound                = domain.ErrCheckoutNotFound
 	ErrCheckoutExpired                 = errors.New("checkout expired")
 	ErrInsufficientStock               = errors.New("insufficient stock")
 	ErrOrderNotFound                   = errors.New("order not found")
@@ -39,7 +40,7 @@ var (
 	ErrCourierDispatchForbidden        = errors.New("active dispatch operator required")
 	ErrCourierDeliveryForbidden        = errors.New("courier cannot update this delivery")
 	ErrInvalidCourierTransition        = errors.New("invalid courier delivery transition")
-	ErrInvalidCourierView              = errors.New("invalid courier job view")
+	ErrInvalidCourierView              = domain.ErrInvalidCourierView
 	ErrCourierHasActiveDeliveries      = errors.New("courier has active deliveries")
 	ErrLastAdmin                       = errors.New("cannot deactivate the last active admin")
 	ErrUserInactive                    = errors.New("user is inactive")

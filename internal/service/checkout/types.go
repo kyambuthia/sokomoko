@@ -1,5 +1,5 @@
 package checkout
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import "github.com/kyambuthia/sokomoko/internal/domain"
 
-var ErrCheckoutNotFound = db.ErrCheckoutNotFound
+var ErrCheckoutNotFound = domain.ErrCheckoutNotFound

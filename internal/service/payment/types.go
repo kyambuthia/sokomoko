@@ -1,11 +1,11 @@
 package payment
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import "github.com/kyambuthia/sokomoko/internal/domain"
 
-type PaymentException = db.PaymentException
+type PaymentException = domain.PaymentException
 
 var (
-	ErrPaymentNotFound          = db.ErrPaymentNotFound
-	ErrPaymentExceptionNotFound = db.ErrPaymentExceptionNotFound
-	ErrCurrencyLocked           = db.ErrCurrencyLocked
+	ErrPaymentNotFound          = domain.ErrPaymentNotFound
+	ErrPaymentExceptionNotFound = domain.ErrPaymentExceptionNotFound
+	ErrCurrencyLocked           = domain.ErrCurrencyLocked
 )

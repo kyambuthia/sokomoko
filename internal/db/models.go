@@ -29,15 +29,7 @@ type User struct {
 	DeletedAt    sql.NullTime
 }
 
-type Partner struct {
-	ID           int
-	Name         string
-	Slug         string
-	ContactEmail string
-	Status       string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
+type Partner = domain.Partner
 
 type Category struct {
 	ID          int
@@ -91,23 +83,9 @@ const MaxProductImageBytes = 256 * 1024
 
 const MaxProductVideoBytes = 10 * 1024 * 1024
 
-type ProductImage struct {
-	ID           int
-	ProductID    int
-	URL          string
-	AltText      string
-	DisplayOrder int
-	ContentType  string
-	Data         []byte
-	CreatedAt    time.Time
-}
+type ProductImage = domain.ProductImage
 
-type ProductVideo struct {
-	ProductID   int
-	ContentType string
-	Data        []byte
-	CreatedAt   time.Time
-}
+type ProductVideo = domain.ProductVideo
 
 type Warehouse struct {
 	ID        int
@@ -238,29 +216,10 @@ type Order struct {
 // CourierDelivery is the dispatch and rider-facing projection for one order.
 // It deliberately omits payment data and prices; riders receive only the
 // customer name, delivery address, fulfillment state, and item quantities.
-type CourierDelivery struct {
-	ID              int
-	OrderID         int
-	CourierUserID   int
-	CourierName     string
-	AssignedByID    int
-	CustomerName    string
-	DeliveryAddress string
-	OrderStatus     string
-	PartnerStatus   string
-	DeliveryStatus  string
-	Status          string
-	FailureNote     string
-	CreatedAt       time.Time
-	AssignedAt      time.Time
-	UpdatedAt       time.Time
-	Items           []CourierDeliveryItem
-}
-
-type CourierDeliveryItem struct {
-	ProductName string
-	Quantity    int
-}
+type (
+	CourierDelivery     = domain.CourierDelivery
+	CourierDeliveryItem = domain.CourierDeliveryItem
+)
 
 type CourierUser struct {
 	ID               int

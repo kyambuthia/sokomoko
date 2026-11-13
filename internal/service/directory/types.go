@@ -1,14 +1,14 @@
 package directory
 
-import "github.com/kyambuthia/sokomoko/internal/db"
+import "github.com/kyambuthia/sokomoko/internal/domain"
 
 type (
-	ServiceListing    = db.ServiceListing
-	ServiceFilter     = db.ServiceFilter
-	ServiceWeeklyHour = db.ServiceWeeklyHour
+	ServiceListing    = domain.ServiceListing
+	ServiceFilter     = domain.ServiceFilter
+	ServiceWeeklyHour = domain.ServiceWeeklyHour
 )
 
 var (
-	ErrServiceNotFound = db.ErrServiceNotFound
-	ErrServiceConflict = db.ErrServiceConflict
+	ErrServiceNotFound = domain.ErrServiceNotFound
+	ErrServiceConflict = domain.ErrServiceConflict
 )
