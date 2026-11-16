@@ -147,7 +147,7 @@ func (s *Store) insertProductImageTx(ctx context.Context, q querier, productID i
 	var imageID int64
 	if err := q.QueryRowContext(ctx,
 		`INSERT INTO product_images (product_id, url, alt_text, position)
-		 VALUES ($1, /media/product-images/pending, $2, $3) RETURNING id`,
+		 VALUES ($1, '/media/product-images/pending', $2, $3) RETURNING id`,
 		productID, strings.TrimSpace(image.AltText), position,
 	).Scan(&imageID); err != nil {
 		return err
