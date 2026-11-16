@@ -34,7 +34,9 @@ const (
 	defaultDBConnMaxLifetimeSeconds = 1800
 	defaultDBQueryTimeoutSeconds    = 10
 
-	defaultSMTPPort = "587"
+	defaultSMTPPort     = "587"
+	defaultMediaBackend = "disk"
+	defaultMediaDiskDir = "var/media"
 )
 
 type Config struct {
@@ -80,6 +82,9 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	SMTPFrom     string
+
+	MediaBackend string
+	MediaDiskDir string
 }
 
 func LoadFromEnv() Config {
@@ -122,6 +127,8 @@ func LoadFromEnv() Config {
 		SMTPUsername:          strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
 		SMTPPassword:          strings.TrimSpace(os.Getenv("SMTP_PASSWORD")),
 		SMTPFrom:              strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		MediaBackend:          strings.ToLower(readEnv("MEDIA_BACKEND", defaultMediaBackend)),
+		MediaDiskDir:          readEnv("MEDIA_DISK_DIR", defaultMediaDiskDir),
 	}
 	cfg.loadErrors = loadErrors
 	if cfg.DatabaseURL == "" {
@@ -215,6 +222,11 @@ func (c Config) Validate() error {
 	}
 	if c.RateLimitHMACKey != "" && (len(c.RateLimitHMACKey) < 32 || len(strings.Fields(c.RateLimitHMACKey)) != 1) {
 		problems = append(problems, "RATE_LIMIT_HMAC_KEY must contain at least 32 bytes and no whitespace when set")
+	}
+	switch strings.ToLower(strings.TrimSpace(c.MediaBackend)) {
+	case "", "disk", "memory":
+	default:
+		problems = append(problems, "MEDIA_BACKEND must be disk or memory")
 	}
 	if c.MetricsToken != "" && (len(c.MetricsToken) < 32 || len(strings.Fields(c.MetricsToken)) != 1) {
 		problems = append(problems, "METRICS_TOKEN must contain at least 32 bytes and no whitespace when set")

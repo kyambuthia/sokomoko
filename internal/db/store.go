@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
+	"github.com/kyambuthia/sokomoko/internal/blob"
 )
 
 const (
@@ -51,7 +52,15 @@ func (o PoolOptions) withDefaults() PoolOptions {
 
 type Store struct {
 	DB           *sql.DB
+	blobs        blob.Store
 	queryTimeout time.Duration
+}
+
+// SetBlobStore configures the binary object store used for product media.
+func (s *Store) SetBlobStore(blobs blob.Store) {
+	if s != nil && blobs != nil {
+		s.blobs = blobs
+	}
 }
 
 // querier is satisfied by both *sql.DB and *sql.Tx.
@@ -91,7 +100,7 @@ func Open(ctx context.Context, databaseURL string, opts PoolOptions) (*Store, er
 		return nil, fmt.Errorf("connect to database: %w", err)
 	}
 
-	return &Store{DB: conn, queryTimeout: opts.QueryTimeout}, nil
+	return &Store{DB: conn, blobs: blob.NewMemoryStore(), queryTimeout: opts.QueryTimeout}, nil
 }
 
 func (s *Store) Close() error {

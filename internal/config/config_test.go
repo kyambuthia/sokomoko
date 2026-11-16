@@ -277,3 +277,23 @@ func TestBindHost(t *testing.T) {
 		}
 	}
 }
+
+func TestMediaBackendConfig(t *testing.T) {
+	t.Setenv("MEDIA_BACKEND", "memory")
+	t.Setenv("MEDIA_DISK_DIR", "/tmp/sokomoko-media")
+	cfg := LoadFromEnv()
+	if cfg.MediaBackend != "memory" {
+		t.Fatalf("MediaBackend = %q, want memory", cfg.MediaBackend)
+	}
+	if cfg.MediaDiskDir != "/tmp/sokomoko-media" {
+		t.Fatalf("MediaDiskDir = %q, want /tmp/sokomoko-media", cfg.MediaDiskDir)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() = %v", err)
+	}
+
+	invalid := Config{Port: "6969", LogFormat: "text", MediaBackend: "ftp"}
+	if err := invalid.Validate(); err == nil || !strings.Contains(err.Error(), "MEDIA_BACKEND") {
+		t.Fatalf("err = %v, want MEDIA_BACKEND error", err)
+	}
+}

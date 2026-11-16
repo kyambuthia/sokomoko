@@ -45,6 +45,8 @@ services:
       PASSWORD_RESET_DISABLED: ${PASSWORD_RESET_DISABLED:-false}
       DEMO_MODE: ${DEMO_MODE:-false}
       PUBLIC_BASE_URL: https://${STOREFRONT_HOST}
+      MEDIA_BACKEND: ${MEDIA_BACKEND:-disk}
+      MEDIA_DISK_DIR: ${MEDIA_DISK_DIR:-/var/lib/sokomoko/media}
       SECRETS_KEY: ${SECRETS_KEY:-}
       SECRETS_KEY_PREVIOUS: ${SECRETS_KEY_PREVIOUS:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -57,6 +59,8 @@ services:
       AUTH_ABUSE_MAX_FAILURES: ${AUTH_ABUSE_MAX_FAILURES:-5}
       AUTH_ABUSE_BACKOFF_BASE_SECONDS: "1"
       AUTH_ABUSE_BACKOFF_MAX_SECONDS: "300"
+    volumes:
+      - media_data:/var/lib/sokomoko/media
 
   proxy:
     image: caddy:2.11.4
@@ -89,3 +93,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  media_data:

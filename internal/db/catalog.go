@@ -149,12 +149,12 @@ func (s *Store) createProduct(ctx context.Context, product Product, actorID int,
 			if position <= 0 {
 				position = i
 			}
-			if err := insertProductImageTx(ctx, tx, id, img, position); err != nil {
+			if err := s.insertProductImageTx(ctx, tx, id, img, position); err != nil {
 				return err
 			}
 		}
 		if product.Video != nil {
-			if err := saveProductVideoTx(ctx, tx, int(id), product.Video); err != nil {
+			if err := s.saveProductVideoTx(ctx, tx, int(id), product.Video); err != nil {
 				return err
 			}
 		}
@@ -294,7 +294,7 @@ func (s *Store) updateProduct(ctx context.Context, product Product, actorID int,
 		}
 
 		if hasUploadedProductImage(product.Images) {
-			if err := deleteUploadedProductImagesTx(ctx, tx, product.ID); err != nil {
+			if err := s.deleteUploadedProductImagesTx(ctx, tx, product.ID); err != nil {
 				return err
 			}
 			newImageCount := 0
@@ -313,24 +313,22 @@ func (s *Store) updateProduct(ctx context.Context, product Product, actorID int,
 				if len(image.Data) == 0 {
 					continue
 				}
-				if err := insertProductImageTx(ctx, tx, int64(product.ID), image, i); err != nil {
+				if err := s.insertProductImageTx(ctx, tx, int64(product.ID), image, i); err != nil {
 					return err
 				}
 			}
 		} else if product.RemoveUploadedImages {
-			if err := deleteUploadedProductImagesTx(ctx, tx, product.ID); err != nil {
+			if err := s.deleteUploadedProductImagesTx(ctx, tx, product.ID); err != nil {
 				return err
 			}
 		}
 
 		if product.Video != nil {
-			if err := saveProductVideoTx(ctx, tx, product.ID, product.Video); err != nil {
+			if err := s.saveProductVideoTx(ctx, tx, product.ID, product.Video); err != nil {
 				return err
 			}
 		} else if product.RemoveUploadedVideo {
-			if _, err := tx.ExecContext(ctx,
-				"DELETE FROM product_video_blobs WHERE product_id = $1", product.ID,
-			); err != nil {
+			if err := s.deleteProductVideoTx(ctx, tx, product.ID); err != nil {
 				return err
 			}
 		}
@@ -443,11 +441,13 @@ func (s *Store) deleteProduct(ctx context.Context, id, actorID int, actorRole st
 				return err
 			}
 		}
+		if err := s.deleteUploadedProductImagesTx(ctx, tx, id); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM product_images WHERE product_id = $1`, id); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM product_video_blobs WHERE product_id = $1`, id)
-		return err
+		return s.deleteProductVideoTx(ctx, tx, id)
 	})
 }
 

@@ -126,3 +126,33 @@ func openExistingStore(t *testing.T, dsn string) *db.Store {
 	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
+
+func TestBuildBlobStore(t *testing.T) {
+	memStore, err := buildBlobStore(config.Config{MediaBackend: "memory"})
+	if err != nil {
+		t.Fatalf("memory blob store: %v", err)
+	}
+	if err := memStore.Put(t.Context(), "products/1/video", "video/mp4", []byte("mp4")); err != nil {
+		t.Fatalf("put to memory store: %v", err)
+	}
+
+	dir := t.TempDir()
+	diskStore, err := buildBlobStore(config.Config{MediaBackend: "disk", MediaDiskDir: dir})
+	if err != nil {
+		t.Fatalf("disk blob store: %v", err)
+	}
+	if err := diskStore.Put(t.Context(), "products/1/images/1", "image/png", []byte("png")); err != nil {
+		t.Fatalf("put to disk store: %v", err)
+	}
+	data, contentType, err := diskStore.Get(t.Context(), "products/1/images/1")
+	if err != nil {
+		t.Fatalf("get from disk store: %v", err)
+	}
+	if string(data) != "png" || contentType != "image/png" {
+		t.Fatalf("got (%q, %q), want (png, image/png)", string(data), contentType)
+	}
+
+	if _, err := buildBlobStore(config.Config{MediaBackend: "unknown"}); err == nil {
+		t.Fatal("expected error for unsupported media backend")
+	}
+}

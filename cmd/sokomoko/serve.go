@@ -11,6 +11,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/api"
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
+	"github.com/kyambuthia/sokomoko/internal/blob"
 	"github.com/kyambuthia/sokomoko/internal/bootstrap"
 	"github.com/kyambuthia/sokomoko/internal/config"
 	"github.com/kyambuthia/sokomoko/internal/db"
@@ -52,11 +53,17 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 		return wrapCommandError(commandServe, "parse templates", fmt.Errorf("parse templates: %w", err))
 	}
 
+	blobStore, err := buildBlobStore(cfg)
+	if err != nil {
+		return wrapCommandError(commandServe, "configure media storage", err)
+	}
+
 	store, err := openStore(cfg)
 	if err != nil {
 		return wrapCommandError(commandServe, "open store", err)
 	}
 	defer store.Close()
+	store.SetBlobStore(blobStore)
 
 	if err := prepareStore(cfg, store, seedOnServe); err != nil {
 		return wrapCommandError(commandServe, "prepare store", err)
@@ -178,6 +185,23 @@ func runSeed(cfg config.Config) error {
 
 	slog.Info("[startup] seed completed")
 	return nil
+}
+
+func buildBlobStore(cfg config.Config) (blob.Store, error) {
+	switch cfg.MediaBackend {
+	case "", "disk":
+		dir := cfg.MediaDiskDir
+		if dir == "" {
+			dir = "var/media"
+		}
+		slog.Info("[startup] media storage configured", "backend", "disk", "dir", dir)
+		return blob.NewDiskStore(dir)
+	case "memory":
+		slog.Info("[startup] media storage configured", "backend", "memory")
+		return blob.NewMemoryStore(), nil
+	default:
+		return nil, fmt.Errorf("unsupported media backend %q", cfg.MediaBackend)
+	}
 }
 
 func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSender, error) {
