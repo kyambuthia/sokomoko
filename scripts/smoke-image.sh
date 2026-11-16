@@ -51,8 +51,10 @@ SQL
 secrets_key="$(head -c 32 /dev/urandom | base64)"
 
 docker run -d --name "$app_container" --network "$scope" --read-only \
+  --tmpfs /var/lib/sokomoko/media:rw,noexec,nosuid,size=16m \
   --cap-drop ALL --security-opt no-new-privileges:true \
   -e ENV=production -e DATABASE_URL="$runtime_url" \
+  -e MEDIA_BACKEND=disk -e MEDIA_DISK_DIR=/var/lib/sokomoko/media \
   -e ALLOWED_HOSTS=shop.example.com,admin.example.com,partner.example.com \
   -e PASSWORD_RESET_BASE_URL=https://shop.example.com \
   -e SMTP_HOST=smtp.example.com -e SMTP_FROM=support@example.com \
