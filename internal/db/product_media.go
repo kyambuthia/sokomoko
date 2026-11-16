@@ -67,7 +67,7 @@ func (s *Store) saveProductVideoTx(ctx context.Context, q querier, productID int
 func (s *Store) deleteProductVideoTx(ctx context.Context, q querier, productID int) error {
 	var blobKey string
 	err := q.QueryRowContext(ctx,
-		`SELECT COALESCE(blob_key, ) FROM product_video_blobs WHERE product_id = $1`,
+		`SELECT COALESCE(blob_key, '') FROM product_video_blobs WHERE product_id = $1`,
 		productID,
 	).Scan(&blobKey)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -91,7 +91,7 @@ func (s *Store) deleteProductVideoTx(ctx context.Context, q querier, productID i
 func (s *Store) deleteUploadedProductImagesTx(ctx context.Context, q querier, productID int) error {
 	var keys []string
 	rows, err := q.QueryContext(ctx,
-		`SELECT COALESCE(blob.blob_key, )
+		`SELECT COALESCE(blob.blob_key, '')
 		 FROM product_images AS image
 		 JOIN product_image_blobs AS blob ON blob.product_image_id = image.id
 		 WHERE image.product_id = $1`,
@@ -187,7 +187,7 @@ func (s *Store) GetPublicProductImageByID(ctx context.Context, id int) (*Product
 	image := &ProductImage{}
 	var blobKey string
 	err := s.DB.QueryRowContext(ctx,
-		`SELECT i.id, i.product_id, b.content_type, COALESCE(b.blob_key, ), b.data, i.created_at
+		`SELECT i.id, i.product_id, b.content_type, COALESCE(b.blob_key, ''), b.data, i.created_at
 		 FROM product_images i
 		 JOIN product_image_blobs b ON b.product_image_id = i.id
 		 JOIN products p ON p.id = i.product_id
@@ -231,7 +231,7 @@ func (s *Store) GetPublicProductVideoByProductID(ctx context.Context, productID 
 	video := &ProductVideo{}
 	var blobKey string
 	err := s.DB.QueryRowContext(ctx,
-		`SELECT v.product_id, v.content_type, COALESCE(v.blob_key, ), v.data, v.created_at
+		`SELECT v.product_id, v.content_type, COALESCE(v.blob_key, ''), v.data, v.created_at
 		 FROM product_video_blobs v
 		 JOIN products p ON p.id = v.product_id
 		 WHERE v.product_id = $1 AND p.deleted_at IS NULL AND `+activePartnerSQL,
