@@ -102,18 +102,15 @@ func (s *Service) CreatePartner(ctx context.Context, actor *Actor, input Partner
 			return ErrInvalidPartner
 		}
 	}
-	id, err := s.store.CreatePartnerForActor(ctx, actor.ID, db.Partner{Name: name, Slug: partnerSlug, ContactEmail: email})
+	ctx = db.WithAudit(ctx, actor.ID, "partner.create", "partner", 0, "slug="+partnerSlug)
+	_, err := s.store.CreatePartnerForActor(ctx, actor.ID, db.Partner{Name: name, Slug: partnerSlug, ContactEmail: email})
 	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 		return ErrForbiddenPartnerAction
 	}
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicatePartner
 	}
-	if err != nil {
-		return err
-	}
-	s.logAudit(ctx, actor.ID, "partner.create", "partner", int(id), "slug="+partnerSlug)
-	return nil
+	return err
 }
 
 // SetPartnerStatus suspends or reactivates a partner.
@@ -128,6 +125,7 @@ func (s *Service) SetPartnerStatus(ctx context.Context, actor *Actor, idRaw, sta
 	if err != nil {
 		return ErrPartnerNotFound
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "partner.status", "partner", id, "status="+status)
 	found, err := s.store.SetPartnerStatusForActor(ctx, actor.ID, id, status)
 	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 		return ErrForbiddenPartnerAction
@@ -138,7 +136,6 @@ func (s *Service) SetPartnerStatus(ctx context.Context, actor *Actor, idRaw, sta
 	if !found {
 		return ErrPartnerNotFound
 	}
-	s.logAudit(ctx, actor.ID, "partner.status", "partner", id, "status="+status)
 	return nil
 }
 
@@ -161,6 +158,7 @@ func (s *Service) UpdatePartner(ctx context.Context, actor *Actor, idRaw string,
 			return ErrInvalidPartner
 		}
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "partner.update", "partner", id, "name="+name)
 	found, err := s.store.UpdatePartnerDetailsForActor(ctx, actor.ID, id, name, email)
 	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 		return ErrForbiddenPartnerAction
@@ -171,7 +169,6 @@ func (s *Service) UpdatePartner(ctx context.Context, actor *Actor, idRaw string,
 	if !found {
 		return ErrPartnerNotFound
 	}
-	s.logAudit(ctx, actor.ID, "partner.update", "partner", id, "name="+name)
 	return nil
 }
 
@@ -200,16 +197,13 @@ func (s *Service) CreatePartnerAccount(ctx context.Context, actor *Actor, input 
 	if err != nil {
 		return err
 	}
-	userID, err := s.store.CreatePartnerUserForActor(ctx, actor.ID, db.User{Username: username, Email: email, PasswordHash: hash}, partnerID)
+	ctx = db.WithAudit(ctx, actor.ID, "partner.account.create", "user", 0, "partner="+partner.Slug)
+	_, err = s.store.CreatePartnerUserForActor(ctx, actor.ID, db.User{Username: username, Email: email, PasswordHash: hash}, partnerID)
 	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 		return ErrForbiddenPartnerAction
 	}
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateAccount
 	}
-	if err != nil {
-		return err
-	}
-	s.logAudit(ctx, actor.ID, "partner.account.create", "user", int(userID), "partner="+partner.Slug)
-	return nil
+	return err
 }

@@ -174,12 +174,16 @@ func (s *Store) createPartner(ctx context.Context, actorID int, partner Partner,
 				return err
 			}
 		}
-		return tx.QueryRowContext(ctx,
+		if err := tx.QueryRowContext(ctx,
 			`INSERT INTO partners (name, slug, contact_email) VALUES ($1, $2, $3) RETURNING id`,
 			strings.TrimSpace(partner.Name),
 			strings.ToLower(strings.TrimSpace(partner.Slug)),
 			strings.ToLower(strings.TrimSpace(partner.ContactEmail)),
-		).Scan(&id)
+		).Scan(&id); err != nil {
+			return err
+		}
+		SetAuditTarget(ctx, int(id))
+		return nil
 	})
 	return id, wrapDBError(err)
 }
@@ -227,6 +231,9 @@ func (s *Store) updatePartnerDetails(ctx context.Context, actorID, partnerID int
 		}
 		n, err := rowsAffected(result)
 		found = n > 0
+		if err == nil && !found {
+			ClearAudit(ctx)
+		}
 		return err
 	})
 	return found, err
@@ -262,7 +269,11 @@ func (s *Store) setPartnerStatus(ctx context.Context, actorID, partnerID int, st
 			return err
 		}
 		found = n > 0
-		if !found || status != "suspended" {
+		if !found {
+			ClearAudit(ctx)
+			return nil
+		}
+		if status != "suspended" {
 			return nil
 		}
 		_, err = tx.ExecContext(ctx,
@@ -298,8 +309,11 @@ func (s *Store) createPartnerUser(ctx context.Context, actorID int, user User, p
 		).Scan(&id); err != nil {
 			return wrapDBError(err)
 		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO partner_users (user_id, partner_id) VALUES ($1, $2)", id, partnerID)
-		return wrapDBError(err)
+		if _, err := tx.ExecContext(ctx, "INSERT INTO partner_users (user_id, partner_id) VALUES ($1, $2)", id, partnerID); err != nil {
+			return wrapDBError(err)
+		}
+		SetAuditTarget(ctx, int(id))
+		return nil
 	})
 	return id, err
 }

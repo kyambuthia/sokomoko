@@ -75,18 +75,15 @@ func (s *Service) CreateCategory(ctx context.Context, actor *Actor, input Catego
 	if name == "" || len([]rune(name)) > maxCategoryName || len([]rune(description)) > maxCategoryDescription || !slug.Valid(categorySlug) {
 		return ErrInvalidCategory
 	}
-	id, err := s.store.CreateCategoryForActor(ctx, actor.ID, actor.Role, db.Category{Name: name, Slug: categorySlug, Description: description})
+	ctx = db.WithAudit(ctx, actor.ID, "category.create", "category", 0, "slug="+categorySlug)
+	_, err := s.store.CreateCategoryForActor(ctx, actor.ID, actor.Role, db.Category{Name: name, Slug: categorySlug, Description: description})
 	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 		return ErrForbiddenCatalogAction
 	}
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateCategory
 	}
-	if err != nil {
-		return err
-	}
-	s.logAudit(ctx, actor.ID, "category.create", "category", int(id), "slug="+categorySlug)
-	return nil
+	return err
 }
 
 // UpdateCategory changes a category's name and description. The slug stays
@@ -113,6 +110,7 @@ func (s *Service) UpdateCategory(ctx context.Context, actor *Actor, idRaw string
 	}
 	before := category.Name
 	category.Name, category.Description = name, description
+	ctx = db.WithAudit(ctx, actor.ID, "category.update", "category", id, before+" -> "+name)
 	err = s.store.UpdateCategoryForActor(ctx, actor.ID, actor.Role, *category)
 	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 		return ErrForbiddenCatalogAction
@@ -120,11 +118,7 @@ func (s *Service) UpdateCategory(ctx context.Context, actor *Actor, idRaw string
 	if db.IsUniqueConstraintError(err) {
 		return ErrDuplicateCategory
 	}
-	if err != nil {
-		return err
-	}
-	s.logAudit(ctx, actor.ID, "category.update", "category", id, before+" -> "+name)
-	return nil
+	return err
 }
 
 // DeleteCategory soft-deletes a category. Its products become uncategorized.
@@ -143,12 +137,12 @@ func (s *Service) DeleteCategory(ctx context.Context, actor *Actor, idRaw string
 	if category == nil {
 		return ErrCategoryNotFound
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "category.delete", "category", id, "slug="+category.Slug)
 	if err := s.store.DeleteCategoryForActor(ctx, actor.ID, actor.Role, id); err != nil {
 		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 			return ErrForbiddenCatalogAction
 		}
 		return err
 	}
-	s.logAudit(ctx, actor.ID, "category.delete", "category", id, "slug="+category.Slug)
 	return nil
 }

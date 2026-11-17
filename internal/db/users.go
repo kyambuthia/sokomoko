@@ -204,6 +204,7 @@ func (s *Store) deleteUser(ctx context.Context, actorID, id int, requireAdmin bo
 			"SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", id,
 		).Scan(&role)
 		if errors.Is(err, sql.ErrNoRows) {
+			ClearAudit(ctx)
 			return nil
 		}
 		if err != nil {
@@ -300,6 +301,9 @@ func (s *Store) reactivateUser(ctx context.Context, actorID, targetID int, requi
 		}
 		n, err := rowsAffected(result)
 		found = n > 0
+		if err == nil && !found {
+			ClearAudit(ctx)
+		}
 		return err
 	})
 	return found, err

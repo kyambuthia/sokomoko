@@ -320,6 +320,8 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 	deliveryStatus := strings.TrimSpace(input.DeliveryStatus)
 	notice := strings.TrimSpace(input.DeliveryNotice)
 
+	ctx = db.WithAudit(ctx, actor.ID, "order.update", "order", orderID,
+		"status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
 	if err := s.store.UpdateOrderByAdminForActor(ctx, actor.ID, orderID, status, partnerStatus, deliveryStatus, notice); err != nil {
 		switch {
 		case errors.Is(err, db.ErrWorkspaceActorNotFound):
@@ -332,8 +334,6 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 			return err
 		}
 	}
-	s.logAudit(ctx, actor.ID, "order.update", "order", orderID,
-		"status="+status+",partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }
 
@@ -384,6 +384,7 @@ func (s *Service) DeactivateUser(ctx context.Context, actor *Actor, userIDRaw st
 	if target == nil {
 		return ErrUserNotFound
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
 	if err := s.store.DeleteUserForActor(ctx, actor.ID, userID); err != nil {
 		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 			return ErrForbiddenUserAction
@@ -396,7 +397,6 @@ func (s *Service) DeactivateUser(ctx context.Context, actor *Actor, userIDRaw st
 		}
 		return err
 	}
-	s.logAudit(ctx, actor.ID, "user.deactivate", "user", userID, "deactivated via admin team")
 	return nil
 }
 
@@ -423,6 +423,7 @@ func (s *Service) ReactivateUser(ctx context.Context, actor *Actor, userIDRaw st
 	if err != nil {
 		return ErrInvalidUserID
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
 	found, err := s.store.ReactivateUserForActor(ctx, actor.ID, userID)
 	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 		return ErrForbiddenUserAction
@@ -433,7 +434,6 @@ func (s *Service) ReactivateUser(ctx context.Context, actor *Actor, userIDRaw st
 	if !found {
 		return ErrUserNotFound
 	}
-	s.logAudit(ctx, actor.ID, "user.reactivate", "user", userID, "reactivated via admin team")
 	return nil
 }
 

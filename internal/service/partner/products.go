@@ -404,15 +404,6 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	} else if input.RemoveVideo {
 		product.RemoveUploadedVideo = true
 	}
-	if err := s.store.UpdateProductForActor(ctx, *product, actor.ID, actor.Role); err != nil {
-		if errors.Is(err, db.ErrProductNotFound) {
-			return ErrProductNotFound
-		}
-		if errors.Is(err, db.ErrProductCurrencyChanged) {
-			return ErrInvalidProductPrice
-		}
-		return fmt.Errorf("update product: %w", err)
-	}
 	details := fmt.Sprintf("%s -> price=%s stock=%d", before, price, stock)
 	if input.Image != nil {
 		details += " image updated"
@@ -424,7 +415,16 @@ func (s *Service) UpdateProductForActor(ctx context.Context, actor *Actor, idRaw
 	} else if input.RemoveVideo {
 		details += " video removed"
 	}
-	s.logAudit(ctx, actor.ID, "product.update", "product", product.ID, details)
+	ctx = db.WithAudit(ctx, actor.ID, "product.update", "product", product.ID, details)
+	if err := s.store.UpdateProductForActor(ctx, *product, actor.ID, actor.Role); err != nil {
+		if errors.Is(err, db.ErrProductNotFound) {
+			return ErrProductNotFound
+		}
+		if errors.Is(err, db.ErrProductCurrencyChanged) {
+			return ErrInvalidProductPrice
+		}
+		return fmt.Errorf("update product: %w", err)
+	}
 	return nil
 }
 
@@ -452,13 +452,13 @@ func (s *Service) DeleteProductForActor(ctx context.Context, actor *Actor, idRaw
 	if err != nil {
 		return err
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "product.delete", "product", product.ID, product.Name)
 	if err := s.store.DeleteProductForActor(ctx, product.ID, actor.ID, actor.Role); err != nil {
 		if errors.Is(err, db.ErrProductNotFound) {
 			return ErrProductNotFound
 		}
 		return fmt.Errorf("delete product: %w", err)
 	}
-	s.logAudit(ctx, actor.ID, "product.delete", "product", product.ID, product.Name)
 	return nil
 }
 

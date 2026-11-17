@@ -10,7 +10,6 @@ type store interface {
 	GetCommerceSettings(ctx context.Context) (db.CommerceSettings, error)
 	PartnerIDForUser(ctx context.Context, userID int) (int, error)
 	CountProducts(ctx context.Context) (int, error)
-	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
 	CreateProductForActor(ctx context.Context, product db.Product, actorID int, actorRole string) (int64, error)
 	GetProductByID(ctx context.Context, id int) (*db.Product, error)
 	UpdateProductForActor(ctx context.Context, product db.Product, actorID int, actorRole string) error

@@ -153,6 +153,9 @@ func (s *Store) runTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	if err := fn(tx); err != nil {
 		return err
 	}
+	if err := writeContextAudit(ctx, tx); err != nil {
+		return err
+	}
 	return wrapDBError(tx.Commit())
 }
 

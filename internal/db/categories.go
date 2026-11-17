@@ -49,7 +49,7 @@ func (s *Store) createCategory(ctx context.Context, actorID int, actorRole strin
 				return err
 			}
 		}
-		return tx.QueryRowContext(ctx,
+		if err := tx.QueryRowContext(ctx,
 			`INSERT INTO categories (name, slug, description, parent_id)
 			 VALUES ($1, $2, $3, $4)
 			 RETURNING id`,
@@ -57,7 +57,11 @@ func (s *Store) createCategory(ctx context.Context, actorID int, actorRole strin
 			strings.TrimSpace(category.Slug),
 			strings.TrimSpace(category.Description),
 			category.ParentID,
-		).Scan(&id)
+		).Scan(&id); err != nil {
+			return err
+		}
+		SetAuditTarget(ctx, int(id))
+		return nil
 	})
 	return id, wrapDBError(err)
 }

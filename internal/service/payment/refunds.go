@@ -81,10 +81,10 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 		slog.Error("refund request requires reconciliation", "exception_id", id, "error", err)
 		return nil, err
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "payments.refund.request", "payment_exception", id, "Paystack refund initiated")
 	if err := s.recordRefundResult(ctx, e, result); err != nil {
 		return nil, err
 	}
-	s.logAudit(ctx, actor.ID, "payments.refund.request", "payment_exception", id, "Paystack refund initiated")
 	return s.store.GetPaymentException(ctx, id)
 }
 
@@ -119,10 +119,10 @@ func (s *Service) requestMpesaReversal(ctx context.Context, actor *Actor, e *db.
 	if err != nil || !claimed {
 		return e, err
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "payments.refund.request", "payment_exception", e.ID, "M-Pesa reversal requested")
 	if err := s.recordRefundResult(ctx, e, result); err != nil {
 		return nil, err
 	}
-	s.logAudit(ctx, actor.ID, "payments.refund.request", "payment_exception", e.ID, "M-Pesa reversal requested")
 	return s.store.GetPaymentException(ctx, e.ID)
 }
 
@@ -151,6 +151,7 @@ func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, refer
 	default:
 		return nil, ErrRefundNotResolvable
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "payments.refund.resolve", "payment_exception", id, "Refund reconciled by hand: "+truncate(reference, 100))
 	if err := s.store.SetPaymentExceptionStatusForActor(ctx, actor.ID, id, "refunded", reference, ""); err != nil {
 		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 			return nil, ErrForbidden
@@ -160,7 +161,6 @@ func (s *Service) ResolveRefund(ctx context.Context, actor *Actor, id int, refer
 		}
 		return nil, err
 	}
-	s.logAudit(ctx, actor.ID, "payments.refund.resolve", "payment_exception", id, "Refund reconciled by hand: "+truncate(reference, 100))
 	return s.store.GetPaymentException(ctx, id)
 }
 

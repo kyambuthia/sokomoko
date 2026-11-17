@@ -51,7 +51,6 @@ var (
 )
 
 type store interface {
-	CreateAuditLog(ctx context.Context, actorUserID int, action, targetType string, targetID int, details string) error
 	GetCommerceSettings(ctx context.Context) (db.CommerceSettings, error)
 	UpdateCommerceSettings(context.Context, db.CommerceSettings) error
 	UpdateCommerceSettingsForActor(ctx context.Context, actorID int, settings db.CommerceSettings, supportedProviders []string) error

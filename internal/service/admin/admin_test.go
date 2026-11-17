@@ -75,10 +75,6 @@ func (s *categoryStore) CreateCategoryForActor(ctx context.Context, _ int, _ str
 	return s.CreateCategory(ctx, c)
 }
 
-func (s *categoryStore) CreateAuditLog(context.Context, int, string, string, int, string) error {
-	return nil
-}
-
 func TestCreateCategory(t *testing.T) {
 	staff := &Actor{ID: 2, Role: "staff"}
 	fake := &categoryStore{}

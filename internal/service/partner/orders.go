@@ -136,6 +136,8 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 		notice = string(runes[:maxNoticeLength])
 	}
 
+	ctx = db.WithAudit(ctx, actor.ID, "partner.fulfillment.update", "order", orderID,
+		"partner="+partnerStatus+",delivery="+deliveryStatus)
 	if err := s.store.UpdateOrderFulfillmentForActor(ctx, actor.ID, actor.Role, orderID, partnerStatus, deliveryStatus, notice); err != nil {
 		switch {
 		case errors.Is(err, db.ErrOrderNotFound):
@@ -153,8 +155,6 @@ func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrd
 			return err
 		}
 	}
-	s.logAudit(ctx, actor.ID, "partner.fulfillment.update", "order", orderID,
-		"partner="+partnerStatus+",delivery="+deliveryStatus)
 	return nil
 }
 

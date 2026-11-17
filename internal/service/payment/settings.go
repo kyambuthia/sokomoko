@@ -183,6 +183,11 @@ func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, inp
 			return err
 		}
 	}
+	state := "disabled"
+	if input.Enabled {
+		state = "enabled " + mode
+	}
+	ctx = db.WithAudit(ctx, actor.ID, "payments.provider.update", "payment_provider", 0, id+": "+state)
 	if err := s.store.SavePaymentProviderConfigForActor(ctx, actor.ID, record, d.Currencies); err != nil {
 		switch {
 		case errors.Is(err, db.ErrWorkspaceActorNotFound):
@@ -195,11 +200,6 @@ func (s *Service) SaveProvider(ctx context.Context, actor *Actor, id string, inp
 			return err
 		}
 	}
-	state := "disabled"
-	if input.Enabled {
-		state = "enabled " + mode
-	}
-	s.logAudit(ctx, actor.ID, "payments.provider.update", "payment_provider", 0, id+": "+state)
 	return nil
 }
 
@@ -302,6 +302,8 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 			supportedProviders = append(supportedProviders, provider.Descriptor().ID)
 		}
 	}
+	ctx = db.WithAudit(ctx, actor.ID, "payments.pricing.update", "commerce_settings", 1,
+		fmt.Sprintf("currency=%s shipping=%s free=%s tax_bp=%d", currency.Code, flat, free, taxPct))
 	if err := s.store.UpdateCommerceSettingsForActorIfUnchanged(ctx, actor.ID, settings, supportedProviders, current); err != nil {
 		if errors.Is(err, db.ErrWorkspaceActorNotFound) {
 			return Pricing{}, ErrForbidden
@@ -317,7 +319,5 @@ func (s *Service) SavePricing(ctx context.Context, actor *Actor, input PricingIn
 		}
 		return Pricing{}, err
 	}
-	s.logAudit(ctx, actor.ID, "payments.pricing.update", "commerce_settings", 1,
-		fmt.Sprintf("currency=%s shipping=%s free=%s tax_bp=%d", currency.Code, flat, free, taxPct))
 	return Pricing(settings), nil
 }
