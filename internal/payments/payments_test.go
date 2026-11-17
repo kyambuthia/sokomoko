@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -169,6 +170,103 @@ func TestMpesaStartVerifyAndCallback(t *testing.T) {
 	failed := []byte(`{"Body":{"stkCallback":{"MerchantRequestID":"m-1","CheckoutRequestID":"ws_CO_1","ResultCode":1032,"ResultDesc":"Request cancelled by user"}}}`)
 	if event, _ := m.ParseWebhook(cfg, nil, failed); event.Result.Status != StatusFailed {
 		t.Fatalf("failed callback = %+v", event.Result)
+	}
+}
+
+func TestPaystackAuthorizationURLHosts(t *testing.T) {
+	if !validAuthorizationURL("https://checkout.paystack.com/x", "") {
+		t.Fatal("https://checkout.paystack.com was rejected")
+	}
+	if validAuthorizationURL("http://checkout.paystack.com/x", "") || validAuthorizationURL("https://user:pass@checkout.paystack.com/x", "") {
+		t.Fatal("an insecure or credentialed Paystack URL was accepted")
+	}
+	if validAuthorizationURL("https://evil.example/pay", "") || validAuthorizationURL("http://127.0.0.1:9/pay", "") {
+		t.Fatal("a non-Paystack host was accepted without a test base URL")
+	}
+	if !validAuthorizationURL("http://127.0.0.1:9/pay", "http://127.0.0.1:9") || !validAuthorizationURL("https://checkout.paystack.com/x", "http://127.0.0.1:9") {
+		t.Fatal("the configured test host or the Paystack host was rejected")
+	}
+	if validAuthorizationURL("https://evil.example/pay", "http://127.0.0.1:9") {
+		t.Fatal("a test base URL accepted a foreign host")
+	}
+
+	cfg := Config{Mode: "test", Values: map[string]string{"secret_key": "sk_test_abc"}}
+	var auth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/transaction/initialize" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, `{"status":true,"data":{"authorization_url":%q,"access_code":"ac","reference":"ref-1"}}`, auth)
+	}))
+	defer server.Close()
+	p := &Paystack{Client: server.Client(), BaseURL: server.URL}
+	for _, tc := range []struct {
+		name    string
+		auth    string
+		wantErr bool
+	}{
+		{name: "paystack host", auth: "https://checkout.paystack.com/x"},
+		{name: "test host", auth: server.URL + "/pay"},
+		{name: "foreign host", auth: "https://evil.example/pay", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			auth = tc.auth
+			result, err := p.Start(context.Background(), cfg, StartRequest{
+				Reference: "ref-1", Amount: 100, Currency: "KES", Email: "a@b.co", ReturnURL: "https://shop/return",
+			})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Start accepted %s", tc.auth)
+				}
+				return
+			}
+			if err != nil || result.RedirectURL != tc.auth {
+				t.Fatalf("Start = %+v, %v; want %s", result, err, tc.auth)
+			}
+		})
+	}
+}
+
+func TestMpesaReversalRequiresMatchingAmount(t *testing.T) {
+	var gotAmount float64
+	var gotTxn string
+	response := `{"ResponseCode":"0","ConversationID":"AG_1","Amount":971}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/v1/generate":
+			_, _ = w.Write([]byte(`{"access_token":"tok","expires_in":"3599"}`))
+		case "/mpesa/reversal/v1/request":
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			gotTxn, _ = body["TransactionID"].(string)
+			gotAmount, _ = body["Amount"].(float64)
+			_, _ = w.Write([]byte(response))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	m := &Mpesa{Client: server.Client(), BaseURL: server.URL}
+	cfg := Config{Mode: "test", Values: map[string]string{"consumer_key": "key", "consumer_secret": "secret", "shortcode": "174379"}}
+	result, err := m.CreateRefund(context.Background(), cfg, "NLJ7RT61SV", 97100, "KES")
+	if err != nil || result.Status != "pending" || result.Amount != 97100 || result.Currency != "KES" || result.ID != "AG_1" {
+		t.Fatalf("matching reversal = %+v, %v", result, err)
+	}
+	if gotTxn != "NLJ7RT61SV" || gotAmount != 971 {
+		t.Fatalf("reversal request txn=%q amount=%v", gotTxn, gotAmount)
+	}
+	response = `{"ResponseCode":"0","ConversationID":"AG_1","Amount":1}`
+	if _, err := m.CreateRefund(context.Background(), cfg, "NLJ7RT61SV", 97100, "KES"); !errors.Is(err, ErrReversalAmountMismatch) {
+		t.Fatalf("mismatched amount err = %v", err)
+	}
+	response = `{"ResponseCode":"0","ConversationID":"AG_1"}`
+	if _, err := m.CreateRefund(context.Background(), cfg, "NLJ7RT61SV", 97100, "KES"); !errors.Is(err, ErrReversalAmountMismatch) {
+		t.Fatalf("missing amount err = %v", err)
+	}
+	if _, err := m.FetchRefund(context.Background(), cfg, "AG_1"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("fetch err = %v", err)
 	}
 }
 

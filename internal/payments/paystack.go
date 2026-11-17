@@ -118,7 +118,7 @@ func (p *Paystack) Start(ctx context.Context, cfg Config, req StartRequest) (Sta
 	if err := json.Unmarshal(env.Data, &data); err != nil || data.AuthorizationURL == "" {
 		return StartResult{}, fmt.Errorf("%w: missing authorization URL", ErrProviderFailure)
 	}
-	if !validAuthorizationURL(data.AuthorizationURL, p.BaseURL == "") {
+	if !validAuthorizationURL(data.AuthorizationURL, p.BaseURL) {
 		return StartResult{}, fmt.Errorf("%w: unexpected authorization URL", ErrProviderFailure)
 	}
 	return StartResult{
@@ -128,12 +128,29 @@ func (p *Paystack) Start(ctx context.Context, cfg Config, req StartRequest) (Sta
 	}, nil
 }
 
-func validAuthorizationURL(raw string, requireHTTPS bool) bool {
+// validAuthorizationURL accepts https://checkout.paystack.com. When apiBase is
+// set, it also accepts that base URL's host so tests can point at a local
+// provider. Any other host is rejected.
+func validAuthorizationURL(raw, apiBase string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || !u.IsAbs() || u.Hostname() == "" || u.User != nil {
 		return false
 	}
-	return !requireHTTPS || strings.EqualFold(u.Scheme, "https")
+	host := strings.ToLower(u.Hostname())
+	if host == "checkout.paystack.com" {
+		return strings.EqualFold(u.Scheme, "https")
+	}
+	if strings.TrimSpace(apiBase) == "" {
+		return false
+	}
+	base, err := url.Parse(apiBase)
+	if err != nil || base.Hostname() == "" {
+		return false
+	}
+	if !strings.EqualFold(base.Hostname(), host) {
+		return false
+	}
+	return strings.EqualFold(u.Scheme, "https") || strings.EqualFold(u.Scheme, "http")
 }
 
 func (p *Paystack) Verify(ctx context.Context, cfg Config, req VerifyRequest) (Verification, error) {

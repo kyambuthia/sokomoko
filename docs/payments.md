@@ -44,7 +44,9 @@ missing credentials, cannot charge the store currency, or has no public URL.
    - Paystack: signed webhook at `/payments/webhooks/paystack` (HMAC-SHA512
      with the secret key) and the customer's return to `/payments/return`.
    - M-Pesa: callback at `/payments/callback/mpesa/<token>`. The token
-     authenticates it and the request IDs must match the stored attempt.
+     authenticates it. The checkout request ID is trusted only after the STK
+     start response saved it; a callback cannot supply one, and a different
+     ID is rejected. The saved ID must match the callback.
 4. Every success is confirmed with the provider's own status API before the
    payment is captured, and the confirmed amount and currency must match what
    was charged. The status page also polls the provider, at most once per
@@ -92,7 +94,7 @@ On `/payments`, the exceptions table offers:
 | Provider | Action |
 | --- | --- |
 | Paystack | **Request refund** calls Paystack's refund API once. The row moves to `pending` and **Check status** reads the result. A processed refund marks it `refunded`. |
-| M-Pesa | For amount discrepancies, first verify the actual charge in the M-Pesa portal. Reverse the transaction there, then **Record refund** with the reversal receipt. |
+| M-Pesa | **Request refund** sends the M-Pesa receipt to Daraja as the transaction to reverse. The row leaves the manual queue only when the reversal response amount matches the exception. A missing or different amount leaves it `open`. |
 | any, stuck | A row in `pending` or `review` can be closed with **Mark refunded** and the provider's reference after reconciliation. Paystack rows in `requested` or recently moved to `review` are held for one minute before manual resolution. |
 
 A refund request is claimed in the database before Paystack is called. If the

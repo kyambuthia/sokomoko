@@ -12,6 +12,10 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/payments"
 )
 
+// ErrReversalAmountMismatch is returned when a provider reversal response does
+// not confirm the expected amount. The exception stays on the manual queue.
+var ErrReversalAmountMismatch = payments.ErrReversalAmountMismatch
+
 var (
 	ErrRefundUnsupported       = errors.New("automatic refunds are unavailable for this provider")
 	ErrRefundReferenceRequired = errors.New("enter the M-Pesa reversal receipt")
@@ -24,9 +28,10 @@ func (s *Service) PaymentExceptions(ctx context.Context) ([]db.PaymentException,
 	return s.store.ListPaymentExceptions(ctx, 50)
 }
 
-// RequestRefund either initiates a Paystack refund once or records an M-Pesa
-// reversal already completed in the operator's M-Pesa account. A claimed
-// request is never sent again after an uncertain provider response.
+// RequestRefund initiates a Paystack refund once, or an M-Pesa reversal when
+// Daraja confirms the expected amount. A Paystack request is claimed before
+// the provider call and is never sent again after an uncertain response. An
+// M-Pesa reversal stays on the manual queue unless the response amount matches.
 func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manualReference string) (*db.PaymentException, error) {
 	if actor == nil || actor.Role != domain.RoleAdmin {
 		return nil, ErrForbidden
@@ -42,25 +47,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	var cfg payments.Config
 	switch e.Provider {
 	case "mpesa":
-		manualReference = strings.TrimSpace(manualReference)
-		if manualReference == "" {
-			return nil, ErrRefundReferenceRequired
-		}
-		if e.Status == "refunded" {
-			return e, nil
-		}
-		if e.Status != "open" && e.Status != "requested" && e.Status != "review" {
-			return e, nil
-		}
-		ctx = context.WithoutCancel(ctx)
-		if err := s.store.RecordMpesaRefundForActor(ctx, actor.ID, id, manualReference); err != nil {
-			if errors.Is(err, db.ErrWorkspaceActorNotFound) {
-				return nil, ErrForbidden
-			}
-			return nil, err
-		}
-		s.logAudit(ctx, actor.ID, "payments.refund.manual", "payment_exception", id, "M-Pesa reversal recorded")
-		return s.store.GetPaymentException(ctx, id)
+		return s.requestMpesaReversal(ctx, actor, e, manualReference)
 	case "paystack":
 		provider, config, err := s.providerFor(ctx, e.Provider)
 		if err != nil {
@@ -99,6 +86,44 @@ func (s *Service) RequestRefund(ctx context.Context, actor *Actor, id int, manua
 	}
 	s.logAudit(ctx, actor.ID, "payments.refund.request", "payment_exception", id, "Paystack refund initiated")
 	return s.store.GetPaymentException(ctx, id)
+}
+
+// requestMpesaReversal calls Daraja before the exception leaves the manual
+// queue. A missing or different amount, or any provider error, leaves the
+// row open so an operator can reconcile it by hand.
+func (s *Service) requestMpesaReversal(ctx context.Context, actor *Actor, e *db.PaymentException, manualReference string) (*db.PaymentException, error) {
+	manualReference = strings.TrimSpace(manualReference)
+	if manualReference == "" {
+		return nil, ErrRefundReferenceRequired
+	}
+	if e.Status == "refunded" || e.Status != "open" {
+		return e, nil
+	}
+	provider, config, err := s.providerFor(ctx, e.Provider)
+	if err != nil {
+		return nil, err
+	}
+	refunder, ok := provider.(payments.RefundProvider)
+	if !ok {
+		return nil, ErrRefundUnsupported
+	}
+	ctx = context.WithoutCancel(ctx)
+	result, err := refunder.CreateRefund(ctx, config, manualReference, e.Amount, e.Currency)
+	if err != nil {
+		return nil, err
+	}
+	e, claimed, err := s.store.BeginRefundForActor(ctx, actor.ID, e.ID)
+	if errors.Is(err, db.ErrWorkspaceActorNotFound) {
+		return nil, ErrForbidden
+	}
+	if err != nil || !claimed {
+		return e, err
+	}
+	if err := s.recordRefundResult(ctx, e, result); err != nil {
+		return nil, err
+	}
+	s.logAudit(ctx, actor.ID, "payments.refund.request", "payment_exception", e.ID, "M-Pesa reversal requested")
+	return s.store.GetPaymentException(ctx, e.ID)
 }
 
 // ResolveRefund closes an exception the operator reconciled in the provider

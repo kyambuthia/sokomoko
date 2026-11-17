@@ -16,9 +16,10 @@ where to look. Planned work is tracked in [Roadmap](roadmap.md).
 - **Customers cannot cancel paid orders.** Self-service cancellation stops once
   the vendor accepts the order or a payment is captured
   (`db.CancelOrderByCustomer`). After that, admin cancels and refunds.
-- **M-Pesa refunds are manual.** The operator reverses the charge in the M-Pesa
-  portal and records the receipt. Only Paystack refunds are requested by the
-  server ([Payments](payments.md)).
+- **M-Pesa reversals stay manual unless Daraja confirms the amount.** Requesting
+  a refund sends the receipt to Daraja. The exception leaves the manual queue
+  only when the response amount matches. Otherwise it stays open
+  ([Payments](payments.md)).
 
 ## Catalog and vendor management
 

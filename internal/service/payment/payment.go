@@ -427,9 +427,10 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (StartOutcome, er
 	}
 	if err := s.store.UpdatePaymentPayload(ctx, attemptID, data); err != nil {
 		slog.Error("persist payment start response", "attempt_id", attemptID, "error", err)
-		// The request reference and callback token were stored before contacting
-		// the provider, so keep the successful start usable while webhooks,
-		// callbacks, or reference-based verification reconcile its result.
+		if failErr := s.store.FailPaymentAttempt(ctx, attemptID, "The payment could not be started. Try again."); failErr != nil {
+			slog.Error("record failed payment start", "attempt_id", attemptID, "error", failErr)
+		}
+		return StartOutcome{}, err
 	}
 	return StartOutcome{RedirectURL: result.RedirectURL}, nil
 }

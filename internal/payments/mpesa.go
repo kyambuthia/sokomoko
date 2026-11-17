@@ -430,6 +430,63 @@ func parseMpesaAmount(raw json.RawMessage) (money.Cents, bool) {
 	return money.Cents(cents.Int64()), true
 }
 
+// CreateRefund asks Daraja to reverse a charge. The exception is marked
+// requested only when this response includes the expected amount. A missing
+// or different amount leaves the exception on the manual queue.
+func (m *Mpesa) CreateRefund(ctx context.Context, cfg Config, reference string, amount money.Cents, currency string) (RefundResult, error) {
+	reference = strings.TrimSpace(reference)
+	if reference == "" {
+		return RefundResult{}, fmt.Errorf("%w: reversal transaction id is required", ErrProviderFailure)
+	}
+	if !strings.EqualFold(currency, "KES") || amount <= 0 || int64(amount)%100 != 0 {
+		return RefundResult{}, ErrReversalAmountMismatch
+	}
+	shillings := int64(amount) / 100
+	token, err := m.token(ctx, cfg)
+	if err != nil {
+		return RefundResult{}, err
+	}
+	shortcode := cfg.Value("shortcode")
+	if shortcode == "" {
+		return RefundResult{}, ErrNotConfigured
+	}
+	var resp struct {
+		ResponseCode        string          `json:"ResponseCode"`
+		ResponseDescription string          `json:"ResponseDescription"`
+		ConversationID      string          `json:"ConversationID"`
+		ErrorMessage        string          `json:"errorMessage"`
+		Amount              json.RawMessage `json:"Amount"`
+	}
+	status, err := doJSON(ctx, m.Client, http.MethodPost, m.base(cfg)+"/mpesa/reversal/v1/request",
+		map[string]string{"Authorization": "Bearer " + token},
+		map[string]any{
+			"CommandID":              "TransactionReversal",
+			"TransactionID":          reference,
+			"Amount":                 shillings,
+			"ReceiverParty":          shortcode,
+			"RecieverIdentifierType": "11",
+			"Remarks":                "Sokomoko reversal",
+			"Occasion":               "refund",
+		}, &resp)
+	if err != nil {
+		return RefundResult{}, err
+	}
+	if status != http.StatusOK || resp.ResponseCode != "0" || resp.ConversationID == "" {
+		return RefundResult{}, fmt.Errorf("%w: %s", ErrProviderFailure, firstNonEmpty(resp.ErrorMessage, resp.ResponseDescription, http.StatusText(status)))
+	}
+	reported, ok := parseMpesaAmount(resp.Amount)
+	if !ok || reported != amount {
+		return RefundResult{}, ErrReversalAmountMismatch
+	}
+	return RefundResult{ID: resp.ConversationID, Status: "pending", Amount: reported, Currency: "KES"}, nil
+}
+
+// FetchRefund is unsupported. Daraja reversals are confirmed by the amount on
+// the request response, and an operator closes anything else by hand.
+func (m *Mpesa) FetchRefund(context.Context, Config, string) (RefundResult, error) {
+	return RefundResult{}, ErrUnsupported
+}
+
 func truncate(s string, max int) string {
 	if r := []rune(s); len(r) > max {
 		return string(r[:max])

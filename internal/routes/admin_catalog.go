@@ -276,7 +276,9 @@ func AdminPayments(a *app.App) http.HandlerFunc {
 			case errors.Is(err, paymentsvc.ErrLastMethod):
 				page.FormError = "Keep at least one payment method enabled, or customers cannot check out."
 			case errors.Is(err, paymentsvc.ErrRefundReferenceRequired):
-				page.FormError = "Enter the M-Pesa reversal receipt after completing the refund in M-Pesa."
+				page.FormError = "Enter the M-Pesa receipt for this charge."
+			case errors.Is(err, paymentsvc.ErrReversalAmountMismatch):
+				page.FormError = "The M-Pesa reversal amount did not match this charge. The exception stays on the manual queue."
 			case errors.Is(err, paymentsvc.ErrPaymentExceptionNotFound):
 				page.FormError = "That payment exception no longer exists."
 			case errors.Is(err, paymentsvc.ErrRefundNotReady), errors.Is(err, paymentsvc.ErrRefundUnsupported),

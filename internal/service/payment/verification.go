@@ -361,14 +361,14 @@ func (s *Service) HandleCallback(ctx context.Context, providerID, token string, 
 	if err != nil {
 		return err
 	}
-	if id := event.Data["checkout_request_id"]; id == "" || payload["checkout_request_id"] != "" && id != payload["checkout_request_id"] {
-		return fmt.Errorf("%w: callback does not match the stored request", db.ErrPaymentNotFound)
+	// The checkout request ID is trusted only after the STK start response
+	// saved it. A callback must not invent one, including when that save failed.
+	storedCheckoutID := payload["checkout_request_id"]
+	if storedCheckoutID == "" {
+		return ErrProviderVerificationPending
 	}
-	if payload["checkout_request_id"] == "" {
-		payload["checkout_request_id"] = event.Data["checkout_request_id"]
-		if err := s.store.UpdatePaymentPayload(ctx, payment.AttemptID, map[string]string{"checkout_request_id": payload["checkout_request_id"]}); err != nil {
-			return err
-		}
+	if id := event.Data["checkout_request_id"]; id == "" || id != storedCheckoutID {
+		return fmt.Errorf("%w: callback does not match the stored request", db.ErrPaymentNotFound)
 	}
 	if payload["callback_amount_mismatch"] == "true" {
 		return nil

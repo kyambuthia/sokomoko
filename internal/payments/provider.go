@@ -20,11 +20,12 @@ import (
 )
 
 var (
-	ErrNotConfigured   = errors.New("payment provider is not configured")
-	ErrUnsupported     = errors.New("payment provider does not support this request")
-	ErrInvalidPhone    = errors.New("enter a valid mobile number")
-	ErrProviderFailure = errors.New("payment provider request failed")
-	ErrBadSignature    = errors.New("webhook signature is invalid")
+	ErrNotConfigured          = errors.New("payment provider is not configured")
+	ErrUnsupported            = errors.New("payment provider does not support this request")
+	ErrInvalidPhone           = errors.New("enter a valid mobile number")
+	ErrProviderFailure        = errors.New("payment provider request failed")
+	ErrBadSignature           = errors.New("webhook signature is invalid")
+	ErrReversalAmountMismatch = errors.New("reversal amount does not match the expected charge")
 )
 
 // Field is one setting an admin fills in for a provider.

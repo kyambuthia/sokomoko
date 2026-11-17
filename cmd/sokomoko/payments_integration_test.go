@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -30,16 +31,19 @@ var testProviders *fakeProviders
 type fakeProviders struct {
 	server *httptest.Server
 
-	mu           sync.Mutex
-	stkResult    string // "processing", "paid", or "cancelled"
-	lastSTK      map[string]any
-	stkCount     int
-	paystackAmt  map[string]int64 // reference -> amount initialized
-	paystackCur  map[string]string
-	refundCount  int
-	refundStatus string
-	refundFail   bool   // the refund endpoint answers 500
-	onInitialize func() // runs while a Paystack initialization is in flight
+	mu             sync.Mutex
+	stkResult      string // "processing", "paid", or "cancelled"
+	lastSTK        map[string]any
+	stkCount       int
+	paystackAmt    map[string]int64 // reference -> amount initialized
+	paystackCur    map[string]string
+	refundCount    int
+	refundStatus   string
+	refundFail     bool   // the refund endpoint answers 500
+	authURL        string // Paystack authorization URL override; empty uses this server
+	reversalAmount string // M-Pesa reversal response amount in shillings; empty echoes the request; "omit" drops it
+	reversalCount  int
+	onInitialize   func() // runs while a Paystack initialization is in flight
 }
 
 func newFakeProviders() *fakeProviders {
@@ -53,6 +57,7 @@ func (f *fakeProviders) reset() {
 	defer f.mu.Unlock()
 	f.stkResult, f.lastSTK, f.stkCount = "processing", nil, 0
 	f.refundCount, f.refundStatus, f.refundFail = 0, "pending", false
+	f.authURL, f.reversalAmount, f.reversalCount = "", "", 0
 	f.paystackAmt, f.paystackCur = map[string]int64{}, map[string]string{}
 	f.onInitialize = nil
 }
@@ -68,6 +73,22 @@ func (f *fakeProviders) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&f.lastSTK)
 		f.stkCount++
 		fmt.Fprintf(w, `{"MerchantRequestID":"m-%d","CheckoutRequestID":"ws_CO_%d","ResponseCode":"0","CustomerMessage":"Success"}`, f.stkCount, f.stkCount)
+	case r.URL.Path == "/mpesa/reversal/v1/request":
+		var body struct {
+			TransactionID string `json:"TransactionID"`
+			Amount        int64  `json:"Amount"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.reversalCount++
+		if f.reversalAmount == "omit" {
+			_, _ = w.Write([]byte(`{"ResponseCode":"0","ConversationID":"AG_1","ResponseDescription":"Accept the service request successfully."}`))
+			return
+		}
+		amount := strconv.FormatInt(body.Amount, 10)
+		if f.reversalAmount != "" {
+			amount = f.reversalAmount
+		}
+		fmt.Fprintf(w, `{"ResponseCode":"0","ConversationID":"AG_1","ResponseDescription":"Accept the service request successfully.","Amount":%s}`, amount)
 	case r.URL.Path == "/mpesa/stkpushquery/v1/query":
 		switch f.stkResult {
 		case "paid":
@@ -88,7 +109,11 @@ func (f *fakeProviders) serve(w http.ResponseWriter, r *http.Request) {
 			f.onInitialize()
 		}
 		f.paystackAmt[body.Reference], f.paystackCur[body.Reference] = body.Amount, body.Currency
-		fmt.Fprintf(w, `{"status":true,"data":{"authorization_url":"https://checkout.paystack.test/%s","access_code":"ac","reference":"%s"}}`, body.Reference, body.Reference)
+		authURL := f.authURL
+		if authURL == "" {
+			authURL = "http://" + r.Host + "/" + body.Reference
+		}
+		fmt.Fprintf(w, `{"status":true,"data":{"authorization_url":%q,"access_code":"ac","reference":"%s"}}`, authURL, body.Reference)
 	case strings.HasPrefix(r.URL.Path, "/transaction/verify/"):
 		ref := strings.TrimPrefix(r.URL.Path, "/transaction/verify/")
 		amount, ok := f.paystackAmt[ref]
@@ -382,10 +407,10 @@ func TestIntegration_PaystackRedirectWebhookAndReturn(t *testing.T) {
 
 	resp := placeOrder(t, customer, "paystack", nil)
 	loc := resp.Header.Get("Location")
-	if !strings.HasPrefix(loc, "https://checkout.paystack.test/skm-") {
+	if !strings.HasPrefix(loc, testProviders.server.URL+"/skm-") {
 		t.Fatalf("checkout redirect = %q", loc)
 	}
-	reference := strings.TrimPrefix(loc, "https://checkout.paystack.test/")
+	reference := strings.TrimPrefix(loc, testProviders.server.URL+"/")
 	if testProviders.paystackAmt[reference] != 1250000 || testProviders.paystackCur[reference] != "NGN" {
 		t.Fatalf("initialized %d %s", testProviders.paystackAmt[reference], testProviders.paystackCur[reference])
 	}
@@ -462,7 +487,7 @@ func TestIntegration_PaystackLateCaptureRefund(t *testing.T) {
 	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
 	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
 	resp := placeOrder(t, customer, "paystack", nil)
-	reference := strings.TrimPrefix(resp.Header.Get("Location"), "https://checkout.paystack.test/")
+	reference := strings.TrimPrefix(resp.Header.Get("Location"), testProviders.server.URL+"/")
 	if _, err := testStore.DB.Exec("UPDATE payments SET created_at = now() - interval '31 minutes'"); err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +537,7 @@ func TestIntegration_UncertainRefundIsResolvedByHand(t *testing.T) {
 	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
 	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
 	resp := placeOrder(t, customer, "paystack", nil)
-	reference := strings.TrimPrefix(resp.Header.Get("Location"), "https://checkout.paystack.test/")
+	reference := strings.TrimPrefix(resp.Header.Get("Location"), testProviders.server.URL+"/")
 	if _, err := testStore.DB.Exec("UPDATE payments SET created_at = now() - interval '31 minutes'"); err != nil {
 		t.Fatal(err)
 	}
@@ -792,5 +817,235 @@ func TestIntegration_MpesaCallbackRejectedWhenPayloadUnreadable(t *testing.T) {
 	}
 	if rec.Code == http.StatusOK || payload != `["unreadable"]` || attempt != "pending" {
 		t.Fatalf("callback status=%d payload=%s attempt=%s", rec.Code, payload, attempt)
+	}
+}
+
+func mpesaCallbackBody(checkoutID string, amountShillings int) string {
+	return fmt.Sprintf(`{"Body":{"stkCallback":{"MerchantRequestID":"m-1","CheckoutRequestID":"%s","ResultCode":0,"ResultDesc":"ok","CallbackMetadata":{"Item":[{"Name":"Amount","Value":%d},{"Name":"MpesaReceiptNumber","Value":"NLJ7RT61SV"}]}}}}`, checkoutID, amountShillings)
+}
+
+func postMpesaCallback(path, payload string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "http://localhost"+path, strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	return rec
+}
+
+func storedCheckoutIDs(t *testing.T) (attemptID, paymentID string) {
+	t.Helper()
+	if err := testStore.DB.QueryRow(`SELECT COALESCE(provider_payload->>'checkout_request_id','') FROM payment_attempts ORDER BY id DESC LIMIT 1`).Scan(&attemptID); err != nil {
+		t.Fatal(err)
+	}
+	if err := testStore.DB.QueryRow(`SELECT COALESCE(provider_payload->>'checkout_request_id','') FROM payments WHERE order_id = 1`).Scan(&paymentID); err != nil {
+		t.Fatal(err)
+	}
+	return attemptID, paymentID
+}
+
+func mpesaCallbackPath(t *testing.T) string {
+	t.Helper()
+	callbackURL, _ := testProviders.lastSTK["CallBackURL"].(string)
+	path := strings.TrimPrefix(callbackURL, "https://shop.example")
+	if !strings.HasPrefix(path, "/payments/callback/mpesa/") {
+		t.Fatalf("callback URL = %q", callbackURL)
+	}
+	return path
+}
+
+func TestIntegration_MpesaCallbackIgnoresUnstoredCheckoutID(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 97092)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	path := mpesaCallbackPath(t)
+	for _, stmt := range []string{
+		`UPDATE payment_attempts SET provider_payload = provider_payload - 'checkout_request_id'`,
+		`UPDATE payments SET provider_payload = provider_payload - 'checkout_request_id'`,
+	} {
+		if _, err := testStore.DB.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+
+	rec := postMpesaCallback(path, mpesaCallbackBody("ws_CO_EVIL", 971))
+	attemptID, paymentID := storedCheckoutIDs(t)
+	if rec.Code != http.StatusOK || paymentStatus(t, 1) != "pending" || attemptID != "" || paymentID != "" || strings.Contains(attemptID+paymentID, "ws_CO_EVIL") {
+		t.Fatalf("unstored callback status=%d payment=%s attempt_id=%q payment_id=%q", rec.Code, paymentStatus(t, 1), attemptID, paymentID)
+	}
+}
+
+func TestIntegration_MpesaCallbackRejectsDifferentCheckoutID(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 97092)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	path := mpesaCallbackPath(t)
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+
+	rec := postMpesaCallback(path, mpesaCallbackBody("ws_CO_EVIL", 971))
+	attemptID, paymentID := storedCheckoutIDs(t)
+	if rec.Code != http.StatusNotFound || paymentStatus(t, 1) != "pending" || attemptID != "ws_CO_1" || paymentID != "ws_CO_1" {
+		t.Fatalf("different id status=%d payment=%s attempt=%q payment=%q", rec.Code, paymentStatus(t, 1), attemptID, paymentID)
+	}
+}
+
+func TestIntegration_MpesaCallbackCapturesMatchingCheckoutAndAmount(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 97092)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	path := mpesaCallbackPath(t)
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+
+	rec := postMpesaCallback(path, mpesaCallbackBody("ws_CO_1", 971))
+	if rec.Code != http.StatusOK || paymentStatus(t, 1) != "captured" {
+		t.Fatalf("matching callback status=%d payment=%s body=%s", rec.Code, paymentStatus(t, 1), rec.Body.String())
+	}
+}
+
+func TestIntegration_MpesaCallbackAmountMismatchIsReview(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 97092)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	path := mpesaCallbackPath(t)
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+
+	rec := postMpesaCallback(path, mpesaCallbackBody("ws_CO_1", 100))
+	var reason, status string
+	err := testStore.DB.QueryRow(`SELECT reason, status FROM payment_exceptions WHERE payment_id = 1`).Scan(&reason, &status)
+	if rec.Code != http.StatusOK || paymentStatus(t, 1) != "pending" || err != nil || reason != "amount_mismatch" || status != "open" {
+		t.Fatalf("amount review status=%d payment=%s exception=%s/%s err=%v", rec.Code, paymentStatus(t, 1), reason, status, err)
+	}
+}
+
+func TestIntegration_FailedSTKPayloadSaveBlocksCallback(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 97092)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	if _, err := testStore.DB.Exec(`CREATE SEQUENCE test_checkout_payload_fail_seq`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testStore.DB.Exec(`
+CREATE FUNCTION test_fail_checkout_payload() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.provider_payload ? 'checkout_request_id' AND nextval('test_checkout_payload_fail_seq') = 1 THEN
+    RAISE EXCEPTION 'checkout payload save failed';
+  END IF;
+  RETURN NEW;
+END
+$fn$`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testStore.DB.Exec(`CREATE TRIGGER test_fail_checkout_payload BEFORE UPDATE ON payment_attempts FOR EACH ROW EXECUTE FUNCTION test_fail_checkout_payload()`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = testStore.DB.Exec(`DROP TRIGGER IF EXISTS test_fail_checkout_payload ON payment_attempts`)
+		_, _ = testStore.DB.Exec(`DROP FUNCTION IF EXISTS test_fail_checkout_payload()`)
+		_, _ = testStore.DB.Exec(`DROP SEQUENCE IF EXISTS test_checkout_payload_fail_seq`)
+	})
+
+	resp := placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	if resp.Header.Get("Location") != "/payments/order/1" {
+		t.Fatalf("failed start redirect = %q", resp.Header.Get("Location"))
+	}
+	var attemptStatus string
+	if err := testStore.DB.QueryRow(`SELECT status FROM payment_attempts ORDER BY id DESC LIMIT 1`).Scan(&attemptStatus); err != nil || attemptStatus != "failed" {
+		t.Fatalf("attempt after failed save = %q, %v", attemptStatus, err)
+	}
+	attemptID, paymentID := storedCheckoutIDs(t)
+	if attemptID != "" || paymentID != "" {
+		t.Fatalf("failed save stored checkout ids attempt=%q payment=%q", attemptID, paymentID)
+	}
+
+	path := mpesaCallbackPath(t)
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.mu.Unlock()
+	rec := postMpesaCallback(path, mpesaCallbackBody("ws_CO_1", 971))
+	attemptID, paymentID = storedCheckoutIDs(t)
+	if rec.Code != http.StatusOK || paymentStatus(t, 1) != "pending" || attemptID != "" || paymentID != "" {
+		t.Fatalf("callback after failed save status=%d payment=%s attempt=%q payment_id=%q", rec.Code, paymentStatus(t, 1), attemptID, paymentID)
+	}
+}
+
+func TestIntegration_MpesaReversalMismatchStaysManual(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "KES", 97092)
+	enableProvider(t, admin, "mpesa", mpesaFields)
+	placeOrder(t, customer, "mpesa", url.Values{"phone": {"0712345678"}})
+	path := mpesaCallbackPath(t)
+	testProviders.mu.Lock()
+	testProviders.stkResult = "paid"
+	testProviders.reversalAmount = "1"
+	testProviders.mu.Unlock()
+	if rec := postMpesaCallback(path, mpesaCallbackBody("ws_CO_1", 100)); rec.Code != http.StatusOK || paymentStatus(t, 1) != "pending" {
+		t.Fatalf("mismatch callback status=%d payment=%s", rec.Code, paymentStatus(t, 1))
+	}
+
+	form := url.Values{"action": {"refund"}, "exception_id": {"1"}, "refund_reference": {"NLJ7RT61SV"}}
+	resp, body := makeRequest(http.MethodPost, "/payments", form, []*http.Cookie{admin}, "admin.localhost")
+	var status string
+	if err := testStore.DB.QueryRow(`SELECT status FROM payment_exceptions WHERE id = 1`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	testProviders.mu.Lock()
+	reversalCount := testProviders.reversalCount
+	testProviders.mu.Unlock()
+	if resp.StatusCode == http.StatusFound || status != "open" || reversalCount != 1 || !strings.Contains(body, "manual queue") {
+		t.Fatalf("mismatched reversal status=%d exception=%s calls=%d body=%s", resp.StatusCode, status, reversalCount, body)
+	}
+
+	testProviders.mu.Lock()
+	testProviders.reversalAmount = "omit"
+	testProviders.mu.Unlock()
+	resp, body = makeRequest(http.MethodPost, "/payments", form, []*http.Cookie{admin}, "admin.localhost")
+	testProviders.mu.Lock()
+	reversalCount = testProviders.reversalCount
+	testProviders.mu.Unlock()
+	if err := testStore.DB.QueryRow(`SELECT status FROM payment_exceptions WHERE id = 1`).Scan(&status); err != nil || resp.StatusCode == http.StatusFound || status != "open" || reversalCount != 2 {
+		t.Fatalf("omitted amount status=%d exception=%s calls=%d err=%v body=%s", resp.StatusCode, status, reversalCount, err, body)
+	}
+
+	testProviders.mu.Lock()
+	testProviders.reversalAmount = ""
+	testProviders.mu.Unlock()
+	resp, body = makeRequest(http.MethodPost, "/payments", form, []*http.Cookie{admin}, "admin.localhost")
+	testProviders.mu.Lock()
+	reversalCount = testProviders.reversalCount
+	testProviders.mu.Unlock()
+	if err := testStore.DB.QueryRow(`SELECT status FROM payment_exceptions WHERE id = 1`).Scan(&status); err != nil || resp.StatusCode != http.StatusFound || status != "pending" || reversalCount != 3 {
+		t.Fatalf("matching reversal status=%d exception=%s calls=%d err=%v body=%s", resp.StatusCode, status, reversalCount, err, body)
+	}
+}
+
+func TestIntegration_PaystackAuthorizationHost(t *testing.T) {
+	customer, admin, _ := paymentsShop(t, "NGN", 1250000)
+	enableProvider(t, admin, "paystack", map[string]string{"secret_key": "sk_test_paystack"})
+	testProviders.mu.Lock()
+	testProviders.authURL = "https://evil.example/pay"
+	testProviders.mu.Unlock()
+
+	resp := placeOrder(t, customer, "paystack", nil)
+	if loc := resp.Header.Get("Location"); loc != "/payments/order/1" || paymentStatus(t, 1) != "pending" {
+		t.Fatalf("evil host redirect=%q payment=%s", loc, paymentStatus(t, 1))
+	}
+	var attemptStatus, redirect string
+	if err := testStore.DB.QueryRow(`SELECT status, COALESCE(provider_payload->>'redirect_url','') FROM payment_attempts ORDER BY id DESC LIMIT 1`).Scan(&attemptStatus, &redirect); err != nil || attemptStatus != "failed" || strings.Contains(redirect, "evil.example") {
+		t.Fatalf("evil attempt=%s redirect=%q err=%v", attemptStatus, redirect, err)
+	}
+
+	testProviders.mu.Lock()
+	testProviders.authURL = "https://checkout.paystack.com/accepted"
+	testProviders.mu.Unlock()
+	resp, _ = makeRequest(http.MethodPost, "/payments/order/1", nil, []*http.Cookie{customer}, "")
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "https://checkout.paystack.com/accepted" {
+		t.Fatalf("paystack host status=%d location=%q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 }

@@ -515,7 +515,7 @@
   <p class="tiny muted">Other providers (Flutterwave, Stripe, MTN MoMo) plug in the same way. See docs/payments.md.</p>
 
   <h2 class="section-title">Payment exceptions</h2>
-  <p class="tiny muted">Late or duplicate charges and M-Pesa amount discrepancies need review. Confirm each transaction in the provider portal before requesting or recording a refund; record an M-Pesa reversal after completing it in the M-Pesa portal.</p>
+  <p class="tiny muted">Late or duplicate charges and M-Pesa amount discrepancies need review. Confirm each transaction in the provider portal before requesting a refund. An M-Pesa reversal stays on the manual queue unless Daraja confirms the same amount.</p>
   {{ if .PaymentExceptions }}
   <div class="table-wrap">
     <table class="table">
@@ -533,8 +533,8 @@
                 {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
                 <input type="hidden" name="action" value="refund">
                 <input type="hidden" name="exception_id" value="{{ .ID }}">
-                {{ if eq .Provider "mpesa" }}<label class="sr-only" for="refund-reference-{{ .ID }}">M-Pesa reversal receipt</label><input class="input" id="refund-reference-{{ .ID }}" name="refund_reference" placeholder="Reversal receipt" required>{{ end }}
-                <button type="submit" class="btn btn-sm">{{ if eq .Provider "mpesa" }}Record refund{{ else }}Request refund{{ end }}</button>
+                {{ if eq .Provider "mpesa" }}<label class="sr-only" for="refund-reference-{{ .ID }}">M-Pesa receipt</label><input class="input" id="refund-reference-{{ .ID }}" name="refund_reference" placeholder="M-Pesa receipt" required>{{ end }}
+                <button type="submit" class="btn btn-sm">Request refund</button>
               </form>
             {{ else if and (eq .Provider "paystack") .RefundReference (ne .Status "refunded") }}
               <form method="POST" action="/payments" data-submit-once>
