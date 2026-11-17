@@ -391,8 +391,21 @@ func (s *Store) updateOrderByAdmin(ctx context.Context, actorID, orderID int, st
 				return err
 			}
 		}
-		if current.InventoryState == "released" && inventoryStateFor(status, partnerStatus) != "released" {
+		nextInventory := inventoryStateFor(status, partnerStatus)
+		if current.InventoryState == "released" && nextInventory != "released" {
 			return ErrInvalidOrderState
+		}
+		// Unpaid online orders stay out of fulfillment. Cash on delivery, and
+		// captured online payments, can still be allocated or shipped.
+		// Cancellation releases stock either way.
+		if nextInventory == "allocated" || nextInventory == "shipped" {
+			settled, err := orderPaymentSettledTx(ctx, tx, orderID)
+			if err != nil {
+				return err
+			}
+			if !settled {
+				return ErrInvalidOrderState
+			}
 		}
 		return writeOrderStateTx(ctx, tx, orderID, current, status, partnerStatus, deliveryStatus, deliveryNotice)
 	})
@@ -428,7 +441,24 @@ func (s *Store) GetPartnerOrderSummary(ctx context.Context) (PartnerOrderSummary
 	return summary, err
 }
 
+// salesRevenueSQL is captured online payments plus non-cancelled
+// cash-on-delivery order totals. Pending or failed online charges are not
+// revenue. A cancelled cash-on-delivery order is not revenue.
+const salesRevenueSQL = `SELECT COALESCE((
+    SELECT SUM(amount_cents) FROM payments
+    WHERE method <> 'cash_on_delivery' AND status = 'captured'
+), 0) + COALESCE((
+    SELECT SUM(o.total_cents) FROM orders o
+    WHERE o.status <> 'cancelled'
+      AND EXISTS (
+          SELECT 1 FROM payments cod
+          WHERE cod.order_id = o.id AND cod.method = 'cash_on_delivery'
+      )
+), 0)`
+
 // GetOrderReportData returns revenue and order-status totals from one snapshot.
+// Revenue is captured online payments plus non-cancelled cash-on-delivery
+// order totals. Order counts still include every status.
 func (s *Store) GetOrderReportData(ctx context.Context) (money.Cents, map[string]int, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -439,9 +469,7 @@ func (s *Store) GetOrderReportData(ctx context.Context) (money.Cents, map[string
 	defer tx.Rollback()
 
 	var revenue money.Cents
-	if err := tx.QueryRowContext(ctx,
-		"SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE status <> 'cancelled'",
-	).Scan(&revenue); err != nil {
+	if err := tx.QueryRowContext(ctx, salesRevenueSQL).Scan(&revenue); err != nil {
 		return 0, nil, err
 	}
 	rows, err := tx.QueryContext(ctx, "SELECT status, count(*) FROM orders GROUP BY status")

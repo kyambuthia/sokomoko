@@ -133,7 +133,7 @@
     <div class="stat"><dt>Delivered</dt><dd>{{ .DeliveredCount }}</dd></div>
     <div class="stat"><dt>Cancelled</dt><dd>{{ .CancelledCount }}</dd></div>
   </dl>
-  <p class="tiny muted">Revenue counts orders that are not cancelled.</p>
+  <p class="tiny muted">Revenue counts captured online payments plus cash-on-delivery orders that are not cancelled.</p>
 {{ end }}
 
 {{ if eq .Title "Delivery Management" }}

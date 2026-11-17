@@ -29,7 +29,7 @@ The process routes each request by its `Host` header (see
 - Dashboard metrics: product count, users by role, active sessions
 - Product list (read-only)
 - Order list with full status editing (admin only)
-- Sales report: revenue and order counts by status
+- Sales report: revenue is captured online payments plus non-cancelled cash-on-delivery order totals, with order counts by status
 - Deliveries board: open orders counted by delivery stage and listed oldest first
 - Categories: create and delete (admin and staff)
 - Partners: onboard vendors, rename them, create partner logins, suspend or reactivate (admin only). A suspended partner's products disappear from the storefront and carts, and its logins are signed out and refused.

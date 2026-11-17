@@ -205,8 +205,11 @@ An order has three status fields and one inventory state:
 Delivery status may only move forward (`queued` -> `processing` -> `shipped`
 -> `delivered`, skipping allowed). Staying in the same state is always allowed.
 
-**Admin updates** (`UpdateOrderByAdmin`) may set any valid combination, with one
-guard: an order whose stock was released (cancelled) cannot be reopened.
+**Admin updates** (`UpdateOrderByAdmin`) may set any valid combination, with two
+guards: an order whose stock was released (cancelled) cannot be reopened, and
+an unpaid online order that is not cash on delivery cannot move into a state
+that allocates or ships stock. Cash-on-delivery orders can still be fulfilled.
+Customer cancellation of an unpaid order still releases stock.
 
 **Customer cancellation** (`CancelOrderByCustomer`) moves an order to
 `cancelled` only while `status` is `pending`, `partner_status` is `new`, and no
