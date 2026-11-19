@@ -19,5 +19,15 @@
     <button type="submit" class="btn btn-block">Sign in</button>
   </form>
   <p class="row-between small"><a href="/signup">Create account</a>{{ if .PasswordResetEnabled }}<a href="/password-reset/request">Forgot password?</a>{{ end }}</p>
+  {{ if demoMode }}
+  <aside class="card card-fill stack" aria-label="Demo buyer credentials">
+    <p class="section-title">Demo buyer account</p>
+    <p class="small">Shared demo account. Do not enter personal or payment information.</p>
+    <dl class="small">
+      <div><dt>Username</dt><dd><code>demo-customer</code></dd></div>
+      <div><dt>Password</dt><dd><code>AsilianoShop!2026</code></dd></div>
+    </dl>
+  </aside>
+  {{ end }}
 </div>
 {{ end }}

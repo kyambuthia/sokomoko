@@ -21,5 +21,15 @@
   </form>
   {{ if .PasswordResetEnabled }}<p class="small"><a href="/password-reset/request">Forgot password?</a></p>{{ end }}
   {{ end }}
+  {{ if and demoMode (eq .Title "Partner Login") (not .SetupRequired) }}
+  <aside class="card card-fill stack" aria-label="Demo partner credentials">
+    <p class="section-title">Demo partner account</p>
+    <p class="small">Shared demo account. Changes may be visible to other visitors.</p>
+    <dl class="small">
+      <div><dt>Username</dt><dd><code>demo-partner</code></dd></div>
+      <div><dt>Password</dt><dd><code>AsilianoPartner!2026</code></dd></div>
+    </dl>
+  </aside>
+  {{ end }}
 </div>
 {{ end }}
