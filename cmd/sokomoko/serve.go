@@ -261,7 +261,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 	slog.Info("trusted hosts configured", "hosts", sortedHostList(allowedHosts))
 
 	handler := app.Chain(
-		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux, metrics.Handler(cfg.MetricsToken)),
+		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux, metrics.Handler(cfg.MetricsToken), !cfg.IsProduction()),
 		buildMiddlewares(cfg, application, metrics)...,
 	)
 

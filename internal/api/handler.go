@@ -344,25 +344,48 @@ func mapAdminProduct(product adminsvc.Product) productDTO {
 }
 
 // CORSMiddleware grants cross-origin credentialed API access only to origins
-// whose host is explicitly listed in allowedHosts.
+// whose host is explicitly listed in allowedHosts, allowing both https and http schemes.
 func CORSMiddleware(allowedHosts map[string]struct{}, next http.Handler) http.Handler {
+	return CORSMiddlewareWithScheme(allowedHosts, true, next)
+}
+
+// CORSMiddlewareWithScheme grants cross-origin credentialed API access only to
+// valid origins whose host is explicitly listed in allowedHosts. When allowHTTP
+// is false, only https origins are accepted.
+func CORSMiddlewareWithScheme(allowedHosts map[string]struct{}, allowHTTP bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
 		if origin != "" {
-			if parsed, err := url.Parse(origin); err == nil && (parsed.Scheme == "https" || parsed.Scheme == "http") {
-				if _, ok := allowedHosts[app.CanonicalHost(parsed.Host)]; ok {
-					w.Header().Add("Vary", "Origin")
-					w.Header().Set("Access-Control-Allow-Origin", origin)
-					w.Header().Set("Access-Control-Allow-Credentials", "true")
-					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token")
-					if r.Method == http.MethodOptions {
-						w.WriteHeader(http.StatusNoContent)
-						return
+			w.Header().Add("Vary", "Origin")
+			if !strings.ContainsAny(origin, "?#") {
+				if parsed, err := url.Parse(origin); err == nil && isValidCORSOrigin(parsed, allowHTTP) {
+					if _, ok := allowedHosts[app.CanonicalHost(parsed.Host)]; ok {
+						w.Header().Set("Access-Control-Allow-Origin", origin)
+						w.Header().Set("Access-Control-Allow-Credentials", "true")
+						w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+						w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token")
+						if r.Method == http.MethodOptions {
+							w.WriteHeader(http.StatusNoContent)
+							return
+						}
 					}
 				}
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isValidCORSOrigin(parsed *url.URL, allowHTTP bool) bool {
+	if parsed == nil || parsed.Host == "" {
+		return false
+	}
+	if parsed.Scheme != "https" && (!allowHTTP || parsed.Scheme != "http") {
+		return false
+	}
+	return parsed.User == nil &&
+		parsed.Path == "" &&
+		!parsed.ForceQuery &&
+		parsed.RawQuery == "" &&
+		parsed.Fragment == ""
 }

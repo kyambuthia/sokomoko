@@ -29,7 +29,7 @@ func TestBuildHostRouter_APISubdomain(t *testing.T) {
 		w.Write([]byte("pong"))
 	})
 
-	router := buildHostRouter(allowed, mainMux, http.NewServeMux(), http.NewServeMux(), http.NewServeMux(), http.NewServeMux(), apiMux, http.NotFoundHandler())
+	router := buildHostRouter(allowed, mainMux, http.NewServeMux(), http.NewServeMux(), http.NewServeMux(), http.NewServeMux(), apiMux, http.NotFoundHandler(), true)
 
 	// api.localhost serves /api/v1/* and returns JSON 404 for unknown paths (not storefront HTML).
 	apiReq := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)

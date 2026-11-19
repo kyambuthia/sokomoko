@@ -55,7 +55,7 @@ func runHTTPServer(server *httpServer, store *db.Store) error {
 	return err
 }
 
-func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux *http.ServeMux, metricsHandler http.Handler) http.Handler {
+func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux *http.ServeMux, metricsHandler http.Handler, allowHTTPCORS bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := app.CanonicalHost(r.Host)
 		if _, ok := allowedHosts[host]; !ok {
@@ -75,7 +75,7 @@ func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partne
 				mainMux.ServeHTTP(w, r)
 				return
 			}
-			api.CORSMiddleware(allowedHosts, apiMux).ServeHTTP(w, r)
+			api.CORSMiddlewareWithScheme(allowedHosts, allowHTTPCORS, apiMux).ServeHTTP(w, r)
 			return
 		}
 		if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/") {
