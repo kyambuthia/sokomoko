@@ -79,6 +79,8 @@ func testStoreContract(t *testing.T, newStore func(t *testing.T) Store) {
 			"products/../../etc/passwd",
 			"/absolute/path.png",
 			"\\windows\\path.png",
+			"bad\x00key.png",
+			"\x00",
 		}
 		for _, k := range invalidKeys {
 			if _, _, err := s.Get(ctx, k); !errors.Is(err, ErrInvalidKey) {
@@ -123,5 +125,28 @@ func TestDiskStore(t *testing.T) {
 			t.Fatalf("expected base dir to exist: %v", err)
 		}
 		_ = store
+	})
+
+	t.Run("cleans up blob file when metadata write fails", func(t *testing.T) {
+		dir := t.TempDir()
+		store, err := NewDiskStore(dir)
+		if err != nil {
+			t.Fatalf("NewDiskStore error: %v", err)
+		}
+
+		key := "products/42/image.png"
+		blobPath := filepath.Join(dir, "products", "42", "image.png")
+		metaDir := store.metaPath(blobPath)
+		if err := os.MkdirAll(metaDir, 0750); err != nil {
+			t.Fatalf("MkdirAll error: %v", err)
+		}
+
+		if err := store.Put(context.Background(), key, "image/png", []byte("fakeimagebytes")); err == nil {
+			t.Fatal("expected Put to fail when meta path is a directory")
+		}
+
+		if _, err := os.Stat(blobPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected orphaned blob file to be removed, stat err=%v", err)
+		}
 	})
 }

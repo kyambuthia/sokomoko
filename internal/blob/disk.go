@@ -96,7 +96,10 @@ func (d *DiskStore) Put(_ context.Context, key string, contentType string, data 
 	}
 
 	if contentType != "" {
-		_ = os.WriteFile(d.metaPath(path), []byte(strings.TrimSpace(contentType)), 0640)
+		if err := os.WriteFile(d.metaPath(path), []byte(strings.TrimSpace(contentType)), 0640); err != nil {
+			_ = os.Remove(path)
+			return err
+		}
 	}
 	return nil
 }

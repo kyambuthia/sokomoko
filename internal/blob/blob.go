@@ -29,7 +29,7 @@ func CleanKey(key string) (string, error) {
 	if clean == "" || len(clean) > 512 {
 		return "", ErrInvalidKey
 	}
-	if strings.Contains(clean, "..") || strings.HasPrefix(clean, "/") || strings.HasPrefix(clean, "\\") {
+	if strings.ContainsRune(clean, 0) || strings.Contains(clean, "..") || strings.HasPrefix(clean, "/") || strings.HasPrefix(clean, "\\") {
 		return "", ErrInvalidKey
 	}
 	return clean, nil
