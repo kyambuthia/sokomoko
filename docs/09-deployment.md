@@ -20,7 +20,7 @@ reverse proxy.
 
 `Dockerfile`:
 
-- Build stage on `golang:1.26.10-bookworm`. `CGO_ENABLED=0`, `-trimpath`,
+- Build stage on `golang:1.27.4-bookworm`. `CGO_ENABLED=0`, `-trimpath`,
   `-ldflags "-s -w -X main.version=${VERSION}"`.
 - Runtime stage `gcr.io/distroless/static-debian12:nonroot`: only the binary,
   running as `nonroot`.

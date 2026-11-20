@@ -179,7 +179,7 @@ an isolated PostgreSQL 17 database:
 SOKOMOKO_REQUIRE_DB_TESTS=1 go test ./internal/db ./internal/service/messaging ./cmd/sokomoko -run 'TestChat|TestNormalizeMessaging|TestMessagingHTTP'
 ```
 
-The design follows the existing Go 1.26.10 `html/template` escaping rules,
+The design follows the existing Go 1.27.4 `html/template` escaping rules,
 [PostgreSQL 17 row and advisory locking](https://www.postgresql.org/docs/17/explicit-locking.html),
 and [OWASP's requirement to check authorization on every request](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html).
 
