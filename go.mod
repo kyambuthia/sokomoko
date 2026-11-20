@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	github.com/jackc/pgx/v5 v5.11.0
 	golang.org/x/crypto v0.58.0
-	golang.org/x/sync v0.24.0
+	golang.org/x/sync v0.25.0
 )
 
 require (
