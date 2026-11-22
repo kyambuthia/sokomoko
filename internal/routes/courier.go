@@ -25,6 +25,7 @@ type CourierDashboardData struct {
 func RegisterCourier(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
+	mux.HandleFunc("/favicon.ico", Favicon())
 	mux.Handle("/static/", Static(a.StaticFS))
 	mux.HandleFunc("/storefront", redirectToSiblingWithProxyTrust("", "/", trustProxyHeaders))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

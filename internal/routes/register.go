@@ -33,6 +33,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
+	mux.HandleFunc("/favicon.ico", Favicon())
 	mux.Handle("/static/", Static(a.StaticFS))
 
 	mux.Handle("/", public(Root(a)))
@@ -79,6 +80,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 func RegisterAdmin(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
+	mux.HandleFunc("/favicon.ico", Favicon())
 	mux.Handle("/static/", Static(a.StaticFS))
 
 	mux.HandleFunc("/storefront", redirectToSiblingWithProxyTrust("", "/", trustProxyHeaders))
@@ -115,6 +117,7 @@ func RegisterPartner(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
+	mux.HandleFunc("/favicon.ico", Favicon())
 	mux.Handle("/static/", Static(a.StaticFS))
 
 	mux.HandleFunc("/storefront", redirectToSiblingWithProxyTrust("", "/", trustProxyHeaders))

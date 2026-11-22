@@ -25,6 +25,7 @@ func RenderErrorPage(w http.ResponseWriter, r *http.Request, status int, title s
 
 	requestID := requestIDFromResponse(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 
 	_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
