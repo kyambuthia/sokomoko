@@ -8,6 +8,7 @@ All routes are registered in `internal/routes/register.go` (HTML) and
 | `GET/HEAD /healthz` | Process liveness. Always `200 ok`. |
 | `GET/HEAD /readyz` | Database ping with a 2 s deadline. `503` while draining or when the database is unreachable. |
 | `GET/HEAD /metrics` | Prometheus HTTP and Go runtime metrics; Bearer token required when enabled, otherwise `404`. |
+| `GET/HEAD /favicon.ico` | Redirects (`302`) to the bundled SVG icon under `/static/`. |
 | `/static/...` | Embedded assets. In development, files under `internal/ui/static/` on disk take precedence. |
 
 Workspace pages link to other hosts through the `/storefront`, `/catalog`, and
@@ -24,6 +25,7 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | --- | --- | --- | --- | --- |
 | `/` | GET | public | `Root` | Home page and catalog |
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
+| `/sitemap.xml` | GET, HEAD | public | `Sitemap` | XML sitemap of public storefront pages, products, and services; cached 5 min |
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
 | `/media/product-videos/<id>` | GET, HEAD | public | `ProductVideo` | Uploaded MP4/WebM video with byte-range support; 404 if the product or partner is inactive |
 | `/search` | GET | public | `Search` | `q`, `category`, `page`; 24 products per page |
@@ -42,6 +44,8 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/cart/remove` | POST | signed in | `CartRemove` | |
 | `/checkout` | GET, POST | signed in | `Checkout` | See below |
 | `/account` | GET | signed in | `Account` | Recent appointment requests and order history; orders are newest first, 20 per page (`?page=`) |
+| `/account/tokens` | POST | signed in | `AccountTokenCreate` | Self-serve creation of `smk_` API tokens (raw token shown once via short-lived `HttpOnly` cookie; disabled in demo mode) |
+| `/account/tokens/<id>/revoke` | POST | signed in | `AccountTokenRevoke` | Revokes an own API token (disabled in demo mode) |
 | `/account/service-bookings` | GET, HEAD | user | `AccountServiceBookings` | Complete appointment history, 20 per page (`?page=`) |
 | `/account/orders/<id>/cancel` | POST | signed in | `AccountOrderCancel` | Own order, while `pending`, partner status `new`, and unpaid |
 | `/account/bookings/<id>/cancel` | POST | user | `AccountBookingCancel` | Cancels the user's own future requested or confirmed service appointment |
@@ -106,7 +110,7 @@ address as a draft and re-renders the form with `422`.
 | `/` | GET | admin, staff | `AdminDashboard` |
 | `/products` | GET | admin, staff | `AdminProducts` (50 per page, `?page=`) |
 | `/orders` | GET, POST | admin, staff (POST needs admin) | `AdminOrders` (50 per page, `?page=`; updates keep the current page) |
-| `/reports` | GET | admin, staff | `AdminReports` |
+| `/reports` | GET | admin, staff | `AdminReports` (sales summary plus Traffic & Agents 24 h / 7 d rollups and active API token count) |
 | `/deliveries` | GET, POST | admin, staff | `AdminDeliveries` (50 pending orders per page; counts include non-cancelled orders; POST assigns couriers) |
 | `/couriers/new` | GET, POST | admin | `auth.CourierSignUp` (create a courier account with username and initial password; no email) |
 | `/courier` | GET | public | Redirect to the courier host's `/login` |
@@ -173,8 +177,9 @@ cannot reassign an order or view another courier's jobs.
 ## JSON API (`/api/v1`)
 
 Served under `/api/v1` on the storefront, admin, partner, and courier hosts.
-The docs host serves the public guide only. The API uses the same session
-cookie as the HTML pages; there are no API keys or bearer tokens.
+The docs host serves the public guide only. The API accepts either the same
+session cookie as the HTML pages or `Authorization: Bearer smk_...` API tokens
+(`bearerAuth` in OpenAPI).
 
 `GET /api/v1/openapi.json` returns an OpenAPI 3.1 index of every path and
 method, each with a one-line summary. It is public and cached for five minutes
@@ -185,9 +190,14 @@ tables below describe request and response shapes.
 
 - Success: `{"data": ...}`. Error: `{"error": {"code": "...", "message": "..."}}`.
 - Request bodies are JSON, at most 1 MiB, one object, unknown fields rejected.
+  Unsafe methods (`POST`, `PUT`, `PATCH`, `DELETE`) carrying a body or
+  `Content-Type` header must use `application/json` (optional `charset=utf-8`)
+  or receive `415 unsupported_media_type`.
 - Unsafe methods need the CSRF token in `X-CSRF-Token` (the pages expose it in
-  `<meta name="csrf-token">`).
-- Unauthenticated calls get `401 authentication_required`, never a redirect.
+  `<meta name="csrf-token">`), unless authenticated with a valid
+  `Authorization: Bearer smk_...` API token.
+- Unauthenticated calls get `401 authentication_required` (or `401 invalid_token`
+  for an invalid, expired, or revoked Bearer token), never a redirect.
 - Responses are `Cache-Control: no-store`, except public catalog reads
   (`public, max-age=30`, search `max-age=15`).
 - Lists that paginate take `page` (from 1) and `limit` (default 20, max 50).
@@ -223,6 +233,9 @@ tables below describe request and response shapes.
 | `GET /me` | signed in | Current user and `csrf_token` |
 | `PATCH /me` | signed in | Update `{username, email}`; `409 profile_conflict` when either is taken |
 | `PATCH /me/password` | signed in | `{current_password, new_password}`; revokes the other sessions and returns a fresh `csrf_token`; `403 demo_mode` on the demo instance |
+| `GET /me/tokens` | signed in | List own API tokens (`id, name, token_prefix, client_type, last_used_at, expires_at, revoked_at, created_at`) |
+| `POST /me/tokens` | signed in | Create an API token from `{name, client_type?, expires_in_days?}`; returns `201` with the one-time `smk_...` `token` |
+| `DELETE /me/tokens/<id>` | signed in | Revoke an own API token; returns `{id, revoked: true}` |
 | `GET /cart` | signed in | Cart lines and subtotal |
 | `POST /cart/items` | signed in | Add `{product_id, quantity}` |
 | `PATCH /cart/items/<product_id>` | signed in | Set `{quantity}` |
@@ -240,7 +253,7 @@ tables below describe request and response shapes.
 | `GET /admin/products` | admin, staff | Product list |
 | `GET /admin/orders` | admin, staff | All orders |
 | `PATCH /admin/orders/<id>` | admin | Set `{status, partner_status, delivery_status, delivery_notice}` |
-| `GET /admin/reports` | admin, staff | Sales report |
+| `GET /admin/reports` | admin, staff | Sales report and `traffic` summary (`active_api_tokens`, `last_24h`, `last_7d` by `client_kind` and `surface`) |
 | `GET /admin/team` | admin | Team members: `{items, page, limit, total}`; `q` searches username or email |
 | `DELETE /admin/team/<id>` | admin | Deactivate a user |
 | `GET /admin/audit` | admin | Audit log |

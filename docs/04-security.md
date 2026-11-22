@@ -41,6 +41,18 @@ Most of this lives in `internal/auth`. HTTP hardening is in
   controlled by the same security boundary.
 - Logout is `POST` only. It deletes the session row and clears the cookie.
 
+## API tokens
+
+- Signed-in users can create and revoke `smk_`-prefixed Bearer tokens from
+  `/account/tokens` (HTML) or `/api/v1/me/tokens` (JSON).
+- Each token is generated from 32 random bytes; the database stores only its
+  SHA-256 digest (`api_tokens.token_hash`) along with a short `token_prefix`,
+  `client_type` (default `agent`), optional `expires_at` (1–3650 days),
+  `revoked_at`, and `last_used_at`. Raw tokens are shown once at creation.
+- `/api/v1` routes accept `Authorization: Bearer smk_...` in
+  `APIAuthMiddleware`, rejecting invalid, expired, or revoked tokens with
+  `401 invalid_token`. HTML routes continue to require a session cookie.
+
 ## Roles and authorization
 
 Roles are `user`, `staff`, `admin`, `partner` (see
@@ -69,6 +81,8 @@ With no valid link, a partner user sees empty lists.
 `CSRFMiddleware` runs on every request:
 
 - Safe methods (GET, HEAD, OPTIONS, TRACE) pass.
+- Unsafe `/api/v1` requests authenticated with a valid
+  `Authorization: Bearer smk_...` API token are exempt from CSRF checks.
 - Anonymous requests, including those with an expired or revoked session
   cookie, do not need a session token. Browser Origin or Referer metadata
   must match the request origin, and Sec-Fetch-Site must not indicate a
@@ -175,7 +189,10 @@ verification, recovery limitations and recipient-disclosed reports.
   `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`, `Cache-Control: no-store`.
   HSTS (one year, subdomains) is added for HTTPS requests.
-- **Body limit** of 1 MiB on unsafe methods.
+- **Body limit and Content-Type enforcement.** Unsafe methods have a 1 MiB body
+  limit. Unsafe `/api/v1` requests (`POST`, `PUT`, `PATCH`, `DELETE`) carrying a
+  body or `Content-Type` header must send `application/json` (optional
+  `charset=utf-8`), otherwise returning `415 unsupported_media_type`.
 - **Open-redirect guard.** The login `next` parameter must be a same-site
   relative path (no `//`, backslashes, or line breaks; at most 512 bytes).
 - **Flash messages** travel in a 60-second `HttpOnly` cookie (base64 JSON, at
@@ -189,6 +206,10 @@ verification, recovery limitations and recipient-disclosed reports.
 - **Request IDs** from clients are accepted only when short and alphanumeric, so
   they cannot forge log lines.
 - **Logs** contain no query strings, cookies, passwords, tokens, or addresses.
+- **Telemetry.** Request logs, Prometheus HTTP metrics, and hourly
+  `traffic_rollups` classify traffic with a bounded `client_kind`
+  (`agent_token`, `browser`, `api_client`, `crawler`) and `surface`, without
+  recording raw tokens or PII.
 
 ## Workspace service boundaries
 

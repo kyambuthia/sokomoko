@@ -39,6 +39,7 @@ data are not stored. See [services](services-and-local-discovery.md).
 | --- | --- | --- |
 | Identity | `users` | Accounts. `role` is `user`, `staff`, `admin`, `partner` or `courier`. Case-insensitive unique usernames are the public handles. |
 | | `sessions` | SHA-256 of the session token, user, CSRF token, expiry |
+| | `api_tokens` | SHA-256 of `smk_` bearer token, user, name, prefix, `client_type`, expiry, `revoked_at`, `last_used_at` (migration 38) |
 | | `password_reset_tokens` | SHA-256 of the token, expiry, `used_at` |
 | | `password_reset_email_outbox` | AES-GCM sealed recipient and reset URL, expiry, retry schedule and lease |
 | | `partner_users` | Links a `partner` user to one partner (migration 2) |
@@ -73,6 +74,7 @@ data are not stored. See [services](services-and-local-discovery.md).
 | | `payment_exceptions` | Confirmed charges that need a refund: late captures and duplicate charges, with refund status (migration 6) |
 | | `idempotency_keys` | Unique `(user_id, operation, key)` that makes order placement idempotent |
 | Audit | `audit_logs` | Actor, action, target, details |
+| Telemetry | `traffic_rollups` | Hourly request, 4xx, 5xx, and rate-limit counts keyed by `(bucket_hour, client_kind, surface)` (migration 39) |
 | Migrations | `schema_migrations` | Applied versions (created by the migration runner) |
 
 Constraints that encode business rules:
