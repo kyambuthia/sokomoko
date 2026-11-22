@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"embed"
 	"encoding/json"
 	"html/template"
@@ -193,6 +194,9 @@ type AuthService interface {
 	SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, username, email, password string) (int, string, string)
 	LogoutAPI(ctx context.Context, w http.ResponseWriter, r *http.Request)
 	ChangePasswordAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, user *db.User, currentPassword, newPassword string) (string, int, string, string)
+	CreateAPIToken(ctx context.Context, userID int, name, clientType string, expiresAt sql.NullTime) (*db.APIToken, string, error)
+	ListAPITokens(ctx context.Context, userID int) ([]db.APIToken, error)
+	RevokeAPIToken(ctx context.Context, userID int, tokenID int64) (bool, error)
 }
 
 type Dependencies struct {

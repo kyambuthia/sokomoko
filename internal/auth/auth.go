@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"io"
 	"log/slog"
@@ -48,6 +49,9 @@ type store interface {
 	ChangeUserPassword(ctx context.Context, userID int, expectedPasswordHash, passwordHash string, session db.Session) error
 	LookupActiveAPITokenUser(ctx context.Context, rawToken string) (*db.User, *db.APIToken, error)
 	TouchAPITokenLastUsed(ctx context.Context, tokenID int64) error
+	CreateAPIToken(ctx context.Context, userID int, name, tokenPrefix, rawToken, clientType string, expiresAt sql.NullTime) (*db.APIToken, error)
+	ListAPITokensByUser(ctx context.Context, userID int) ([]db.APIToken, error)
+	RevokeAPIToken(ctx context.Context, userID int, tokenID int64) (bool, error)
 }
 
 type Config struct {

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -152,4 +153,32 @@ func (s *Service) ChangePasswordAPI(ctx context.Context, w http.ResponseWriter, 
 	s.revokeRequestSessions(ctx, r, "api password change")
 	s.setSessionCookie(w, r, session)
 	return session.CSRFToken, http.StatusOK, "", ""
+}
+
+// CreateAPIToken generates a new smk_ bearer token and persists its hash.
+func (s *Service) CreateAPIToken(ctx context.Context, userID int, name, clientType string, expiresAt sql.NullTime) (*db.APIToken, string, error) {
+	secretPart, err := generateOpaqueToken(32)
+	if err != nil {
+		return nil, "", err
+	}
+	rawToken := "smk_" + secretPart
+	prefixLen := 12
+	if len(rawToken) < prefixLen {
+		prefixLen = len(rawToken)
+	}
+	tok, err := s.store.CreateAPIToken(ctx, userID, name, rawToken[:prefixLen], rawToken, clientType, expiresAt)
+	if err != nil {
+		return nil, "", err
+	}
+	return tok, rawToken, nil
+}
+
+// ListAPITokens returns all API tokens owned by userID.
+func (s *Service) ListAPITokens(ctx context.Context, userID int) ([]db.APIToken, error) {
+	return s.store.ListAPITokensByUser(ctx, userID)
+}
+
+// RevokeAPIToken revokes a token owned by userID.
+func (s *Service) RevokeAPIToken(ctx context.Context, userID int, tokenID int64) (bool, error) {
+	return s.store.RevokeAPIToken(ctx, userID, tokenID)
 }

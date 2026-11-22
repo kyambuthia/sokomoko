@@ -67,6 +67,8 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.Handle(apiPrefix+"/auth/logout", h.authenticated(http.HandlerFunc(h.authLogout)))
 	mux.Handle(apiPrefix+"/me", h.authenticated(h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.me)))))
 	mux.Handle(apiPrefix+"/me/password", h.authenticated(h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.mePassword)))))
+	mux.Handle(apiPrefix+"/me/tokens", h.authenticated(h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.meTokens)))))
+	mux.Handle(apiPrefix+"/me/tokens/{id}", h.authenticated(h.demoWriteDisabled(http.HandlerFunc(h.meToken))))
 	mux.Handle(apiPrefix+"/encrypted-chat", h.authenticated(h.requireJSON(http.HandlerFunc(h.encryptedChat))))
 	mux.Handle(apiPrefix+"/messages", h.authenticated(h.requireJSON(http.HandlerFunc(h.messages))))
 	mux.Handle(apiPrefix+"/messages/contacts", h.authenticated(http.HandlerFunc(h.messageContacts)))
