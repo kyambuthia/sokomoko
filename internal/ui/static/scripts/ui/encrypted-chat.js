@@ -67,7 +67,7 @@ export class UIEncryptedChat extends HTMLElement {
   if(!this.active)return;
   if(this.busy){if(!background)this.queued=fn;return;}this.busy=true;
   const previousDelay=this.delay||5000;
-  try{this.delay=5000;await fn();}catch(error){this.status.textContent=error.message;this.delay=Math.min(previousDelay*2,60000);
+  try{this.delay=5000;await fn();}catch(error){this.setStatus(error.message,true);this.delay=Math.min(previousDelay*2,60000);
    if([401,403,404].includes(error.status)){this.querySelector("[data-encrypted-history]")?.replaceChildren();this.querySelector("[data-encrypted-compose]")?.setAttribute("hidden","");this.querySelector("[data-encrypted-content]").hidden=true;}
   }finally{this.busy=false;clearTimeout(this.timer);if(this.queued){const next=this.queued;this.queued=null;await this.task(next);return;}if(this.active&&!document.hidden)this.timer=setTimeout(()=>this.task(()=>this.refresh(),true),this.delay||5000);}
  }
@@ -140,16 +140,36 @@ export class UIEncryptedChat extends HTMLElement {
   }
   return result.device.approved&&!result.device.revoked;
  }
+ setStatus(text,showBanner=false){
+  if(!this.status)return;
+  this.status.textContent=text;
+  const wrap=this.status.closest(".chat-status");
+  if(wrap)wrap.hidden=!showBanner;
+ }
  async refresh(){
+  let needsEnroll=false;
   await this.store.locked(async(data,save)=>{
-   this.querySelector("[data-device-enroll]").hidden=!!data;
-   if(!data){this.status.textContent="Set up this browser to use encrypted messages.";return;}
+   if(!data){needsEnroll=true;return;}
+   this.querySelector("[data-device-enroll]").hidden=true;
    if(!data.registered)await this.register(data,save);
-   if(!await this.devices(data,save)){this.querySelector("[data-device-panel]").open=true;this.status.textContent="This browser needs approval from an existing device.";return;}
+   if(!await this.devices(data,save)){
+    const panel=this.querySelector("[data-device-panel]");
+    if(panel){panel.hidden=false;panel.open=true;}
+    this.setStatus("This browser needs approval from an existing device.",true);
+    return;
+   }
    await this.flush(data,save);await this.replenish(data,save);
    this.querySelector("[data-encrypted-content]").hidden=false;
-   if(this.conversation)await this.thread(data,save);else this.status.textContent="Device ready. Keys stay in this browser.";
+   if(this.conversation)await this.thread(data,save);else this.setStatus("",false);
   });
+  if(needsEnroll&&!this._autoEnrolled){
+   this._autoEnrolled=true;
+   try{await this.enroll();return;}
+   catch(err){
+    this.querySelector("[data-device-enroll]").hidden=false;
+    this.setStatus(err?.message||"Set up this browser to use encrypted messages.",true);
+   }
+  }
  }
  async openConversation(form){
   const target={};for(const [key,value]of new FormData(form))target[key]=key==="handle"?value:Number(value);
@@ -182,7 +202,7 @@ export class UIEncryptedChat extends HTMLElement {
   data.history[this.conversation]||=[];
   for(const event of response.events||[]){
    const s=sessions.get(event.session_id);
-   if(!data.trusted[s.roster_hash]){await this.rosterDisplay({devices:s.roster,hash:s.roster_hash,ready:true});this.roster={devices:s.roster,hash:s.roster_hash,ready:true};this.status.textContent="Review the devices for earlier encrypted messages.";return;}
+   if(!data.trusted[s.roster_hash]){await this.rosterDisplay({devices:s.roster,hash:s.roster_hash,ready:true});this.roster={devices:s.roster,hash:s.roster_hash,ready:true};this.setStatus("Review the devices for earlier encrypted messages.",true);return;}
    const sender=s.roster.find(d=>d.id===event.device_id);if(!sender)throw new Error("Unknown sender device.");
    let body;
    if(event.device_id===data.deviceID){body=data.outgoing[event.nonce]?.text;}
@@ -204,7 +224,8 @@ export class UIEncryptedChat extends HTMLElement {
   const needsExisting=result.session&&result.session.roster_hash!==result.roster.hash&&!result.session.roster.some(d=>d.id===data.deviceID);
   const ready=!needsExisting&&data.trusted[result.roster.hash]&&result.roster.ready&&!c.closed&&!c.blocked&&(c.can_send||canIntro);
   compose.hidden=!ready;
-  this.status.textContent=needsExisting?"An existing participant device must start the updated encrypted session before this new browser can send.":!result.roster.ready?"Your contact needs to set up an approved device and publish keys before you can send.":c.blocked?"Messaging is blocked for this contact.":c.closed?"This conversation is closed.":c.state==="pending"&&!canIntro?"Waiting for the message request to be accepted.":ready?"End-to-end encryption is ready on this device.":"Review and verify the conversation devices.";
+  const notice=needsExisting?"An existing participant device must start the updated encrypted session before this new browser can send.":!result.roster.ready?"Your contact needs to set up an approved device and publish keys before you can send.":c.blocked?"Messaging is blocked for this contact.":c.closed?"This conversation is closed.":c.state==="pending"&&!canIntro?"Waiting for the message request to be accepted.":ready?"":"Review and verify the conversation devices.";
+  this.setStatus(notice,!!notice);
   if(response.more)this.delay=250;
  }
  async session(data,save){
@@ -270,7 +291,7 @@ export class UIEncryptedChat extends HTMLElement {
     const label=textNode("label","Reason");const select=document.createElement("select");select.className="select";
     for(const reason of ["spam","harassment","scam","personal_information","other"]){const o=textNode("option",reason.replaceAll("_"," "));o.value=reason;select.append(o);}label.append(select);form.append(label);
     const button=textNode("button","Share this message with moderators","btn btn-secondary btn-sm");button.type="submit";form.append(button);
-    form.addEventListener("submit",e=>{e.preventDefault();this.task(async()=>{await this.store.locked(async(data,save)=>this.enqueue(data,save,"report",{conversation_id:this.conversation,event_id:m.id,reason:select.value,disclosed_text:m.body}));this.status.textContent="Selected message disclosed to moderators.";details.open=false;});},{signal:this.events.signal});details.append(form);li.append(details);
+    form.addEventListener("submit",e=>{e.preventDefault();this.task(async()=>{await this.store.locked(async(data,save)=>this.enqueue(data,save,"report",{conversation_id:this.conversation,event_id:m.id,reason:select.value,disclosed_text:m.body}));this.setStatus("Selected message disclosed to moderators.",true);details.open=false;});},{signal:this.events.signal});details.append(form);li.append(details);
    }list.append(li);
   }
   const last=this.querySelector("[data-encrypted-history]")?.lastElementChild;

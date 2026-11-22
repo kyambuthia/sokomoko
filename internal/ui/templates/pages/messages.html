@@ -177,7 +177,7 @@
  </div>
  {{ if demoMode }}<p class="notice">Demo accounts are shared. First-device enrollment belongs to whoever enrolls first; use sample information. Each visitor is a separate browser device.</p>{{ end }}
  <noscript><p class="notice">JavaScript and secure local storage are required for encrypted messages. No plaintext fallback is available.</p></noscript>
- <div class="chat-status">{{ icon "lock" }}<p role="status" aria-live="polite" data-encrypted-status>Opening this browser's encrypted keys…</p></div>
+ <div class="chat-status" hidden>{{ icon "lock" }}<p role="status" aria-live="polite" data-encrypted-status></p></div>
  <div class="card stack chat-enroll" data-device-enroll hidden>
   <div class="chat-enroll__icon" aria-hidden="true">{{ icon "lock" }}</div>
   <h2>Set up this browser</h2>
@@ -244,7 +244,6 @@
  </div>
  {{ end }}
  </div>
- <details class="card chat-devices" data-device-panel><summary>{{ icon "laptop" }}<span>Messaging devices and verification</span>{{ icon "chevron-down" }}</summary><div class="stack" data-devices></div></details>
- <p class="tiny muted">Message content is encrypted on your device. Sokomoko still sees conversation membership, timing, and message sizes. Reports disclose only the text you explicitly choose to share with moderators.</p>
+ <details class="card chat-devices" data-device-panel{{ if eq .Mode "thread" }} hidden{{ end }}><summary>{{ icon "laptop" }}<span>Messaging devices</span>{{ icon "chevron-down" }}</summary><div class="stack" data-devices></div><p class="tiny muted">Message content is encrypted on your device. Sokomoko still sees conversation membership, timing, and message sizes. Reports disclose only the text you explicitly choose to share with moderators.</p></details>
 </ui-encrypted-chat>
 {{ end }}
