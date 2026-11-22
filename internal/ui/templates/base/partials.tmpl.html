@@ -63,6 +63,7 @@
 {{ define "auth-layout" }}
 <body>
   <a class="skip" href="#main">Skip to content</a>
+  {{ template "demo-site-notice" . }}
   <header class="bar">
     <div class="container bar__inner">
       <a class="brand brand--bar" href="/" aria-label="sokomoko">{{ template "brand" . }}</a>
