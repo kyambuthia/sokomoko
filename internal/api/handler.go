@@ -57,7 +57,11 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix+"/catalog/search", h.catalogSearch)
 
 	// Customer session and commerce APIs.
+	mux.HandleFunc(apiPrefix+"/auth/login", h.authLogin)
+	mux.HandleFunc(apiPrefix+"/auth/signup", h.authSignUp)
+	mux.Handle(apiPrefix+"/auth/logout", h.authenticated(http.HandlerFunc(h.authLogout)))
 	mux.Handle(apiPrefix+"/me", h.authenticated(http.HandlerFunc(h.me)))
+	mux.Handle(apiPrefix+"/me/password", h.authenticated(h.demoWriteDisabled(http.HandlerFunc(h.mePassword))))
 	mux.Handle(apiPrefix+"/encrypted-chat", h.authenticated(http.HandlerFunc(h.encryptedChat)))
 	mux.Handle(apiPrefix+"/messages", h.authenticated(http.HandlerFunc(h.messages)))
 	mux.Handle(apiPrefix+"/messages/contacts", h.authenticated(http.HandlerFunc(h.messageContacts)))

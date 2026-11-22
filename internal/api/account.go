@@ -19,11 +19,12 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		writeData(w, http.StatusOK, struct {
-			ID       int    `json:"id"`
-			Username string `json:"username"`
-			Email    string `json:"email"`
-			Role     string `json:"role"`
-		}{ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role})
+			ID        int    `json:"id"`
+			Username  string `json:"username"`
+			Email     string `json:"email"`
+			Role      string `json:"role"`
+			CSRFToken string `json:"csrf_token,omitempty"`
+		}{ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role, CSRFToken: h.app.Auth.CSRFToken(r)})
 		return
 	}
 	if r.Method != http.MethodPatch {
