@@ -180,9 +180,9 @@ func TestHashPassword_RejectsOverlongPasswords(t *testing.T) {
 	}
 }
 
-func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
+func TestAdminSetup_CreatesAdminOnce(t *testing.T) {
 	clearAuthTables()
-	tmpl := template.Must(template.New("x").Parse(`{{define "root_template"}}{{.Error}}{{range .StaffCredentials}}[{{.Username}}:{{.TempPassword}}]{{end}}{{end}}`))
+	tmpl := template.Must(template.New("x").Parse(`{{define "root_template"}}{{.Error}}|{{.Message}}{{end}}`))
 	svc := newTestService(Config{AdminSetupToken: "setup-secret"})
 
 	submit := func() *httptest.ResponseRecorder {
@@ -192,7 +192,6 @@ func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
 			"admin_email":      {"root@example.com"},
 			"admin_password":   {"RootPassword123"},
 			"confirm_password": {"RootPassword123"},
-			"staff_count":      {"2"},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/setup", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -202,12 +201,15 @@ func TestAdminSetup_CreatesAdminAndStaffOnce(t *testing.T) {
 	}
 
 	rr := submit()
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "[staff01:") || !strings.Contains(rr.Body.String(), "[staff02:") {
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Root admin account has been created") {
 		t.Fatalf("first setup status=%d body=%q", rr.Code, rr.Body.String())
 	}
-	staff, _ := testStore.GetUserByUsername(t.Context(), "staff01")
-	if staff == nil || staff.Role != domain.RoleStaff {
-		t.Fatalf("staff01 = %+v", staff)
+	adminUser, _ := testStore.GetUserByUsername(t.Context(), "rootadmin")
+	if adminUser == nil || adminUser.Role != domain.RoleAdmin {
+		t.Fatalf("rootadmin = %+v", adminUser)
+	}
+	if staff, _ := testStore.GetUserByUsername(t.Context(), "staff01"); staff != nil {
+		t.Fatalf("unexpected staff created during first setup: %+v", staff)
 	}
 
 	if again := submit(); again.Code != http.StatusFound || again.Header().Get("Location") != "/login" {

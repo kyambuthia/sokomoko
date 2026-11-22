@@ -3,32 +3,21 @@ package auth
 import (
 	"crypto/subtle"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/kyambuthia/sokomoko/internal/db"
 )
 
-type StaffCredential struct {
-	Username     string
-	Email        string
-	TempPassword string
-}
-
 type AdminSetupPageData struct {
-	Title            string
-	Role             string
-	Message          string
-	Error            string
-	RecommendedStaff int
-	StaffRationale   string
-	StaffCredentials []StaffCredential
-	ShowForm         bool
-	CSRFToken        string
+	Title     string
+	Role      string
+	Message   string
+	Error     string
+	ShowForm  bool
+	CSRFToken string
 }
 
 // isLoopbackRequest reports whether the request came straight from this
@@ -68,21 +57,8 @@ func (s *Service) isAdminSetupAuthorized(r *http.Request) bool {
 	return isLoopbackRequest(r)
 }
 
-func recommendedStaffCount(productCount int) (int, string) {
-	base := 2
-	extra := 0
-	if productCount > 100 {
-		extra = (productCount - 100 + 74) / 75
-	}
-	total := base + extra
-	if total > 12 {
-		total = 12
-	}
-	reason := "Baseline recommendation is 2 staff (operations + customer support), plus 1 extra for each additional ~75 products after the first 100."
-	return total, reason
-}
-
-// AdminSetup is the first-run bootstrap flow that creates the root admin and optional staff accounts.
+// AdminSetup is the first-run bootstrap flow that creates the root admin account.
+// Staff accounts are created later by the admin from Team (/staff/signup).
 func (s *Service) AdminSetup(tmpl TemplateRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hasAdmin, err := s.store.HasAdminUser(r.Context())
@@ -99,19 +75,11 @@ func (s *Service) AdminSetup(tmpl TemplateRenderer) http.HandlerFunc {
 			return
 		}
 
-		productCount, err := s.store.CountProducts(r.Context())
-		if err != nil {
-			productCount = 0
-		}
-		recommendedStaff, rationale := recommendedStaffCount(productCount)
-
 		data := AdminSetupPageData{
-			Title:            "Initial Admin Setup",
-			Role:             "admin",
-			RecommendedStaff: recommendedStaff,
-			StaffRationale:   rationale,
-			ShowForm:         true,
-			CSRFToken:        s.CSRFTokenForSession(r),
+			Title:     "Initial Admin Setup",
+			Role:      "admin",
+			ShowForm:  true,
+			CSRFToken: s.CSRFTokenForSession(r),
 		}
 
 		if r.Method == http.MethodGet {
@@ -128,7 +96,6 @@ func (s *Service) AdminSetup(tmpl TemplateRenderer) http.HandlerFunc {
 		adminEmail := normalizeEmail(r.FormValue("admin_email"))
 		adminPassword := r.FormValue("admin_password")
 		confirmPassword := r.FormValue("confirm_password")
-		staffCountRaw := strings.TrimSpace(r.FormValue("staff_count"))
 
 		if adminUsername == "" || adminEmail == "" || adminPassword == "" || confirmPassword == "" {
 			data.Error = "All admin fields are required"
@@ -156,47 +123,16 @@ func (s *Service) AdminSetup(tmpl TemplateRenderer) http.HandlerFunc {
 			return
 		}
 
-		staffCount := recommendedStaff
-		if staffCountRaw != "" {
-			parsed, parseErr := strconv.Atoi(staffCountRaw)
-			if parseErr != nil || parsed < 0 || parsed > 20 {
-				data.Error = "Staff count must be a number between 0 and 20"
-				renderWithStatus(w, tmpl, http.StatusBadRequest, data)
-				return
-			}
-			staffCount = parsed
-		}
-
 		adminHash, err := hashPassword(adminPassword)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		tempPasswords := make([]string, staffCount)
-		staffHashes := make([]string, staffCount)
-		for i := range tempPasswords {
-			token, tokenErr := generateOpaqueToken(12)
-			if tokenErr != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-			tempPasswords[i] = token
-			if staffHashes[i], err = hashPassword(token); err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-		}
 
-		staffUsers, err := s.store.BootstrapAdmin(r.Context(),
+		_, err = s.store.BootstrapAdmin(r.Context(),
 			db.User{Username: adminUsername, Email: adminEmail, PasswordHash: adminHash},
-			staffHashes,
-			func(i, attempt int) (string, string) {
-				username := fmt.Sprintf("staff%02d", i)
-				if attempt > 0 {
-					username = fmt.Sprintf("staff%02d_%d", i, attempt)
-				}
-				return username, username + "@sokomoko.local"
-			},
+			nil,
+			nil,
 		)
 		if errors.Is(err, db.ErrAdminExists) {
 			http.Redirect(w, r, "/login", http.StatusFound)
@@ -210,18 +146,8 @@ func (s *Service) AdminSetup(tmpl TemplateRenderer) http.HandlerFunc {
 			return
 		}
 
-		staffCredentials := make([]StaffCredential, 0, len(staffUsers))
-		for i, user := range staffUsers {
-			staffCredentials = append(staffCredentials, StaffCredential{
-				Username:     user.Username,
-				Email:        user.Email,
-				TempPassword: tempPasswords[i],
-			})
-		}
-
 		data.ShowForm = false
-		data.Message = "Root admin account has been created. Save the temporary staff credentials now."
-		data.StaffCredentials = staffCredentials
+		data.Message = "Root admin account has been created. You can add staff accounts later from Team."
 		renderWithStatus(w, tmpl, 0, data)
 	}
 }
