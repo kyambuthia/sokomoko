@@ -90,27 +90,24 @@ func (s *Store) UpdateCartQuantity(ctx context.Context, userID, productID, quant
 		if err != nil {
 			return err
 		}
+		var result sql.Result
 		if quantity <= 0 {
-			_, err = tx.ExecContext(ctx, "DELETE FROM cart_items WHERE cart_id = $1 AND product_id = $2", cartID, productID)
+			result, err = tx.ExecContext(ctx, "DELETE FROM cart_items WHERE cart_id = $1 AND product_id = $2", cartID, productID)
 		} else {
-			var result sql.Result
 			result, err = tx.ExecContext(ctx,
 				"UPDATE cart_items SET quantity = $1 WHERE cart_id = $2 AND product_id = $3",
 				quantity, cartID, productID,
 			)
-			if err != nil {
-				return err
-			}
-			updated, err := rowsAffected(result)
-			if err != nil {
-				return err
-			}
-			if updated == 0 {
-				return ErrCartItemNotFound
-			}
 		}
 		if err != nil {
 			return err
+		}
+		affected, err := rowsAffected(result)
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return ErrCartItemNotFound
 		}
 		return invalidateCheckoutsTx(ctx, tx, userID)
 	})
