@@ -50,13 +50,6 @@
     <a class="brand brand--bar" href="/" aria-label="sokomoko {{ .Tag }}">{{ template "brand" . }}<span class="brand__tag">{{ .Tag }}</span></a>
     <div class="bar__actions">
       {{ template "theme-toggle" }}
-      {{ if and .Page.CSRFToken (ne .Tag "workspace") }}
-      <a class="btn btn-icon" href="/password" aria-label="Change password" title="Change password">{{ icon "settings" }}</a>
-      <form action="/logout" method="POST" class="inline-form">
-        <input type="hidden" name="csrf_token" value="{{ .Page.CSRFToken }}">
-        <button type="submit" class="btn btn-icon" aria-label="Sign out">{{ icon "logout" }}</button>
-      </form>
-      {{ end }}
     </div>
   </div>
 </header>

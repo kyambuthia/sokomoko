@@ -56,3 +56,21 @@ document.addEventListener("submit", (event) => {
   form.dataset.submitted = "true";
   form.querySelectorAll('[type="submit"]').forEach((button) => button.setAttribute("aria-busy", "true"));
 });
+
+// Workspace bottom sheet: a trigger opens the <dialog>; the close button, a
+// backdrop click and Escape (native) close it.
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const opener = target.closest("[data-sheet-open]");
+  if (opener) {
+    const sheet = document.getElementById(opener.getAttribute("data-sheet-open"));
+    if (sheet instanceof HTMLDialogElement && !sheet.open) sheet.showModal();
+    return;
+  }
+  if (target.closest("[data-sheet-close]")) {
+    target.closest("dialog")?.close();
+    return;
+  }
+  if (target instanceof HTMLDialogElement && target.classList.contains("ws-sheet")) target.close();
+});
