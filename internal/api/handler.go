@@ -38,6 +38,7 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/", h.notFound)
 	mux.HandleFunc(apiPrefix, h.notFound)
 	mux.HandleFunc(apiPrefix+"/", h.notFound)
+	mux.HandleFunc(apiPrefix+"/openapi.json", h.openAPI)
 
 	// Service discovery and seller-owned offerings.
 	mux.HandleFunc(apiPrefix+"/catalog/services", h.serviceList)
