@@ -32,6 +32,10 @@ type stubRoutesLogistics struct {
 	jobsByViewFn func(context.Context, *logisticsvc.Actor, string) ([]logisticsvc.CourierDelivery, error)
 }
 
+func (s *stubRoutesLogistics) JobsSummary(context.Context, *logisticsvc.Actor) (logisticsvc.CourierJobSummary, error) {
+	return logisticsvc.CourierJobSummary{}, nil
+}
+
 func (s *stubRoutesLogistics) JobsByView(ctx context.Context, actor *logisticsvc.Actor, view string) ([]logisticsvc.CourierDelivery, error) {
 	return s.jobsByViewFn(ctx, actor, view)
 }

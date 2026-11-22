@@ -152,6 +152,7 @@ type LogisticsService interface {
 	DispatchBoard(context.Context, *logisticsvc.Actor) (logisticsvc.DispatchBoard, error)
 	Assign(context.Context, *logisticsvc.Actor, string, string) error
 	Jobs(context.Context, *logisticsvc.Actor) ([]logisticsvc.CourierDelivery, error)
+	JobsSummary(context.Context, *logisticsvc.Actor) (logisticsvc.CourierJobSummary, error)
 	JobsByView(context.Context, *logisticsvc.Actor, string) ([]logisticsvc.CourierDelivery, error)
 	Update(context.Context, *logisticsvc.Actor, string, string, string) error
 }

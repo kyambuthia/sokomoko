@@ -16,6 +16,11 @@
     <a class="btn btn-secondary btn-sm" href="/deliveries?view=completed"{{ if eq .View "completed" }} aria-current="page"{{ end }}>Completed</a>
     <a class="btn btn-secondary btn-sm" href="/deliveries"{{ if eq .View "all" }} aria-current="page"{{ end }}>All jobs</a>
   </nav>
+  <dl class="stats">
+    <div class="stat"><dt>Active</dt><dd>{{ .Summary.ActiveCount }}</dd></div>
+    <div class="stat"><dt>Failed</dt><dd>{{ .Summary.FailedCount }}</dd></div>
+    <div class="stat"><dt>Completed</dt><dd>{{ .Summary.CompletedCount }}</dd></div>
+  </dl>
   <p class="muted">Work assigned to your courier account appears here. Customer addresses are private; use them only to complete the assigned delivery.</p>
   {{ template "notice" dict "Kind" "success" "Text" .Message }}
   {{ template "notice" dict "Kind" "danger" "Text" .Error }}
@@ -25,10 +30,10 @@
     {{ range .Deliveries }}
     <article class="card stack">
       <div class="row row-between">
-        <div><p class="section-title">Order #{{ .OrderID }}</p><p class="tiny muted">Assigned <ui-relative-time datetime="{{ rfc3339 .AssignedAt }}">{{ .AssignedAt.Format "2006-01-02 15:04" }}</ui-relative-time></p></div>
+        <div><p class="section-title">Order #{{ .OrderID }}</p><p class="tiny muted">Assigned <ui-relative-time datetime="{{ rfc3339 .AssignedAt }}">{{ .AssignedAt.Format "2006-01-02 15:04" }}</ui-relative-time>{{ if eq .Status "delivered" }} · Delivered <ui-relative-time datetime="{{ rfc3339 .UpdatedAt }}">{{ .UpdatedAt.Format "2006-01-02 15:04" }}</ui-relative-time>{{ else if eq .Status "delivery_failed" }} · Failed <ui-relative-time datetime="{{ rfc3339 .UpdatedAt }}">{{ .UpdatedAt.Format "2006-01-02 15:04" }}</ui-relative-time>{{ end }}</p></div>
         <span class="badge">{{ .Status }}</span>
       </div>
-      <div><p class="section-title">Deliver to</p><p>@{{ .CustomerName }}</p>{{ if eq .Status "delivered" }}<p class="small muted">Address hidden after delivery completion.</p>{{ else }}<p>{{ .DeliveryAddress }}</p>{{ end }}</div>
+      <div><p class="section-title">Deliver to</p><p>@{{ .CustomerName }}</p>{{ if eq .Status "delivered" }}<p class="small muted">Address hidden after delivery completion.</p>{{ else }}<p>{{ .DeliveryAddress }}</p>{{ if .DeliveryNotice }}<p class="small muted">Note: {{ .DeliveryNotice }}</p>{{ end }}{{ end }}</div>
       {{ if ne .Status "delivered" }}<div><a class="btn btn-secondary btn-sm" href="/messages/new?delivery_order_id={{ .OrderID }}">Message buyer</a></div>{{ end }}
       <div><p class="section-title">Items</p><ul class="list">
         {{ range .Items }}<li>{{ .Quantity }} × {{ .ProductName }}</li>{{ end }}

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"sort"
 	"strings"
+
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 var courierFailureReasons = map[string]bool{
@@ -72,6 +74,30 @@ func (s *Store) ListCourierDeliveriesByView(ctx context.Context, courierUserID i
 	return s.listCourierOrders(ctx, courierUserID, false, view)
 }
 
+type CourierJobSummary = domain.CourierJobSummary
+
+// CourierJobSummary returns active, failed, and completed delivery counts for courierUserID.
+func (s *Store) CourierJobSummary(ctx context.Context, courierUserID int) (CourierJobSummary, error) {
+	if courierUserID <= 0 {
+		return CourierJobSummary{}, ErrCourierDeliveryForbidden
+	}
+	ctx, cancel := s.queryContext(ctx)
+	defer cancel()
+
+	var summary CourierJobSummary
+	err := s.DB.QueryRowContext(ctx,
+		`SELECT
+		 count(*) FILTER (WHERE NOT (`+courierCompletedSQL+`) AND `+paymentSettledSQL+` AND cd.status IN ('assigned','picked_up','out_for_delivery')),
+		 count(*) FILTER (WHERE NOT (`+courierCompletedSQL+`) AND `+paymentSettledSQL+` AND cd.status = 'delivery_failed'),
+		 count(*) FILTER (WHERE `+courierCompletedSQL+`)
+		 FROM courier_deliveries cd
+		 JOIN orders o ON o.id = cd.order_id
+		 WHERE cd.courier_user_id = $1 AND o.status <> 'cancelled'`,
+		courierUserID,
+	).Scan(&summary.ActiveCount, &summary.FailedCount, &summary.CompletedCount)
+	return summary, err
+}
+
 const courierCompletedSQL = `COALESCE(cd.status, '') = 'delivered' OR o.status='delivered' OR o.delivery_status='delivered'`
 
 func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispatch bool, view string) ([]CourierDelivery, error) {
@@ -116,7 +142,7 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 		)
 		 SELECT COALESCE(cd.id, 0), o.id, COALESCE(cd.courier_user_id, 0),
 		        COALESCE(courier.username, ''), COALESCE(cd.assigned_by_user_id, 0),
-		        customer.username, CASE WHEN cd.status='delivered' OR o.status='delivered' OR o.delivery_status='delivered' THEN '' ELSE o.delivery_address END, o.status, o.partner_status,
+		        customer.username, CASE WHEN cd.status='delivered' OR o.status='delivered' OR o.delivery_status='delivered' THEN '' ELSE o.delivery_address END, CASE WHEN cd.status='delivered' OR o.status='delivered' OR o.delivery_status='delivered' THEN '' ELSE COALESCE(o.delivery_notice, '') END, o.status, o.partner_status,
 		        o.delivery_status, CASE WHEN o.status='delivered' OR o.delivery_status='delivered' THEN 'delivered' ELSE COALESCE(cd.status, '') END, COALESCE(cd.failure_note, ''),
 		        o.created_at, COALESCE(cd.assigned_at, o.created_at),
 	        COALESCE(cd.updated_at, o.updated_at), oi.product_name, oi.quantity
@@ -141,7 +167,7 @@ func (s *Store) listCourierOrders(ctx context.Context, courierUserID int, dispat
 		if err := rows.Scan(
 			&delivery.ID, &delivery.OrderID, &delivery.CourierUserID,
 			&delivery.CourierName, &delivery.AssignedByID, &delivery.CustomerName,
-			&delivery.DeliveryAddress, &delivery.OrderStatus, &delivery.PartnerStatus,
+			&delivery.DeliveryAddress, &delivery.DeliveryNotice, &delivery.OrderStatus, &delivery.PartnerStatus,
 			&delivery.DeliveryStatus, &delivery.Status, &delivery.FailureNote,
 			&delivery.CreatedAt, &delivery.AssignedAt, &delivery.UpdatedAt,
 			&productName, &quantity,

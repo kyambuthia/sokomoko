@@ -42,6 +42,7 @@ type store interface {
 	ListCourierUsers(context.Context) ([]db.CourierUser, error)
 	ListCourierDispatchOrders(context.Context) ([]db.CourierDelivery, error)
 	ListCourierDeliveriesByView(context.Context, int, string) ([]db.CourierDelivery, error)
+	CourierJobSummary(context.Context, int) (db.CourierJobSummary, error)
 	AssignCourierToOrder(context.Context, int, int, int) error
 	UpdateCourierDelivery(context.Context, int, int, string, string) error
 }
@@ -110,6 +111,13 @@ func (s *Service) Jobs(ctx context.Context, actor *Actor) ([]db.CourierDelivery,
 		return nil, ErrForbidden
 	}
 	return s.JobsByView(ctx, actor, "all")
+}
+
+func (s *Service) JobsSummary(ctx context.Context, actor *Actor) (CourierJobSummary, error) {
+	if actor == nil || actor.ID <= 0 || actor.Role != domain.RoleCourier {
+		return CourierJobSummary{}, ErrForbidden
+	}
+	return s.store.CourierJobSummary(ctx, actor.ID)
 }
 
 func (s *Service) JobsByView(ctx context.Context, actor *Actor, view string) ([]db.CourierDelivery, error) {

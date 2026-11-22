@@ -18,6 +18,7 @@ type CourierDashboardData struct {
 	CSRFToken  string
 	Message    string
 	Error      string
+	Summary    logisticsvc.CourierJobSummary
 	Deliveries []logisticsvc.CourierDelivery
 }
 
@@ -56,7 +57,8 @@ func CourierDeliveries(a *app.App) http.HandlerFunc {
 		if view == "" {
 			view = "all"
 		}
-		jobs, err := a.Logistics.JobsByView(r.Context(), logisticsActorFromContext(r), view)
+		actor := logisticsActorFromContext(r)
+		jobs, err := a.Logistics.JobsByView(r.Context(), actor, view)
 		if errors.Is(err, logisticsvc.ErrInvalidCourierView) {
 			http.Error(w, "Invalid delivery view", http.StatusBadRequest)
 			return
@@ -65,9 +67,14 @@ func CourierDeliveries(a *app.App) http.HandlerFunc {
 			http.Error(w, "Unable to load deliveries", http.StatusInternalServerError)
 			return
 		}
+		summary, err := a.Logistics.JobsSummary(r.Context(), actor)
+		if err != nil {
+			http.Error(w, "Unable to load deliveries", http.StatusInternalServerError)
+			return
+		}
 		user := auth.GetUserFromContext(r.Context())
 		data := CourierDashboardData{
-			View: view, Title: "My Deliveries", CSRFToken: a.Auth.CSRFToken(r), Deliveries: jobs,
+			View: view, Title: "My Deliveries", CSRFToken: a.Auth.CSRFToken(r), Summary: summary, Deliveries: jobs,
 		}
 		if user != nil {
 			data.Username = user.Username

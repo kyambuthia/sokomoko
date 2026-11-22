@@ -26,6 +26,9 @@ func TestCourierRejectsOtherRolesBeforeStoreAccess(t *testing.T) {
 		if _, err := svc.JobsByView(t.Context(), actor, "active"); !errors.Is(err, ErrForbidden) {
 			t.Errorf("filtered jobs actor=%+v: %v", actor, err)
 		}
+		if _, err := svc.JobsSummary(t.Context(), actor); !errors.Is(err, ErrForbidden) {
+			t.Errorf("summary actor=%+v: %v", actor, err)
+		}
 		if _, err := svc.Jobs(t.Context(), actor); !errors.Is(err, ErrForbidden) {
 			t.Errorf("jobs actor=%+v: %v", actor, err)
 		}

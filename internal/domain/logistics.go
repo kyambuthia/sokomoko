@@ -17,6 +17,7 @@ type CourierDelivery struct {
 	AssignedByID    int
 	CustomerName    string
 	DeliveryAddress string
+	DeliveryNotice  string
 	OrderStatus     string
 	PartnerStatus   string
 	DeliveryStatus  string
@@ -31,4 +32,10 @@ type CourierDelivery struct {
 type CourierDeliveryItem struct {
 	ProductName string
 	Quantity    int
+}
+
+type CourierJobSummary struct {
+	ActiveCount    int
+	FailedCount    int
+	CompletedCount int
 }
