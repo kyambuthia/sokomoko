@@ -160,7 +160,7 @@ func TestValidate_ProductionRequiresExplicitSettings(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected production validation error")
 	}
-	for _, want := range []string{"DATABASE_URL", "ALLOWED_HOSTS", "PASSWORD_RESET_BASE_URL"} {
+	for _, want := range []string{"DATABASE_URL", "ALLOWED_HOSTS", "PASSWORD_RESET_BASE_URL", "POST_RATE_LIMIT_MAX", "AUTH_ABUSE_MAX_FAILURES"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %s", err, want)
 		}
@@ -173,6 +173,11 @@ func TestValidate_ProductionRequiresExplicitSettings(t *testing.T) {
 	cfg.SMTPPort = "587"
 	cfg.SMTPFrom = "support@example.com"
 	cfg.SecretsKey = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+	cfg.PostRateLimitMax = defaultPostRateMax
+	cfg.PostRateLimitWindow = defaultPostRateWin
+	cfg.AuthAbuseMaxFailures = defaultAuthAbuseMaxFailures
+	cfg.AuthAbuseBackoffBase = defaultAuthAbuseBackoffBaseSeconds
+	cfg.AuthAbuseBackoffMax = defaultAuthAbuseBackoffMaxSeconds
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("valid production config rejected: %v", err)
 	}
@@ -185,7 +190,12 @@ func productionConfig() Config {
 		AllowedHostsRaw:      "shop.example.com,admin.example.com,partner.example.com",
 		PasswordResetBaseURL: "https://shop.example.com",
 		SMTPHost:             "smtp.example.com", SMTPPort: "587", SMTPFrom: "support@example.com",
-		SecretsKey: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+		SecretsKey:           "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+		PostRateLimitMax:     defaultPostRateMax,
+		PostRateLimitWindow:  defaultPostRateWin,
+		AuthAbuseMaxFailures: defaultAuthAbuseMaxFailures,
+		AuthAbuseBackoffBase: defaultAuthAbuseBackoffBaseSeconds,
+		AuthAbuseBackoffMax:  defaultAuthAbuseBackoffMaxSeconds,
 	}
 }
 
@@ -211,7 +221,9 @@ func TestValidate_RejectsUnsafeProductionSettings(t *testing.T) {
 		{"unrelated cookie domain", func(c *Config) { c.SessionCookieDomain = ".other.com" }, "SESSION_COOKIE_DOMAIN"},
 		{"inverted pool", func(c *Config) { c.DBMaxOpenConns = 2; c.DBMaxIdleConns = 4 }, "DB_MAX_IDLE_CONNS"},
 		{"single connection pool", func(c *Config) { c.DBMaxOpenConns = 1; c.DBMaxIdleConns = 1 }, "at least 2"},
-		{"zero rate window", func(c *Config) { c.PostRateLimitMax = 10 }, "POST_RATE_LIMIT_WINDOW_SECONDS"},
+		{"zero rate window", func(c *Config) { c.PostRateLimitMax = 10; c.PostRateLimitWindow = 0 }, "POST_RATE_LIMIT_WINDOW_SECONDS"},
+		{"zero post rate limit", func(c *Config) { c.PostRateLimitMax = 0 }, "POST_RATE_LIMIT_MAX"},
+		{"zero auth abuse limit", func(c *Config) { c.AuthAbuseMaxFailures = 0 }, "AUTH_ABUSE_MAX_FAILURES"},
 		{"inverted auth backoff", func(c *Config) { c.AuthAbuseMaxFailures = 5; c.AuthAbuseBackoffBase = 10; c.AuthAbuseBackoffMax = 1 }, "AUTH_ABUSE"},
 	}
 	for _, tc := range cases {

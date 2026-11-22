@@ -22,10 +22,10 @@ const (
 	defaultPort        = "6969"
 	defaultDatabaseURL = "postgres://sokomoko@localhost:5432/sokomoko?sslmode=disable"
 	defaultEnvironment = "development"
-	defaultPostRateMax = 0
+	defaultPostRateMax = 60
 	defaultPostRateWin = 60
 
-	defaultAuthAbuseMaxFailures        = 0
+	defaultAuthAbuseMaxFailures        = 5
 	defaultAuthAbuseBackoffBaseSeconds = 1
 	defaultAuthAbuseBackoffMaxSeconds  = 300
 
@@ -232,6 +232,12 @@ func (c Config) Validate() error {
 		problems = append(problems, "METRICS_TOKEN must contain at least 32 bytes and no whitespace when set")
 	}
 	if c.IsProduction() {
+		if c.PostRateLimitMax <= 0 {
+			problems = append(problems, "POST_RATE_LIMIT_MAX must be positive in production")
+		}
+		if c.AuthAbuseMaxFailures <= 0 {
+			problems = append(problems, "AUTH_ABUSE_MAX_FAILURES must be positive in production")
+		}
 		if len(hosts) == 0 {
 			problems = append(problems, "ALLOWED_HOSTS is required in production")
 		}
