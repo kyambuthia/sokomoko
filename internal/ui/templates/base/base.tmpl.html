@@ -36,46 +36,40 @@
 </body>
 {{ end }}
 
-{{/* Workspaces: top bar, then a nav and content grid. */}}
+{{/* Workspaces: thin top bar on phones, a rail on desktop, content, and the mobile tab bar. */}}
 {{ define "admin-layout" }}
-<body>
+<body class="has-tabbar has-rail">
   <a class="skip" href="#main">Skip to content</a>
   {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "admin" "Page" . }}
-  <div class="ws">
-    {{ template "admin-nav" . }}
-    <main id="main" class="container main" tabindex="-1">
-      {{ template "main-area" . }}
-    </main>
-  </div>
+  <main id="main" class="container main" tabindex="-1">
+    {{ template "main-area" . }}
+  </main>
+  {{ template "admin-nav" . }}
 </body>
 {{ end }}
 
 {{ define "partner-layout" }}
-<body>
+<body class="has-tabbar has-rail">
   <a class="skip" href="#main">Skip to content</a>
   {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "partner" "Page" . }}
-  <div class="ws">
-    {{ template "partner-nav" . }}
-    <main id="main" class="container main" tabindex="-1">
-      {{ template "main-area" . }}
-    </main>
-  </div>
+  <main id="main" class="container main" tabindex="-1">
+    {{ template "main-area" . }}
+  </main>
+  {{ template "partner-nav" . }}
 </body>
 {{ end }}
 
 {{ define "courier-layout" }}
-<body>
+<body class="has-tabbar has-rail">
   <a class="skip" href="#main">Skip to content</a>
   {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "courier" "Page" . }}
-  <div class="ws">
-    {{ template "courier-nav" . }}
-    <main id="main" class="container main" tabindex="-1">
-      {{ template "main-area" . }}
-    </main>
-  </div>
+  <main id="main" class="container main" tabindex="-1">
+    {{ template "main-area" . }}
+  </main>
+  {{ template "courier-nav" . }}
 </body>
 {{ end }}
 

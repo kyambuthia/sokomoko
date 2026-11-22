@@ -28,54 +28,81 @@
 </nav>
 {{ end }}
 
-{{ define "admin-nav" }}
-<nav class="ws-nav" aria-label="Admin">
-  <div class="ws-nav__list">
-    <a class="ws-nav__link" href="/" {{ if eq .Title "Admin Dashboard" }}aria-current="page"{{ end }}>{{ icon "dashboard" }}Overview</a>
-    <a class="ws-nav__link" href="/orders" {{ if eq .Title "Order Management" }}aria-current="page"{{ end }}>{{ icon "orders" }}Orders</a>
-    <a class="ws-nav__link" href="/deliveries" {{ if eq .Title "Delivery Management" }}aria-current="page"{{ end }}>{{ icon "truck" }}Deliveries</a>
-    <a class="ws-nav__link" href="/products" {{ if eq .Title "Product Management" }}aria-current="page"{{ end }}>{{ icon "box" }}Products</a>
-    <a class="ws-nav__link" href="/categories" {{ if eq .Title "Categories" }}aria-current="page"{{ end }}>{{ icon "category" }}Categories</a>
-    <a class="ws-nav__link" href="/reports" {{ if eq .Title "Sales Reports" }}aria-current="page"{{ end }}>{{ icon "chart" }}Reports</a>
-    {{ if eq .Role "admin" }}
-    <span class="ws-nav__sep" aria-hidden="true"></span>
-    <a class="ws-nav__link" href="/payments" {{ if eq .Title "Payments" }}aria-current="page"{{ end }}>{{ icon "wallet" }}Payments</a>
-    <a class="ws-nav__link" href="/partners" {{ if eq .Title "Partners" }}aria-current="page"{{ end }}>{{ icon "store" }}Partners</a>
-    <a class="ws-nav__link" href="/team" {{ if eq .Title "Team Management" }}aria-current="page"{{ end }}>{{ icon "users" }}Team</a>
-    <a class="ws-nav__link" href="/staff/signup" {{ if eq .Title "Staff Account Setup" }}aria-current="page"{{ end }}>{{ icon "user-plus" }}Add staff</a>
-    <a class="ws-nav__link" href="/audit" {{ if eq .Title "Audit Log" }}aria-current="page"{{ end }}>{{ icon "audit" }}Audit</a>
-    <a class="ws-nav__link" href="/message-reports" {{ if eq .Title "Message reports" }}aria-current="page"{{ end }}>{{ icon "users" }}Message reports</a>
+{{/* Workspace navigation. The rail (desktop) lists every link. The tab bar (phones)
+   shows the primary links and a More menu with the rest, so it keeps four columns.
+   ws-link dict: Mode (rail, tab, more), Group (p primary, m more), Href, Icon, Label, Cur. */}}
+{{ define "ws-link" }}{{ if or (eq .Mode "rail") (eq .Mode .Group) }}{{ if eq .Mode "rail" }}<a href="{{ .Href }}" {{ if .Cur }}aria-current="page"{{ end }}>{{ icon .Icon }}<span class="rail__label">{{ .Label }}</span></a>{{ else }}<a href="{{ .Href }}" {{ if .Cur }}aria-current="page"{{ end }}>{{ icon .Icon }}{{ .Label }}</a>{{ end }}{{ end }}{{ end }}
+
+{{/* dict: Label, Page, Kind (admin, partner, courier), and HasMore. */}}
+{{ define "ws-nav" }}
+<nav class="rail rail--ws" aria-label="{{ .Label }}">
+  <a class="rail__brand" href="/" aria-label="sokomoko {{ .Label }}">{{ template "brand" . }}</a>
+  <div class="rail__links">
+    {{ template "ws-links" dict "Kind" $.Kind "Page" $.Page "Mode" "rail" }}
+  </div>
+  <div class="rail__foot">
+    {{ template "theme-toggle" }}
+    {{ if .Page.CSRFToken }}
+    <a class="btn btn-icon" href="/password" aria-label="Change password" title="Change password">{{ icon "settings" }}</a>
+    <form action="/logout" method="POST" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ .Page.CSRFToken }}">
+      <button type="submit" class="btn btn-icon" aria-label="Sign out">{{ icon "logout" }}</button>
+    </form>
     {{ end }}
-    <span class="ws-nav__sep" aria-hidden="true"></span>
-    <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
   </div>
+</nav>
+<nav class="tabbar tabbar--ws" aria-label="{{ .Label }} tabs">
+  {{ template "ws-links" dict "Kind" $.Kind "Page" $.Page "Mode" "tab" }}
+  {{ if .HasMore }}
+  <details class="tabbar__more">
+    <summary aria-label="More">{{ icon "dots" }}More</summary>
+    <div class="tabbar__menu">
+      {{ template "ws-links" dict "Kind" $.Kind "Page" $.Page "Mode" "more" }}
+    </div>
+  </details>
+  {{ end }}
 </nav>
 {{ end }}
 
-{{ define "partner-nav" }}
-<nav class="ws-nav" aria-label="Partner">
-  <div class="ws-nav__list">
-    <a class="ws-nav__link" href="/dashboard" {{ if eq .Title "Partner Dashboard" }}aria-current="page"{{ end }}>{{ icon "dashboard" }}Overview</a>
-    {{ if eq (field . "Role") "partner" }}<a class="ws-nav__link" href="/messages" {{ if eq .Title "Messages" }}aria-current="page"{{ end }}>{{ icon "users" }}Messages</a>{{ end }}
-    <a class="ws-nav__link" href="/orders" {{ if eq .Title "Partner Orders" }}aria-current="page"{{ end }}>{{ icon "orders" }}Orders</a>
-    {{ if eq (field . "Role") "partner" }}<a class="ws-nav__link" href="/service-bookings" {{ if eq .Title "Appointment Requests" }}aria-current="page"{{ end }}>{{ icon "orders" }}Appointments</a>{{ end }}
-    <a class="ws-nav__link" href="/products" {{ if eq .Title "Partner Products" }}aria-current="page"{{ end }}>{{ icon "box" }}Products</a>
-    {{ if eq (field . "Role") "partner" }}<a class="ws-nav__link" href="/services" {{ if eq .Title "Services" }}aria-current="page"{{ end }}>{{ icon "store" }}Services</a>{{ end }}
-    <a class="ws-nav__link" href="/products/new" {{ if eq .Title "Add Product" }}aria-current="page"{{ end }}>{{ icon "plus" }}Add product</a>
-    <a class="ws-nav__link" href="/setup" {{ if eq .Title "Store Setup" }}aria-current="page"{{ end }}>{{ icon "settings" }}Store</a>
-    <span class="ws-nav__sep" aria-hidden="true"></span>
-    <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
-  </div>
-</nav>
+{{ define "ws-links" }}{{ if eq .Kind "admin" }}{{ template "admin-links" . }}{{ else if eq .Kind "partner" }}{{ template "partner-links" . }}{{ else }}{{ template "courier-links" . }}{{ end }}{{ end }}
+
+{{ define "admin-nav" }}{{ template "ws-nav" dict "Label" "Admin" "Page" . "Kind" "admin" "HasMore" true }}{{ end }}
+{{ define "admin-links" }}{{ $p := .Page }}{{ $m := .Mode }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/" "Icon" "dashboard" "Label" "Overview" "Cur" (eq $p.Title "Admin Dashboard") }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/orders" "Icon" "orders" "Label" "Orders" "Cur" (eq $p.Title "Order Management") }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/deliveries" "Icon" "truck" "Label" "Deliveries" "Cur" (eq $p.Title "Delivery Management") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/products" "Icon" "box" "Label" "Products" "Cur" (eq $p.Title "Product Management") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/categories" "Icon" "category" "Label" "Categories" "Cur" (eq $p.Title "Categories") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/reports" "Icon" "chart" "Label" "Reports" "Cur" (eq $p.Title "Sales Reports") }}
+{{ if eq $p.Role "admin" }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/payments" "Icon" "wallet" "Label" "Payments" "Cur" (eq $p.Title "Payments") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/partners" "Icon" "store" "Label" "Partners" "Cur" (eq $p.Title "Partners") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/team" "Icon" "users" "Label" "Team" "Cur" (eq $p.Title "Team Management") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/staff/signup" "Icon" "user-plus" "Label" "Add staff" "Cur" (eq $p.Title "Staff Account Setup") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/audit" "Icon" "audit" "Label" "Audit" "Cur" (eq $p.Title "Audit Log") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/message-reports" "Icon" "users" "Label" "Message reports" "Cur" (eq $p.Title "Message reports") }}
+{{ end }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/storefront" "Icon" "external" "Label" "Storefront" "Cur" false }}
 {{ end }}
 
-{{ define "courier-nav" }}
-<nav class="ws-nav" aria-label="Courier">
-  <div class="ws-nav__list">
-    <a class="ws-nav__link" href="/deliveries" {{ if eq .Title "My Deliveries" }}aria-current="page"{{ end }}>{{ icon "truck" }}My deliveries</a>
-    <a class="ws-nav__link" href="/messages" {{ if eq .Title "Messages" }}aria-current="page"{{ end }}>{{ icon "users" }}Messages</a>
-    <span class="ws-nav__sep" aria-hidden="true"></span>
-    <a class="ws-nav__link" href="/storefront">{{ icon "external" }}Storefront</a>
-  </div>
-</nav>
+{{ define "partner-nav" }}{{ template "ws-nav" dict "Label" "Partner" "Page" . "Kind" "partner" "HasMore" true }}{{ end }}
+{{ define "partner-links" }}{{ $p := .Page }}{{ $m := .Mode }}{{ $partner := eq (field $p "Role") "partner" }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/dashboard" "Icon" "dashboard" "Label" "Overview" "Cur" (eq $p.Title "Partner Dashboard") }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/orders" "Icon" "orders" "Label" "Orders" "Cur" (eq $p.Title "Partner Orders") }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/products" "Icon" "box" "Label" "Products" "Cur" (eq $p.Title "Partner Products") }}
+{{ if $partner }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/messages" "Icon" "users" "Label" "Messages" "Cur" (eq $p.Title "Messages") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/service-bookings" "Icon" "orders" "Label" "Appointments" "Cur" (eq $p.Title "Appointment Requests") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/services" "Icon" "store" "Label" "Services" "Cur" (eq $p.Title "Services") }}
+{{ end }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/products/new" "Icon" "plus" "Label" "Add product" "Cur" (eq $p.Title "Add Product") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/setup" "Icon" "settings" "Label" "Store" "Cur" (eq $p.Title "Store Setup") }}
+{{ template "ws-link" dict "Mode" $m "Group" "m" "Href" "/storefront" "Icon" "external" "Label" "Storefront" "Cur" false }}
+{{ end }}
+
+{{ define "courier-nav" }}{{ template "ws-nav" dict "Label" "Courier" "Page" . "Kind" "courier" "HasMore" false }}{{ end }}
+{{ define "courier-links" }}{{ $p := .Page }}{{ $m := .Mode }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/deliveries" "Icon" "truck" "Label" "My deliveries" "Cur" (eq $p.Title "My Deliveries") }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/messages" "Icon" "users" "Label" "Messages" "Cur" (eq $p.Title "Messages") }}
+{{ template "ws-link" dict "Mode" $m "Group" "p" "Href" "/storefront" "Icon" "external" "Label" "Storefront" "Cur" false }}
 {{ end }}

@@ -45,7 +45,7 @@
 
 {{/* dict: Tag (admin, partner, workspace) and Page (the page data). */}}
 {{ define "workspace-header" }}
-<header class="bar">
+<header class="bar{{ if ne .Tag "workspace" }} bar--ws{{ end }}">
   <div class="container bar__inner">
     <a class="brand brand--bar" href="/" aria-label="sokomoko {{ .Tag }}">{{ template "brand" . }}<span class="brand__tag">{{ .Tag }}</span></a>
     <div class="bar__actions">
