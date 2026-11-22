@@ -117,7 +117,13 @@ func Services(a *app.App, own bool) http.HandlerFunc {
 		}
 		page := pageParamBounded(r, 1000)
 		data := servicePage{Title: "Services", Viewer: viewerFromRequest(r), CSRFToken: a.Auth.CSRFToken(r), Categories: serviceCategories}
-		data.Filter = directorysvc.ServiceFilter{Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), Limit: 24}
+		data.Filter = directorysvc.ServiceFilter{
+			Query:        sanitizeSearchInput(r.URL.Query().Get("q")),
+			Category:     sanitizeSearchInput(r.URL.Query().Get("category")),
+			Area:         sanitizeSearchInput(r.URL.Query().Get("area")),
+			DeliveryMode: sanitizeSearchInput(r.URL.Query().Get("delivery_mode")),
+			Limit:        24,
+		}
 		var total int
 		var err error
 		if own {

@@ -246,6 +246,24 @@ func TestCatalogEndpoints(t *testing.T) {
 		if errBody := decodeErrEnvelope(t, errRec); errBody.Code != "search_unavailable" {
 			t.Fatalf("error code = %q; want search_unavailable", errBody.Code)
 		}
+
+		for _, rawURL := range []string{
+			apiPrefix + "/catalog/search?q=%00",
+			apiPrefix + "/catalog/search?q=lamp%00",
+			apiPrefix + "/catalog/search?q=%FF",
+			apiPrefix + "/catalog/search?q=%C3%28",
+			apiPrefix + "/catalog/search?category=%00",
+			apiPrefix + "/catalog/search?category=%FF",
+		} {
+			badRec := httptest.NewRecorder()
+			h.catalogSearch(badRec, httptest.NewRequest(http.MethodGet, rawURL, nil))
+			if badRec.Code != http.StatusBadRequest {
+				t.Fatalf("%s status = %d; want 400", rawURL, badRec.Code)
+			}
+			if errBody := decodeErrEnvelope(t, badRec); errBody.Code != "invalid_query" {
+				t.Fatalf("%s error code = %q; want invalid_query", rawURL, errBody.Code)
+			}
+		}
 	})
 
 	t.Run("catalogProduct maps invalid slug, missing, and valid product", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
@@ -45,8 +46,14 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	category := strings.TrimSpace(r.URL.Query().Get("category"))
+	rawQuery := r.URL.Query().Get("q")
+	rawCategory := r.URL.Query().Get("category")
+	if !isValidSearchText(rawQuery) || !isValidSearchText(rawCategory) {
+		writeError(w, http.StatusBadRequest, "invalid_query", "Search query must be valid UTF-8 without NUL bytes")
+		return
+	}
+	query := strings.TrimSpace(rawQuery)
+	category := strings.TrimSpace(rawCategory)
 	if query == "" && category == "" {
 		writeData(w, http.StatusOK, catalogListDTO{Items: []productDTO{}, Page: 1, Limit: defaultPageSize, Total: 0})
 		return
@@ -91,6 +98,10 @@ func (h *Handler) catalogProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	writeData(w, http.StatusOK, mapProduct(*product))
+}
+
+func isValidSearchText(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, '\x00')
 }
 
 func pageParams(r *http.Request) (int, int) {

@@ -199,8 +199,8 @@ func Search(a *app.App) http.HandlerFunc {
 			methodNotAllowed(w, http.MethodGet, http.MethodHead)
 			return
 		}
-		query := strings.TrimSpace(r.URL.Query().Get("q"))
-		category := strings.TrimSpace(r.URL.Query().Get("category"))
+		query := sanitizeSearchInput(r.URL.Query().Get("q"))
+		category := sanitizeSearchInput(r.URL.Query().Get("category"))
 		if strings.EqualFold(category, catalogsvc.AllCategories) || strings.EqualFold(category, "all") {
 			category = ""
 		}
@@ -263,6 +263,12 @@ func CategoriesAPI(a *app.App) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "public, max-age=60")
 		app.JSON(w, http.StatusOK, map[string]any{"categories": out})
 	}
+}
+
+func sanitizeSearchInput(s string) string {
+	s = strings.ToValidUTF8(s, "")
+	s = strings.ReplaceAll(s, "\x00", "")
+	return strings.TrimSpace(s)
 }
 
 func serverError(w http.ResponseWriter, r *http.Request) {

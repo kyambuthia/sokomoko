@@ -66,7 +66,15 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, total, err := h.app.Directory.Browse(r.Context(), directorysvc.ServiceFilter{PartnerID: partnerID, Query: r.URL.Query().Get("q"), Category: r.URL.Query().Get("category"), Area: r.URL.Query().Get("area"), DeliveryMode: r.URL.Query().Get("delivery_mode"), HasHours: hasHours, Lat: lat, Lng: lng, RadiusKM: radiusKM, Limit: limit}, page)
+	q := r.URL.Query().Get("q")
+	category := r.URL.Query().Get("category")
+	area := r.URL.Query().Get("area")
+	deliveryMode := r.URL.Query().Get("delivery_mode")
+	if !isValidSearchText(q) || !isValidSearchText(category) || !isValidSearchText(area) || !isValidSearchText(deliveryMode) {
+		writeError(w, http.StatusBadRequest, "invalid_query", "Search query must be valid UTF-8 without NUL bytes")
+		return
+	}
+	items, total, err := h.app.Directory.Browse(r.Context(), directorysvc.ServiceFilter{PartnerID: partnerID, Query: q, Category: category, Area: area, DeliveryMode: deliveryMode, HasHours: hasHours, Lat: lat, Lng: lng, RadiusKM: radiusKM, Limit: limit}, page)
 	if err != nil {
 		writeServiceError(w, err)
 		return
