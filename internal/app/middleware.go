@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/kyambuthia/sokomoko/internal/auth"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -100,9 +102,76 @@ func RequestLogger() Middleware {
 				slog.Int("status", rec.status),
 				slog.Duration("duration", time.Since(start)),
 				slog.String("request_id", RequestIDFromContext(r.Context())),
+				slog.String("client_kind", ClassifyClientKind(r)),
 			)
 		})
 	}
+}
+
+// ClassifyClientKind maps an HTTP request to a bounded client_kind label
+// (agent_token, browser, api_client, crawler) for logs and metrics.
+func ClassifyClientKind(r *http.Request) string {
+	if r == nil {
+		return ClientKindBrowser
+	}
+	if auth.GetAPITokenFromContext(r.Context()) != nil || hasSMKBearerHeader(r) {
+		return ClientKindAgentToken
+	}
+	ua := strings.ToLower(strings.TrimSpace(r.Header.Get("User-Agent")))
+	if isCrawlerUserAgent(ua) {
+		return ClientKindCrawler
+	}
+	if isAPIClientRequest(r, ua) {
+		return ClientKindAPIClient
+	}
+	return ClientKindBrowser
+}
+
+func hasSMKBearerHeader(r *http.Request) bool {
+	for _, raw := range r.Header.Values("Authorization") {
+		scheme, rest, ok := strings.Cut(strings.TrimSpace(raw), " ")
+		if ok && strings.EqualFold(scheme, "Bearer") && strings.HasPrefix(strings.TrimSpace(rest), "smk_") {
+			return true
+		}
+	}
+	return false
+}
+
+func isCrawlerUserAgent(ua string) bool {
+	if ua == "" {
+		return false
+	}
+	for _, marker := range []string{
+		"bot", "crawler", "spider", "slurp",
+		"facebookexternalhit", "anthropic-ai",
+	} {
+		if strings.Contains(ua, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAPIClientRequest(r *http.Request, ua string) bool {
+	for _, marker := range []string{
+		"curl/", "wget/", "httpie/", "python-requests/", "python-httpx/",
+		"httpx/", "go-http-client/", "aiohttp/", "okhttp/", "axios/",
+		"node-fetch/", "undici", "postmanruntime/", "insomnia/",
+	} {
+		if strings.Contains(ua, marker) {
+			return true
+		}
+	}
+	hasBrowserFetch := r.Header.Get("Sec-Fetch-Site") != "" ||
+		r.Header.Get("Sec-Fetch-Mode") != "" ||
+		strings.Contains(ua, "mozilla/")
+	if hasBrowserFetch {
+		return false
+	}
+	if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/") {
+		return true
+	}
+	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
 }
 
 const maxRequestLogFieldBytes = 256

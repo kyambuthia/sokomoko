@@ -14,16 +14,24 @@ import (
 
 const metricsSnapshotTTL = 5 * time.Second
 
+const (
+	ClientKindAgentToken = "agent_token"
+	ClientKindBrowser    = "browser"
+	ClientKindAPIClient  = "api_client"
+	ClientKindCrawler    = "crawler"
+)
+
 var (
-	httpMetricMethods  = [...]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OTHER"}
-	httpMetricStatuses = [...]string{"1xx", "2xx", "3xx", "4xx", "5xx", "other"}
-	httpDurationBounds = [...]float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+	httpMetricMethods     = [...]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OTHER"}
+	httpMetricStatuses    = [...]string{"1xx", "2xx", "3xx", "4xx", "5xx", "other"}
+	httpMetricClientKinds = [...]string{ClientKindAgentToken, ClientKindBrowser, ClientKindAPIClient, ClientKindCrawler}
+	httpDurationBounds    = [...]float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 )
 
 // HTTPMetrics records bounded-cardinality request totals and latency for scraping.
 type HTTPMetrics struct {
 	startedAt       time.Time
-	requests        [len(httpMetricMethods)][len(httpMetricStatuses)]atomic.Uint64
+	requests        [len(httpMetricMethods)][len(httpMetricStatuses)][len(httpMetricClientKinds)]atomic.Uint64
 	durationBuckets [len(httpDurationBounds) + 1]atomic.Uint64
 	durationNanos   atomic.Uint64
 	snapshotMu      sync.Mutex
@@ -47,11 +55,11 @@ func (m *HTTPMetrics) Middleware(next http.Handler) http.Handler {
 		started := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
-		m.record(r.Method, recorder.status, time.Since(started))
+		m.record(r.Method, recorder.status, ClassifyClientKind(r), time.Since(started))
 	})
 }
 
-func (m *HTTPMetrics) record(method string, status int, duration time.Duration) {
+func (m *HTTPMetrics) record(method string, status int, clientKind string, duration time.Duration) {
 	methodIndex := len(httpMetricMethods) - 1
 	for index, known := range httpMetricMethods[:len(httpMetricMethods)-1] {
 		if method == known {
@@ -65,7 +73,15 @@ func (m *HTTPMetrics) record(method string, status int, duration time.Duration) 
 	if statusClass >= 1 && statusClass <= 5 {
 		statusIndex = statusClass - 1
 	}
-	m.requests[methodIndex][statusIndex].Add(1)
+
+	clientKindIndex := 1 // default to browser
+	for index, known := range httpMetricClientKinds {
+		if clientKind == known {
+			clientKindIndex = index
+			break
+		}
+	}
+	m.requests[methodIndex][statusIndex][clientKindIndex].Add(1)
 
 	bucket := len(httpDurationBounds)
 	seconds := duration.Seconds()
@@ -144,12 +160,14 @@ func (m *HTTPMetrics) cachedExposition() string {
 
 func (m *HTTPMetrics) exposition() string {
 	var body strings.Builder
-	fmt.Fprintln(&body, "# HELP sokomoko_http_requests_total Completed HTTP requests by bounded method and status class.")
+	fmt.Fprintln(&body, "# HELP sokomoko_http_requests_total Completed HTTP requests by bounded method, status class, and client kind.")
 	fmt.Fprintln(&body, "# TYPE sokomoko_http_requests_total counter")
 	for methodIndex, method := range httpMetricMethods {
 		for statusIndex, status := range httpMetricStatuses {
-			fmt.Fprintf(&body, "sokomoko_http_requests_total{method=%q,status_class=%q} %d\n",
-				method, status, m.requests[methodIndex][statusIndex].Load())
+			for kindIndex, clientKind := range httpMetricClientKinds {
+				fmt.Fprintf(&body, "sokomoko_http_requests_total{method=%q,status_class=%q,client_kind=%q} %d\n",
+					method, status, clientKind, m.requests[methodIndex][statusIndex][kindIndex].Load())
+			}
 		}
 	}
 
