@@ -1,4 +1,5 @@
 import { api, busy, csrfToken } from "./core.js";
+import { parseLocationPin } from "./osm-map.js";
 
 // The server-rendered forms remain usable without JavaScript. This component
 // adds polling and sends replies without replacing the reader's current page.
@@ -161,10 +162,41 @@ export class UIMessages extends HTMLElement {
     time.dateTime = message.created_at;
     time.textContent = new Date(message.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
     meta.append(sender, time);
-    const body = document.createElement("p");
-    body.className = "chat-message__body";
-    body.textContent = message.body;
-    node.append(meta, body);
+    const pin = parseLocationPin(message.body);
+    if (pin) {
+      const card = document.createElement("div");
+      card.className = "chat-location stack-sm";
+      const map = document.createElement("ui-osm-map");
+      map.setAttribute("lat", pin.lat.toFixed(6));
+      map.setAttribute("lng", pin.lng.toFixed(6));
+      map.setAttribute("zoom", "16");
+      map.setAttribute("readonly", "");
+      const info = document.createElement("div");
+      info.className = "row-between";
+      const coords = document.createElement("span");
+      coords.className = "tiny muted";
+      coords.textContent = `${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)}`;
+      const link = document.createElement("a");
+      link.className = "btn btn-secondary btn-sm";
+      link.href = pin.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Open in OpenStreetMap";
+      info.append(coords, link);
+      card.append(map, info);
+      if (pin.note) {
+        const note = document.createElement("p");
+        note.className = "small";
+        note.textContent = pin.note;
+        card.append(note);
+      }
+      node.append(meta, card);
+    } else {
+      const body = document.createElement("p");
+      body.className = "chat-message__body";
+      body.textContent = message.body;
+      node.append(meta, body);
+    }
     if (message.can_report) node.append(this.reportForm(message.id));
     return node;
   }

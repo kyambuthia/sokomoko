@@ -218,9 +218,29 @@
   <form class="chat-composer" data-encrypted-compose hidden>
    <label class="sr-only" for="encrypted-body">Your message</label>
    <textarea class="input chat-composer__input" id="encrypted-body" rows="1" required maxlength="4000" placeholder="Encrypted message" aria-describedby="encrypted-body-help"></textarea>
+   <button class="btn btn-secondary btn-icon chat-composer__pin" type="button" data-location-open aria-label="Send delivery location pin" title="Send delivery location pin">{{ icon "map-pin" }}</button>
    <button class="btn btn-icon chat-composer__send" type="submit" aria-label="Send encrypted message">{{ icon "send" }}</button>
    <p class="chat-composer__hint" id="encrypted-body-help">Only approved recipient devices can decrypt this message.<span class="desktop-only"> Enter sends · Shift+Enter adds a line.</span></p>
   </form>
+  <dialog class="osm-picker" data-location-dialog aria-label="Choose delivery location">
+   <div class="stack">
+    <div class="row-between">
+     <strong>Delivery location pin</strong>
+     <button type="button" class="btn btn-icon btn-sm" data-location-close aria-label="Close">{{ icon "x" }}</button>
+    </div>
+    <p class="tiny muted">Drag to pan, tap or click on the map to drop the pin, or use your current location.</p>
+    <ui-osm-map lat="-1.286389" lng="36.817223" zoom="15"></ui-osm-map>
+    <p class="tiny muted" data-location-coords>-1.286389, 36.817223</p>
+    <div class="field">
+     <label class="label" for="location-note">Delivery note <span class="muted">(optional)</span></label>
+     <input class="input" id="location-note" maxlength="200" placeholder="Gate, landmark, or instructions" data-location-note>
+    </div>
+    <div class="row-between">
+     <button type="button" class="btn btn-secondary" data-location-close>Cancel</button>
+     <button type="button" class="btn" data-location-send>{{ icon "map-pin" }}Send location pin</button>
+    </div>
+   </div>
+  </dialog>
  </div>
  {{ end }}
  </div>

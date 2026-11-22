@@ -1,5 +1,6 @@
 import { api } from "./core.js";
 import { EncryptedStore, cryptoOperation, randomID, signedRequest } from "./encrypted-store.js";
+import { formatLocationPin, parseLocationPin } from "./osm-map.js";
 
 const textNode=(tag,text,cls)=>{const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;};
 const groupID=(conversation,s)=>`sokomoko:${conversation}:${s.id}:${s.roster_hash}`;
@@ -21,6 +22,30 @@ export class UIEncryptedChat extends HTMLElement {
   this.querySelector("[data-enroll]").addEventListener("click",()=>this.task(()=>this.enroll()),options);
   this.querySelector("[data-trust-roster]")?.addEventListener("click",()=>this.task(()=>this.trust()),options);
   this.querySelector("[data-encrypted-compose]")?.addEventListener("submit",e=>{e.preventDefault();this.task(()=>this.send());},options);
+  const locDialog=this.querySelector("[data-location-dialog]");
+  const locMap=locDialog?.querySelector("ui-osm-map");
+  const locCoords=locDialog?.querySelector("[data-location-coords]");
+  const locNote=locDialog?.querySelector("[data-location-note]");
+  this.querySelector("[data-location-open]")?.addEventListener("click",()=>{
+   if(!locDialog)return;
+   locDialog.showModal();
+   locMap?.refresh();
+  },options);
+  locDialog?.addEventListener("click",e=>{
+   if(e.target===locDialog||e.target.closest("[data-location-close]"))locDialog.close();
+  },options);
+  locMap?.addEventListener("change",e=>{
+   if(locCoords)locCoords.textContent=`${e.detail.lat.toFixed(6)}, ${e.detail.lng.toFixed(6)}`;
+  },options);
+  this.querySelector("[data-location-send]")?.addEventListener("click",()=>{
+   if(!locMap)return;
+   const pinText=formatLocationPin(locMap.lat,locMap.lng,locNote?.value||"");
+   this.task(async()=>{
+    await this.sendText(pinText);
+    if(locNote)locNote.value="";
+    locDialog?.close();
+   });
+  },options);
   const encInput=this.querySelector("#encrypted-body");
   if(encInput){
    const resize=()=>{encInput.style.height="auto";encInput.style.height=Math.min(encInput.scrollHeight,180)+"px";};
@@ -196,7 +221,13 @@ export class UIEncryptedChat extends HTMLElement {
   return response.session;
  }
  async send(){
-  const input=this.querySelector("#encrypted-body");const text=input.value.trim();if(!text||Array.from(text).length>4000||new TextEncoder().encode(text).length>16000)throw new Error("Use a message of 1–4,000 characters.");
+  const input=this.querySelector("#encrypted-body");const text=input.value.trim();
+  await this.sendText(text);
+  input.value="";
+  input.style.height="auto";
+ }
+ async sendText(rawText){
+  const text=String(rawText||"").trim();if(!text||Array.from(text).length>4000||new TextEncoder().encode(text).length>16000)throw new Error("Use a message of 1–4,000 characters.");
   await this.store.locked(async(data,save)=>{
    const resumed=data.outbox?.text===text;await this.flush(data,save);if(resumed)return;await this.thread(data,save);const s=await this.session(data,save);
    // A self-update contributes fresh entropy before each application message.
@@ -209,7 +240,7 @@ export class UIEncryptedChat extends HTMLElement {
    previousState=data.state;
    const result=await cryptoOperation(data.state,"send",{group:groupID(this.conversation,s),text});verifyMembers(result,s.roster);data.state=result.state;
    await this.enqueue(data,save,"send",{conversation_id:this.conversation,session_id:s.id,roster_hash:s.roster_hash,kind:"message",after:data.last?.[s.id]||0,ciphertext:result.message},{text,sessionID:s.id,previousState});
-  });input.value="";await this.refresh();
+  });await this.refresh();
  }
  renderHistory(messages){
   const stamp=`${messages.length}:${messages.at(-1)?.id||0}`;
@@ -218,7 +249,22 @@ export class UIEncryptedChat extends HTMLElement {
   for(const m of messages){
    const li=textNode("li","",`chat-message${m.mine?" chat-message--mine":""}`);
    const meta=textNode("div","","chat-message__meta");meta.append(textNode("strong",`@${m.sender}`),textNode("time",new Date(m.time).toLocaleString()));
-   li.append(meta,textNode("p",m.body,"chat-message__body"));
+   const pin=parseLocationPin(m.body);
+   if(pin){
+    const card=textNode("div","","chat-location stack-sm");
+    const map=document.createElement("ui-osm-map");
+    map.setAttribute("lat",pin.lat.toFixed(6));map.setAttribute("lng",pin.lng.toFixed(6));map.setAttribute("zoom","16");map.setAttribute("readonly","");
+    const info=textNode("div","","row-between");
+    info.append(textNode("span",`${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)}`,"tiny muted"));
+    const link=textNode("a","Open in OpenStreetMap","btn btn-secondary btn-sm");
+    link.href=pin.url;link.target="_blank";link.rel="noopener noreferrer";
+    info.append(link);
+    card.append(map,info);
+    if(pin.note)card.append(textNode("p",pin.note,"small"));
+    li.append(meta,card);
+   }else{
+    li.append(meta,textNode("p",m.body,"chat-message__body"));
+   }
    if(m.reportable){const details=document.createElement("details");details.append(textNode("summary","Report"));
     const form=document.createElement("form");form.className="stack-sm";form.append(textNode("p","Reporting will disclose the text shown above to moderators. This is a recipient-provided disclosure, not independent proof of authorship.","tiny"));
     const label=textNode("label","Reason");const select=document.createElement("select");select.className="select";

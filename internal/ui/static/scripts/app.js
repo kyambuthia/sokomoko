@@ -13,6 +13,7 @@ import { UISplatViewer } from "./ui/splat-viewer.js";
 import { UIThemeToggle } from "./ui/theme-toggle.js";
 import { UIEncryptedChat } from "./ui/encrypted-chat.js";
 import { UIMessages } from "./ui/messages.js";
+import { UIOsmMap } from "./ui/osm-map.js";
 import { UICategoryNav, UICharCounter, UICopy, UICountdown, UIRelativeTime, UITableFilter } from "./ui/widgets.js";
 
 const components = {
@@ -29,6 +30,7 @@ const components = {
   "ui-messages": UIMessages,
  "ui-encrypted-chat": UIEncryptedChat,
   "ui-order-progress": UIOrderProgress,
+  "ui-osm-map": UIOsmMap,
   "ui-password": UIPassword,
   "ui-payment-status": UIPaymentStatus,
   "ui-quantity": UIQuantity,

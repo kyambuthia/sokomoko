@@ -1562,3 +1562,65 @@ ui-encrypted-chat { display: block; }
 ui-encrypted-chat [data-devices] { padding-top: 1rem; }
 ui-encrypted-chat [data-roster] { overflow-wrap: anywhere; }
 ui-encrypted-chat .device-fingerprint { font-size: .75rem; overflow-wrap: anywhere; }
+
+/* OpenStreetMap pin picker and chat location cards ------------------------ */
+
+.osm-map {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 220px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--fill);
+  touch-action: none;
+  user-select: none;
+}
+.osm-map:not([readonly]) { cursor: grab; height: 280px; }
+.osm-map:not([readonly]):active { cursor: grabbing; }
+.osm-map__tiles { position: absolute; inset: 0; pointer-events: none; }
+.osm-map__tiles img { position: absolute; width: 256px; height: 256px; max-width: none; }
+.osm-map__pin {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  margin: -20px 0 0 -10px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--fg);
+  border: 2px solid var(--bg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
+.osm-map__pin::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.osm-map__controls {
+  position: absolute;
+  top: var(--s2);
+  left: var(--s2);
+  z-index: 2;
+  display: flex;
+  gap: var(--s1);
+  flex-wrap: wrap;
+}
+.osm-map__controls .btn { background: var(--bg); }
+.osm-map__attr {
+  position: absolute;
+  right: var(--s2);
+  bottom: var(--s1);
+  z-index: 2;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--fg-2);
+  font-size: 10px;
+  text-decoration: none;
+}
+.osm-picker { width: min(32rem, calc(100vw - var(--s4))); }
+.chat-location { width: min(20rem, 100%); }
