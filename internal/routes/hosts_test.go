@@ -45,3 +45,16 @@ func TestRedirectToSibling(t *testing.T) {
 		t.Fatalf("POST got %d, want 405", rec.Code)
 	}
 }
+
+func TestSiblingURLWithProxyTrust(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/deliveries", nil)
+	r.Host = "admin.shop.example"
+	r.Header.Set("X-Forwarded-Proto", "https")
+
+	if got := siblingURLWithProxyTrust(r, courierHostPrefix, "/login", false); got != "http://courier.shop.example/login" {
+		t.Fatalf("untrusted proxy got %q, want http://courier.shop.example/login", got)
+	}
+	if got := siblingURLWithProxyTrust(r, courierHostPrefix, "/login", true); got != "https://courier.shop.example/login" {
+		t.Fatalf("trusted proxy got %q, want https://courier.shop.example/login", got)
+	}
+}

@@ -217,6 +217,36 @@ func TestAdminSetup_CreatesAdminOnce(t *testing.T) {
 	}
 }
 
+func TestAdminSetup_RejectsSetupTokenInQueryString(t *testing.T) {
+	clearAuthTables()
+	tmpl := template.Must(template.New("x").Parse(`{{define "root_template"}}{{.Error}}|{{.Message}}{{end}}`))
+	svc := newTestService(Config{AdminSetupToken: "setup-secret"})
+	handler := svc.AdminSetup(tmpl)
+
+	getQuery := httptest.NewRequest(http.MethodGet, "/setup?setup_token=setup-secret", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, getQuery)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("GET with query setup_token status=%d, want 403", rr.Code)
+	}
+
+	postQuery := httptest.NewRequest(http.MethodPost, "/setup?setup_token=setup-secret", strings.NewReader("admin_username=a"))
+	postQuery.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, postQuery)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("POST with query setup_token status=%d, want 403", rr.Code)
+	}
+
+	getHeader := httptest.NewRequest(http.MethodGet, "/setup", nil)
+	getHeader.Header.Set("X-Admin-Setup-Token", "setup-secret")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, getHeader)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET with X-Admin-Setup-Token header status=%d, want 200", rr.Code)
+	}
+}
+
 func TestDispatchPasswordResetEmail_RetriesTransientFailures(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

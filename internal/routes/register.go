@@ -102,7 +102,7 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	adminHandlers.HandleFunc("/products", AdminProducts(a))
 	adminHandlers.Handle("/orders", demoReadOnly(a, "/orders", http.HandlerFunc(AdminOrders(a))))
 	adminHandlers.HandleFunc("/reports", AdminReports(a))
-	adminHandlers.Handle("/deliveries", demoReadOnly(a, "/deliveries", http.HandlerFunc(AdminDeliveries(a))))
+	adminHandlers.Handle("/deliveries", demoReadOnly(a, "/deliveries", http.HandlerFunc(AdminDeliveriesWithProxyTrust(a, trustProxyHeaders))))
 	adminHandlers.Handle("/categories", demoReadOnly(a, "/categories", http.HandlerFunc(AdminCategories(a))))
 	adminHandlers.Handle("/audit", auth.RequireRole(domain.RoleAdmin, http.HandlerFunc(AdminAudit(a))))
 	adminHandlers.Handle("/team", demoReadOnly(a, "/team", auth.RequireRole(domain.RoleAdmin, http.HandlerFunc(AdminTeam(a)))))

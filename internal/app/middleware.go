@@ -210,7 +210,7 @@ func canonicalHost(host string) string {
 		return host
 	}
 	parsed, err := url.Parse("//" + host)
-	if err != nil {
+	if err != nil || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return ""
 	}
 	return parsed.Hostname()

@@ -11,6 +11,10 @@ import (
 const adminDeliveriesPageSize = 50 // Pending deliveries shown on each admin page.
 
 func AdminDeliveries(a *app.App) http.HandlerFunc {
+	return AdminDeliveriesWithProxyTrust(a, false)
+}
+
+func AdminDeliveriesWithProxyTrust(a *app.App, trustProxyHeaders bool) http.HandlerFunc {
 	svc := a.Admin
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +83,7 @@ func AdminDeliveries(a *app.App) http.HandlerFunc {
 		page.DeliveriesPager = newPager(r, displayPage, adminDeliveriesPageSize, total)
 		page.Dispatch = dispatch
 		page.DispatchError = dispatchError
-		page.CourierHostURL = siblingURL(r, courierHostPrefix, "/login")
+		page.CourierHostURL = siblingURLWithProxyTrust(r, courierHostPrefix, "/login", trustProxyHeaders)
 		if flash := popFlash(w, r); flash.Message != "" {
 			if flash.Kind == "danger" {
 				page.DispatchError = flash.Message

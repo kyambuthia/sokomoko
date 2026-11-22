@@ -44,8 +44,8 @@ func (s *Service) validAdminSetupToken(r *http.Request) bool {
 	}
 
 	provided := strings.TrimSpace(r.Header.Get("X-Admin-Setup-Token"))
-	if provided == "" {
-		provided = strings.TrimSpace(r.FormValue("setup_token"))
+	if provided == "" && r.Method == http.MethodPost {
+		provided = strings.TrimSpace(r.PostFormValue("setup_token"))
 	}
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }

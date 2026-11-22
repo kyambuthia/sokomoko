@@ -70,6 +70,17 @@ func TestCanonicalHost(t *testing.T) {
 	if got := CanonicalHost("Admin.Localhost:6969"); got != "admin.localhost" {
 		t.Fatalf("expected admin.localhost, got %q", got)
 	}
+	for _, bad := range []string{
+		"user@evil.example",
+		"user:pass@evil.example:8080",
+		"evil.example/path",
+		"evil.example?query=1",
+		"evil.example#frag",
+	} {
+		if got := CanonicalHost(bad); got != "" {
+			t.Fatalf("CanonicalHost(%q) = %q, want empty", bad, got)
+		}
+	}
 }
 
 func TestSecurityHeaders(t *testing.T) {
