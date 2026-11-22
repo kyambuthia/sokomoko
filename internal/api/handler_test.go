@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 )
@@ -288,4 +289,35 @@ func TestCatalogEndpoints(t *testing.T) {
 			t.Fatalf("unexpected product DTO: %+v", dto)
 		}
 	})
+}
+
+func TestDemoMode_CheckoutRequiresAuthAndWriteGuardBlocksMutations(t *testing.T) {
+	h := &Handler{app: &app.App{DemoMode: true, Auth: &auth.Service{}}}
+
+	mux := http.NewServeMux()
+	Register(h.app, mux)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, apiPrefix+"/checkout", nil)
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated demo checkout status = %d; want 401", rec.Code)
+	}
+
+	called := false
+	guarded := h.demoWriteDisabled(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	getRec := httptest.NewRecorder()
+	guarded.ServeHTTP(getRec, httptest.NewRequest(http.MethodGet, apiPrefix+"/partner/services", nil))
+	if !called || getRec.Code != http.StatusOK {
+		t.Fatalf("GET demoWriteDisabled called=%v status=%d; want true/200", called, getRec.Code)
+	}
+
+	called = false
+	postRec := httptest.NewRecorder()
+	guarded.ServeHTTP(postRec, httptest.NewRequest(http.MethodPost, apiPrefix+"/partner/services", nil))
+	if called || postRec.Code != http.StatusForbidden {
+		t.Fatalf("POST demoWriteDisabled called=%v status=%d; want false/403", called, postRec.Code)
+	}
 }
