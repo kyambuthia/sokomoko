@@ -86,7 +86,10 @@ func (h *Handler) adminProducts(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	products, total, err := h.app.Admin.ProductsPage(r.Context(), page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load products")
@@ -109,7 +112,10 @@ func (h *Handler) adminOrdersList(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	orders, total, err := h.app.Admin.OrdersPage(r.Context(), page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load orders")
@@ -179,7 +185,10 @@ func (h *Handler) adminTeamList(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	members, total, err := h.app.Admin.TeamMembers(r.Context(), r.URL.Query().Get("q"), page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load team")

@@ -21,7 +21,10 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	partnerID := 0
 	if raw := r.URL.Query().Get("partner_id"); raw != "" {
 		var err error
@@ -96,7 +99,10 @@ func (h *Handler) serviceDetail(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ownServices(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		page, limit := pageParams(r)
+		page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 		items, total, err := h.app.Directory.OwnByState(r.Context(), serviceActor(r), r.URL.Query().Get("state"), page, limit)
 		if err != nil {
 			writeServiceError(w, err)

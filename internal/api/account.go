@@ -70,7 +70,10 @@ func (h *Handler) accountOrders(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	orders, total, err := h.app.Account.OrdersForUserPage(r.Context(), uid, page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "orders_unavailable", "Unable to load orders")

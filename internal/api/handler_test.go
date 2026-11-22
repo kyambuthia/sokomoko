@@ -221,6 +221,21 @@ func TestCatalogEndpoints(t *testing.T) {
 		if data.Total != 1 || len(data.Items) != 1 || data.Items[0].Slug != "brass-lamp" || data.Items[0].PriceMinor != 1500 {
 			t.Fatalf("unexpected catalog list DTO: %+v", data)
 		}
+
+		for _, badURL := range []string{
+			apiPrefix + "/catalog/products?page=abc",
+			apiPrefix + "/catalog/products?limit=xyz",
+			apiPrefix + "/catalog/products?page=1.5",
+		} {
+			badRec := httptest.NewRecorder()
+			h.catalogProducts(badRec, httptest.NewRequest(http.MethodGet, badURL, nil))
+			if badRec.Code != http.StatusBadRequest {
+				t.Fatalf("%s status = %d; want 400", badURL, badRec.Code)
+			}
+			if errBody := decodeErrEnvelope(t, badRec); errBody.Code != "invalid_pagination" {
+				t.Fatalf("%s error code = %q; want invalid_pagination", badURL, errBody.Code)
+			}
+		}
 	})
 
 	t.Run("catalogSearch short-circuits empty query and handles errors", func(t *testing.T) {

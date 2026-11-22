@@ -25,7 +25,10 @@ func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	products, total, err := h.app.Catalog.Page(r.Context(), page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load products")
@@ -58,7 +61,10 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 		writeData(w, http.StatusOK, catalogListDTO{Items: []productDTO{}, Page: 1, Limit: defaultPageSize, Total: 0})
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	products, total, err := h.app.Catalog.SearchPage(r.Context(), query, category, page, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search_unavailable", "Unable to search products")
@@ -104,9 +110,17 @@ func isValidSearchText(s string) bool {
 	return utf8.ValidString(s) && !strings.ContainsRune(s, '\x00')
 }
 
-func pageParams(r *http.Request) (int, int) {
-	page := parseQueryInt(r, "page", 1)
-	limit := parseQueryInt(r, "limit", defaultPageSize)
+func parsePageParams(w http.ResponseWriter, r *http.Request) (int, int, bool) {
+	page, ok := parseQueryInt(r, "page", 1)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_pagination", "page must be an integer")
+		return 0, 0, false
+	}
+	limit, ok := parseQueryInt(r, "limit", defaultPageSize)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_pagination", "limit must be an integer")
+		return 0, 0, false
+	}
 	if page < 1 {
 		page = 1
 	}
@@ -119,15 +133,19 @@ func pageParams(r *http.Request) (int, int) {
 	if limit > maxPageLimit {
 		limit = maxPageLimit
 	}
-	return page, limit
+	return page, limit, true
 }
 
-func parseQueryInt(r *http.Request, key string, fallback int) int {
-	value, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get(key)))
-	if err != nil {
-		return fallback
+func parseQueryInt(r *http.Request, key string, fallback int) (int, bool) {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return fallback, true
 	}
-	return value
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, false
+	}
+	return value, true
 }
 
 func (h *Handler) catalogCategories(w http.ResponseWriter, r *http.Request) {

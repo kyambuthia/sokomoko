@@ -101,7 +101,10 @@ func (h *Handler) partnerDashboard(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		page, limit := pageParams(r)
+		page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 		data, total, err := h.app.Partner.ProductsPageForActor(r.Context(), partnerActor(r), page, limit)
 		if err != nil {
 			writePartnerError(w, err)
@@ -173,7 +176,10 @@ func (h *Handler) partnerOrdersList(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	data, total, err := h.app.Partner.OrdersPageForActor(r.Context(), partnerActor(r), strings.TrimSpace(r.URL.Query().Get("status")), page, limit)
 	if err != nil {
 		writePartnerError(w, err)

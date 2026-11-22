@@ -105,7 +105,10 @@ func (h *Handler) accountServiceBookings(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusForbidden, "forbidden", "A customer account is required")
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	if page > 1000 || (page-1)*limit > 50000 {
 		writeError(w, http.StatusBadRequest, "invalid_pagination", "Page must be between 1 and 1000")
 		return
@@ -132,7 +135,10 @@ func (h *Handler) partnerServiceBookings(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusForbidden, "forbidden", "A partner account is required")
 		return
 	}
-	page, limit := pageParams(r)
+	page, limit, ok := parsePageParams(w, r)
+	if !ok {
+		return
+	}
 	if page > 1000 || (page-1)*limit > 50000 {
 		writeError(w, http.StatusBadRequest, "invalid_pagination", "Page must be between 1 and 1000")
 		return
