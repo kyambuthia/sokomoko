@@ -152,6 +152,29 @@ func (h *Handler) catalogCategories(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, items)
 }
 
+func (h *Handler) catalogStores(w http.ResponseWriter, r *http.Request) {
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
+		return
+	}
+	stores, err := h.app.Catalog.ActiveStores(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load stores")
+		return
+	}
+	type storeSummaryDTO struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	items := make([]storeSummaryDTO, 0, len(stores))
+	for _, s := range stores {
+		items = append(items, storeSummaryDTO{ID: s.ID, Name: s.Name, Slug: s.Slug})
+	}
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	writeData(w, http.StatusOK, items)
+}
+
 func (h *Handler) catalogStore(w http.ResponseWriter, r *http.Request) {
 	w, ok := requireGetOrHead(w, r)
 	if !ok {

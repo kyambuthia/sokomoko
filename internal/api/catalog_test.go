@@ -13,10 +13,11 @@ import (
 
 type stubCatalogPlus struct {
 	mockCatalogService
-	categoriesFn  func(context.Context) ([]catalogsvc.Category, error)
-	activeStoreFn func(context.Context, string) (*catalogsvc.Partner, error)
-	browseFn      func(context.Context, catalogsvc.Filter) ([]catalogsvc.Product, error)
-	countFn       func(context.Context, catalogsvc.Filter) (int, error)
+	categoriesFn   func(context.Context) ([]catalogsvc.Category, error)
+	activeStoreFn  func(context.Context, string) (*catalogsvc.Partner, error)
+	activeStoresFn func(context.Context) ([]catalogsvc.Partner, error)
+	browseFn       func(context.Context, catalogsvc.Filter) ([]catalogsvc.Product, error)
+	countFn        func(context.Context, catalogsvc.Filter) (int, error)
 }
 
 func (s *stubCatalogPlus) Categories(ctx context.Context) ([]catalogsvc.Category, error) {
@@ -24,6 +25,12 @@ func (s *stubCatalogPlus) Categories(ctx context.Context) ([]catalogsvc.Category
 }
 func (s *stubCatalogPlus) ActiveStore(ctx context.Context, slug string) (*catalogsvc.Partner, error) {
 	return s.activeStoreFn(ctx, slug)
+}
+func (s *stubCatalogPlus) ActiveStores(ctx context.Context) ([]catalogsvc.Partner, error) {
+	if s.activeStoresFn != nil {
+		return s.activeStoresFn(ctx)
+	}
+	return nil, nil
 }
 func (s *stubCatalogPlus) Browse(ctx context.Context, f catalogsvc.Filter) ([]catalogsvc.Product, error) {
 	return s.browseFn(ctx, f)
@@ -43,6 +50,9 @@ func TestCatalogCategoriesAndStoreEndpoints(t *testing.T) {
 			}
 			return nil, nil
 		},
+		activeStoresFn: func(context.Context) ([]catalogsvc.Partner, error) {
+			return []catalogsvc.Partner{{ID: 1, Name: "Urban Goods", Slug: "urban-goods", ContactEmail: "secret@example.com"}}, nil
+		},
 		browseFn: func(context.Context, catalogsvc.Filter) ([]catalogsvc.Product, error) {
 			return []catalogsvc.Product{{ID: 1, Name: "Lamp", Slug: "lamp"}}, nil
 		},
@@ -55,6 +65,12 @@ func TestCatalogCategoriesAndStoreEndpoints(t *testing.T) {
 	mux.ServeHTTP(catRec, httptest.NewRequest(http.MethodGet, apiPrefix+"/catalog/categories", nil))
 	if catRec.Code != http.StatusOK || !strings.Contains(catRec.Body.String(), "electronics") {
 		t.Fatalf("categories status=%d body=%s", catRec.Code, catRec.Body.String())
+	}
+
+	storesRec := httptest.NewRecorder()
+	mux.ServeHTTP(storesRec, httptest.NewRequest(http.MethodGet, apiPrefix+"/catalog/stores", nil))
+	if storesRec.Code != http.StatusOK || !strings.Contains(storesRec.Body.String(), "urban-goods") || strings.Contains(storesRec.Body.String(), "secret@example.com") {
+		t.Fatalf("stores status=%d body=%s", storesRec.Code, storesRec.Body.String())
 	}
 
 	storeRec := httptest.NewRecorder()
@@ -73,6 +89,7 @@ func TestCatalogCategoriesAndStoreEndpoints(t *testing.T) {
 		apiPrefix + "/catalog/products",
 		apiPrefix + "/catalog/search",
 		apiPrefix + "/catalog/categories",
+		apiPrefix + "/catalog/stores",
 		apiPrefix + "/catalog/stores/urban-goods",
 	} {
 		headRec := httptest.NewRecorder()

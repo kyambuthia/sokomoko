@@ -15,6 +15,7 @@
     "/api/v1/catalog/products/{slug}": { "get": { "summary": "Get product by slug" } },
     "/api/v1/catalog/search": { "get": { "summary": "Search products" } },
     "/api/v1/catalog/categories": { "get": { "summary": "List categories" } },
+    "/api/v1/catalog/stores": { "get": { "summary": "List active public stores" } },
     "/api/v1/catalog/stores/{slug}": { "get": { "summary": "Get public store profile, products, and services" } },
     "/api/v1/catalog/services": { "get": { "summary": "List public services" } },
     "/api/v1/catalog/services/{slug}": { "get": { "summary": "Get service detail" } },

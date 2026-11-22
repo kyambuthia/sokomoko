@@ -15,6 +15,7 @@ type store interface {
 	ListProductsPage(context.Context, db.ProductFilter) ([]db.Product, int, error)
 	CountFilteredProducts(context.Context, db.ProductFilter) (int, error)
 	GetPartnerBySlug(context.Context, string) (*db.Partner, error)
+	ListPartners(context.Context) ([]db.Partner, error)
 }
 
 var _ store = (*db.Store)(nil)

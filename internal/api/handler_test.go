@@ -68,6 +68,9 @@ func (m *mockCatalogService) ProductCount(context.Context, catalogsvc.Filter) (i
 func (m *mockCatalogService) ActiveStore(context.Context, string) (*catalogsvc.Partner, error) {
 	return nil, nil
 }
+func (m *mockCatalogService) ActiveStores(context.Context) ([]catalogsvc.Partner, error) {
+	return nil, nil
+}
 
 func decodeEnvelope[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 	t.Helper()

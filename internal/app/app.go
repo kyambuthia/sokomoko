@@ -43,6 +43,7 @@ type CatalogService interface {
 	SearchPage(ctx context.Context, query, category string, page, limit int) ([]catalogsvc.Product, int, error)
 	ProductCount(ctx context.Context, filter catalogsvc.Filter) (int, error)
 	ActiveStore(ctx context.Context, slug string) (*catalogsvc.Partner, error)
+	ActiveStores(ctx context.Context) ([]catalogsvc.Partner, error)
 }
 
 type DirectoryService interface {

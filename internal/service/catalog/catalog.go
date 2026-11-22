@@ -150,6 +150,21 @@ func (s *Service) ActiveStore(ctx context.Context, slug string) (*db.Partner, er
 	return partner, nil
 }
 
+// ActiveStores returns all active public stores.
+func (s *Service) ActiveStores(ctx context.Context) ([]db.Partner, error) {
+	partners, err := s.store.ListPartners(ctx)
+	if err != nil {
+		return nil, err
+	}
+	active := make([]db.Partner, 0, len(partners))
+	for _, p := range partners {
+		if p.Status == "active" {
+			active = append(active, p)
+		}
+	}
+	return active, nil
+}
+
 // Search returns products matching query; a blank query matches nothing.
 func (s *Service) Search(ctx context.Context, query string) ([]Product, error) {
 	return s.SearchInCategory(ctx, query, "")

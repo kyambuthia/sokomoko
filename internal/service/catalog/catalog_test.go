@@ -19,6 +19,7 @@ type mockCatalogStore struct {
 	listProductsPageFn                 func(ctx context.Context, filter db.ProductFilter) ([]db.Product, int, error)
 	countFilteredProductsFn            func(ctx context.Context, filter db.ProductFilter) (int, error)
 	getPartnerBySlugFn                 func(ctx context.Context, slug string) (*db.Partner, error)
+	listPartnersFn                     func(ctx context.Context) ([]db.Partner, error)
 }
 
 func (m *mockCatalogStore) GetAllCategories(ctx context.Context) ([]db.Category, error) {
@@ -75,6 +76,31 @@ func (m *mockCatalogStore) GetPartnerBySlug(ctx context.Context, slug string) (*
 		return m.getPartnerBySlugFn(ctx, slug)
 	}
 	return nil, nil
+}
+
+func (m *mockCatalogStore) ListPartners(ctx context.Context) ([]db.Partner, error) {
+	if m.listPartnersFn != nil {
+		return m.listPartnersFn(ctx)
+	}
+	return nil, nil
+}
+
+func TestActiveStores(t *testing.T) {
+	svc := New(&mockCatalogStore{
+		listPartnersFn: func(context.Context) ([]db.Partner, error) {
+			return []db.Partner{
+				{ID: 1, Name: "Active Shop", Slug: "active-shop", Status: "active"},
+				{ID: 2, Name: "Paused Shop", Slug: "paused-shop", Status: "suspended"},
+			}, nil
+		},
+	})
+	stores, err := svc.ActiveStores(context.Background())
+	if err != nil {
+		t.Fatalf("ActiveStores() error = %v", err)
+	}
+	if len(stores) != 1 || stores[0].Slug != "active-shop" {
+		t.Fatalf("ActiveStores() = %+v, want only active-shop", stores)
+	}
 }
 
 func TestProductBySlug(t *testing.T) {

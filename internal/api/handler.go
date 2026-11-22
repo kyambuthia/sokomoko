@@ -58,6 +58,7 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix+"/catalog/products/", h.catalogProduct)
 	mux.HandleFunc(apiPrefix+"/catalog/search", h.catalogSearch)
 	mux.HandleFunc(apiPrefix+"/catalog/categories", h.catalogCategories)
+	mux.HandleFunc(apiPrefix+"/catalog/stores", h.catalogStores)
 	mux.HandleFunc(apiPrefix+"/catalog/stores/{slug}", h.catalogStore)
 
 	// Customer session and commerce APIs.
