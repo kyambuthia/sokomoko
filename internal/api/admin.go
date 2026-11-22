@@ -62,6 +62,7 @@ func (h *Handler) registerAdminRoutes(mux *http.ServeMux) {
 	mux.Handle(apiPrefix+"/admin/team", h.role(adminOnly, http.HandlerFunc(h.adminTeamList)))
 	mux.Handle(apiPrefix+"/admin/team/{id}", h.role(adminOnly, h.demoWriteDisabled(http.HandlerFunc(h.adminTeamDeactivate))))
 	mux.Handle(apiPrefix+"/admin/audit", h.role(adminOnly, http.HandlerFunc(h.adminAudit)))
+	h.registerAdminManagementRoutes(mux)
 }
 
 func (h *Handler) adminMetrics(w http.ResponseWriter, r *http.Request) {
