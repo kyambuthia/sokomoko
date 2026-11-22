@@ -79,7 +79,7 @@ func buildHostRouter(allowedHosts map[string]struct{}, mainMux, adminMux, partne
 			return
 		}
 		if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/") {
-			apiMux.ServeHTTP(w, r)
+			api.CORSMiddlewareWithScheme(allowedHosts, allowHTTPCORS, apiMux).ServeHTTP(w, r)
 			return
 		}
 		if strings.HasPrefix(host, "admin.") {

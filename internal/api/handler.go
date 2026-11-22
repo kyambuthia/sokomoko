@@ -45,11 +45,11 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}/availability", h.serviceAvailability)
 	mux.Handle(apiPrefix+"/services/{slug}/bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.createServiceBooking)))
 	mux.Handle(apiPrefix+"/account/service-bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.accountServiceBookings)))
-	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.demoWriteDisabled(h.role([]string{domain.RoleUser}, http.HandlerFunc(h.cancelServiceBooking))))
-	mux.Handle(apiPrefix+"/partner/services", h.demoWriteDisabled(h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownServices))))
-	mux.Handle(apiPrefix+"/partner/services/{id}", h.demoWriteDisabled(h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownService))))
+	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.role([]string{domain.RoleUser}, h.demoWriteDisabled(http.HandlerFunc(h.cancelServiceBooking))))
+	mux.Handle(apiPrefix+"/partner/services", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(http.HandlerFunc(h.ownServices))))
+	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(http.HandlerFunc(h.ownService))))
 	mux.Handle(apiPrefix+"/partner/service-bookings", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookings)))
-	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.demoWriteDisabled(h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookingAction))))
+	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(http.HandlerFunc(h.partnerServiceBookingAction))))
 
 	// Public catalog reads.
 	mux.HandleFunc(apiPrefix+"/catalog/products", h.catalogProducts)
@@ -75,16 +75,16 @@ func Register(a *app.App, mux *http.ServeMux) {
 		mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.checkoutSession)))
 	}
 	mux.Handle(apiPrefix+"/account/orders", h.authenticated(http.HandlerFunc(h.accountOrders)))
-	mux.Handle(apiPrefix+"/account/orders/", h.demoWriteDisabled(h.authenticated(http.HandlerFunc(h.accountOrder))))
+	mux.Handle(apiPrefix+"/account/orders/", h.authenticated(h.demoWriteDisabled(http.HandlerFunc(h.accountOrder))))
 
 	// Workspace APIs. Role checks are applied per resource so one mux can be
 	// used on storefront, admin, and partner hosts without duplicating routes.
 	h.registerAdminRoutes(mux)
 	h.registerPartnerRoutes(mux)
 	mux.Handle(apiPrefix+"/admin/deliveries", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierDeliveries)))
-	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.demoWriteDisabled(h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierAssign))))
+	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, h.demoWriteDisabled(http.HandlerFunc(h.adminCourierAssign))))
 	mux.Handle(apiPrefix+"/courier/deliveries", h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveries)))
-	mux.Handle(apiPrefix+"/courier/deliveries/", h.demoWriteDisabled(h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveryUpdate))))
+	mux.Handle(apiPrefix+"/courier/deliveries/", h.role([]string{domain.RoleCourier}, h.demoWriteDisabled(http.HandlerFunc(h.courierDeliveryUpdate))))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {

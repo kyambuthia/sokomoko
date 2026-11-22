@@ -72,13 +72,13 @@ type partnerDashboardDTO struct {
 func (h *Handler) registerPartnerRoutes(mux *http.ServeMux) {
 	partnerOps := []string{domain.RoleAdmin, domain.RoleStaff, domain.RolePartner}
 
-	mux.Handle(apiPrefix+"/partner/{$}", h.demoWriteDisabled(h.role(partnerOps, http.HandlerFunc(h.partnerDashboard))))
-	mux.Handle(apiPrefix+"/partner/dashboard", h.demoWriteDisabled(h.role(partnerOps, http.HandlerFunc(h.partnerDashboard))))
-	mux.Handle(apiPrefix+"/partner/products", h.demoWriteDisabled(h.role(partnerOps, http.HandlerFunc(h.partnerProducts))))
-	mux.Handle(apiPrefix+"/partner/products/{id}", h.demoWriteDisabled(h.role(partnerOps, http.HandlerFunc(h.partnerProductPatch))))
-	mux.Handle(apiPrefix+"/partner/orders", h.demoWriteDisabled(h.role(partnerOps, http.HandlerFunc(h.partnerOrdersList))))
-	mux.Handle(apiPrefix+"/partner/orders/{id}", h.demoWriteDisabled(h.role(partnerOps, http.HandlerFunc(h.partnerOrderUpdate))))
-	mux.Handle(apiPrefix+"/partner/settings", h.demoWriteDisabled(h.role(partnerOps, http.HandlerFunc(h.partnerSettings))))
+	mux.Handle(apiPrefix+"/partner/{$}", h.role(partnerOps, http.HandlerFunc(h.partnerDashboard)))
+	mux.Handle(apiPrefix+"/partner/dashboard", h.role(partnerOps, http.HandlerFunc(h.partnerDashboard)))
+	mux.Handle(apiPrefix+"/partner/products", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerProducts))))
+	mux.Handle(apiPrefix+"/partner/products/{id}", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerProductPatch))))
+	mux.Handle(apiPrefix+"/partner/orders", h.role(partnerOps, http.HandlerFunc(h.partnerOrdersList)))
+	mux.Handle(apiPrefix+"/partner/orders/{id}", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerOrderUpdate))))
+	mux.Handle(apiPrefix+"/partner/settings", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerSettings))))
 }
 
 func (h *Handler) partnerDashboard(w http.ResponseWriter, r *http.Request) {

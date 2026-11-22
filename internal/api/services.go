@@ -114,7 +114,7 @@ func (h *Handler) ownServices(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ownService(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePositiveID(r.PathValue("id"))
 	if !ok {
-		writeServiceError(w, directorysvc.ErrServiceNotFound)
+		writeError(w, http.StatusBadRequest, "invalid_service", "Service id must be a positive integer")
 		return
 	}
 	switch r.Method {
