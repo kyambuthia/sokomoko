@@ -7,13 +7,15 @@ import (
 	"strings"
 
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
+	directorysvc "github.com/kyambuthia/sokomoko/internal/service/directory"
 )
 
 type catalogListDTO struct {
-	Items []productDTO `json:"items"`
-	Page  int          `json:"page"`
-	Limit int          `json:"limit"`
-	Total int          `json:"total"`
+	Items   []productDTO `json:"items"`
+	Page    int          `json:"page"`
+	Limit   int          `json:"limit"`
+	Total   int          `json:"total"`
+	HasMore bool         `json:"has_more"`
 }
 
 func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +36,7 @@ func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=30")
-	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: total})
+	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: total, HasMore: page*limit < total})
 }
 
 func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +63,7 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=15")
-	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: total})
+	writeData(w, http.StatusOK, catalogListDTO{Items: items, Page: page, Limit: limit, Total: total, HasMore: page*limit < total})
 }
 
 func (h *Handler) catalogProduct(w http.ResponseWriter, r *http.Request) {
@@ -115,4 +117,86 @@ func parseQueryInt(r *http.Request, key string, fallback int) int {
 		return fallback
 	}
 	return value
+}
+
+func (h *Handler) catalogCategories(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	categories, err := h.app.Catalog.Categories(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load categories")
+		return
+	}
+	type categoryDTO struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	items := make([]categoryDTO, 0, len(categories))
+	for _, c := range categories {
+		items = append(items, categoryDTO{Name: c.Name, Slug: c.Slug})
+	}
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	writeData(w, http.StatusOK, items)
+}
+
+func (h *Handler) catalogStore(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	slug := strings.TrimSpace(r.PathValue("slug"))
+	if slug == "" {
+		writeError(w, http.StatusNotFound, "store_not_found", "Store not found")
+		return
+	}
+	partner, err := h.app.Catalog.ActiveStore(r.Context(), slug)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load store")
+		return
+	}
+	if partner == nil {
+		writeError(w, http.StatusNotFound, "store_not_found", "Store not found")
+		return
+	}
+	products, err := h.app.Catalog.Browse(r.Context(), catalogsvc.Filter{PartnerID: partner.ID, Limit: 48})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load store products")
+		return
+	}
+	productTotal, err := h.app.Catalog.ProductCount(r.Context(), catalogsvc.Filter{PartnerID: partner.ID})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load store products")
+		return
+	}
+	productDTOs := make([]productDTO, 0, len(products))
+	for _, p := range products {
+		productDTOs = append(productDTOs, mapProduct(p))
+	}
+	serviceDTOs := []directorysvc.ServiceListing{}
+	var serviceTotal int
+	if h.app.Directory != nil {
+		services, total, err := h.app.Directory.Browse(r.Context(), directorysvc.ServiceFilter{PartnerID: partner.ID, Limit: 24}, 1)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "catalog_unavailable", "Unable to load store services")
+			return
+		}
+		serviceTotal = total
+		serviceDTOs = services
+	}
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	writeData(w, http.StatusOK, struct {
+		ID           int                           `json:"id"`
+		Name         string                        `json:"name"`
+		Slug         string                        `json:"slug"`
+		ProductTotal int                           `json:"product_total"`
+		ServiceTotal int                           `json:"service_total"`
+		Products     []productDTO                  `json:"products"`
+		Services     []directorysvc.ServiceListing `json:"services"`
+	}{
+		ID: partner.ID, Name: partner.Name, Slug: partner.Slug,
+		ProductTotal: productTotal, ServiceTotal: serviceTotal,
+		Products: productDTOs, Services: serviceDTOs,
+	})
 }
