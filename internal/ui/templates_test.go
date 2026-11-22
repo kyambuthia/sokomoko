@@ -141,3 +141,30 @@ func TestDemoBannerAndCredentials(t *testing.T) {
 		}
 	})
 }
+
+func TestFontPreloadUsesAssetHelper(t *testing.T) {
+	tmpls, err := ParseTemplatesWithDemo(false)
+	if err != nil {
+		t.Fatalf("ParseTemplatesWithDemo(false): %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpls.Login.ExecuteTemplate(&buf, "root_template", struct {
+		Title                string
+		CSRFToken            string
+		Error                string
+		Username             string
+		Email                string
+		Next                 string
+		SetupRequired        bool
+		PasswordResetEnabled bool
+	}{}); err != nil {
+		t.Fatalf("execute login: %v", err)
+	}
+
+	out := buf.String()
+	want := "/static/fonts/jetbrains-mono-latin-wght.woff2?v="
+	if !strings.Contains(out, want) {
+		t.Fatalf("expected cache-busted font preload %q in rendered HTML", want)
+	}
+}
