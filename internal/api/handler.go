@@ -75,16 +75,16 @@ func Register(a *app.App, mux *http.ServeMux) {
 		mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.checkoutSession)))
 	}
 	mux.Handle(apiPrefix+"/account/orders", h.authenticated(http.HandlerFunc(h.accountOrders)))
-	mux.Handle(apiPrefix+"/account/orders/", h.authenticated(http.HandlerFunc(h.accountOrder)))
+	mux.Handle(apiPrefix+"/account/orders/", h.demoWriteDisabled(h.authenticated(http.HandlerFunc(h.accountOrder))))
 
 	// Workspace APIs. Role checks are applied per resource so one mux can be
 	// used on storefront, admin, and partner hosts without duplicating routes.
 	h.registerAdminRoutes(mux)
 	h.registerPartnerRoutes(mux)
 	mux.Handle(apiPrefix+"/admin/deliveries", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierDeliveries)))
-	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierAssign)))
+	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.demoWriteDisabled(h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierAssign))))
 	mux.Handle(apiPrefix+"/courier/deliveries", h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveries)))
-	mux.Handle(apiPrefix+"/courier/deliveries/", h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveryUpdate)))
+	mux.Handle(apiPrefix+"/courier/deliveries/", h.demoWriteDisabled(h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveryUpdate))))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +93,19 @@ func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) demoCheckoutDisabled(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusForbidden, "demo_mode", "This demo does not accept orders or payments")
+}
+
+func (h *Handler) demoWriteDisabled(next http.Handler) http.Handler {
+	if !h.app.DemoMode {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			next.ServeHTTP(w, r)
+			return
+		}
+		writeError(w, http.StatusForbidden, "demo_mode", "Changes are disabled in demo mode")
+	})
 }
 
 func (h *Handler) authenticated(next http.Handler) http.Handler {

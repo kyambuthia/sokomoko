@@ -53,15 +53,15 @@ func (h *Handler) registerAdminRoutes(mux *http.ServeMux) {
 	adminStaff := []string{domain.RoleAdmin, domain.RoleStaff}
 	adminOnly := []string{domain.RoleAdmin}
 
-	mux.Handle(apiPrefix+"/admin/{$}", h.role(adminStaff, http.HandlerFunc(h.adminMetrics)))
-	mux.Handle(apiPrefix+"/admin/metrics", h.role(adminStaff, http.HandlerFunc(h.adminMetrics)))
-	mux.Handle(apiPrefix+"/admin/products", h.role(adminStaff, http.HandlerFunc(h.adminProducts)))
-	mux.Handle(apiPrefix+"/admin/orders", h.role(adminStaff, http.HandlerFunc(h.adminOrdersList)))
-	mux.Handle(apiPrefix+"/admin/orders/{id}", h.role(adminStaff, http.HandlerFunc(h.adminOrderUpdate)))
-	mux.Handle(apiPrefix+"/admin/reports", h.role(adminStaff, http.HandlerFunc(h.adminReports)))
-	mux.Handle(apiPrefix+"/admin/team", h.role(adminOnly, http.HandlerFunc(h.adminTeamList)))
-	mux.Handle(apiPrefix+"/admin/team/{id}", h.role(adminOnly, http.HandlerFunc(h.adminTeamDeactivate)))
-	mux.Handle(apiPrefix+"/admin/audit", h.role(adminOnly, http.HandlerFunc(h.adminAudit)))
+	mux.Handle(apiPrefix+"/admin/{$}", h.demoWriteDisabled(h.role(adminStaff, http.HandlerFunc(h.adminMetrics))))
+	mux.Handle(apiPrefix+"/admin/metrics", h.demoWriteDisabled(h.role(adminStaff, http.HandlerFunc(h.adminMetrics))))
+	mux.Handle(apiPrefix+"/admin/products", h.demoWriteDisabled(h.role(adminStaff, http.HandlerFunc(h.adminProducts))))
+	mux.Handle(apiPrefix+"/admin/orders", h.demoWriteDisabled(h.role(adminStaff, http.HandlerFunc(h.adminOrdersList))))
+	mux.Handle(apiPrefix+"/admin/orders/{id}", h.demoWriteDisabled(h.role(adminStaff, http.HandlerFunc(h.adminOrderUpdate))))
+	mux.Handle(apiPrefix+"/admin/reports", h.demoWriteDisabled(h.role(adminStaff, http.HandlerFunc(h.adminReports))))
+	mux.Handle(apiPrefix+"/admin/team", h.demoWriteDisabled(h.role(adminOnly, http.HandlerFunc(h.adminTeamList))))
+	mux.Handle(apiPrefix+"/admin/team/{id}", h.demoWriteDisabled(h.role(adminOnly, http.HandlerFunc(h.adminTeamDeactivate))))
+	mux.Handle(apiPrefix+"/admin/audit", h.demoWriteDisabled(h.role(adminOnly, http.HandlerFunc(h.adminAudit))))
 }
 
 func (h *Handler) adminMetrics(w http.ResponseWriter, r *http.Request) {

@@ -40,9 +40,9 @@ func RegisterCourier(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	})
 	mux.HandleFunc("/login", a.Auth.CourierLogin(a.Templates.AdminLogin))
 	mux.HandleFunc("/logout", a.Auth.Logout())
-	mux.Handle("/password", withRole(a, domain.RoleCourier, a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/deliveries")))
+	mux.Handle("/password", demoReadOnly(a, "/password", withRole(a, domain.RoleCourier, a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/deliveries"))))
 	mux.Handle("/deliveries", withRole(a, domain.RoleCourier, CourierDeliveries(a)))
-	mux.Handle("/deliveries/", withRole(a, domain.RoleCourier, CourierDeliveryUpdate(a)))
+	mux.Handle("/deliveries/", demoReadOnly(a, "/deliveries", withRole(a, domain.RoleCourier, CourierDeliveryUpdate(a))))
 	mux.Handle("/password-reset/", http.NotFoundHandler())
 	registerMessaging(a, mux, "courier", []string{domain.RoleCourier})
 }
