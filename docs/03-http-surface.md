@@ -176,6 +176,11 @@ Served under `/api/v1` on the storefront, admin, partner, and courier hosts.
 The docs host serves the public guide only. The API uses the same session
 cookie as the HTML pages; there are no API keys or bearer tokens.
 
+`GET /api/v1/openapi.json` returns an OpenAPI 3.1 index of every path and
+method, each with a one-line summary. It is public and cached for five minutes
+(`Cache-Control: public, max-age=300`). It lists routes, not field schemas; the
+tables below describe request and response shapes.
+
 ### Conventions
 
 - Success: `{"data": ...}`. Error: `{"error": {"code": "...", "message": "..."}}`.
@@ -186,12 +191,16 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 - Responses are `Cache-Control: no-store`, except public catalog reads
   (`public, max-age=30`, search `max-age=15`).
 - Lists that paginate take `page` (from 1) and `limit` (default 20, max 50).
+  Catalog product lists and search add `has_more` (`page * limit < total`) to
+  `{items, page, limit, total}`. Other paginated endpoints return the envelope
+  shown in their row.
 
 ### Endpoints
 
 | Method and path | Access | Purpose |
 | --- | --- | --- |
-| `GET /catalog/products` | public | Paginated product list: `{items, page, limit, total}` |
+| `GET /openapi.json` | public | OpenAPI 3.1 index of these paths and methods |
+| `GET /catalog/products` | public | Paginated product list: `{items, page, limit, total, has_more}` |
 | `GET /catalog/products/<slug>` | public | One product |
 | `GET /catalog/services?q=&category=&area=&delivery_mode=&partner_id=&has_hours=` | public | Published services; optional `has_hours=true` filter; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
 | `GET /catalog/services/<slug>` | public | Published service details; 404 for private, archived or suspended-shop listings |
@@ -205,8 +214,15 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | `PATCH /partner/services/<id>` | partner | Full editable field replacement plus current version; stale version returns 409 |
 | `GET /partner/service-bookings?page=&limit=` | partner | Own shop appointment queue, paginated |
 | `POST /partner/service-bookings/<id>/status` | partner | Update with {action, version}; supports confirm, reject, cancel, start, complete and no_show; returns 204 |
-| `GET /catalog/search?q=&category=` | public | Paginated product search; category may be used without `q`; `{items, page, limit, total}` |
-| `GET /me` | signed in | Current user |
+| `GET /catalog/search?q=&category=` | public | Paginated product search; category may be used without `q`; `{items, page, limit, total, has_more}` |
+| `GET /catalog/categories` | public | Active categories as `{name, slug}`; cached 60 s |
+| `GET /catalog/stores/<slug>` | public | Active store profile with up to 48 products and 24 services, plus `product_total` and `service_total`; `404 store_not_found` for unknown or inactive stores |
+| `POST /auth/login` | public | `{username, password}`; the host picks the role set (`admin.` admin and staff, `partner.` workspace roles, `courier.` courier, storefront customer) and returns the user with a `csrf_token` |
+| `POST /auth/signup` | public | Create a customer from `{username, email, password}`; `201`; `403 demo_mode` on the demo instance |
+| `POST /auth/logout` | signed in | Revoke the current session; returns `{logged_out: true}` |
+| `GET /me` | signed in | Current user and `csrf_token` |
+| `PATCH /me` | signed in | Update `{username, email}`; `409 profile_conflict` when either is taken |
+| `PATCH /me/password` | signed in | `{current_password, new_password}`; revokes the other sessions and returns a fresh `csrf_token`; `403 demo_mode` on the demo instance |
 | `GET /cart` | signed in | Cart lines and subtotal |
 | `POST /cart/items` | signed in | Add `{product_id, quantity}` |
 | `PATCH /cart/items/<product_id>` | signed in | Set `{quantity}` |
@@ -228,6 +244,18 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | `GET /admin/team` | admin | Team members: `{items, page, limit, total}`; `q` searches username or email |
 | `DELETE /admin/team/<id>` | admin | Deactivate a user |
 | `GET /admin/audit` | admin | Audit log |
+| `GET /admin/categories` | admin, staff | Categories with product counts |
+| `POST /admin/categories` | admin, staff | Create from `{name, slug, description}` |
+| `PATCH /admin/categories/<id>` | admin, staff | Update `{name, slug, description}`; duplicates return `409 duplicate_category` |
+| `DELETE /admin/categories/<id>` | admin, staff | Delete a category |
+| `GET /admin/partners` | admin | Partners and their accounts |
+| `POST /admin/partners` | admin | Create from `{name, slug, contact_email}` |
+| `PATCH /admin/partners/<id>` | admin | Update `{name, contact_email}`; duplicates return `409 duplicate_partner` |
+| `POST /admin/partners/accounts` | admin | Create a partner login from `{partner_id, username, email, password}` |
+| `POST /admin/team/<id>/reactivate` | admin | Reactivate a deactivated user |
+| `GET /admin/message-reports` | admin | Reported message threads |
+| `POST /admin/message-reports/<id>/resolve` | admin | Mark a report resolved |
+| `GET /admin/payments` | admin | Pricing, providers and payment exceptions |
 | `GET /partner/dashboard` | admin, staff, partner | Dashboard data |
 | `GET /partner/products` | admin, staff, partner | Products and categories |
 | `POST /partner/products` | admin, staff, partner | Create a product |
@@ -236,10 +264,15 @@ cookie as the HTML pages; there are no API keys or bearer tokens.
 | `PATCH /partner/orders/<id>` | admin, staff, partner | Update `{partner_status, delivery_status, delivery_notice}` |
 | `GET /admin/deliveries` | admin, staff | Shipped orders awaiting delivery and active courier accounts with `active_deliveries` and `failed_deliveries` counts; excludes prices and payment data |
 | `POST /admin/deliveries/assign` | admin, staff | Assign `{order_id, courier_id}`; only shipped orders can be assigned, and picked-up deliveries cannot be reassigned |
-| `GET /courier/deliveries` | courier | Own delivery assignments and delivered history; optional `view=all|active|completed`; completed `delivery_address` is empty |
+| `GET /courier/deliveries` | courier | Own delivery assignments and delivered history; optional `view=all\|active\|completed`; completed `delivery_address` is empty |
 | `PATCH /courier/deliveries/<id>` | courier | Update `{status, note}` through `picked_up`, `out_for_delivery`, `delivered`, or `delivery_failed` |
 | `GET /partner/settings` | admin, staff, partner | Store settings (`404 store_not_configured` if unset) |
 | `PATCH /partner/settings` | admin, staff | Save store settings |
+
+On the demo instance, admin, staff and partner writes above return
+`403 demo_mode`, as do checkout, service booking requests and cancellations,
+order cancellation, and password changes. Reads, cart changes, and `PATCH /me`
+stay available.
 
 When `status` is `delivery_failed`, `note` must be one of `Recipient
 unavailable`, `Address issue`, `Item damaged`, `Recipient declined`, or
