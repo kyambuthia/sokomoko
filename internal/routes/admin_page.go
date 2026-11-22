@@ -55,7 +55,7 @@ func adminOrdersPage(metrics adminsvc.Metrics, role string, orders []adminsvc.Or
 	return page
 }
 
-func adminReportsPage(metrics adminsvc.Metrics, role string, report adminsvc.SalesReport) AdminPageData {
+func adminReportsPage(metrics adminsvc.Metrics, role string, report adminsvc.SalesReport, traffic adminsvc.TrafficSummary) AdminPageData {
 	page := newAdminPage(metrics, role, "Sales Reports", "Live operational metrics from orders and fulfillment")
 	page.RevenueTotal = report.RevenueTotal
 	page.PendingCount = report.PendingCount
@@ -63,6 +63,7 @@ func adminReportsPage(metrics adminsvc.Metrics, role string, report adminsvc.Sal
 	page.DeliveredCount = report.DeliveredCount
 	page.OrderCount = report.OrderCount
 	page.CancelledCount = report.CancelledCount
+	page.Traffic = traffic
 	return page
 }
 

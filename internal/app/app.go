@@ -131,6 +131,7 @@ type AdminService interface {
 	Products(ctx context.Context) ([]adminsvc.Product, error)
 	ProductsPage(context.Context, int, int) ([]adminsvc.Product, int, error)
 	Reports(ctx context.Context) (adminsvc.SalesReport, error)
+	TrafficSummary(ctx context.Context) (adminsvc.TrafficSummary, error)
 	TeamMembers(ctx context.Context, query string, page, limit int) ([]adminsvc.TeamMember, int, error)
 	UpdateOrder(ctx context.Context, actor *adminsvc.Actor, input adminsvc.UpdateOrderInput) error
 }

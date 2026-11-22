@@ -111,7 +111,9 @@ func runServe(cfg config.Config, seedOnServe bool) error {
 		},
 	})
 	application.Version = version
-	server, allowedHosts := buildServer(cfg, application)
+	traffic := app.NewTrafficCollector(store)
+	server, allowedHosts := buildServer(cfg, application, traffic)
+	server.Background = append(server.Background, traffic.Run)
 	if resetEmailSender != nil && !cfg.PasswordResetDisabled {
 		if worker, ok := application.Auth.(interface {
 			MaintainPasswordResetEmailOutbox(context.Context)
@@ -228,7 +230,7 @@ func buildPasswordResetEmailSender(cfg config.Config) (auth.PasswordResetEmailSe
 	return resetEmailSender, nil
 }
 
-func buildServer(cfg config.Config, application *app.App) (*httpServer, map[string]struct{}) {
+func buildServer(cfg config.Config, application *app.App, traffic *app.TrafficCollector) (*httpServer, map[string]struct{}) {
 	readiness := &lifecycle.Readiness{Check: application.Readiness.PingContext}
 	application.Readiness = readiness
 	mainMux := http.NewServeMux()
@@ -262,7 +264,7 @@ func buildServer(cfg config.Config, application *app.App) (*httpServer, map[stri
 
 	handler := app.Chain(
 		buildHostRouter(allowedHosts, mainMux, adminMux, partnerMux, courierMux, docsMux, apiMux, metrics.Handler(cfg.MetricsToken), !cfg.IsProduction()),
-		buildMiddlewares(cfg, application, metrics)...,
+		buildMiddlewares(cfg, application, metrics, traffic)...,
 	)
 
 	return &httpServer{

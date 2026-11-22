@@ -2,6 +2,8 @@ package admin
 
 import (
 	"context"
+	"time"
+
 	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/money"
 )
@@ -37,6 +39,7 @@ type store interface {
 	ListProductsPage(context.Context, db.ProductFilter) ([]db.Product, int, error)
 	GetOrderStatusCounts(ctx context.Context) (map[string]int, error)
 	GetOrderReportData(ctx context.Context) (money.Cents, map[string]int, error)
+	GetTrafficSummary(ctx context.Context, now time.Time) (db.TrafficSummary, error)
 	GetUserByID(ctx context.Context, id int) (*db.User, error)
 	ListAllOrders(ctx context.Context) ([]db.Order, error)
 	ListAllOrdersPage(context.Context, int, int) ([]db.Order, int, error)

@@ -90,11 +90,18 @@ func validRequestID(id string) bool {
 
 // RequestLogger emits one structured access log line per request.
 func RequestLogger() Middleware {
+	return RequestLoggerWithTraffic(nil)
+}
+
+// RequestLoggerWithTraffic emits one structured access log line per request
+// and optionally records bounded traffic rollup counts.
+func RequestLoggerWithTraffic(traffic *TrafficCollector) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
+			traffic.Record(r, rec.status)
 			slog.LogAttrs(r.Context(), slog.LevelInfo, "http request",
 				slog.String("method", boundedRequestLogField(r.Method)),
 				slog.String("path", boundedRequestLogField(requestLogPath(r.URL.Path))),

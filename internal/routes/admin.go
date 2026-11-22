@@ -47,6 +47,7 @@ type AdminPageData struct {
 	PendingCount    int
 	ShippedCount    int
 	DeliveredCount  int
+	Traffic         adminsvc.TrafficSummary
 	TeamError       string
 	TeamMessage     string
 	OrderError      string
@@ -251,6 +252,12 @@ func AdminReports(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		renderAdminPage(a, w, r, http.StatusOK, adminReportsPage(metrics, adminRoleFromContext(r), report))
+		traffic, err := svc.TrafficSummary(r.Context())
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		renderAdminPage(a, w, r, http.StatusOK, adminReportsPage(metrics, adminRoleFromContext(r), report, traffic))
 	}
 }

@@ -109,7 +109,7 @@ func parseAllowedHosts(raw string) map[string]struct{} {
 	return hosts
 }
 
-func buildMiddlewares(cfg config.Config, application *app.App, metrics *app.HTTPMetrics) []app.Middleware {
+func buildMiddlewares(cfg config.Config, application *app.App, metrics *app.HTTPMetrics, traffic *app.TrafficCollector) []app.Middleware {
 	middlewares := []app.Middleware{
 		app.RequestID(),
 	}
@@ -117,7 +117,7 @@ func buildMiddlewares(cfg config.Config, application *app.App, metrics *app.HTTP
 		middlewares = append(middlewares, metrics.Middleware)
 	}
 	middlewares = append(middlewares,
-		app.RequestLogger(),
+		app.RequestLoggerWithTraffic(traffic),
 		app.Recoverer(),
 		app.SecurityHeadersWithProxy(cfg.TrustProxyHeaders),
 		app.BodyLimitWith(app.MaxRequestBodyBytes, routes.ProductMediaRequestLimit),

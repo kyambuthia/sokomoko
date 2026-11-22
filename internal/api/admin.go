@@ -41,12 +41,28 @@ type workspaceMetricsDTO struct {
 	UserCount    int `json:"user_count"`
 }
 
+type trafficBreakdownDTO struct {
+	ClientKind       string `json:"client_kind"`
+	Surface          string `json:"surface"`
+	RequestCount     int64  `json:"request_count"`
+	Error4xxCount    int64  `json:"error_4xx_count"`
+	Error5xxCount    int64  `json:"error_5xx_count"`
+	RateLimitedCount int64  `json:"rate_limited_count"`
+}
+
+type trafficSummaryDTO struct {
+	ActiveAPITokens int                   `json:"active_api_tokens"`
+	Last24h         []trafficBreakdownDTO `json:"last_24h"`
+	Last7d          []trafficBreakdownDTO `json:"last_7d"`
+}
+
 type salesReportDTO struct {
-	RevenueTotal   float64 `json:"revenue_total"`
-	OrderCount     int     `json:"order_count"`
-	PendingCount   int     `json:"pending_count"`
-	ShippedCount   int     `json:"shipped_count"`
-	DeliveredCount int     `json:"delivered_count"`
+	RevenueTotal   float64           `json:"revenue_total"`
+	OrderCount     int               `json:"order_count"`
+	PendingCount   int               `json:"pending_count"`
+	ShippedCount   int               `json:"shipped_count"`
+	DeliveredCount int               `json:"delivered_count"`
+	Traffic        trafficSummaryDTO `json:"traffic"`
 }
 
 func (h *Handler) registerAdminRoutes(mux *http.ServeMux) {
@@ -174,9 +190,33 @@ func (h *Handler) adminReports(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load sales report")
 		return
 	}
+	traffic, err := h.app.Admin.TrafficSummary(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "workspace_unavailable", "Unable to load traffic summary")
+		return
+	}
+	mapTraffic := func(rows []adminsvc.TrafficBreakdown) []trafficBreakdownDTO {
+		out := make([]trafficBreakdownDTO, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, trafficBreakdownDTO{
+				ClientKind:       row.ClientKind,
+				Surface:          row.Surface,
+				RequestCount:     row.RequestCount,
+				Error4xxCount:    row.Error4xxCount,
+				Error5xxCount:    row.Error5xxCount,
+				RateLimitedCount: row.RateLimitedCount,
+			})
+		}
+		return out
+	}
 	writeData(w, http.StatusOK, salesReportDTO{
 		RevenueTotal: report.RevenueTotal.Float64(), OrderCount: report.OrderCount,
 		PendingCount: report.PendingCount, ShippedCount: report.ShippedCount, DeliveredCount: report.DeliveredCount,
+		Traffic: trafficSummaryDTO{
+			ActiveAPITokens: traffic.ActiveAPITokens,
+			Last24h:         mapTraffic(traffic.Last24h),
+			Last7d:          mapTraffic(traffic.Last7d),
+		},
 	})
 }
 

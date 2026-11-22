@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kyambuthia/sokomoko/internal/money"
 )
 
 func TestDemoBannerAndCredentials(t *testing.T) {
@@ -267,6 +269,75 @@ func TestAccountAPITokensTemplateRendersTokensAndNewToken(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in rendered account template", want)
+		}
+	}
+}
+
+func TestAdminReportsTemplateRendersTrafficAndAgents(t *testing.T) {
+	tmpls, err := ParseTemplatesWithDemo(false)
+	if err != nil {
+		t.Fatalf("ParseTemplatesWithDemo(false): %v", err)
+	}
+
+	type trafficRow struct {
+		ClientKind       string
+		Surface          string
+		RequestCount     int64
+		Error4xxCount    int64
+		Error5xxCount    int64
+		RateLimitedCount int64
+	}
+	type trafficSummary struct {
+		Last24h         []trafficRow
+		Last7d          []trafficRow
+		ActiveAPITokens int
+	}
+
+	data := struct {
+		Title          string
+		CSRFToken      string
+		Role           string
+		ProductCount   int
+		SessionCount   int
+		AdminCount     int
+		StaffCount     int
+		UserCount      int
+		RevenueTotal   money.Cents
+		OrderCount     int
+		PendingCount   int
+		ShippedCount   int
+		DeliveredCount int
+		CancelledCount int
+		Traffic        trafficSummary
+	}{
+		Title:     "Sales Reports",
+		CSRFToken: "csrf-admin",
+		Role:      "admin",
+		Traffic: trafficSummary{
+			ActiveAPITokens: 7,
+			Last24h: []trafficRow{
+				{ClientKind: "agent_token", Surface: "api", RequestCount: 42, Error4xxCount: 3, Error5xxCount: 0, RateLimitedCount: 1},
+			},
+			Last7d: []trafficRow{
+				{ClientKind: "browser", Surface: "storefront", RequestCount: 310, Error4xxCount: 4, Error5xxCount: 1, RateLimitedCount: 0},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := tmpls.Admin.ExecuteTemplate(&buf, "root_template", data); err != nil {
+		t.Fatalf("execute admin template: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`id="traffic-agents-title"`,
+		"Active API tokens",
+		"agent_token",
+		"storefront",
+		"310",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in rendered admin reports template", want)
 		}
 	}
 }

@@ -74,7 +74,7 @@ func setupTestServer(dsn string) {
 		Port:            "6969",
 		AllowedHostsRaw: "localhost,127.0.0.1,admin.localhost,partner.localhost,courier.localhost",
 	}
-	server, _ := buildServer(cfg, a)
+	server, _ := buildServer(cfg, a, nil)
 	testHandler = server.Handler
 }
 

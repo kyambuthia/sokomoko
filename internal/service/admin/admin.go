@@ -47,6 +47,21 @@ type SalesReport struct {
 	CancelledCount int
 }
 
+type TrafficBreakdown struct {
+	ClientKind       string
+	Surface          string
+	RequestCount     int64
+	Error4xxCount    int64
+	Error5xxCount    int64
+	RateLimitedCount int64
+}
+
+type TrafficSummary struct {
+	Last24h         []TrafficBreakdown
+	Last7d          []TrafficBreakdown
+	ActiveAPITokens int
+}
+
 type Product struct {
 	ID            int
 	Name          string
@@ -305,6 +320,33 @@ func (s *Service) Reports(ctx context.Context) (SalesReport, error) {
 		report.OrderCount += count
 	}
 	return report, nil
+}
+
+// TrafficSummary returns recent 24h and 7d traffic rollups and active API token count.
+func (s *Service) TrafficSummary(ctx context.Context) (TrafficSummary, error) {
+	summary, err := s.store.GetTrafficSummary(ctx, time.Now().UTC())
+	if err != nil {
+		return TrafficSummary{}, err
+	}
+	mapRows := func(rows []db.TrafficBreakdownRow) []TrafficBreakdown {
+		out := make([]TrafficBreakdown, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, TrafficBreakdown{
+				ClientKind:       row.ClientKind,
+				Surface:          row.Surface,
+				RequestCount:     row.RequestCount,
+				Error4xxCount:    row.Error4xxCount,
+				Error5xxCount:    row.Error5xxCount,
+				RateLimitedCount: row.RateLimitedCount,
+			})
+		}
+		return out
+	}
+	return TrafficSummary{
+		Last24h:         mapRows(summary.Last24h),
+		Last7d:          mapRows(summary.Last7d),
+		ActiveAPITokens: summary.ActiveAPITokens,
+	}, nil
 }
 
 func (s *Service) UpdateOrder(ctx context.Context, actor *Actor, input UpdateOrderInput) error {
