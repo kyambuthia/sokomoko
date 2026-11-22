@@ -352,17 +352,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tabbar a[aria-current="page"] { color: var(--fg); font-weight: 700; }
 .tabbar .icon { width: 24px; height: 24px; }
 .tabbar .count { top: 8px; right: calc(50% - 24px); }
-.has-tabbar {
+.has-tabbar,
+.has-rail {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
   padding-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom));
 }
-.has-tabbar > .main { flex: 1 0 auto; }
+.has-tabbar > .main,
+.has-rail > .main { flex: 1 0 auto; }
 
 @media (min-width: 48rem) {
   .tabbar { display: none; }
-  .has-tabbar { padding-bottom: 0; padding-left: var(--rail); }
+  .has-tabbar,
+  .has-rail { padding-bottom: 0; padding-left: var(--rail); }
   .bar--storefront { display: none; }
 }
 
@@ -480,27 +483,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .store-profile__stats { grid-column: 2 / -1; }
 }
 
-/* Workspace shell: the rail and tab bar come from the storefront pattern. */
+/* Workspace shell: the rail comes from the storefront pattern. */
 
 .bar--ws .brand__tag { margin-left: var(--s1); }
 .rail--ws .rail__foot { flex-direction: column; align-items: center; gap: var(--s1); }
 .rail--ws .inline-form { display: contents; }
-.tabbar--ws > * { min-width: 0; }
-.tabbar__more {
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 2px;
-  min-height: var(--tabbar);
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: var(--t-xs);
-  color: var(--fg-2);
-  cursor: pointer;
-}
-.tabbar__more .icon { width: 24px; height: 24px; }
 .ws-sheet {
   inset: auto 0 0 0;
   width: 100%;

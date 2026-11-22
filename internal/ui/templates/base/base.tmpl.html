@@ -22,7 +22,7 @@
 </html>
 {{ end }}
 
-{{/* Storefront: a thin phone bar, a desktop rail, content, footer, and the mobile tab bar. */}}
+{{/* Storefront: a thin phone bar, a desktop rail, content, footer, and the Menu sheet on phones. */}}
 {{ define "storefront-layout" }}
 <body class="has-tabbar {{ block "body-class" . }}{{ end }}">
   <a class="skip" href="#main">Skip to content</a>
@@ -36,9 +36,9 @@
 </body>
 {{ end }}
 
-{{/* Workspaces: thin top bar on phones, a rail on desktop, content, and the mobile tab bar. */}}
+{{/* Workspaces: thin top bar on phones, a rail on desktop, content, and the Menu sheet on phones. */}}
 {{ define "admin-layout" }}
-<body class="has-tabbar has-rail">
+<body class="has-rail">
   <a class="skip" href="#main">Skip to content</a>
   {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "admin" "Page" . }}
@@ -50,7 +50,7 @@
 {{ end }}
 
 {{ define "partner-layout" }}
-<body class="has-tabbar has-rail">
+<body class="has-rail">
   <a class="skip" href="#main">Skip to content</a>
   {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "partner" "Page" . }}
@@ -62,7 +62,7 @@
 {{ end }}
 
 {{ define "courier-layout" }}
-<body class="has-tabbar has-rail">
+<body class="has-rail">
   <a class="skip" href="#main">Skip to content</a>
   {{ template "demo-site-notice" . }}
   {{ template "workspace-header" dict "Tag" "courier" "Page" . }}

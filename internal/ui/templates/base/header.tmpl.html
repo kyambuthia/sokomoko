@@ -50,6 +50,7 @@
     <a class="brand brand--bar" href="/" aria-label="sokomoko {{ .Tag }}">{{ template "brand" . }}<span class="brand__tag">{{ .Tag }}</span></a>
     <div class="bar__actions">
       {{ template "theme-toggle" }}
+      {{ if ne .Tag "workspace" }}<button type="button" class="btn btn-icon" data-sheet-open="ws-sheet" aria-haspopup="dialog" aria-controls="ws-sheet" aria-label="Menu">{{ icon "menu" }}</button>{{ end }}
     </div>
   </div>
 </header>
