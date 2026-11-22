@@ -34,6 +34,7 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", Health())
 	mux.HandleFunc("/readyz", Ready(a))
 	mux.HandleFunc("/favicon.ico", Favicon())
+	mux.HandleFunc("/sitemap.xml", Sitemap(a))
 	mux.Handle("/static/", Static(a.StaticFS))
 
 	mux.Handle("/", public(Root(a)))

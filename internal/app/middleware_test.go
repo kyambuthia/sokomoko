@@ -85,8 +85,8 @@ func TestSecurityHeaders(t *testing.T) {
 	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("expected nosniff header, got %q", got)
 	}
-	if got := rec.Header().Get("Content-Security-Policy"); got == "" {
-		t.Fatal("expected content security policy header")
+	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "object-src 'none'") {
+		t.Fatalf("expected object-src 'none' in CSP header, got %q", got)
 	}
 }
 

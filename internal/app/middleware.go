@@ -151,7 +151,7 @@ func Recoverer() Middleware {
 // SecurityHeadersWithProxy trusts forwarded protocol only when the application
 // is reachable exclusively through a proxy that overwrites that header.
 func SecurityHeadersWithProxy(trustProxy bool) Middleware {
-	csp := "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	csp := "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
