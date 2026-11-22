@@ -251,6 +251,11 @@ func WithUser(ctx context.Context, user *User) context.Context {
 	return context.WithValue(ctx, userContextKey, user)
 }
 
+// ContextWithUser returns a copy of ctx carrying user.
+func ContextWithUser(ctx context.Context, user *db.User) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
+}
+
 // GetUserFromContext retrieves the user from the request context
 func GetUserFromContext(ctx context.Context) *db.User {
 	user, ok := ctx.Value(userContextKey).(*db.User)

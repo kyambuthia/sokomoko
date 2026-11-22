@@ -78,7 +78,7 @@
 {{ template "ws-link" dict "Mode" $m "Href" "/deliveries" "Icon" "truck" "Label" "Deliveries" "Cur" (eq $p.Title "Delivery Management") }}
 {{ template "ws-link" dict "Mode" $m "Href" "/products" "Icon" "box" "Label" "Products" "Cur" (eq $p.Title "Product Management") }}
 {{ template "ws-link" dict "Mode" $m "Href" "/reports" "Icon" "chart" "Label" "Reports" "Cur" (eq $p.Title "Sales Reports") }}
-{{ if eq $p.Role "admin" }}
+{{ if eq (field $p "Role") "admin" }}
 {{ template "ws-link" dict "Mode" $m "Href" "/payments" "Icon" "wallet" "Label" "Payments" "Cur" (eq $p.Title "Payments") }}
 {{ template "ws-link" dict "Mode" $m "Href" "/partners" "Icon" "store" "Label" "Partners" "Cur" (eq $p.Title "Partners") }}
 {{ template "ws-link" dict "Mode" $m "Href" "/team" "Icon" "users" "Label" "Team" "Cur" (eq $p.Title "Team Management") }}

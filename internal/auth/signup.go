@@ -29,6 +29,7 @@ type SignupPageData struct {
 
 type CourierSignupPageData struct {
 	Title     string
+	Role      string
 	Username  string
 	Message   string
 	Error     string
@@ -155,7 +156,7 @@ func (s *Service) StaffSignUp(tmpl TemplateRenderer) http.HandlerFunc {
 // email workflow, so the required database email is a non-deliverable alias.
 func (s *Service) CourierSignUp(tmpl TemplateRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := CourierSignupPageData{Title: "Add courier", CSRFToken: s.CSRFTokenForSession(r)}
+		data := CourierSignupPageData{Title: "Add courier", Role: domain.RoleAdmin, CSRFToken: s.CSRFTokenForSession(r)}
 		if r.Method == http.MethodGet {
 			renderWithStatus(w, tmpl, 0, data)
 			return

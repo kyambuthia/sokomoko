@@ -160,7 +160,7 @@ func demoReadOnly(a *app.App, redirectTo string, next http.Handler) http.Handler
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || auth.GetUserFromContext(r.Context()) == nil {
 			next.ServeHTTP(w, r)
 			return
 		}

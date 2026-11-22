@@ -45,11 +45,11 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}/availability", h.serviceAvailability)
 	mux.Handle(apiPrefix+"/services/{slug}/bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.createServiceBooking)))
 	mux.Handle(apiPrefix+"/account/service-bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.accountServiceBookings)))
-	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.cancelServiceBooking)))
-	mux.Handle(apiPrefix+"/partner/services", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownServices)))
-	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownService)))
+	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.demoWriteDisabled(h.role([]string{domain.RoleUser}, http.HandlerFunc(h.cancelServiceBooking))))
+	mux.Handle(apiPrefix+"/partner/services", h.demoWriteDisabled(h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownServices))))
+	mux.Handle(apiPrefix+"/partner/services/{id}", h.demoWriteDisabled(h.role([]string{domain.RolePartner}, http.HandlerFunc(h.ownService))))
 	mux.Handle(apiPrefix+"/partner/service-bookings", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookings)))
-	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookingAction)))
+	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.demoWriteDisabled(h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookingAction))))
 
 	// Public catalog reads.
 	mux.HandleFunc(apiPrefix+"/catalog/products", h.catalogProducts)
@@ -68,8 +68,8 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.Handle(apiPrefix+"/cart/items", h.authenticated(http.HandlerFunc(h.cartItemCreate)))
 	mux.Handle(apiPrefix+"/cart/items/", h.authenticated(http.HandlerFunc(h.cartItem)))
 	if a.DemoMode {
-		mux.HandleFunc(apiPrefix+"/checkout", h.demoCheckoutDisabled)
-		mux.HandleFunc(apiPrefix+"/checkout/", h.demoCheckoutDisabled)
+		mux.Handle(apiPrefix+"/checkout", h.authenticated(http.HandlerFunc(h.demoCheckoutDisabled)))
+		mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.demoCheckoutDisabled)))
 	} else {
 		mux.Handle(apiPrefix+"/checkout", h.authenticated(http.HandlerFunc(h.checkout)))
 		mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.checkoutSession)))
