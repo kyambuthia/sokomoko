@@ -701,3 +701,32 @@ func TestRequireRole(t *testing.T) {
 		t.Errorf("handler returned wrong status code for unauthenticated user on admin route: got %v want %v", status, http.StatusForbidden)
 	}
 }
+
+func TestSignUpAPI_LoginAPISucceeds(t *testing.T) {
+	clearAuthTables()
+	svc := newTestService(Config{})
+
+	const (
+		username = "apiuser1"
+		email    = "apiuser1@example.com"
+		password = "correct-horse-battery"
+	)
+	status, code, msg := svc.SignUpAPI(t.Context(), username, email, password)
+	if status != http.StatusCreated || code != "" || msg != "" {
+		t.Fatalf("SignUpAPI() = (%d, %q, %q), want (201, \"\", \"\")", status, code, msg)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	req.RemoteAddr = "127.0.0.1:4321"
+	rr := httptest.NewRecorder()
+	user, csrfToken, status, code, msg := svc.LoginAPI(t.Context(), rr, req, username, password, "user_login", nil)
+	if status != http.StatusOK || code != "" || msg != "" {
+		t.Fatalf("LoginAPI() = (%d, %q, %q), want (200, \"\", \"\")", status, code, msg)
+	}
+	if user == nil || user.Username != username {
+		t.Fatalf("LoginAPI() user = %+v, want username %q", user, username)
+	}
+	if csrfToken == "" {
+		t.Fatal("LoginAPI() returned empty CSRF token")
+	}
+}

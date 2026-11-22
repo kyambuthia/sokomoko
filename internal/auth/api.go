@@ -79,11 +79,7 @@ func (s *Service) SignUpAPI(ctx context.Context, username, email, password strin
 	case !isStrongEnoughPassword(password):
 		return http.StatusBadRequest, "invalid_password", "Password must be 10 to 72 characters"
 	}
-	hash, err := hashPassword(password)
-	if err != nil {
-		return http.StatusInternalServerError, "signup_failed", "Unable to create account"
-	}
-	if _, err := createUserWithPassword(ctx, s.store, username, email, hash, domain.RoleUser); err != nil {
+	if _, err := createUserWithPassword(ctx, s.store, username, email, password, domain.RoleUser); err != nil {
 		statusCode, msg := mapAccountCreationError(err, "Unable to create account")
 		code := "signup_failed"
 		if statusCode == http.StatusConflict {
