@@ -16,17 +16,21 @@
     <a class="chip" href="/orders?status=accepted" {{ if eq $f "accepted" }}aria-current="page"{{ end }}>Accepted</a>
     <a class="chip" href="/orders?status=packing" {{ if eq $f "packing" }}aria-current="page"{{ end }}>Packing</a>
     <a class="chip" href="/orders?status=dispatched" {{ if eq $f "dispatched" }}aria-current="page"{{ end }}>Dispatched · {{ .DispatchedCount }}</a>
-    <a class="chip" href="/orders?status=completed" {{ if eq $f "completed" }}aria-current="page"{{ end }}>Completed</a>
+    <a class="chip" href="/orders?status=completed" {{ if eq $f "completed" }}aria-current="page"{{ end }}>Completed · {{ .CompletedCount }}</a>
   </nav>
   {{ if .Orders }}
   <ul class="stack">
     {{ range .Orders }}
     <li class="card stack-sm" data-order>
       <div class="row-between">
-        <span class="strong">#{{ .ID }} · {{ .CustomerName }}</span>
+        <div>
+          <span class="strong">#{{ .ID }} · {{ .CustomerName }}</span>
+          <p class="tiny muted">Placed <ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02 15:04" }}</ui-relative-time></p>
+        </div>
         <span class="strong">{{ money .TotalAmount }}</span>
       </div>
       <div class="row">
+        {{ if eq .Status "cancelled" }}<span class="badge badge-muted">{{ .Status }}</span>{{ end }}
         <span class="badge badge-solid" data-badge="partner_status">{{ .PartnerStatus }}</span>
         <span class="badge" data-badge="delivery_status">{{ .DeliveryStatus }}</span>
       </div>

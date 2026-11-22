@@ -6,7 +6,8 @@
   <div class="page-head">
     <div>
       <h1>{{ .StoreName }}</h1>
-      <p class="muted small">{{ .Username }} · {{ .Role }}</p>
+      <p class="muted small">{{ .Username }} · {{ .Role }}{{ if .ContactEmail }} · {{ .ContactEmail }}{{ end }}</p>
+      {{ if .Description }}<p class="small muted">{{ .Description }}</p>{{ end }}
     </div>
     <a class="btn btn-sm" href="/products/new">{{ icon "plus" }}Add product</a>
   </div>
@@ -17,11 +18,17 @@
     <div class="stat"><dt>New</dt><dd>{{ .NewOrders }}</dd></div>
     <div class="stat"><dt>In progress</dt><dd>{{ .InProgressOrders }}</dd></div>
     <div class="stat"><dt>Dispatched</dt><dd>{{ .DispatchedOrders }}</dd></div>
+    <div class="stat"><dt>Completed</dt><dd>{{ .CompletedOrders }}</dd></div>
     <div class="stat"><dt>Products</dt><dd>{{ .ProductCount }}</dd></div>
   </dl>
   <nav class="list" aria-label="Shortcuts">
     <a class="list-item" href="/orders">{{ icon "orders" }}<span>Orders</span>{{ icon "chevron-right" }}</a>
     <a class="list-item" href="/products">{{ icon "box" }}<span>Products</span>{{ icon "chevron-right" }}</a>
+    {{ if eq .Role "partner" }}
+    <a class="list-item" href="/services">{{ icon "tools" }}<span>Services</span>{{ icon "chevron-right" }}</a>
+    <a class="list-item" href="/service-bookings">{{ icon "clock" }}<span>Appointments</span>{{ icon "chevron-right" }}</a>
+    <a class="list-item" href="/messages">{{ icon "users" }}<span>Messages</span>{{ icon "chevron-right" }}</a>
+    {{ end }}
     <a class="list-item" href="/setup">{{ icon "settings" }}<span>Store</span>{{ icon "chevron-right" }}</a>
   </nav>
 </div>
