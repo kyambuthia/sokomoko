@@ -37,6 +37,72 @@
     </form>
   </section>
 
+  <section class="section" aria-labelledby="api-tokens-title">
+    <h2 class="section-title" id="api-tokens-title">API Tokens</h2>
+    {{ if .NewAPIToken }}
+    <div class="card stack-sm" role="status">
+      <strong>New API token (shown once)</strong>
+      <p class="small muted">Copy this token now. You will not be able to see it again.</p>
+      <code class="small">{{ .NewAPIToken }}</code>
+    </div>
+    {{ end }}
+    <form action="/account/tokens" method="POST" class="form" data-submit-once>
+      {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="token-name">Token name</label>
+          <input class="input" id="token-name" name="name" type="text" required maxlength="100" placeholder="e.g. shopping-agent">
+        </div>
+        <div class="field">
+          <label class="label" for="token-client-type">Client type</label>
+          <select class="input" id="token-client-type" name="client_type">
+            <option value="agent">Agent</option>
+            <option value="cli">CLI</option>
+            <option value="integration">Integration</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="token-expires-days">Expires in (days)</label>
+          <input class="input" id="token-expires-days" name="expires_in_days" type="number" min="1" max="3650" placeholder="Optional">
+        </div>
+      </div>
+      <div class="row"><button type="submit" class="btn btn-secondary btn-sm">Create token</button></div>
+    </form>
+    {{ if .APITokens }}
+    <ul class="stack">
+      {{ range .APITokens }}
+      <li class="card stack-sm">
+        <div class="row-between">
+          <div>
+            <strong>{{ .Name }}</strong>
+            <code class="small muted">{{ .TokenPrefix }}…</code>
+          </div>
+          <div class="row">
+            <span class="badge">{{ .ClientType }}</span>
+            {{ if .IsRevoked }}<span class="badge">revoked</span>{{ else if .IsExpired }}<span class="badge">expired</span>{{ else }}<span class="badge badge-solid">active</span>{{ end }}
+          </div>
+        </div>
+        <p class="tiny muted">
+          Last used: {{ if .LastUsedAt }}<ui-relative-time datetime="{{ .LastUsedAt.UTC.Format "2006-01-02T15:04:05Z" }}">{{ .LastUsedAt.Format "2 Jan 2006" }}</ui-relative-time>{{ else }}never{{ end }}
+          · Expires: {{ if .ExpiresAt }}{{ .ExpiresAt.Format "2 Jan 2006" }}{{ else }}never{{ end }}
+          {{ if .RevokedAt }}· Revoked: {{ .RevokedAt.Format "2 Jan 2006" }}{{ end }}
+        </p>
+        {{ if not .IsRevoked }}
+        <ui-confirm title="Revoke API token?" message="Any client using {{ .Name }} will lose access immediately." confirm-label="Revoke token" cancel-label="Keep token">
+          <form method="POST" action="/account/tokens/{{ .ID }}/revoke" data-submit-once>
+            {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
+            <button type="submit" class="btn btn-secondary btn-sm">Revoke</button>
+          </form>
+        </ui-confirm>
+        {{ end }}
+      </li>
+      {{ end }}
+    </ul>
+    {{ else }}
+    <p class="muted">No API tokens yet.</p>
+    {{ end }}
+  </section>
+
   <section class="section" aria-labelledby="appointments-title">
     <div class="row-between">
       <h2 class="section-title" id="appointments-title">Appointments</h2>

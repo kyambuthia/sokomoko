@@ -60,6 +60,8 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
 	mux.Handle("/account/profile", customer(demoReadOnly(a, "/account", AccountProfileUpdate(a))))
+	mux.Handle("/account/tokens", customer(demoReadOnly(a, "/account", AccountTokenCreate(a))))
+	mux.Handle("/account/tokens/{id}/revoke", customer(demoReadOnly(a, "/account", AccountTokenRevoke(a))))
 	mux.Handle("/account/service-bookings", withRole(a, domain.RoleUser, AccountServiceBookings(a)))
 	mux.Handle("/account/orders/{id}/cancel", customer(demoReadOnly(a, "/account", AccountOrderCancel(a))))
 	mux.Handle("/account/bookings/{id}/cancel", withRole(a, domain.RoleUser, demoReadOnly(a, "/account/service-bookings", AccountBookingCancel(a))))

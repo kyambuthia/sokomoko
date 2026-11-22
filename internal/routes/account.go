@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kyambuthia/sokomoko/internal/app"
+	"github.com/kyambuthia/sokomoko/internal/db"
 	"github.com/kyambuthia/sokomoko/internal/domain"
 	accountsvc "github.com/kyambuthia/sokomoko/internal/service/account"
 	bookingsvc "github.com/kyambuthia/sokomoko/internal/service/booking"
@@ -23,11 +26,26 @@ type AccountPageData struct {
 	Flash           Flash
 	Orders          []accountsvc.Order
 	Bookings        []AccountBookingView
+	APITokens       []AccountAPITokenView
+	NewAPIToken     string
 	Pager           Pager
 	Viewer          Viewer
 	ProfileUsername string
 	ProfileEmail    string
 	CSRFToken       string
+}
+
+type AccountAPITokenView struct {
+	ID          int64
+	Name        string
+	TokenPrefix string
+	ClientType  string
+	LastUsedAt  *time.Time
+	ExpiresAt   *time.Time
+	RevokedAt   *time.Time
+	CreatedAt   time.Time
+	IsRevoked   bool
+	IsExpired   bool
 }
 
 type AccountBookingView struct {
@@ -117,11 +135,27 @@ func Account(a *app.App) http.HandlerFunc {
 			profileUsername = user.Username
 			profileEmail = user.Email
 		}
+		var apiTokenViews []AccountAPITokenView
+		if a.Auth != nil && userID > 0 {
+			tokens, tokenErr := a.Auth.ListAPITokens(r.Context(), userID)
+			if tokenErr != nil {
+				slog.ErrorContext(r.Context(), "account api tokens", "error", tokenErr)
+				serverError(w, r)
+				return
+			}
+			now := time.Now()
+			apiTokenViews = make([]AccountAPITokenView, 0, len(tokens))
+			for _, tok := range tokens {
+				apiTokenViews = append(apiTokenViews, accountAPITokenView(tok, now))
+			}
+		}
 		a.Render(w, a.Templates.Account, AccountPageData{
 			Title:           "Your Account",
 			Flash:           popFlash(w, r),
 			Orders:          orders,
 			Bookings:        bookingViews,
+			APITokens:       apiTokenViews,
+			NewAPIToken:     popNewAPITokenFlash(w, r),
 			Pager:           newPager(r, page, accountOrdersPerPage, total),
 			Viewer:          viewerFromRequest(r),
 			ProfileUsername: profileUsername,
@@ -272,5 +306,150 @@ func AccountProfileUpdate(a *app.App) http.HandlerFunc {
 			slog.ErrorContext(r.Context(), "update account profile", "error", err)
 			serverError(w, r)
 		}
+	}
+}
+
+const newAPITokenCookieName = "new_api_token"
+
+func accountAPITokenView(tok db.APIToken, now time.Time) AccountAPITokenView {
+	view := AccountAPITokenView{
+		ID:          tok.ID,
+		Name:        tok.Name,
+		TokenPrefix: tok.TokenPrefix,
+		ClientType:  tok.ClientType,
+		CreatedAt:   tok.CreatedAt,
+		IsRevoked:   tok.RevokedAt.Valid,
+		IsExpired:   tok.ExpiresAt.Valid && !tok.ExpiresAt.Time.After(now),
+	}
+	if tok.LastUsedAt.Valid {
+		t := tok.LastUsedAt.Time
+		view.LastUsedAt = &t
+	}
+	if tok.ExpiresAt.Valid {
+		t := tok.ExpiresAt.Time
+		view.ExpiresAt = &t
+	}
+	if tok.RevokedAt.Valid {
+		t := tok.RevokedAt.Time
+		view.RevokedAt = &t
+	}
+	return view
+}
+
+func setNewAPITokenFlash(w http.ResponseWriter, rawToken string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     newAPITokenCookieName,
+		Value:    base64.RawURLEncoding.EncodeToString([]byte(rawToken)),
+		Path:     "/account",
+		MaxAge:   60,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func popNewAPITokenFlash(w http.ResponseWriter, r *http.Request) string {
+	cookie, err := r.Cookie(newAPITokenCookieName)
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     newAPITokenCookieName,
+		Value:    "",
+		Path:     "/account",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	raw, err := base64.RawURLEncoding.DecodeString(cookie.Value)
+	if err != nil || len(raw) > 256 {
+		return ""
+	}
+	tok := string(raw)
+	if !strings.HasPrefix(tok, "smk_") {
+		return ""
+	}
+	return tok
+}
+
+// AccountTokenCreate creates a new self-serve API token for the signed-in user.
+func AccountTokenCreate(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		userID, ok := requestUserID(r)
+		if !ok || userID <= 0 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			redirectWithFlash(w, r, "/account", "danger", "Invalid form submission.")
+			return
+		}
+		name := strings.TrimSpace(r.PostForm.Get("name"))
+		if len(name) == 0 || len(name) > 100 {
+			redirectWithFlash(w, r, "/account", "danger", "Token name must be 1 to 100 characters.")
+			return
+		}
+		clientType := strings.TrimSpace(r.PostForm.Get("client_type"))
+		if clientType == "" {
+			clientType = "agent"
+		}
+		if len(clientType) > 32 {
+			redirectWithFlash(w, r, "/account", "danger", "Client type must be at most 32 characters.")
+			return
+		}
+		var expiresAt sql.NullTime
+		if rawDays := strings.TrimSpace(r.PostForm.Get("expires_in_days")); rawDays != "" {
+			days, err := strconv.Atoi(rawDays)
+			if err != nil || days <= 0 || days > 3650 {
+				redirectWithFlash(w, r, "/account", "danger", "Expiration must be between 1 and 3650 days.")
+				return
+			}
+			expiresAt = sql.NullTime{
+				Time:  time.Now().Add(time.Duration(days) * 24 * time.Hour),
+				Valid: true,
+			}
+		}
+		_, rawToken, err := a.Auth.CreateAPIToken(r.Context(), userID, name, clientType, expiresAt)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "create account api token", "error", err)
+			serverError(w, r)
+			return
+		}
+		setNewAPITokenFlash(w, rawToken)
+		redirectWithFlash(w, r, "/account", "success", "API token created. Copy it now; it will not be shown again.")
+	}
+}
+
+// AccountTokenRevoke revokes an API token owned by the signed-in user.
+func AccountTokenRevoke(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		userID, ok := requestUserID(r)
+		if !ok || userID <= 0 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		tokenID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || tokenID <= 0 {
+			http.NotFound(w, r)
+			return
+		}
+		revoked, err := a.Auth.RevokeAPIToken(r.Context(), userID, tokenID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "revoke account api token", "error", err)
+			serverError(w, r)
+			return
+		}
+		if !revoked {
+			redirectWithFlash(w, r, "/account", "danger", "API token not found or already revoked.")
+			return
+		}
+		redirectWithFlash(w, r, "/account", "success", "API token revoked.")
 	}
 }
