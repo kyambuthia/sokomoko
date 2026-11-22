@@ -102,9 +102,9 @@ func (h *Handler) partnerProducts(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		page, limit, ok := parsePageParams(w, r)
-	if !ok {
-		return
-	}
+		if !ok {
+			return
+		}
 		data, total, err := h.app.Partner.ProductsPageForActor(r.Context(), partnerActor(r), page, limit)
 		if err != nil {
 			writePartnerError(w, err)

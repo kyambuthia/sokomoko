@@ -100,9 +100,9 @@ func (h *Handler) ownServices(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		page, limit, ok := parsePageParams(w, r)
-	if !ok {
-		return
-	}
+		if !ok {
+			return
+		}
 		items, total, err := h.app.Directory.OwnByState(r.Context(), serviceActor(r), r.URL.Query().Get("state"), page, limit)
 		if err != nil {
 			writeServiceError(w, err)
