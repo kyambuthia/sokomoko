@@ -1251,7 +1251,7 @@
             viewer goes through that function rather than pattern-matching this document.
             Left as `null` for the standalone case.
         -->
-        <script type="application/json" id="sse-bootstrap">{"settings":{"version":2,"tonemapping":"linear","highPrecisionRendering":false,"background":{"color":[0,0,0]},"postEffectSettings":{"sharpness":{"enabled":false,"amount":0},"bloom":{"enabled":false,"intensity":0.1,"blurLevel":2},"grading":{"enabled":false,"brightness":1,"contrast":1,"saturation":1,"tint":[1,1,1]},"vignette":{"enabled":false,"intensity":0.5,"inner":0.3,"outer":0.75,"curvature":1},"fringing":{"enabled":false,"intensity":0.5}},"animTracks":[],"cameras":[{"initial":{"position":[2,2,-2],"target":[0,0,0],"fov":85}}],"annotations":[],"startMode":"default"},"contentUrl":"/outputs/ceramic-mug.ply"}</script>
+        <script type="application/json" id="sse-bootstrap">{"settings":{"version":2,"tonemapping":"linear","highPrecisionRendering":false,"background":{"color":[0,0,0]},"postEffectSettings":{"sharpness":{"enabled":false,"amount":0},"bloom":{"enabled":false,"intensity":0.1,"blurLevel":2},"grading":{"enabled":false,"brightness":1,"contrast":1,"saturation":1,"tint":[1,1,1]},"vignette":{"enabled":false,"intensity":0.5,"inner":0.3,"outer":0.75,"curvature":1},"fringing":{"enabled":false,"intensity":0.5}},"animTracks":[],"cameras":[],"annotations":[],"startMode":"default"},"contentUrl":"/outputs/ceramic-mug.ply"}</script>
 
         <script type="module">
             const createImage = (url) => {
@@ -95351,7 +95351,7 @@ class Quality {
 // Annotated so the published declaration widens to `number`; without it the emitted type is
 // the literal `75`, which bakes the value into the api.
 // eslint-disable-next-line @typescript-eslint/no-inferrable-types
-const DEFAULT_CAMERA_FOV = 85;
+const DEFAULT_CAMERA_FOV = 50;
 /**
  * Default post-processing settings, with every effect disabled.
  *
@@ -103931,7 +103931,7 @@ const createFigure8Track = (position, target, fov, size = 1, keys = 24, duration
  * @param duration - The duration of the animation in seconds.
  * @returns - The animation track object containing position and target keyframes.
  */
-const createRotateTrack = (position, target, fov, keys = 12, duration = 20) => {
+const createRotateTrack = (position, target, fov, keys = 12, duration = 32) => {
     const times = new Array(keys).fill(0).map((_, i) => (i / keys) * duration);
     const positions = [];
     const targets = [];
@@ -105776,7 +105776,7 @@ const createCamera = (position, target, fov) => {
 };
 const createFrameCamera = (bbox, fov) => {
     const sceneSize = bbox.halfExtents.length();
-    const distance = sceneSize / Math.sin((fov / 180) * Math.PI * 0.5);
+    const distance = (sceneSize / Math.sin((fov / 180) * Math.PI * 0.5)) * 0.78;
     return createCamera(new Vec3(2, 1, 2).normalize().mulScalar(distance).add(bbox.center), bbox.center, fov);
 };
 class CameraManager {
