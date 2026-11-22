@@ -711,7 +711,10 @@ func TestSignUpAPI_LoginAPISucceeds(t *testing.T) {
 		email    = "apiuser1@example.com"
 		password = "correct-horse-battery"
 	)
-	status, code, msg := svc.SignUpAPI(t.Context(), username, email, password)
+	signupReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/signup", nil)
+	signupReq.RemoteAddr = "127.0.0.1:4321"
+	signupRR := httptest.NewRecorder()
+	status, code, msg := svc.SignUpAPI(t.Context(), signupRR, signupReq, username, email, password)
 	if status != http.StatusCreated || code != "" || msg != "" {
 		t.Fatalf("SignUpAPI() = (%d, %q, %q), want (201, \"\", \"\")", status, code, msg)
 	}

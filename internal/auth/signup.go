@@ -54,6 +54,15 @@ func (s *Service) SignUp(tmpl TemplateRenderer) http.HandlerFunc {
 			return
 		}
 
+		const signupScope = "signup"
+		ipLocked, ipGeneration := s.checkAbuseLockByIP(w, signupScope, r)
+		if ipLocked {
+			data.Error = "Too many attempts. Please wait and try again."
+			renderWithStatus(w, tmpl, http.StatusTooManyRequests, data)
+			return
+		}
+		s.recordAbuseAttemptByIP(signupScope, r, ipGeneration)
+
 		username := strings.TrimSpace(r.FormValue("username"))
 		email := normalizeEmail(r.FormValue("email"))
 		password := r.FormValue("password")

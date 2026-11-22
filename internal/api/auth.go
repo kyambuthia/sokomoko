@@ -16,7 +16,7 @@ func loginScopeForHost(r *http.Request) (string, []string) {
 	}
 	switch {
 	case strings.HasPrefix(host, "admin."):
-		return "login:admin", []string{domain.RoleAdmin, domain.RoleStaff}
+		return "login:workspace", []string{domain.RoleAdmin, domain.RoleStaff}
 	case strings.HasPrefix(host, "partner."):
 		return "login:workspace", []string{domain.RoleAdmin, domain.RoleStaff, domain.RolePartner}
 	case strings.HasPrefix(host, "courier."):
@@ -72,7 +72,7 @@ func (h *Handler) authSignUp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 		return
 	}
-	status, errCode, errMsg := h.app.Auth.SignUpAPI(r.Context(), input.Username, input.Email, input.Password)
+	status, errCode, errMsg := h.app.Auth.SignUpAPI(r.Context(), w, r, input.Username, input.Email, input.Password)
 	if errCode != "" {
 		writeError(w, status, errCode, errMsg)
 		return

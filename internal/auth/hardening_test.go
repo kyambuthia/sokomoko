@@ -253,3 +253,176 @@ func TestDispatchPasswordResetEmail_RetriesTransientFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestClientIP_TrailingCommaAndInvalidEntries(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.5:1234"
+	req.Header.Set("X-Forwarded-For", "203.0.113.9, ")
+	if got := ClientIP(req, true); got != "203.0.113.9" {
+		t.Fatalf("trailing comma ClientIP = %q, want 203.0.113.9", got)
+	}
+
+	req.Header.Set("X-Forwarded-For", "203.0.113.9, not-an-ip")
+	if got := ClientIP(req, true); got != "203.0.113.9" {
+		t.Fatalf("trailing invalid entry ClientIP = %q, want 203.0.113.9", got)
+	}
+
+	req.Header.Set("X-Forwarded-For", "garbage, , also-bad")
+	if got := ClientIP(req, true); got != "10.0.0.5" {
+		t.Fatalf("all-invalid ClientIP = %q, want 10.0.0.5", got)
+	}
+}
+
+func TestLogin_IPLockoutAcrossUsernames(t *testing.T) {
+	clearAuthTables()
+	svc := newTestService(Config{
+		AuthAbuseMaxFailures: 2,
+		AuthAbuseBackoffBase: time.Minute,
+		AuthAbuseBackoffMax:  5 * time.Minute,
+	})
+	tmpl := template.Must(template.New("login.html").Parse(`{{define "root_template"}}{{.Error}}{{end}}`))
+	handler := svc.Login(tmpl)
+
+	for _, username := range []string{"nope1", "nope2"} {
+		form := url.Values{"username": {username}, "password": {"wrong-password"}}
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "198.51.100.10:1234"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt for %s: status=%d, want 401", username, rr.Code)
+		}
+	}
+
+	form := url.Values{"username": {"nope3"}, "password": {"wrong-password"}}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.10:1234"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("third attempt across new username: status=%d, want 429", rr.Code)
+	}
+}
+
+func TestLoginAPI_IPLockoutAndSessionRevocation(t *testing.T) {
+	clearAuthTables()
+	user := createTestUser("apilogin", "apilogin@example.com", "correct-horse-battery", domain.RoleUser)
+	_ = testStore.CreateSession(t.Context(), db.Session{
+		ID:        "pre-login-session",
+		UserID:    user.ID,
+		CSRFToken: "old-csrf",
+		ExpiresAt: time.Now().Add(time.Hour),
+	})
+
+	svc := newTestService(Config{
+		AuthAbuseMaxFailures: 2,
+		AuthAbuseBackoffBase: time.Minute,
+		AuthAbuseBackoffMax:  5 * time.Minute,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	req.RemoteAddr = "198.51.100.20:1111"
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "pre-login-session"})
+	rr := httptest.NewRecorder()
+	_, _, status, _, _ := svc.LoginAPI(t.Context(), rr, req, user.Username, "correct-horse-battery", "login:user", []string{domain.RoleUser})
+	if status != http.StatusOK {
+		t.Fatalf("LoginAPI status=%d, want 200", status)
+	}
+	if oldSess, err := testStore.GetSession(t.Context(), "pre-login-session"); err == nil && oldSess != nil {
+		t.Fatal("expected pre-login session to be revoked on LoginAPI")
+	}
+
+	for _, username := range []string{"bad1", "bad2"} {
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+		r.RemoteAddr = "198.51.100.21:2222"
+		w := httptest.NewRecorder()
+		_, _, code, _, _ := svc.LoginAPI(t.Context(), w, r, username, "wrong-password", "login:user", []string{domain.RoleUser})
+		if code != http.StatusUnauthorized {
+			t.Fatalf("LoginAPI(%s) status=%d, want 401", username, code)
+		}
+	}
+	r3 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	r3.RemoteAddr = "198.51.100.21:2222"
+	w3 := httptest.NewRecorder()
+	_, _, code, _, _ := svc.LoginAPI(t.Context(), w3, r3, "bad3", "wrong-password", "login:user", []string{domain.RoleUser})
+	if code != http.StatusTooManyRequests {
+		t.Fatalf("third LoginAPI attempt status=%d, want 429", code)
+	}
+}
+
+func TestAdminAndWorkspaceLogin_ShareAbuseScope(t *testing.T) {
+	clearAuthTables()
+	createTestUser("admin1", "admin1@example.com", "correct-horse-battery", domain.RoleAdmin)
+	svc := newTestService(Config{
+		AuthAbuseMaxFailures: 2,
+		AuthAbuseBackoffBase: time.Minute,
+		AuthAbuseBackoffMax:  5 * time.Minute,
+	})
+	tmpl := template.Must(template.New("admin_login.html").Parse(`{{define "root_template"}}{{.Error}}{{end}}`))
+
+	// Fail once on AdminLogin, then once on WorkspaceLogin -> 2 failures in shared scope locks out 3rd attempt.
+	for i, handler := range []http.HandlerFunc{svc.AdminLogin(tmpl), svc.WorkspaceLogin(tmpl)} {
+		form := url.Values{"username": {"admin1"}, "password": {"wrong-password"}}
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "198.51.100.30:3333"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("step %d: status=%d, want 401", i, rr.Code)
+		}
+	}
+
+	form := url.Values{"username": {"admin1"}, "password": {"correct-horse-battery"}}
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.30:3333"
+	rr := httptest.NewRecorder()
+	svc.WorkspaceLogin(tmpl).ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected shared scope lockout (429), got %d", rr.Code)
+	}
+}
+
+func TestSignUp_And_SignUpAPI_IPRateLimit(t *testing.T) {
+	clearAuthTables()
+	svc := newTestService(Config{
+		AuthAbuseMaxFailures: 2,
+		AuthAbuseBackoffBase: time.Minute,
+		AuthAbuseBackoffMax:  5 * time.Minute,
+	})
+	tmpl := template.Must(template.New("signup.html").Parse(`{{define "root_template"}}{{.Error}}{{end}}`))
+	handler := svc.SignUp(tmpl)
+
+	for i := 0; i < 2; i++ {
+		form := url.Values{"username": {""}, "email": {""}, "password": {""}}
+		req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "198.51.100.40:4444"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("SignUp attempt %d status=%d, want 400", i, rr.Code)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader("username=u&email=e&password=p"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "198.51.100.40:4444"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("SignUp 3rd attempt status=%d, want 429", rr.Code)
+	}
+
+	// SignUpAPI from the same IP is also rate limited.
+	apiReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/signup", nil)
+	apiReq.RemoteAddr = "198.51.100.40:4444"
+	apiRR := httptest.NewRecorder()
+	status, code, _ := svc.SignUpAPI(t.Context(), apiRR, apiReq, "validuser", "valid@example.com", "correct-horse-battery")
+	if status != http.StatusTooManyRequests || code != "rate_limited" {
+		t.Fatalf("SignUpAPI status=%d code=%q, want 429 rate_limited", status, code)
+	}
+}

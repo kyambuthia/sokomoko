@@ -67,3 +67,32 @@ func TestAuthAbuseLimiter_ExponentialBackoffAndReset(t *testing.T) {
 		t.Fatal("expected success to clear lock")
 	}
 }
+
+func TestAuthAbuseLimiter_SaturatedMapFailsClosed(t *testing.T) {
+	limiter := newAuthAbuseLimiter(1, time.Minute, 5*time.Minute)
+	if limiter == nil {
+		t.Fatal("expected limiter")
+	}
+
+	now := time.Unix(1000, 0)
+	for i := 0; i < maxAuthAbuseEntries; i++ {
+		limiter.observeLock(string(rune('a'+i%26))+":"+time.Duration(i).String(), time.Minute, now)
+	}
+	if len(limiter.entries) != maxAuthAbuseEntries {
+		t.Fatalf("entries=%d, want %d", len(limiter.entries), maxAuthAbuseEntries)
+	}
+
+	locked, retryAfter := limiter.IsLocked("brand-new-untracked-key", now)
+	if !locked {
+		t.Fatal("expected saturated limiter to fail closed for untracked key")
+	}
+	if retryAfter <= 0 {
+		t.Fatalf("retryAfter=%v, want > 0", retryAfter)
+	}
+
+	afterExpiry := now.Add(time.Minute + time.Second)
+	locked, _ = limiter.IsLocked("brand-new-untracked-key", afterExpiry)
+	if locked {
+		t.Fatal("expected untracked key to be allowed after expired entry is evicted")
+	}
+}

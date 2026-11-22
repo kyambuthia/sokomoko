@@ -54,7 +54,7 @@ func (s *Service) Login(tmpl TemplateRenderer) http.HandlerFunc {
 // AdminLogin handles admin and staff authentication on the admin host. When no
 // admin exists yet it redirects to the first-run /setup flow.
 func (s *Service) AdminLogin(tmpl TemplateRenderer) http.HandlerFunc {
-	return s.workspaceLogin(tmpl, "/setup", "Admin Login", "login:admin", []string{domain.RoleAdmin, domain.RoleStaff})
+	return s.workspaceLogin(tmpl, "/setup", "Admin Login", "login:workspace", []string{domain.RoleAdmin, domain.RoleStaff})
 }
 
 // WorkspaceLogin serves the partner host. Before an admin exists it explains
@@ -117,6 +117,11 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 		renderWithStatus(w, cfg.tmpl, http.StatusBadRequest, withError(data, "Username and password are required"))
 		return
 	}
+	ipLocked, ipGeneration := s.checkAbuseLockByIP(w, cfg.abuseScope, r)
+	if ipLocked {
+		renderWithStatus(w, cfg.tmpl, http.StatusTooManyRequests, withError(data, "Too many attempts. Please wait and try again."))
+		return
+	}
 	locked, abuseGeneration := s.checkAbuseLock(w, cfg.abuseScope, username, false, r)
 	if locked {
 		renderWithStatus(w, cfg.tmpl, http.StatusTooManyRequests, withError(data, "Too many attempts. Please wait and try again."))
@@ -134,6 +139,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request, cfg loginC
 	}
 	if !checkPassword(user, password) {
 		s.markAbuseFailure(cfg.abuseScope, username, false, r, abuseGeneration)
+		s.recordAbuseAttemptByIP(cfg.abuseScope, r, ipGeneration)
 		renderWithStatus(w, cfg.tmpl, http.StatusUnauthorized, withError(data, "Invalid credentials"))
 		return
 	}

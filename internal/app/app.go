@@ -190,7 +190,7 @@ type AuthService interface {
 	PasswordChange(tmpl auth.TemplateRenderer, action, backHref string) http.HandlerFunc
 	WorkspaceLogin(tmpl auth.TemplateRenderer) http.HandlerFunc
 	LoginAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, username, password, abuseScope string, allowedRoles []string) (*db.User, string, int, string, string)
-	SignUpAPI(ctx context.Context, username, email, password string) (int, string, string)
+	SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, username, email, password string) (int, string, string)
 	LogoutAPI(ctx context.Context, w http.ResponseWriter, r *http.Request)
 	ChangePasswordAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, user *db.User, currentPassword, newPassword string) (string, int, string, string)
 }

@@ -82,6 +82,13 @@ func (l *authAbuseLimiter) IsLocked(key string, now time.Time) (bool, time.Durat
 
 	entry, ok := l.entries[key]
 	if !ok {
+		if len(l.entries) >= maxAuthAbuseEntries && !l.evictOldestUnlockedLocked(now) {
+			retryAfter := l.saturatedUntil.Sub(now)
+			if retryAfter <= 0 {
+				retryAfter = l.backoffBase
+			}
+			return true, retryAfter
+		}
 		return false, 0
 	}
 	if entry.lockedUntil.IsZero() || !entry.lockedUntil.After(now) {
@@ -199,8 +206,8 @@ func (l *authAbuseLimiter) removeLocked(key string) {
 	l.saturatedUntil = time.Time{}
 }
 
-// evictOldestUnlockedLocked protects active lockouts and leaves new keys
-// untracked when every slot is locked, avoiding a global authentication outage.
+// evictOldestUnlockedLocked protects active lockouts; when every slot is
+// locked it signals saturation so IsLocked fails closed for untracked keys.
 func (l *authAbuseLimiter) evictOldestUnlockedLocked(now time.Time) bool {
 	if l.saturatedUntil.After(now) {
 		return false
@@ -288,13 +295,16 @@ func ClientIP(r *http.Request, trustProxy bool) string {
 	}
 	if trustProxy {
 		values := r.Header.Values("X-Forwarded-For")
-		if len(values) > 0 {
-			last := values[len(values)-1]
-			if i := strings.LastIndex(last, ","); i >= 0 {
-				last = last[i+1:]
-			}
-			if candidate := strings.TrimSpace(last); candidate != "" {
-				return candidate
+		for i := len(values) - 1; i >= 0; i-- {
+			parts := strings.Split(values[i], ",")
+			for j := len(parts) - 1; j >= 0; j-- {
+				candidate := strings.TrimSpace(parts[j])
+				if candidate == "" {
+					continue
+				}
+				if ip := net.ParseIP(candidate); ip != nil {
+					return ip.String()
+				}
 			}
 		}
 	}
@@ -350,6 +360,9 @@ func boundedAbuseKeyComponent(value string) string {
 }
 
 func (s *Service) throttleStatus(w http.ResponseWriter, retryAfter time.Duration) {
+	if w == nil {
+		return
+	}
 	if retryAfter <= 0 {
 		retryAfter = time.Second
 	}

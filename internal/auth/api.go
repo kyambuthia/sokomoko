@@ -19,6 +19,10 @@ func (s *Service) LoginAPI(ctx context.Context, w http.ResponseWriter, r *http.R
 	if username == "" || password == "" {
 		return nil, "", http.StatusBadRequest, "invalid_request", "Username and password are required"
 	}
+	ipLocked, ipGeneration := s.checkAbuseLockByIP(w, abuseScope, r)
+	if ipLocked {
+		return nil, "", http.StatusTooManyRequests, "rate_limited", "Too many attempts. Please wait and try again."
+	}
 	locked, abuseGeneration := s.checkAbuseLock(w, abuseScope, username, false, r)
 	if locked {
 		return nil, "", http.StatusTooManyRequests, "rate_limited", "Too many attempts. Please wait and try again."
@@ -34,6 +38,7 @@ func (s *Service) LoginAPI(ctx context.Context, w http.ResponseWriter, r *http.R
 	}
 	if !checkPassword(user, password) {
 		s.markAbuseFailure(abuseScope, username, false, r, abuseGeneration)
+		s.recordAbuseAttemptByIP(abuseScope, r, ipGeneration)
 		return nil, "", http.StatusUnauthorized, "invalid_credentials", "Invalid credentials"
 	}
 	s.clearAbuseFailures(abuseScope, username, false, r)
@@ -49,6 +54,7 @@ func (s *Service) LoginAPI(ctx context.Context, w http.ResponseWriter, r *http.R
 		}
 	}
 
+	s.revokeRequestSessions(ctx, r, "api sign-in: revoke previous session")
 	session, err := s.newSession(user.ID)
 	if err != nil {
 		return nil, "", http.StatusInternalServerError, "login_failed", "Unable to create session"
@@ -66,7 +72,14 @@ func (s *Service) LoginAPI(ctx context.Context, w http.ResponseWriter, r *http.R
 }
 
 // SignUpAPI registers a new customer account via JSON API.
-func (s *Service) SignUpAPI(ctx context.Context, username, email, password string) (int, string, string) {
+func (s *Service) SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, username, email, password string) (int, string, string) {
+	const signupScope = "signup"
+	ipLocked, ipGeneration := s.checkAbuseLockByIP(w, signupScope, r)
+	if ipLocked {
+		return http.StatusTooManyRequests, "rate_limited", "Too many attempts. Please wait and try again."
+	}
+	s.recordAbuseAttemptByIP(signupScope, r, ipGeneration)
+
 	username = strings.TrimSpace(username)
 	email = normalizeEmail(email)
 	switch {
@@ -123,6 +136,7 @@ func (s *Service) ChangePasswordAPI(ctx context.Context, w http.ResponseWriter, 
 	if err != nil {
 		return "", http.StatusInternalServerError, "password_change_failed", "Unable to change password"
 	}
+	s.revokeRequestSessions(ctx, r, "api sign-in: revoke previous session")
 	session, err := s.newSession(user.ID)
 	if err != nil {
 		return "", http.StatusInternalServerError, "password_change_failed", "Unable to change password"
