@@ -59,11 +59,11 @@ func RegisterPublic(a *app.App, mux *http.ServeMux) {
 	mux.Handle("/cart/remove", customer(CartRemove(a)))
 	mux.Handle("/checkout", customer(Checkout(a)))
 	mux.Handle("/account", customer(Account(a)))
-	mux.Handle("/account/profile", demoReadOnly(a, "/account", customer(AccountProfileUpdate(a))))
+	mux.Handle("/account/profile", customer(demoReadOnly(a, "/account", AccountProfileUpdate(a))))
 	mux.Handle("/account/service-bookings", withRole(a, domain.RoleUser, AccountServiceBookings(a)))
-	mux.Handle("/account/orders/{id}/cancel", demoReadOnly(a, "/account", customer(AccountOrderCancel(a))))
-	mux.Handle("/account/bookings/{id}/cancel", demoReadOnly(a, "/account/service-bookings", withRole(a, domain.RoleUser, AccountBookingCancel(a))))
-	mux.Handle("/account/password", demoReadOnly(a, "/account/password", customer(a.Auth.PasswordChange(a.Templates.PasswordChange, "/account/password", "/account"))))
+	mux.Handle("/account/orders/{id}/cancel", customer(demoReadOnly(a, "/account", AccountOrderCancel(a))))
+	mux.Handle("/account/bookings/{id}/cancel", withRole(a, domain.RoleUser, demoReadOnly(a, "/account/service-bookings", AccountBookingCancel(a))))
+	mux.Handle("/account/password", customer(demoReadOnly(a, "/account/password", a.Auth.PasswordChange(a.Templates.PasswordChange, "/account/password", "/account"))))
 	registerMessaging(a, mux, "storefront", roleUser)
 	if a.DemoMode {
 		mux.Handle("/payments/", http.NotFoundHandler())
@@ -93,9 +93,9 @@ func RegisterAdmin(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	mux.HandleFunc("/login", a.Auth.AdminLogin(a.Templates.AdminLogin))
 	mux.HandleFunc("/logout", a.Auth.Logout())
 	registerPasswordReset(a, mux, roleAdminStaff, "Reset Admin or Staff Password", "Enter username or email to request a password reset for admin or staff access.", "Set New Admin or Staff Password", "Choose a new password for your admin/staff account.", "/login")
-	mux.Handle("/staff/signup", demoReadOnly(a, "/staff/signup", withRole(a, domain.RoleAdmin, a.Auth.StaffSignUp(a.Templates.StaffSignup))))
-	mux.Handle("/couriers/new", demoReadOnly(a, "/couriers/new", withRole(a, domain.RoleAdmin, a.Auth.CourierSignUp(a.Templates.CourierSignup))))
-	mux.Handle("/password", demoReadOnly(a, "/password", withAnyRole(a, roleAdminStaff, a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/"))))
+	mux.Handle("/staff/signup", withRole(a, domain.RoleAdmin, demoReadOnly(a, "/staff/signup", a.Auth.StaffSignUp(a.Templates.StaffSignup))))
+	mux.Handle("/couriers/new", withRole(a, domain.RoleAdmin, demoReadOnly(a, "/couriers/new", a.Auth.CourierSignUp(a.Templates.CourierSignup))))
+	mux.Handle("/password", withAnyRole(a, roleAdminStaff, demoReadOnly(a, "/password", a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/"))))
 
 	adminHandlers := http.NewServeMux()
 	adminHandlers.HandleFunc("/", AdminDashboard(a))
@@ -127,22 +127,22 @@ func RegisterPartner(a *app.App, mux *http.ServeMux, trustProxyHeaders bool) {
 	mux.HandleFunc("/login", a.Auth.WorkspaceLogin(a.Templates.AdminLogin))
 	mux.HandleFunc("/logout", a.Auth.Logout())
 	registerPasswordReset(a, mux, rolePartnerOps, "Reset Partner Password", "Enter username or email to request a password reset for partner access.", "Set New Partner Password", "Choose a new password for your partner account.", "/login")
-	mux.Handle("/setup", demoReadOnly(a, "/setup", staff(PartnerSetup(a))))
+	mux.Handle("/setup", staff(demoReadOnly(a, "/setup", PartnerSetup(a))))
 	mux.Handle("/dashboard", staff(PartnerDashboard(a)))
 	mux.Handle("/products", staff(PartnerProducts(a)))
 	mux.Handle("/media/product-images/{id}", ProductImage(a))
 	mux.Handle("/media/product-videos/{id}", ProductVideo(a))
-	mux.Handle("/products/new", demoReadOnly(a, "/products/new", staff(PartnerProductNew(a))))
+	mux.Handle("/products/new", staff(demoReadOnly(a, "/products/new", PartnerProductNew(a))))
 	mux.Handle("/services", withRole(a, domain.RolePartner, Services(a, true)))
 	mux.Handle("/service-bookings", withRole(a, domain.RolePartner, PartnerServiceBookings(a)))
-	mux.Handle("/service-bookings/{id}/status", demoReadOnly(a, "/service-bookings", withRole(a, domain.RolePartner, PartnerServiceBookingAction(a))))
-	mux.Handle("/services/new", demoReadOnly(a, "/services/new", withRole(a, domain.RolePartner, PartnerServiceEdit(a))))
+	mux.Handle("/service-bookings/{id}/status", withRole(a, domain.RolePartner, demoReadOnly(a, "/service-bookings", PartnerServiceBookingAction(a))))
+	mux.Handle("/services/new", withRole(a, domain.RolePartner, demoReadOnly(a, "/services/new", PartnerServiceEdit(a))))
 	mux.Handle("/services/{id}/preview", withRole(a, domain.RolePartner, PartnerServicePreview(a)))
-	mux.Handle("/services/{id}/edit", demoReadOnly(a, "", withRole(a, domain.RolePartner, PartnerServiceEdit(a))))
-	mux.Handle("/products/{id}/edit", demoReadOnly(a, "", staff(PartnerProductEdit(a))))
-	mux.Handle("/products/{id}/delete", demoReadOnly(a, "/products", staff(PartnerProductDelete(a))))
-	mux.Handle("/password", demoReadOnly(a, "/password", staff(a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/dashboard"))))
-	mux.Handle("/orders", demoReadOnly(a, "/orders", staff(PartnerOrders(a))))
+	mux.Handle("/services/{id}/edit", withRole(a, domain.RolePartner, demoReadOnly(a, "", PartnerServiceEdit(a))))
+	mux.Handle("/products/{id}/edit", staff(demoReadOnly(a, "", PartnerProductEdit(a))))
+	mux.Handle("/products/{id}/delete", staff(demoReadOnly(a, "/products", PartnerProductDelete(a))))
+	mux.Handle("/password", staff(demoReadOnly(a, "/password", a.Auth.PasswordChange(a.Templates.PasswordChange, "/password", "/dashboard"))))
+	mux.Handle("/orders", staff(demoReadOnly(a, "/orders", PartnerOrders(a))))
 	registerMessaging(a, mux, "partner", []string{domain.RolePartner})
 }
 
@@ -159,9 +159,9 @@ func registerPasswordReset(a *app.App, mux *http.ServeMux, roles []string, reque
 	))
 }
 
-func demoReadOnly(a *app.App, redirectTo string, next http.Handler) http.Handler {
+func demoReadOnly(a *app.App, redirectTo string, next http.Handler) http.HandlerFunc {
 	if !a.DemoMode {
-		return next
+		return next.ServeHTTP
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || auth.GetUserFromContext(r.Context()) == nil {

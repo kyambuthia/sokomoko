@@ -8,6 +8,7 @@ import (
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
 	"github.com/kyambuthia/sokomoko/internal/db"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 )
 
 func TestDemoReadOnly_AllowsGetAndUnauthenticatedAndBlocksAuthenticatedMutations(t *testing.T) {
@@ -43,5 +44,25 @@ func TestDemoReadOnly_AllowsGetAndUnauthenticatedAndBlocksAuthenticatedMutations
 	}
 	if postRec.Code != http.StatusFound || postRec.Header().Get("Location") != "/orders" {
 		t.Fatalf("POST code=%d location=%q, want 302 /orders", postRec.Code, postRec.Header().Get("Location"))
+	}
+}
+
+func TestDemoReadOnly_InsideRoleMiddlewareBlocksAuthenticatedPost(t *testing.T) {
+	a := &app.App{DemoMode: true}
+	called := false
+	handler := auth.RequireRole(domain.RolePartner, demoReadOnly(a, "/products", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	req := httptest.NewRequest(http.MethodPost, "/products/1/delete", nil)
+	req = req.WithContext(auth.ContextWithUser(req.Context(), &db.User{ID: 2, Role: domain.RolePartner}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if called {
+		t.Fatal("authenticated partner POST reached handler in demo mode")
+	}
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/products" {
+		t.Fatalf("POST code=%d location=%q, want 302 /products", rec.Code, rec.Header().Get("Location"))
 	}
 }
