@@ -14,8 +14,8 @@ import (
 )
 
 func (h *Handler) serviceAvailability(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 	availability, err := h.app.Bookings.Availability(r.Context(), r.PathValue("slug"), r.URL.Query().Get("date"))

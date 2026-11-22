@@ -68,4 +68,29 @@ func TestCatalogCategoriesAndStoreEndpoints(t *testing.T) {
 	if missingRec.Code != http.StatusNotFound {
 		t.Fatalf("missing store status=%d, want 404", missingRec.Code)
 	}
+
+	for _, path := range []string{
+		apiPrefix + "/catalog/products",
+		apiPrefix + "/catalog/search",
+		apiPrefix + "/catalog/categories",
+		apiPrefix + "/catalog/stores/urban-goods",
+	} {
+		headRec := httptest.NewRecorder()
+		mux.ServeHTTP(headRec, httptest.NewRequest(http.MethodHead, path, nil))
+		if headRec.Code != http.StatusOK {
+			t.Fatalf("HEAD %s status=%d, want 200", path, headRec.Code)
+		}
+		if headRec.Body.Len() != 0 {
+			t.Fatalf("HEAD %s wrote non-empty body: %q", path, headRec.Body.String())
+		}
+		if ct := headRec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Fatalf("HEAD %s Content-Type=%q, want application/json", path, ct)
+		}
+
+		postRec := httptest.NewRecorder()
+		mux.ServeHTTP(postRec, httptest.NewRequest(http.MethodPost, path, nil))
+		if postRec.Code != http.StatusMethodNotAllowed || postRec.Header().Get("Allow") != "GET, HEAD" {
+			t.Fatalf("POST %s status=%d allow=%q, want 405 and GET, HEAD", path, postRec.Code, postRec.Header().Get("Allow"))
+		}
+	}
 }

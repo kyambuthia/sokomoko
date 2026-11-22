@@ -201,7 +201,7 @@ func TestCatalogEndpoints(t *testing.T) {
 		// POST rejected
 		postRec := httptest.NewRecorder()
 		h.catalogProducts(postRec, httptest.NewRequest(http.MethodPost, apiPrefix+"/catalog/products", nil))
-		if postRec.Code != http.StatusMethodNotAllowed || postRec.Header().Get("Allow") != http.MethodGet {
+		if postRec.Code != http.StatusMethodNotAllowed || postRec.Header().Get("Allow") != "GET, HEAD" {
 			t.Fatalf("POST status=%d allow=%q", postRec.Code, postRec.Header().Get("Allow"))
 		}
 

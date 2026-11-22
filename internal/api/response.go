@@ -46,3 +46,23 @@ func methodNotAllowed(w http.ResponseWriter, allowed ...string) {
 	w.Header().Set("Allow", strings.Join(allowed, ", "))
 	writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 }
+
+type headResponseWriter struct {
+	http.ResponseWriter
+}
+
+func (headResponseWriter) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+func requireGetOrHead(w http.ResponseWriter, r *http.Request) (http.ResponseWriter, bool) {
+	switch r.Method {
+	case http.MethodGet:
+		return w, true
+	case http.MethodHead:
+		return headResponseWriter{ResponseWriter: w}, true
+	default:
+		methodNotAllowed(w, http.MethodGet, http.MethodHead)
+		return w, false
+	}
+}

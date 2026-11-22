@@ -20,8 +20,8 @@ type catalogListDTO struct {
 }
 
 func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 
@@ -41,8 +41,8 @@ func (h *Handler) catalogProducts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 
@@ -74,8 +74,8 @@ func (h *Handler) catalogSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) catalogProduct(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 	slug := pathTail(r.URL.Path, apiPrefix+"/catalog/products/")
@@ -131,8 +131,8 @@ func parseQueryInt(r *http.Request, key string, fallback int) int {
 }
 
 func (h *Handler) catalogCategories(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 	categories, err := h.app.Catalog.Categories(r.Context())
@@ -153,8 +153,8 @@ func (h *Handler) catalogCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) catalogStore(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 	slug := strings.TrimSpace(r.PathValue("slug"))

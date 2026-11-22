@@ -17,8 +17,8 @@ func serviceActor(r *http.Request) *directorysvc.Actor {
 	return &directorysvc.Actor{ID: u.ID, Role: u.Role}
 }
 func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 	page, limit := pageParams(r)
@@ -82,8 +82,8 @@ func (h *Handler) serviceList(w http.ResponseWriter, r *http.Request) {
 	writeServicePage(w, items, total, page, limit)
 }
 func (h *Handler) serviceDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w, http.MethodGet)
+	w, ok := requireGetOrHead(w, r)
+	if !ok {
 		return
 	}
 	v, err := h.app.Directory.Public(r.Context(), r.PathValue("slug"))
