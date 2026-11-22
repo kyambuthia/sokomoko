@@ -12,6 +12,7 @@ import (
 
 	"github.com/kyambuthia/sokomoko/internal/app"
 	"github.com/kyambuthia/sokomoko/internal/auth"
+	"github.com/kyambuthia/sokomoko/internal/domain"
 	"github.com/kyambuthia/sokomoko/internal/money"
 	catalogsvc "github.com/kyambuthia/sokomoko/internal/service/catalog"
 )
@@ -319,5 +320,91 @@ func TestDemoMode_CheckoutRequiresAuthAndWriteGuardBlocksMutations(t *testing.T)
 	guarded.ServeHTTP(postRec, httptest.NewRequest(http.MethodPost, apiPrefix+"/partner/services", nil))
 	if called || postRec.Code != http.StatusForbidden {
 		t.Fatalf("POST demoWriteDisabled called=%v status=%d; want false/403", called, postRec.Code)
+	}
+}
+
+func TestRequireJSONContentType(t *testing.T) {
+	mux := http.NewServeMux()
+	Register(app.New(app.Dependencies{
+		Auth: &stubAuthService{user: &auth.User{ID: 1, Username: "alice", Email: "a@b.c", Role: domain.RoleUser}},
+	}), mux)
+
+	t.Run("rejects text/plain body with 415", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, apiPrefix+"/auth/login", strings.NewReader(`{"username":"a","password":"b"}`))
+		req.Header.Set("Content-Type", "text/plain")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnsupportedMediaType {
+			t.Fatalf("status = %d, want 415; body=%s", rec.Code, rec.Body.String())
+		}
+		if errBody := decodeErrEnvelope(t, rec); errBody.Code != "unsupported_media_type" {
+			t.Fatalf("error code = %q, want unsupported_media_type", errBody.Code)
+		}
+	})
+
+	t.Run("rejects missing Content-Type when body is sent with 415", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPatch, apiPrefix+"/me", strings.NewReader(`{"username":"bob","email":"b@b.c"}`))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnsupportedMediaType {
+			t.Fatalf("status = %d, want 415; body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("allows application/json with charset=utf-8 and bodyless POST", func(t *testing.T) {
+		logoutMux := http.NewServeMux()
+		Register(app.New(app.Dependencies{
+			Auth: &mockAPIAuth{
+				stubAuthService: stubAuthService{user: &auth.User{ID: 1, Username: "alice", Email: "a@b.c", Role: domain.RoleUser}},
+			},
+		}), logoutMux)
+		req := httptest.NewRequest(http.MethodPost, apiPrefix+"/auth/logout", nil)
+		rec := httptest.NewRecorder()
+		logoutMux.ServeHTTP(rec, req)
+		if rec.Code == http.StatusUnsupportedMediaType {
+			t.Fatalf("bodyless POST should not return 415")
+		}
+
+		h := &Handler{app: &app.App{}}
+		called := false
+		wrapped := h.requireJSON(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusOK)
+		}))
+		reqJSON := httptest.NewRequest(http.MethodPatch, apiPrefix+"/me", strings.NewReader(`{"username":"bob"}`))
+		reqJSON.Header.Set("Content-Type", "application/json; charset=utf-8")
+		recJSON := httptest.NewRecorder()
+		wrapped.ServeHTTP(recJSON, reqJSON)
+		if !called || recJSON.Code != http.StatusOK {
+			t.Fatalf("called=%v status=%d, want true/200", called, recJSON.Code)
+		}
+	})
+}
+
+func TestDemoMode_PatchMeChecksAuthThenDemoBeforeValidation(t *testing.T) {
+	unauthMux := http.NewServeMux()
+	Register(app.New(app.Dependencies{DemoMode: true, Auth: &auth.Service{}}), unauthMux)
+	unauthReq := httptest.NewRequest(http.MethodPatch, apiPrefix+"/me", strings.NewReader(`{"username":""}`))
+	unauthReq.Header.Set("Content-Type", "application/json")
+	unauthRec := httptest.NewRecorder()
+	unauthMux.ServeHTTP(unauthRec, unauthReq)
+	if unauthRec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated PATCH /api/v1/me status = %d, want 401", unauthRec.Code)
+	}
+
+	authMux := http.NewServeMux()
+	Register(app.New(app.Dependencies{
+		DemoMode: true,
+		Auth:     &stubAuthService{user: &auth.User{ID: 1, Username: "demo", Email: "demo@example.com", Role: domain.RoleUser}},
+	}), authMux)
+	authReq := httptest.NewRequest(http.MethodPatch, apiPrefix+"/me", strings.NewReader(`{"username":"","email":"bad"}`))
+	authReq.Header.Set("Content-Type", "application/json")
+	authRec := httptest.NewRecorder()
+	authMux.ServeHTTP(authRec, authReq)
+	if authRec.Code != http.StatusForbidden {
+		t.Fatalf("authenticated demo PATCH /api/v1/me status = %d, want 403; body=%s", authRec.Code, authRec.Body.String())
+	}
+	if errBody := decodeErrEnvelope(t, authRec); errBody.Code != "demo_mode" {
+		t.Fatalf("error code = %q, want demo_mode", errBody.Code)
 	}
 }

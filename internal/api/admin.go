@@ -57,7 +57,7 @@ func (h *Handler) registerAdminRoutes(mux *http.ServeMux) {
 	mux.Handle(apiPrefix+"/admin/metrics", h.role(adminStaff, http.HandlerFunc(h.adminMetrics)))
 	mux.Handle(apiPrefix+"/admin/products", h.role(adminStaff, http.HandlerFunc(h.adminProducts)))
 	mux.Handle(apiPrefix+"/admin/orders", h.role(adminStaff, http.HandlerFunc(h.adminOrdersList)))
-	mux.Handle(apiPrefix+"/admin/orders/{id}", h.role(adminStaff, h.demoWriteDisabled(http.HandlerFunc(h.adminOrderUpdate))))
+	mux.Handle(apiPrefix+"/admin/orders/{id}", h.role(adminStaff, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.adminOrderUpdate)))))
 	mux.Handle(apiPrefix+"/admin/reports", h.role(adminStaff, http.HandlerFunc(h.adminReports)))
 	mux.Handle(apiPrefix+"/admin/team", h.role(adminOnly, http.HandlerFunc(h.adminTeamList)))
 	mux.Handle(apiPrefix+"/admin/team/{id}", h.role(adminOnly, h.demoWriteDisabled(http.HandlerFunc(h.adminTeamDeactivate))))

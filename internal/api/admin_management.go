@@ -22,11 +22,11 @@ func (h *Handler) registerAdminManagementRoutes(mux *http.ServeMux) {
 	adminStaff := []string{domain.RoleAdmin, domain.RoleStaff}
 	adminOnly := []string{domain.RoleAdmin}
 
-	mux.Handle(apiPrefix+"/admin/categories", h.role(adminStaff, h.demoWriteDisabled(http.HandlerFunc(h.adminCategories))))
-	mux.Handle(apiPrefix+"/admin/categories/{id}", h.role(adminStaff, h.demoWriteDisabled(http.HandlerFunc(h.adminCategory))))
-	mux.Handle(apiPrefix+"/admin/partners", h.role(adminOnly, h.demoWriteDisabled(http.HandlerFunc(h.adminPartners))))
-	mux.Handle(apiPrefix+"/admin/partners/{id}", h.role(adminOnly, h.demoWriteDisabled(http.HandlerFunc(h.adminPartnerUpdate))))
-	mux.Handle(apiPrefix+"/admin/partners/accounts", h.role(adminOnly, h.demoWriteDisabled(http.HandlerFunc(h.adminPartnerAccountCreate))))
+	mux.Handle(apiPrefix+"/admin/categories", h.role(adminStaff, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.adminCategories)))))
+	mux.Handle(apiPrefix+"/admin/categories/{id}", h.role(adminStaff, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.adminCategory)))))
+	mux.Handle(apiPrefix+"/admin/partners", h.role(adminOnly, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.adminPartners)))))
+	mux.Handle(apiPrefix+"/admin/partners/{id}", h.role(adminOnly, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.adminPartnerUpdate)))))
+	mux.Handle(apiPrefix+"/admin/partners/accounts", h.role(adminOnly, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.adminPartnerAccountCreate)))))
 	mux.Handle(apiPrefix+"/admin/team/{id}/reactivate", h.role(adminOnly, h.demoWriteDisabled(http.HandlerFunc(h.adminTeamReactivate))))
 	mux.Handle(apiPrefix+"/admin/message-reports", h.role(adminOnly, http.HandlerFunc(h.adminMessageReports)))
 	mux.Handle(apiPrefix+"/admin/message-reports/{id}/resolve", h.role(adminOnly, h.demoWriteDisabled(http.HandlerFunc(h.adminMessageReportResolve))))

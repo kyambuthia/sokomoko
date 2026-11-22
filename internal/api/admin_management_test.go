@@ -58,7 +58,9 @@ func TestAdminManagementEndpoints(t *testing.T) {
 	}
 
 	catPost := httptest.NewRecorder()
-	mux.ServeHTTP(catPost, httptest.NewRequest(http.MethodPost, apiPrefix+"/admin/categories", strings.NewReader(`{"name":"Tech","slug":"tech"}`)))
+	catReq := httptest.NewRequest(http.MethodPost, apiPrefix+"/admin/categories", strings.NewReader(`{"name":"Tech","slug":"tech"}`))
+	catReq.Header.Set("Content-Type", "application/json")
+	mux.ServeHTTP(catPost, catReq)
 	if catPost.Code != http.StatusCreated {
 		t.Fatalf("POST categories=%d body=%s", catPost.Code, catPost.Body.String())
 	}

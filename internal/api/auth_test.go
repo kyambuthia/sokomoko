@@ -47,6 +47,7 @@ func TestAPIAuth_LoginSignupLogout(t *testing.T) {
 	Register(app.New(app.Dependencies{Auth: ma}), mux)
 
 	loginReq := httptest.NewRequest(http.MethodPost, apiPrefix+"/auth/login", strings.NewReader(`{"username":"qaadmin","password":"secret"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
 	loginReq.Host = "admin.localhost:6969"
 	loginRec := httptest.NewRecorder()
 	mux.ServeHTTP(loginRec, loginReq)
@@ -55,6 +56,7 @@ func TestAPIAuth_LoginSignupLogout(t *testing.T) {
 	}
 
 	signupReq := httptest.NewRequest(http.MethodPost, apiPrefix+"/auth/signup", strings.NewReader(`{"username":"newbuyer","email":"n@b.c","password":"LongPassword123"}`))
+	signupReq.Header.Set("Content-Type", "application/json")
 	signupRec := httptest.NewRecorder()
 	mux.ServeHTTP(signupRec, signupReq)
 	if signupRec.Code != http.StatusCreated {
@@ -64,6 +66,7 @@ func TestAPIAuth_LoginSignupLogout(t *testing.T) {
 	demoMux := http.NewServeMux()
 	Register(app.New(app.Dependencies{Auth: ma, DemoMode: true}), demoMux)
 	demoSignup := httptest.NewRequest(http.MethodPost, apiPrefix+"/auth/signup", strings.NewReader(`{"username":"x","email":"x@y.z","password":"LongPassword123"}`))
+	demoSignup.Header.Set("Content-Type", "application/json")
 	demoRec := httptest.NewRecorder()
 	demoMux.ServeHTTP(demoRec, demoSignup)
 	if demoRec.Code != http.StatusForbidden {

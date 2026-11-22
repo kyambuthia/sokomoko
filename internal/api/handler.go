@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -44,13 +45,13 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix+"/catalog/services", h.serviceList)
 	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}", h.serviceDetail)
 	mux.HandleFunc(apiPrefix+"/catalog/services/{slug}/availability", h.serviceAvailability)
-	mux.Handle(apiPrefix+"/services/{slug}/bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.createServiceBooking)))
+	mux.Handle(apiPrefix+"/services/{slug}/bookings", h.role([]string{domain.RoleUser}, h.requireJSON(http.HandlerFunc(h.createServiceBooking))))
 	mux.Handle(apiPrefix+"/account/service-bookings", h.role([]string{domain.RoleUser}, http.HandlerFunc(h.accountServiceBookings)))
 	mux.Handle(apiPrefix+"/account/service-bookings/{id}/cancel", h.role([]string{domain.RoleUser}, h.demoWriteDisabled(http.HandlerFunc(h.cancelServiceBooking))))
-	mux.Handle(apiPrefix+"/partner/services", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(http.HandlerFunc(h.ownServices))))
-	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(http.HandlerFunc(h.ownService))))
+	mux.Handle(apiPrefix+"/partner/services", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.ownServices)))))
+	mux.Handle(apiPrefix+"/partner/services/{id}", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.ownService)))))
 	mux.Handle(apiPrefix+"/partner/service-bookings", h.role([]string{domain.RolePartner}, http.HandlerFunc(h.partnerServiceBookings)))
-	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(http.HandlerFunc(h.partnerServiceBookingAction))))
+	mux.Handle(apiPrefix+"/partner/service-bookings/{id}/status", h.role([]string{domain.RolePartner}, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.partnerServiceBookingAction)))))
 
 	// Public catalog reads.
 	mux.HandleFunc(apiPrefix+"/catalog/products", h.catalogProducts)
@@ -60,26 +61,26 @@ func Register(a *app.App, mux *http.ServeMux) {
 	mux.HandleFunc(apiPrefix+"/catalog/stores/{slug}", h.catalogStore)
 
 	// Customer session and commerce APIs.
-	mux.HandleFunc(apiPrefix+"/auth/login", h.authLogin)
-	mux.HandleFunc(apiPrefix+"/auth/signup", h.authSignUp)
+	mux.Handle(apiPrefix+"/auth/login", h.requireJSON(http.HandlerFunc(h.authLogin)))
+	mux.Handle(apiPrefix+"/auth/signup", h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.authSignUp))))
 	mux.Handle(apiPrefix+"/auth/logout", h.authenticated(http.HandlerFunc(h.authLogout)))
-	mux.Handle(apiPrefix+"/me", h.authenticated(http.HandlerFunc(h.me)))
-	mux.Handle(apiPrefix+"/me/password", h.authenticated(h.demoWriteDisabled(http.HandlerFunc(h.mePassword))))
-	mux.Handle(apiPrefix+"/encrypted-chat", h.authenticated(http.HandlerFunc(h.encryptedChat)))
-	mux.Handle(apiPrefix+"/messages", h.authenticated(http.HandlerFunc(h.messages)))
+	mux.Handle(apiPrefix+"/me", h.authenticated(h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.me)))))
+	mux.Handle(apiPrefix+"/me/password", h.authenticated(h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.mePassword)))))
+	mux.Handle(apiPrefix+"/encrypted-chat", h.authenticated(h.requireJSON(http.HandlerFunc(h.encryptedChat))))
+	mux.Handle(apiPrefix+"/messages", h.authenticated(h.requireJSON(http.HandlerFunc(h.messages))))
 	mux.Handle(apiPrefix+"/messages/contacts", h.authenticated(http.HandlerFunc(h.messageContacts)))
 	mux.Handle(apiPrefix+"/messages/{id}", h.authenticated(http.HandlerFunc(h.messageThread)))
-	mux.Handle(apiPrefix+"/messages/{id}/send", h.authenticated(http.HandlerFunc(h.messageSend)))
-	mux.Handle(apiPrefix+"/messages/{id}/action", h.authenticated(http.HandlerFunc(h.messageAction)))
+	mux.Handle(apiPrefix+"/messages/{id}/send", h.authenticated(h.requireJSON(http.HandlerFunc(h.messageSend))))
+	mux.Handle(apiPrefix+"/messages/{id}/action", h.authenticated(h.requireJSON(http.HandlerFunc(h.messageAction))))
 	mux.Handle(apiPrefix+"/cart", h.authenticated(http.HandlerFunc(h.cart)))
-	mux.Handle(apiPrefix+"/cart/items", h.authenticated(http.HandlerFunc(h.cartItemCreate)))
-	mux.Handle(apiPrefix+"/cart/items/", h.authenticated(http.HandlerFunc(h.cartItem)))
+	mux.Handle(apiPrefix+"/cart/items", h.authenticated(h.requireJSON(http.HandlerFunc(h.cartItemCreate))))
+	mux.Handle(apiPrefix+"/cart/items/", h.authenticated(h.requireJSON(http.HandlerFunc(h.cartItem))))
 	if a.DemoMode {
 		mux.Handle(apiPrefix+"/checkout", h.authenticated(http.HandlerFunc(h.demoCheckoutDisabled)))
 		mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.demoCheckoutDisabled)))
 	} else {
-		mux.Handle(apiPrefix+"/checkout", h.authenticated(http.HandlerFunc(h.checkout)))
-		mux.Handle(apiPrefix+"/checkout/", h.authenticated(http.HandlerFunc(h.checkoutSession)))
+		mux.Handle(apiPrefix+"/checkout", h.authenticated(h.requireJSON(http.HandlerFunc(h.checkout))))
+		mux.Handle(apiPrefix+"/checkout/", h.authenticated(h.requireJSON(http.HandlerFunc(h.checkoutSession))))
 	}
 	mux.Handle(apiPrefix+"/account/orders", h.authenticated(http.HandlerFunc(h.accountOrders)))
 	mux.Handle(apiPrefix+"/account/orders/", h.authenticated(h.demoWriteDisabled(http.HandlerFunc(h.accountOrder))))
@@ -89,9 +90,9 @@ func Register(a *app.App, mux *http.ServeMux) {
 	h.registerAdminRoutes(mux)
 	h.registerPartnerRoutes(mux)
 	mux.Handle(apiPrefix+"/admin/deliveries", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, http.HandlerFunc(h.adminCourierDeliveries)))
-	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, h.demoWriteDisabled(http.HandlerFunc(h.adminCourierAssign))))
+	mux.Handle(apiPrefix+"/admin/deliveries/assign", h.role([]string{domain.RoleAdmin, domain.RoleStaff}, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.adminCourierAssign)))))
 	mux.Handle(apiPrefix+"/courier/deliveries", h.role([]string{domain.RoleCourier}, http.HandlerFunc(h.courierDeliveries)))
-	mux.Handle(apiPrefix+"/courier/deliveries/", h.role([]string{domain.RoleCourier}, h.demoWriteDisabled(http.HandlerFunc(h.courierDeliveryUpdate))))
+	mux.Handle(apiPrefix+"/courier/deliveries/", h.role([]string{domain.RoleCourier}, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.courierDeliveryUpdate)))))
 }
 
 func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +114,50 @@ func (h *Handler) demoWriteDisabled(next http.Handler) http.Handler {
 		}
 		writeError(w, http.StatusForbidden, "demo_mode", "Changes are disabled in demo mode")
 	})
+}
+
+func (h *Handler) requireJSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+			ct := strings.TrimSpace(r.Header.Get("Content-Type"))
+			if (hasRequestBody(r) || ct != "") && !isJSONContentType(ct) {
+				writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func hasRequestBody(r *http.Request) bool {
+	if r.Body == nil || r.Body == http.NoBody {
+		return false
+	}
+	if r.ContentLength > 0 {
+		return true
+	}
+	return r.ContentLength < 0 && len(r.TransferEncoding) > 0
+}
+
+func isJSONContentType(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	mediaType, params, err := mime.ParseMediaType(raw)
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return false
+	}
+	for k, v := range params {
+		if strings.EqualFold(k, "charset") {
+			if !strings.EqualFold(v, "utf-8") {
+				return false
+			}
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (h *Handler) authenticated(next http.Handler) http.Handler {

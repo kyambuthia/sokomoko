@@ -74,11 +74,11 @@ func (h *Handler) registerPartnerRoutes(mux *http.ServeMux) {
 
 	mux.Handle(apiPrefix+"/partner/{$}", h.role(partnerOps, http.HandlerFunc(h.partnerDashboard)))
 	mux.Handle(apiPrefix+"/partner/dashboard", h.role(partnerOps, http.HandlerFunc(h.partnerDashboard)))
-	mux.Handle(apiPrefix+"/partner/products", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerProducts))))
-	mux.Handle(apiPrefix+"/partner/products/{id}", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerProductPatch))))
+	mux.Handle(apiPrefix+"/partner/products", h.role(partnerOps, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.partnerProducts)))))
+	mux.Handle(apiPrefix+"/partner/products/{id}", h.role(partnerOps, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.partnerProductPatch)))))
 	mux.Handle(apiPrefix+"/partner/orders", h.role(partnerOps, http.HandlerFunc(h.partnerOrdersList)))
-	mux.Handle(apiPrefix+"/partner/orders/{id}", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerOrderUpdate))))
-	mux.Handle(apiPrefix+"/partner/settings", h.role(partnerOps, h.demoWriteDisabled(http.HandlerFunc(h.partnerSettings))))
+	mux.Handle(apiPrefix+"/partner/orders/{id}", h.role(partnerOps, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.partnerOrderUpdate)))))
+	mux.Handle(apiPrefix+"/partner/settings", h.role(partnerOps, h.demoWriteDisabled(h.requireJSON(http.HandlerFunc(h.partnerSettings)))))
 }
 
 func (h *Handler) partnerDashboard(w http.ResponseWriter, r *http.Request) {
