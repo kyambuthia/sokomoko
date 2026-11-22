@@ -46,6 +46,8 @@ type store interface {
 	UsePasswordResetToken(ctx context.Context, token, passwordHash string) (bool, error)
 	PartnerIDForUser(ctx context.Context, userID int) (int, error)
 	ChangeUserPassword(ctx context.Context, userID int, expectedPasswordHash, passwordHash string, session db.Session) error
+	LookupActiveAPITokenUser(ctx context.Context, rawToken string) (*db.User, *db.APIToken, error)
+	TouchAPITokenLastUsed(ctx context.Context, tokenID int64) error
 }
 
 type Config struct {

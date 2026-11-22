@@ -151,7 +151,58 @@ func (s *Service) clearCookie(w http.ResponseWriter, r *http.Request, name strin
 // contextKey is a custom type for context keys to avoid collisions.
 type contextKey string
 
-const userContextKey contextKey = "user"
+const (
+	userContextKey         contextKey = "user"
+	apiTokenContextKey     contextKey = "api_token"
+	apiTokenAuthContextKey contextKey = "api_token_auth"
+)
+
+type apiTokenAuth struct {
+	user  *db.User
+	token *db.APIToken
+}
+
+// GetAPITokenFromContext retrieves the authenticated API token from the request context, if any.
+func GetAPITokenFromContext(ctx context.Context) *db.APIToken {
+	tok, ok := ctx.Value(apiTokenContextKey).(*db.APIToken)
+	if !ok {
+		return nil
+	}
+	return tok
+}
+
+func extractBearerToken(r *http.Request) (string, bool) {
+	if r == nil {
+		return "", false
+	}
+	values := r.Header.Values("Authorization")
+	if len(values) == 0 {
+		return "", false
+	}
+	if len(values) > 1 {
+		return "", true
+	}
+	raw := strings.TrimSpace(values[0])
+	if raw == "" {
+		return "", false
+	}
+	scheme, rest, ok := strings.Cut(raw, " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return "", false
+	}
+	return strings.TrimSpace(rest), true
+}
+
+func (s *Service) authenticateAPIToken(ctx context.Context, rawToken string) (*db.User, *db.APIToken, error) {
+	if !strings.HasPrefix(rawToken, "smk_") {
+		return nil, nil, nil
+	}
+	user, tok, err := s.store.LookupActiveAPITokenUser(ctx, rawToken)
+	if err != nil || user == nil || tok == nil {
+		return nil, nil, err
+	}
+	return user, tok, nil
+}
 
 // WantsJSON reports whether the client asked for a JSON response, as the
 // storefront's web components do.
@@ -292,6 +343,36 @@ func RequireAnyRole(roles []string, next http.Handler) http.Handler {
 // APIAuthMiddleware preserves the versioned API error contract without redirects.
 func (s *Service) APIAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if preAuth, ok := r.Context().Value(apiTokenAuthContextKey).(apiTokenAuth); ok && preAuth.user != nil && preAuth.token != nil {
+			if err := s.store.TouchAPITokenLastUsed(r.Context(), preAuth.token.ID); err != nil {
+				slog.WarnContext(r.Context(), "touch api token last_used_at failed", "token_id", preAuth.token.ID, "error", err)
+			}
+			ctx := context.WithValue(r.Context(), userContextKey, preAuth.user)
+			ctx = context.WithValue(ctx, apiTokenContextKey, preAuth.token)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		if rawToken, hasBearer := extractBearerToken(r); hasBearer {
+			user, tok, err := s.authenticateAPIToken(r.Context(), rawToken)
+			if err != nil {
+				slog.ErrorContext(r.Context(), "api token lookup failed", "error", err)
+				writeAPIJSONError(w, http.StatusServiceUnavailable, "service_unavailable", "Service unavailable")
+				return
+			}
+			if user == nil || tok == nil {
+				writeAPIJSONError(w, http.StatusUnauthorized, "invalid_token", "Invalid API token")
+				return
+			}
+			if err := s.store.TouchAPITokenLastUsed(r.Context(), tok.ID); err != nil {
+				slog.WarnContext(r.Context(), "touch api token last_used_at failed", "token_id", tok.ID, "error", err)
+			}
+			ctx := context.WithValue(r.Context(), userContextKey, user)
+			ctx = context.WithValue(ctx, apiTokenContextKey, tok)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		user := s.sessionUser(r)
 		if user == nil {
 			writeAPIJSONError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required")

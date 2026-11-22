@@ -26,6 +26,23 @@ func (s *Service) CSRFMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Skip CSRF on API requests ONLY when a valid Bearer API token authenticates the request.
+		if isAPIRequest(r) {
+			if rawToken, hasBearer := extractBearerToken(r); hasBearer && strings.HasPrefix(rawToken, "smk_") {
+				user, tok, err := s.authenticateAPIToken(r.Context(), rawToken)
+				if err != nil {
+					slog.WarnContext(r.Context(), "CSRF check: api token lookup failed", "error", err)
+					writeAPIJSONError(w, http.StatusServiceUnavailable, "service_unavailable", "Service unavailable")
+					return
+				}
+				if user != nil && tok != nil {
+					ctx := context.WithValue(r.Context(), apiTokenAuthContextKey, apiTokenAuth{user: user, token: tok})
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
+		}
+
 		// Require a token for a valid session cookie and origin checks for anonymous requests
 		cookie, err := r.Cookie(cookieName)
 		if err != nil {
