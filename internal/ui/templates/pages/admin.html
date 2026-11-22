@@ -12,6 +12,8 @@
     <div class="stat"><dt>Staff</dt><dd>{{ .StaffCount }}</dd></div>
     <div class="stat"><dt>Admins</dt><dd>{{ .AdminCount }}</dd></div>
     <div class="stat"><dt>Sessions</dt><dd>{{ .SessionCount }}</dd></div>
+    <div class="stat"><dt>Open orders</dt><dd>{{ .PendingCount }}</dd></div>
+    <div class="stat"><dt>Shipped</dt><dd>{{ .ShippedCount }}</dd></div>
   </dl>
   {{ if .PaymentAttention }}
   <a class="notice" href="/payments">{{ icon "info" }}<p>{{ .PaymentAttention }} payment {{ if eq .PaymentAttention 1 }}exception needs{{ else }}exceptions need{{ end }} a refund decision.</p></a>
@@ -67,7 +69,10 @@
     {{ range .Orders }}
     <li class="card stack-sm" data-order>
       <div class="row-between">
-        <span class="strong">#{{ .ID }} · {{ .CustomerName }}</span>
+        <div>
+          <span class="strong">#{{ .ID }} · {{ .CustomerName }}</span>
+          <p class="tiny muted">Placed <ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02 15:04" }}</ui-relative-time></p>
+        </div>
         <span class="strong">{{ money .TotalAmount }}</span>
       </div>
       <div class="row">
@@ -76,7 +81,7 @@
         <span class="badge" data-badge="delivery_status">{{ .DeliveryStatus }}</span>
         {{ if .PaymentMethod }}<span class="badge {{ if eq .PaymentStatus "pending" }}badge-muted{{ end }}">{{ .PaymentMethod }} · {{ .PaymentStatus }}</span>{{ end }}
       </div>
-      <p class="small">{{ range $i, $item := .Items }}{{ if $i }}, {{ end }}{{ $item.ProductName }} × {{ $item.Quantity }}{{ end }}</p>
+      <p class="small">{{ range $i, $item := .Items }}{{ if $i }}, {{ end }}{{ $item.ProductName }} × {{ $item.Quantity }} ({{ money $item.LineTotal }}){{ end }}</p>
       <p class="tiny muted">{{ icon "map-pin" }} {{ .DeliveryAddress }}</p>
       {{ if eq $.Role "admin" }}
       <details>
@@ -161,7 +166,7 @@
           {{ range .Dispatch.Orders }}
             {{ $order := . }}
             <tr>
-              <td class="strong">#{{ .OrderID }}<div class="tiny muted">{{ if .Status }}{{ .Status }}{{ else }}unassigned{{ end }}</div></td>
+              <td class="strong">#{{ .OrderID }}<div class="tiny muted">{{ if .Status }}{{ .Status }}{{ else }}unassigned{{ end }} · <ui-relative-time datetime="{{ rfc3339 .UpdatedAt }}">{{ .UpdatedAt.Format "2006-01-02 15:04" }}</ui-relative-time></div></td>
               <td>{{ .CustomerName }}</td>
               <td>{{ .DeliveryAddress }}</td>
               <td><ul class="tiny">{{ range .Items }}<li>{{ .Quantity }} × {{ .ProductName }}</li>{{ end }}</ul>{{ if .FailureNote }}<p class="tiny notice-error">Failed attempt: {{ .FailureNote }}</p>{{ end }}</td>
@@ -578,12 +583,13 @@
   </form>
   <div class="table-wrap">
     <table class="table" id="admin-team-table">
-      <thead><tr><th>User</th><th>Role</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+      <thead><tr><th>User</th><th>Role</th><th>Joined</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>
         {{ range .TeamMembers }}
         <tr>
           <td>{{ .Username }}<div class="tiny muted">{{ .Email }}</div></td>
           <td><span class="badge {{ if eq .Role "admin" }}badge-solid{{ end }}">{{ .Role }}</span></td>
+          <td class="nowrap tiny muted"><ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02" }}</ui-relative-time></td>
           <td class="actions">
             <ui-confirm title="Deactivate {{ .Username }}?" message="They are signed out and cannot sign in until an admin reactivates them. The current admin and last active admin cannot be deactivated." confirm-label="Deactivate">
               <form method="POST" action="/team" class="inline-form">
@@ -595,7 +601,7 @@
           </td>
         </tr>
         {{ else }}
-        <tr><td colspan="3" class="muted">{{ if .TeamQuery }}No one matches “{{ .TeamQuery }}”.{{ else }}No users.{{ end }}</td></tr>
+        <tr><td colspan="4" class="muted">{{ if .TeamQuery }}No one matches “{{ .TeamQuery }}”.{{ else }}No users.{{ end }}</td></tr>
         {{ end }}
       </tbody>
     </table>
@@ -605,12 +611,13 @@
   <h2 class="section-title">Deactivated</h2>
   <div class="table-wrap">
     <table class="table" id="admin-deactivated-table">
-      <thead><tr><th>User</th><th>Role</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+      <thead><tr><th>User</th><th>Role</th><th>Joined</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>
         {{ range .Deactivated }}
         <tr>
           <td>{{ .Username }}<div class="tiny muted">{{ .Email }}</div></td>
           <td><span class="badge badge-muted">{{ .Role }}</span></td>
+          <td class="nowrap tiny muted"><ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02" }}</ui-relative-time></td>
           <td class="actions">
             <form method="POST" action="/team" class="inline-form" data-submit-once>
               {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">{{ end }}
@@ -638,7 +645,7 @@
         {{ range .AuditLogs }}
         <tr>
           <td class="nowrap"><ui-relative-time datetime="{{ rfc3339 .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02 15:04" }}</ui-relative-time></td>
-          <td>{{ if .ActorUserID.Valid }}#{{ .ActorUserID.Int64 }}{{ else }}system{{ end }}</td>
+          <td>{{ if .ActorName }}{{ .ActorName }}{{ if .ActorUserID.Valid }} <span class="tiny muted">#{{ .ActorUserID.Int64 }}</span>{{ end }}{{ else if .ActorUserID.Valid }}#{{ .ActorUserID.Int64 }}{{ else }}system{{ end }}</td>
           <td class="strong">{{ .Action }}</td>
           <td>{{ .TargetType }}{{ if .TargetID.Valid }} #{{ .TargetID.Int64 }}{{ end }}</td>
           <td class="muted">{{ .Details }}</td>

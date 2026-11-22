@@ -97,7 +97,15 @@ func AdminDashboard(a *app.App) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		report, err := svc.Reports(r.Context())
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		page := adminDashboardPage(metrics, adminRoleFromContext(r))
+		page.OrderCount = report.OrderCount
+		page.PendingCount = report.PendingCount
+		page.ShippedCount = report.ShippedCount
 		for _, option := range a.Payment.MethodOptions(r.Context()) {
 			page.OnlinePayments = page.OnlinePayments || option.Online
 		}
