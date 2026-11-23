@@ -41,8 +41,27 @@ func TestOpenAPIEndpoint(t *testing.T) {
 	if doc.Components.SecuritySchemes["sessionCookie"] == nil || doc.Components.SecuritySchemes["csrfToken"] == nil {
 		t.Fatalf("expected sessionCookie and csrfToken securitySchemes, got %+v", doc.Components.SecuritySchemes)
 	}
-	if doc.Components.Schemas["Error"] == nil {
-		t.Fatal("expected components.schemas.Error")
+	for _, key := range []string{"Error", "SignUpRequest", "LoginRequest", "APITokenCreateRequest", "CartItemAddRequest", "CartItemUpdateRequest", "PlaceOrderRequest", "ServiceBookingRequest"} {
+		if doc.Components.Schemas[key] == nil {
+			t.Fatalf("expected components.schemas.%s", key)
+		}
+	}
+	for _, tc := range []struct {
+		path   string
+		method string
+	}{
+		{"/api/v1/auth/signup", "post"},
+		{"/api/v1/auth/login", "post"},
+		{"/api/v1/me/tokens", "post"},
+		{"/api/v1/cart/items", "post"},
+		{"/api/v1/cart/items/{id}", "patch"},
+		{"/api/v1/checkout/{token}/place-order", "post"},
+		{"/api/v1/services/{slug}/bookings", "post"},
+	} {
+		op := doc.Paths[tc.path][tc.method].(map[string]any)
+		if op["requestBody"] == nil {
+			t.Fatalf("%s %s missing requestBody", tc.method, tc.path)
+		}
 	}
 	for _, key := range []string{"SlugParam", "IdParam", "TokenParam", "PageParam", "LimitParam"} {
 		if doc.Components.Parameters[key] == nil {

@@ -22,6 +22,16 @@
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
         }
       }
     },
@@ -41,6 +51,16 @@
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignUpRequest"
+              }
+            }
+          }
         }
       }
     },
@@ -48,6 +68,9 @@
       "post": {
         "summary": "Revoke active session",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -80,6 +103,9 @@
         "summary": "Current user profile and CSRF token",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -104,6 +130,9 @@
       "patch": {
         "summary": "Update profile",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -135,6 +164,9 @@
       "patch": {
         "summary": "Change password",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -220,6 +252,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/APITokenCreateRequest"
+              }
+            }
           }
         }
       }
@@ -468,6 +510,9 @@
         "summary": "Get cart",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -495,6 +540,9 @@
         "summary": "Add item to cart",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -518,6 +566,16 @@
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartItemAddRequest"
+              }
+            }
+          }
         }
       }
     },
@@ -530,6 +588,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -557,6 +618,16 @@
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartItemUpdateRequest"
+              }
+            }
+          }
         }
       },
       "delete": {
@@ -567,6 +638,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -602,6 +676,9 @@
         "summary": "Get checkout summary",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -627,6 +704,9 @@
         "summary": "Create checkout session",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -650,6 +730,16 @@
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutStartRequest"
+              }
+            }
+          }
         }
       }
     },
@@ -662,6 +752,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -695,6 +788,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -735,6 +831,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -761,6 +860,16 @@
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceOrderRequest"
+              }
+            }
+          }
         }
       }
     },
@@ -776,6 +885,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -808,6 +920,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -843,6 +958,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -886,6 +1004,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -917,6 +1038,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -957,6 +1081,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -983,6 +1110,16 @@
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceBookingRequest"
+              }
+            }
+          }
         }
       }
     },
@@ -990,6 +1127,9 @@
       "get": {
         "summary": "List conversations",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -1015,6 +1155,9 @@
       "post": {
         "summary": "Start conversation",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1046,6 +1189,9 @@
       "post": {
         "summary": "Lookup contact",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1083,6 +1229,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1117,6 +1266,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1157,6 +1309,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -1191,6 +1346,9 @@
         "summary": "MLS encrypted messaging RPC",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -1221,6 +1379,9 @@
       "get": {
         "summary": "Partner dashboard summary",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -1257,6 +1418,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1281,6 +1445,9 @@
       "post": {
         "summary": "Create product",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1317,6 +1484,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1360,6 +1530,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1391,6 +1564,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1426,6 +1602,9 @@
         "summary": "Get store settings",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1450,6 +1629,9 @@
       "patch": {
         "summary": "Update store settings",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1490,6 +1672,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1514,6 +1699,9 @@
       "post": {
         "summary": "Create service",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1551,6 +1739,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1583,6 +1774,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1626,6 +1820,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1657,6 +1854,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1691,6 +1891,9 @@
       "get": {
         "summary": "Admin metrics",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -1727,6 +1930,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1762,6 +1968,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1793,6 +2002,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1828,6 +2040,9 @@
         "summary": "Sales report",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1855,6 +2070,9 @@
         "summary": "Courier dispatch board",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1881,6 +2099,9 @@
       "post": {
         "summary": "Assign courier to order",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1913,6 +2134,9 @@
         "summary": "List categories",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -1937,6 +2161,9 @@
       "post": {
         "summary": "Create category",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -1973,6 +2200,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -2011,6 +2241,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -2045,6 +2278,9 @@
         "summary": "List partners and accounts",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -2069,6 +2305,9 @@
       "post": {
         "summary": "Create partner",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -2106,6 +2345,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -2139,6 +2381,9 @@
       "post": {
         "summary": "Create partner login",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -2179,6 +2424,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -2210,6 +2458,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -2250,6 +2501,9 @@
         ],
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": [],
             "csrfToken": []
           }
@@ -2284,6 +2538,9 @@
         "summary": "List audit log",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -2310,6 +2567,9 @@
       "get": {
         "summary": "List message reports",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -2342,6 +2602,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -2377,6 +2640,9 @@
         "summary": "Get payment pricing, providers, and exceptions",
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
@@ -2403,6 +2669,9 @@
       "get": {
         "summary": "List assigned deliveries",
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": []
           }
@@ -2435,6 +2704,9 @@
           }
         ],
         "security": [
+          {
+            "bearerAuth": []
+          },
           {
             "sessionCookie": [],
             "csrfToken": []
@@ -2520,6 +2792,161 @@
                 }
               }
             }
+          }
+        }
+      },
+      "SignUpRequest": {
+        "type": "object",
+        "required": [
+          "username",
+          "email",
+          "password"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "APITokenCreateRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "client_type": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "script",
+              "integration"
+            ],
+            "default": "agent"
+          },
+          "expires_in_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          }
+        }
+      },
+      "CartItemAddRequest": {
+        "type": "object",
+        "required": [
+          "product_id",
+          "quantity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "CartItemUpdateRequest": {
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "CheckoutStartRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "PlaceOrderRequest": {
+        "type": "object",
+        "required": [
+          "delivery_address",
+          "payment_method"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "delivery_address": {
+            "type": "string"
+          },
+          "payment_method": {
+            "type": "string",
+            "enum": [
+              "cash_on_delivery",
+              "mpesa",
+              "paystack"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "description": "Required for M-Pesa STK push"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "ServiceBookingRequest": {
+        "type": "object",
+        "required": [
+          "starts_at_local",
+          "listing_version",
+          "idempotency_key"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "starts_at_local": {
+            "type": "string",
+            "example": "2026-11-24T09:00"
+          },
+          "listing_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "idempotency_key": {
+            "type": "string"
           }
         }
       }
