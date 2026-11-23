@@ -55,29 +55,38 @@ func (s *Service) LoginAPI(ctx context.Context, w http.ResponseWriter, r *http.R
 		}
 	}
 
-	s.revokeRequestSessions(ctx, r, "api sign-in: revoke previous session")
+	csrfToken, status, errCode, errMsg := s.issueAPISession(ctx, w, r, user, "api sign-in", "login_failed", "Unable to sign in")
+	if errCode != "" {
+		return nil, "", status, errCode, errMsg
+	}
+	return user, csrfToken, http.StatusOK, "", ""
+}
+
+func (s *Service) issueAPISession(ctx context.Context, w http.ResponseWriter, r *http.Request, user *db.User, reason, errCode, errMsg string) (string, int, string, string) {
+	s.revokeRequestSessions(ctx, r, reason+": revoke previous session")
 	session, err := s.newSession(user.ID)
 	if err != nil {
-		return nil, "", http.StatusInternalServerError, "login_failed", "Unable to create session"
+		return "", http.StatusInternalServerError, errCode, "Unable to create session"
 	}
 	if err := s.store.CreateSessionForPasswordHash(ctx, session, user.PasswordHash); err != nil {
 		if errors.Is(err, db.ErrUserInactive) || errors.Is(err, db.ErrPasswordChanged) {
 			s.clearSessionCookie(w, r)
-			return nil, "", http.StatusUnauthorized, "invalid_credentials", "Invalid credentials"
+			return "", http.StatusUnauthorized, "invalid_credentials", "Invalid credentials"
 		}
-		slog.ErrorContext(ctx, "api create session failed", "error", err)
-		return nil, "", http.StatusInternalServerError, "login_failed", "Unable to create session"
+		slog.ErrorContext(ctx, reason+" create session failed", "error", err)
+		return "", http.StatusInternalServerError, errCode, errMsg
 	}
 	s.setSessionCookie(w, r, session)
-	return user, session.CSRFToken, http.StatusOK, "", ""
+	return session.CSRFToken, 0, "", ""
 }
 
-// SignUpAPI registers a new customer account via JSON API.
-func (s *Service) SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, username, email, password string) (int, string, string) {
+// SignUpAPI registers a new customer account via JSON API, starts a session,
+// sets the session cookie, and returns the user and CSRF token.
+func (s *Service) SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, username, email, password string) (*db.User, string, int, string, string) {
 	const signupScope = "signup"
 	ipLocked, ipGeneration := s.checkAbuseLockByIP(w, signupScope, r)
 	if ipLocked {
-		return http.StatusTooManyRequests, "rate_limited", "Too many attempts. Please wait and try again."
+		return nil, "", http.StatusTooManyRequests, "rate_limited", "Too many attempts. Please wait and try again."
 	}
 	s.recordAbuseAttemptByIP(signupScope, r, ipGeneration)
 
@@ -85,13 +94,13 @@ func (s *Service) SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.
 	email = normalizeEmail(email)
 	switch {
 	case username == "" || email == "" || password == "":
-		return http.StatusBadRequest, "invalid_request", "Username, email, and password are required"
+		return nil, "", http.StatusBadRequest, "invalid_request", "Username, email, and password are required"
 	case !isValidUsername(username):
-		return http.StatusBadRequest, "invalid_username", "Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"
+		return nil, "", http.StatusBadRequest, "invalid_username", "Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores"
 	case !isValidEmail(email):
-		return http.StatusBadRequest, "invalid_email", "Enter a valid email address"
+		return nil, "", http.StatusBadRequest, "invalid_email", "Enter a valid email address"
 	case !isStrongEnoughPassword(password):
-		return http.StatusBadRequest, "invalid_password", "Password must be 10 to 72 characters"
+		return nil, "", http.StatusBadRequest, "invalid_password", "Password must be 10 to 72 characters"
 	}
 	if _, err := createUserWithPassword(ctx, s.store, username, email, password, domain.RoleUser); err != nil {
 		statusCode, msg := mapAccountCreationError(err, "Unable to create account")
@@ -99,9 +108,18 @@ func (s *Service) SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.
 		if statusCode == http.StatusConflict {
 			code = "account_exists"
 		}
-		return statusCode, code, msg
+		return nil, "", statusCode, code, msg
 	}
-	return http.StatusCreated, "", ""
+	user, err := s.findUserByIdentifier(ctx, username)
+	if err != nil || user == nil {
+		slog.ErrorContext(ctx, "api signup lookup failed", "error", err)
+		return nil, "", http.StatusInternalServerError, "signup_failed", "Unable to create session"
+	}
+	csrfToken, status, errCode, errMsg := s.issueAPISession(ctx, w, r, user, "api signup", "signup_failed", "Unable to create session")
+	if errCode != "" {
+		return nil, "", status, errCode, errMsg
+	}
+	return user, csrfToken, http.StatusCreated, "", ""
 }
 
 // LogoutAPI revokes the active session and clears the session cookie.

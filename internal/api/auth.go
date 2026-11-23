@@ -45,13 +45,17 @@ func (h *Handler) authLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, errCode, errMsg)
 		return
 	}
-	writeData(w, http.StatusOK, struct {
-		ID        int    `json:"id"`
-		Username  string `json:"username"`
-		Email     string `json:"email"`
-		Role      string `json:"role"`
-		CSRFToken string `json:"csrf_token"`
-	}{ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role, CSRFToken: csrfToken})
+	writeData(w, http.StatusOK, authUserDTO{
+		ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role, CSRFToken: csrfToken,
+	})
+}
+
+type authUserDTO struct {
+	ID        int    `json:"id"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	CSRFToken string `json:"csrf_token"`
 }
 
 func (h *Handler) authSignUp(w http.ResponseWriter, r *http.Request) {
@@ -72,12 +76,14 @@ func (h *Handler) authSignUp(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON")
 		return
 	}
-	status, errCode, errMsg := h.app.Auth.SignUpAPI(r.Context(), w, r, input.Username, input.Email, input.Password)
+	user, csrfToken, status, errCode, errMsg := h.app.Auth.SignUpAPI(r.Context(), w, r, input.Username, input.Email, input.Password)
 	if errCode != "" {
 		writeError(w, status, errCode, errMsg)
 		return
 	}
-	writeData(w, http.StatusCreated, map[string]string{"username": strings.TrimSpace(input.Username)})
+	writeData(w, http.StatusCreated, authUserDTO{
+		ID: user.ID, Username: user.Username, Email: user.Email, Role: user.Role, CSRFToken: csrfToken,
+	})
 }
 
 func (h *Handler) authLogout(w http.ResponseWriter, r *http.Request) {

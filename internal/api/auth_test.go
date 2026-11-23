@@ -15,14 +15,14 @@ import (
 type mockAPIAuth struct {
 	stubAuthService
 	loginFn  func(context.Context, http.ResponseWriter, *http.Request, string, string, string, []string) (*db.User, string, int, string, string)
-	signupFn func(context.Context, http.ResponseWriter, *http.Request, string, string, string) (int, string, string)
+	signupFn func(context.Context, http.ResponseWriter, *http.Request, string, string, string) (*db.User, string, int, string, string)
 	logoutFn func(context.Context, http.ResponseWriter, *http.Request)
 }
 
 func (m *mockAPIAuth) LoginAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, u, p, scope string, roles []string) (*db.User, string, int, string, string) {
 	return m.loginFn(ctx, w, r, u, p, scope, roles)
 }
-func (m *mockAPIAuth) SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, u, e, p string) (int, string, string) {
+func (m *mockAPIAuth) SignUpAPI(ctx context.Context, w http.ResponseWriter, r *http.Request, u, e, p string) (*db.User, string, int, string, string) {
 	return m.signupFn(ctx, w, r, u, e, p)
 }
 func (m *mockAPIAuth) LogoutAPI(ctx context.Context, w http.ResponseWriter, r *http.Request) {
@@ -39,8 +39,8 @@ func TestAPIAuth_LoginSignupLogout(t *testing.T) {
 			}
 			return &db.User{ID: 7, Username: u, Email: "a@b.c", Role: domain.RoleAdmin}, "csrf-123", http.StatusOK, "", ""
 		},
-		signupFn: func(_ context.Context, _ http.ResponseWriter, _ *http.Request, u, e, p string) (int, string, string) {
-			return http.StatusCreated, "", ""
+		signupFn: func(_ context.Context, _ http.ResponseWriter, _ *http.Request, u, e, p string) (*db.User, string, int, string, string) {
+			return &db.User{ID: 8, Username: u, Email: e, Role: domain.RoleUser}, "signup-csrf-456", http.StatusCreated, "", ""
 		},
 	}
 	mux := http.NewServeMux()
@@ -59,7 +59,7 @@ func TestAPIAuth_LoginSignupLogout(t *testing.T) {
 	signupReq.Header.Set("Content-Type", "application/json")
 	signupRec := httptest.NewRecorder()
 	mux.ServeHTTP(signupRec, signupReq)
-	if signupRec.Code != http.StatusCreated {
+	if signupRec.Code != http.StatusCreated || !strings.Contains(signupRec.Body.String(), "signup-csrf-456") {
 		t.Fatalf("signup status=%d body=%s", signupRec.Code, signupRec.Body.String())
 	}
 

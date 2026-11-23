@@ -451,7 +451,7 @@ func TestSignUp_And_SignUpAPI_IPRateLimit(t *testing.T) {
 	apiReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/signup", nil)
 	apiReq.RemoteAddr = "198.51.100.40:4444"
 	apiRR := httptest.NewRecorder()
-	status, code, _ := svc.SignUpAPI(t.Context(), apiRR, apiReq, "validuser", "valid@example.com", "correct-horse-battery")
+	_, _, status, code, _ := svc.SignUpAPI(t.Context(), apiRR, apiReq, "validuser", "valid@example.com", "correct-horse-battery")
 	if status != http.StatusTooManyRequests || code != "rate_limited" {
 		t.Fatalf("SignUpAPI status=%d code=%q, want 429 rate_limited", status, code)
 	}
