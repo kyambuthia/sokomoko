@@ -27,14 +27,7 @@ func Sitemap(a *app.App) http.HandlerFunc {
 			return
 		}
 
-		base := a.PublicBase(r)
-		if base == "" && r.Host != "" {
-			scheme := "http"
-			if r.TLS != nil || a.Production {
-				scheme = "https"
-			}
-			base = scheme + "://" + r.Host
-		}
+		base := publicBaseURL(a, r)
 
 		urls := []sitemapURL{
 			{Loc: base + "/"},
