@@ -26,6 +26,8 @@ session, otherwise redirect to `/login?next=...`), or a list of roles.
 | `/` | GET | public | `Root` | Home page and catalog |
 | `/products/<slug>` | GET | public | `ProductDetail` | 404 for unknown slugs |
 | `/sitemap.xml` | GET, HEAD | public | `Sitemap` | XML sitemap of public storefront pages, products, and services; cached 5 min |
+| `/robots.txt` | GET, HEAD | public | `RobotsTxt` | Crawler directives and sitemap link; cached 5 min |
+| `/llms.txt` | GET, HEAD | public | `LLMsTxt` | Concise machine-readable guide for AI agents and API clients; cached 5 min |
 | `/media/product-images/<id>` | GET, HEAD | public | `ProductImage` | Uploaded image bytes; 404 if the product or partner is inactive |
 | `/media/product-videos/<id>` | GET, HEAD | public | `ProductVideo` | Uploaded MP4/WebM video with byte-range support; 404 if the product or partner is inactive |
 | `/search` | GET | public | `Search` | `q`, `category`, `page`; 24 products per page |
@@ -182,9 +184,10 @@ session cookie as the HTML pages or `Authorization: Bearer smk_...` API tokens
 (`bearerAuth` in OpenAPI).
 
 `GET /api/v1/openapi.json` returns an OpenAPI 3.1 index of every path and
-method, each with a one-line summary. It is public and cached for five minutes
-(`Cache-Control: public, max-age=300`). It lists routes, not field schemas; the
-tables below describe request and response shapes.
+method, including `requestBody` schemas for core auth, token, cart, checkout,
+and booking mutations, plus `bearerAuth` security metadata. It is public and
+cached for five minutes (`Cache-Control: public, max-age=300`), and is linked
+from HTML pages via `<link rel="describedby" ...>` and `/llms.txt`.
 
 ### Conventions
 
@@ -210,8 +213,8 @@ tables below describe request and response shapes.
 | Method and path | Access | Purpose |
 | --- | --- | --- |
 | `GET /openapi.json` | public | OpenAPI 3.1 index of these paths and methods |
-| `GET /catalog/products` | public | Paginated product list: `{items, page, limit, total, has_more}` |
-| `GET /catalog/products/<slug>` | public | One product |
+| `GET /catalog/products` | public | Paginated product list: `{items, page, limit, total, has_more}`; items include `store_name` and `store_slug` when attached to a partner store |
+| `GET /catalog/products/<slug>` | public | One product (includes `store_name` and `store_slug` when attached to a partner store) |
 | `GET /catalog/services?q=&category=&area=&delivery_mode=&partner_id=&has_hours=` | public | Published services; optional `has_hours=true` filter; `{items, page, limit, total}`; limit 1–50, page 1–1000 |
 | `GET /catalog/services/<slug>` | public | Published service details; 404 for private, archived or suspended-shop listings |
 | `GET /catalog/services/<slug>/availability?date=YYYY-MM-DD` | public | Advisory 15-minute local start suggestions; includes listing version and timezone; booking requests recheck availability |
@@ -228,7 +231,7 @@ tables below describe request and response shapes.
 | `GET /catalog/categories` | public | Active categories as `{name, slug}`; cached 60 s |
 | `GET /catalog/stores/<slug>` | public | Active store profile with up to 48 products and 24 services, plus `product_total` and `service_total`; `404 store_not_found` for unknown or inactive stores |
 | `POST /auth/login` | public | `{username, password}`; the host picks the role set (`admin.` admin and staff, `partner.` workspace roles, `courier.` courier, storefront customer) and returns the user with a `csrf_token` |
-| `POST /auth/signup` | public | Create a customer from `{username, email, password}`; `201`; `403 demo_mode` on the demo instance |
+| `POST /auth/signup` | public | Create a customer from `{username, email, password}`, start a session (`session_token` cookie), and return `{id, username, email, role, csrf_token}` (`201`); `403 demo_mode` on the demo instance |
 | `POST /auth/logout` | signed in | Revoke the current session; returns `{logged_out: true}` |
 | `GET /me` | signed in | Current user and `csrf_token` |
 | `PATCH /me` | signed in | Update `{username, email}`; `409 profile_conflict` when either is taken |
