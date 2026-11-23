@@ -14,7 +14,7 @@ four web workspaces and a JSON API from a single PostgreSQL database:
 | `partner.localhost` | Admins, staff, partners | Store setup, product entry, order fulfillment |
 | `courier.localhost` | Couriers | Assigned delivery jobs and delivery status updates |
 | `docs.localhost` | Buyers, partners, developers | Public feature guide |
-| any host, `/api/v1/...` | Browser scripts and API clients | JSON API for the same features |
+| any host, `/api/v1/...` | Browser scripts, AI agents, API clients | JSON API (`/api/v1/openapi.json`, `Bearer smk_...` tokens) |
 
 ## Stack
 
@@ -92,6 +92,13 @@ deploy/            Production Compose file, Caddy reverse proxy, env example
 scripts/           Image smoke test
 docs/              Design and operations documentation
 ```
+
+## API & Agent Discovery
+
+- `/llms.txt` — concise machine-readable guide for AI agents and API clients
+- `/api/v1/openapi.json` — OpenAPI 3.1 spec (includes `requestBody` schemas and `bearerAuth`)
+- `/robots.txt` and `/sitemap.xml` — crawler directives and public storefront sitemap
+- `Authorization: Bearer smk_...` — self-serve API tokens created on `/account` or `POST /api/v1/me/tokens` (CSRF header not required)
 
 ## Documentation
 
