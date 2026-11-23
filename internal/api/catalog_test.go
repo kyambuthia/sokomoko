@@ -54,7 +54,7 @@ func TestCatalogCategoriesAndStoreEndpoints(t *testing.T) {
 			return []catalogsvc.Partner{{ID: 1, Name: "Urban Goods", Slug: "urban-goods", ContactEmail: "secret@example.com"}}, nil
 		},
 		browseFn: func(context.Context, catalogsvc.Filter) ([]catalogsvc.Product, error) {
-			return []catalogsvc.Product{{ID: 1, Name: "Lamp", Slug: "lamp"}}, nil
+			return []catalogsvc.Product{{ID: 1, Name: "Lamp", Slug: "lamp", PartnerName: "Urban Goods", PartnerSlug: "urban-goods"}}, nil
 		},
 		countFn: func(context.Context, catalogsvc.Filter) (int, error) { return 1, nil },
 	}
@@ -75,7 +75,7 @@ func TestCatalogCategoriesAndStoreEndpoints(t *testing.T) {
 
 	storeRec := httptest.NewRecorder()
 	mux.ServeHTTP(storeRec, httptest.NewRequest(http.MethodGet, apiPrefix+"/catalog/stores/urban-goods", nil))
-	if storeRec.Code != http.StatusOK || !strings.Contains(storeRec.Body.String(), "Urban Goods") {
+	if storeRec.Code != http.StatusOK || !strings.Contains(storeRec.Body.String(), "Urban Goods") || !strings.Contains(storeRec.Body.String(), `"store_slug":"urban-goods"`) {
 		t.Fatalf("store status=%d body=%s", storeRec.Code, storeRec.Body.String())
 	}
 

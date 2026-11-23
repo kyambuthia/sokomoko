@@ -239,6 +239,8 @@ type productDTO struct {
 	Currency      string  `json:"currency"`
 	StockQuantity int     `json:"stock_quantity"`
 	Category      string  `json:"category,omitempty"`
+	StoreName     string  `json:"store_name,omitempty"`
+	StoreSlug     string  `json:"store_slug,omitempty"`
 	PrimaryImage  string  `json:"primary_image"`
 }
 
@@ -247,6 +249,7 @@ func mapProduct(product catalogsvc.Product) productDTO {
 		ID: product.ID, Name: product.Name, Slug: product.Slug,
 		Description: product.Description, Price: product.Price.Float64(), PriceMinor: int64(product.Price), Currency: product.Currency,
 		StockQuantity: product.StockQuantity, Category: product.Category,
+		StoreName: product.PartnerName, StoreSlug: product.PartnerSlug,
 		PrimaryImage: product.ImageURL,
 	}
 }
